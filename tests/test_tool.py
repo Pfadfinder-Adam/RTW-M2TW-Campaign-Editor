@@ -14255,6 +14255,74 @@ building smith
         self.assertEqual(RP.find(mod, "ui/B.tga"), b"second")
         self.assertIsNone(RP.find(mod, "ui/c.tga"))
 
+    def test_game_packs_read(self):
+        """data/packs read the way the engines read them (engine source docs/pack_formats.md): Medieval II's / REX's
+        .pack version 3 (64 KB chunks, LZO1X or stored), version 4 (one zstd frame or stored a file, 64-bit offsets);
+        a picture a mod keeps only in its packs is taken out for reading (find_any), never for writing (find)."""
+        import struct
+        from campaign_editor import gamepacks as G
+        text = b"the ground of the map, " * 20 + b"end"
+        lzo = bytes.fromhex("0b7468652067726f756e64206f66207401016d61702c81016720008458000c6f6620746865206d61702c20"
+                            "656e64110000")
+        self.assertEqual(G.lzo1x_decompress(lzo, len(text)), text)
+        big = bytes(range(256)) * 300                  # 76 800 bytes: a stored 64 KB chunk + a stored rest
+
+        def v3(entries):
+            names = [n for n, _ in entries]
+            chunks, blobs = [], []
+            for _, parts in entries:
+                for c in parts:
+                    chunks.append(len(c))
+                    blobs.append(c)
+            places, first, table = [], 0, b""
+            head = 20 + 4 * len(names) + 4 * len(chunks)
+            sizes = [sum(len(c) for c in p) for _, p in entries]
+            data_at = head + sum(16 + len(n) + 1 for n in names)
+            for n, (_, parts), stored in zip(names, entries, sizes):
+                real = {"a.txt": len(text), "b.bin": len(big)}[n.rsplit("/", 1)[-1].lower()]
+                places.append(len(table))
+                table += struct.pack("<4I", data_at, first, real, stored) + n.encode() + b"\0"
+                first += len(parts)
+                data_at += stored
+            return b"PACK" + struct.pack("<4I", G.V3, len(names), len(table), len(chunks)) + \
+                struct.pack("<%dI" % len(places), *places) + struct.pack("<%dI" % len(chunks), *chunks) + table + \
+                b"".join(blobs)
+        blob = v3([("data/terrain/aerial_map/ground_types/a.txt", [lzo]),
+                   ("data/ui/B.BIN", [big[:65536], big[65536:]])])
+        packs = os.path.join(self.root, "data", "packs")
+        os.makedirs(packs, exist_ok=True)
+        with open(os.path.join(packs, "mine.pack"), "wb") as fh:
+            fh.write(blob)
+        idx = G.read_index(os.path.join(packs, "mine.pack"))
+        self.assertEqual(sorted(idx), ["data/terrain/aerial_map/ground_types/a.txt", "data/ui/b.bin"])
+        self.assertEqual(G.read_file(os.path.join(packs, "mine.pack"), idx["data/ui/b.bin"]), big)
+        mod = ModData(self.root)
+        self.assertIsNone(mod.find("terrain/aerial_map/ground_types/a.txt"))            # never for writing
+        got = mod.find_any("terrain/aerial_map/ground_types/A.txt")
+        with open(got, "rb") as fh:
+            self.assertEqual(fh.read(), text)
+        self.assertIsNone(mod.find_any("ui/none.bin"))
+        # version 4: the record is 64-bit offset, size, stored size, codec, name; a stored file
+        name = b"data/x.txt"
+        table = struct.pack("<QIIB", 0, 5, 5, 0) + name + b"\0"
+        at = 20 + 4 + len(table)
+        table = struct.pack("<QIIB", at, 5, 5, 0) + name + b"\0"
+        v4 = b"PACK" + struct.pack("<4I", G.V4, 1, len(table), 0) + struct.pack("<I", 0) + table + b"hello"
+        with open(os.path.join(packs, "v4.pack"), "wb") as fh:
+            fh.write(v4)
+        idx = G.read_index(os.path.join(packs, "v4.pack"))
+        self.assertEqual(G.read_file(os.path.join(packs, "v4.pack"), idx["data/x.txt"]), b"hello")
+        frame = bytes.fromhex("28b52ffd60cf001d0100c87468652067726f756e64206f6620746865206d61702c656e640200ae3a1540a1"
+                              "3401")
+        try:
+            self.assertEqual(G.zstd_decompress(frame, len(text)), text)
+        except ValueError:
+            pass                                       # no zstd on this system: the pack is said to be unread
+        from campaign_editor.terrain3d import ground_file
+        self.assertEqual(ground_file("../../../../data/terrain/aerial_map/ground_types/RS.tga"),
+                         "terrain/aerial_map/ground_types/RS.tga")                    # HLR's way of naming
+        self.assertEqual(ground_file("grass.tga"), "terrain/aerial_map/ground_types/grass.tga")
+
     def test_religion_web(self):
         """A faction's religion changed (Medieval II): it leaves the old faith's buildings (levels and the priest
         lines in them) and gets the new faith's where a faction of that faith (of its own culture first) has them;

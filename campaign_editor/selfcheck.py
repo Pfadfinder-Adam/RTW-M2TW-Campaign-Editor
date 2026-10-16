@@ -71,6 +71,12 @@ def _modules(ok, fail, window):
     except Exception as e:                                  # noqa: BLE001 - the exe must have it, a Python may not
         if getattr(sys, "frozen", False):
             fail("moderngl", "%s: %s" % (type(e).__name__, e))
+    try:                                                    # REX / M2EX packs of version 4 (zstd) - gamepacks
+        import zstandard  # noqa: F401
+        ok("zstandard imports (packs of REX / M2EX, version 4)")
+    except Exception as e:                                  # noqa: BLE001
+        if getattr(sys, "frozen", False):
+            fail("zstandard", "%s: %s" % (type(e).__name__, e))
 
 
 def _bundled(ok, fail):

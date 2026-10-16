@@ -38,11 +38,11 @@ RIVER = np.array([60, 110, 170], np.float32)
 PERIOD = 64             # pixels one texture repeat covers on the colour map (x texture_density)
 
 
-def aerial_sets(mod):
+def aerial_sets(mod, path=None):
     """({climate: {ground key: (summer file, winter file or None)}}, texture_density) of
-    descr_aerial_map_ground_types.txt (the mod's, else the game's)."""
+    descr_aerial_map_ground_types.txt (the mod's, else the game's; path: that file)."""
     from .textio import strip_comment
-    p = mod.find("descr_aerial_map_ground_types.txt")
+    p = path or mod.find("descr_aerial_map_ground_types.txt")
     out, density, cur = {}, 1.0, None
     if not p:
         return out, density
@@ -62,13 +62,53 @@ def aerial_sets(mod):
     return out, density
 
 
+def picture_choices(mod, keys, winter=False):
+    """(climates, {(climate, ground key): [pictures to try, the first that opens wins]}, texture_density): the
+    picture descr_aerial_map_ground_types.txt names (its 'default' block where the climate has none, the stand-in
+    ground where the key is missing), then the game's own picture for the same place - a mod whose pictures the
+    editor cannot reach (packed in a way it does not read) still shows the ground drawn, not a plain colour."""
+    import os
+    from .moddata import ci_path
+    sets, density = aerial_sets(mod)
+    game = {}
+    own = mod.find("descr_aerial_map_ground_types.txt")
+    under = ci_path(mod.under, "descr_aerial_map_ground_types.txt") if getattr(mod, "under", None) else None
+    if under and (not own or os.path.normcase(own) != os.path.normcase(under)):
+        game = aerial_sets(mod, under)[0]
+    names = list(sets) or ["default"]
+
+    def pick(s, cname, key):
+        entry = s.get(cname, {}).get(key) or s.get("default", {}).get(key)
+        if entry is None and FALLBACK.get(key):
+            entry = s.get(cname, {}).get(FALLBACK[key]) or s.get("default", {}).get(FALLBACK[key])
+        return (entry[1] if winter and entry[1] else entry[0]) if entry else None
+    out = {}
+    for cname in names:
+        for key in keys:
+            files = []
+            for f in (pick(sets, cname, key), pick(game, cname, key)):
+                if f and f not in files:
+                    files.append(f)
+            out[(cname, key)] = files
+    return names, out, density
+
+
+def ground_file(name):
+    """The path under data/ of a picture named in descr_aerial_map_ground_types.txt: the game puts the name after
+    data/terrain/aerial_map/ground_types/ as it stands, so a mod may climb out with '../' (HLR names
+    '../../../../data/terrain/aerial_map/ground_types/x.tga' - the same folder reached from the game's root)."""
+    import posixpath
+    p = posixpath.normpath("data/terrain/aerial_map/ground_types/" + name.replace("\\", "/"))
+    return p[5:] if p.lower().startswith("data/") else p.lstrip("./")
+
+
 def _texture(mod, name, period):
     """A ground texture as a (period, period, 3) float array, or None."""
     from PIL import Image
-    for rel in ("terrain/aerial_map/ground_types/" + name, "terrain/aerial_map/" + name):
-        p = mod.find(rel)
+    for rel in (ground_file(name), "terrain/aerial_map/" + name):
+        p = mod.find_any(rel)
         if not p and not name.lower().endswith(".dds"):
-            p = mod.find(rel + ".dds")
+            p = mod.find_any(rel + ".dds")
         if p:
             try:
                 with Image.open(p) as im:
@@ -211,9 +251,8 @@ def colour_map(mod, campaign, winter=False, limit=2048, rng=None):
     k = pixels_per_point(W, H, limit)
     ground = _picture(mod, campaign, "map_ground_types.tga")
     climate = _picture(mod, campaign, "map_climates.tga")
-    sets, density = aerial_sets(mod)
-    names = list(sets) or ["default"]
     keys = sorted(set(GROUND_KEYS.values()))
+    names, choices, density = picture_choices(mod, keys, winter)
     notes = []
     period = max(8, int(PERIOD * density))
     # one texture per (climate, ground): looked up once, the plain colour where none
@@ -222,22 +261,22 @@ def colour_map(mod, campaign, winter=False, limit=2048, rng=None):
     cache = {}
     for ci, cname in enumerate(names):
         for gi, key in enumerate(keys):
-            entry = sets.get(cname, {}).get(key) or sets.get("default", {}).get(key)
-            if entry is None and FALLBACK.get(key):
-                entry = sets.get(cname, {}).get(FALLBACK[key]) or sets.get("default", {}).get(FALLBACK[key])
-            fname = entry[1] if entry and winter and entry[1] else (entry[0] if entry else None)
+            files = choices[(cname, key)]
             arr = None
-            if fname:
+            for fname in files:
                 if fname not in cache:
                     cache[fname] = _texture(mod, fname, period)
                 arr = cache[fname]
-                if arr is None:
-                    missing.add(fname)
+                if arr is not None:
+                    break
+            if files and cache[files[0]] is None:
+                missing.add(files[0])
             tex[ci, gi] = arr if arr is not None else np.array(PLAIN.get(key, (120, 120, 90)), np.float32)
     if missing:
-        notes.append("%d ground texture(s) not found - their ground's plain colour shown: %s" % (
+        notes.append("%d ground texture(s) not found - the game's own picture of that ground (else its plain colour) "
+                     "shown: %s" % (
             len(missing), ", ".join(sorted(missing)[:4]) + (" ..." if len(missing) > 4 else "")))
-    if not sets:
+    if not any(choices.values()):
         notes.append("no descr_aerial_map_ground_types.txt - the grounds' plain colours shown")
     # the grounds and climates of the heights' points (the pictures share the 2 W + 1 size; else stretched)
     gi = _ground_index(ground, keys) if ground is not None and ground.shape[:2] == (H, W) else np.zeros((H, W), np.int32)

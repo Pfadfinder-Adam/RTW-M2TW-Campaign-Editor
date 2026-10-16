@@ -232,6 +232,15 @@ class ModData:
                 return p
         return None
 
+    def find_any(self, rel):
+        """find(), else the file taken out of the packs the game reads (data/packs, Medieval II's packs) into a
+        temporary copy - for READING pictures and models only (never a file to write), or None."""
+        p = self.find(rel)
+        if p:
+            return p
+        from .gamepacks import unpacked
+        return unpacked(self.roots(), rel)
+
     def dirs(self, rel):
         """Every folder data/<rel> there is (any case) - the mod's own first, then the game's under it. A mod folder
         keeps only what it changes: a reader that walks a folder walks all of these (Recolour once looked in the mod's

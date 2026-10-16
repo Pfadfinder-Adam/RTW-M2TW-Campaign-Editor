@@ -21,6 +21,7 @@ picture (the same way on every system - no window of its own to fit into Tk). Wi
 gives OpenGL 3.3, available() says why and Maps > 3D draws as before (terrain3d)."""
 
 import math
+import os
 
 import numpy as np
 
@@ -99,7 +100,7 @@ def _image(mod, rels, size=None, mode="RGB"):
     from PIL import Image
     for rel in rels:
         for name in (rel, rel + ".dds"):
-            p = mod.find(name)
+            p = mod.find_any(name)
             if not p:
                 continue
             try:
@@ -116,7 +117,7 @@ def _image(mod, rels, size=None, mode="RGB"):
 def _image_size(mod, rel):
     from PIL import Image
     for name in (rel, rel + ".dds"):
-        p = mod.find(name)
+        p = mod.find_any(name)
         if p:
             try:
                 with Image.open(p) as im:
@@ -152,9 +153,8 @@ class MapData:
 
     def _ground(self, mod, campaign, winter):
         """(layer of each point (rows, cols) uint16, [pictures (LAYER, LAYER, 3)], [repeats a tile per layer])."""
-        sets, density = T3.aerial_sets(mod)
-        names = list(sets) or ["default"]
         keys = sorted(set(T3.GROUND_KEYS.values()) | {"beach"})
+        names, choices, density = T3.picture_choices(mod, keys, winter)
         ground = T3._picture(mod, campaign, "map_ground_types.tga")
         climate = T3._picture(mod, campaign, "map_climates.tga")
         shape = (self.rows, self.cols)
@@ -166,34 +166,39 @@ class MapData:
         # the games' own fix at loading: a land point with a sea colour is low fertility, a sea point is beach
         gi = np.where(gi < 0, keys.index("fertility_low"), gi)
         gi = np.where(sea, keys.index("beach"), gi)
-        files, pictures, repeat, missing = {}, [], [], set()
+        files, loaded, pictures, repeat, missing = {}, {}, [], [], set()
         table = np.zeros((len(names), len(keys)), np.int32)
         for c, cname in enumerate(names):
             for g, key in enumerate(keys):
-                entry = sets.get(cname, {}).get(key) or sets.get("default", {}).get(key)
-                if entry is None and T3.FALLBACK.get(key):
-                    entry = sets.get(cname, {}).get(T3.FALLBACK[key]) or sets.get("default", {}).get(T3.FALLBACK[key])
-                fname = (entry[1] if winter and entry[1] else entry[0]) if entry else None
-                tag = fname.lower() if fname else "plain:" + key
-                if tag not in files:
-                    arr, n = None, None
-                    if fname:
-                        rel = "terrain/aerial_map/ground_types/" + fname
+                tag = None
+                for fname in choices[(cname, key)]:          # the mod's picture, else the game's own
+                    if fname.lower() not in loaded:
+                        rel = T3.ground_file(fname)
                         arr = _image(mod, [rel], LAYER)
-                        n = _image_size(mod, rel)
-                        if arr is None:
-                            missing.add(fname)
-                    if arr is None:              # the ground's plain colour where the picture is missing
-                        arr = np.empty((LAYER, LAYER, 3), np.uint8)
+                        loaded[fname.lower()] = (arr, _image_size(mod, rel)) if arr is not None else None
+                    if loaded[fname.lower()] is None:
+                        missing.add(fname)
+                        continue
+                    tag = fname.lower()
+                    break
+                if tag is None:
+                    tag = "plain:" + key
+                if tag not in files:
+                    if tag.startswith("plain:"):             # the ground's plain colour where no picture opens
+                        arr, n = np.empty((LAYER, LAYER, 3), np.uint8), None
                         arr[:] = T3.PLAIN.get(key, (120, 120, 90))
+                    else:
+                        arr, n = loaded[tag]
                     files[tag] = len(pictures)
                     pictures.append(arr)
                     repeat.append(SEGMENT_TEXELS * density / float(n or LAYER))
                 table[c, g] = files[tag]
+        missing = {m for m in missing if loaded.get(m.lower()) is None}
         if missing:
-            self.notes.append("%d ground picture(s) not found - their ground's plain colour shown: %s" % (
-                len(missing), ", ".join(sorted(missing)[:4]) + (" ..." if len(missing) > 4 else "")))
-        if not sets:
+            self.notes.append("%d ground picture(s) not found - the game's own picture of that ground (else its plain "
+                              "colour) shown: %s" % (len(missing), ", ".join(
+                                  sorted(os.path.basename(m) for m in missing)[:4]) + (" ..." if len(missing) > 4 else "")))
+        if not any(choices.values()):
             self.notes.append("no descr_aerial_map_ground_types.txt - the grounds' plain colours shown")
         return table[ci, gi].astype(np.uint16), pictures, repeat
 
