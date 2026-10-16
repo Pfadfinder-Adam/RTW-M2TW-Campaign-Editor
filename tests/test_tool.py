@@ -8028,6 +8028,42 @@ building smith
         finally:
             gl.release()
 
+    def test_map_on_the_graphics_card_traces_the_coast_as_the_game(self):
+        """The live 3D map's coast (step 2, the engine's aerial_map_coastline): the shore is where the ground crosses
+        height 0 on the half-tile squares; an island is one closed line whose points look inland (to its middle);
+        two land corners facing each other in one square are cut off apart (the ground's SW -> NE diagonal); the
+        strips: a fixed beach 0.15 tile either side, then wet sand and surf sliding in from the sea."""
+        try:
+            import numpy as np
+        except ImportError:
+            self.skipTest("NumPy not installed")
+        from campaign_editor import glmap
+        h = np.full((7, 7), -100.0, np.float32)
+        h[2:5, 2:5] = 300.0                            # an island of 3 x 3 points
+        verts, tris = glmap.coast_line(h, 0.0006)
+        self.assertEqual(len(verts) % 2, 0)
+        self.assertEqual(len(tris) % 6, 0)
+        self.assertEqual(len(tris) // 6, len(verts) // 2 - 1)           # one line: a strip between its points
+        self.assertTrue(np.allclose(verts[0, :3], verts[-1, :3]))       # closed - the last point is the first
+        mid = np.array([1.5, 1.5])                                       # the island's middle (x, z in tiles)
+        for v in verts[::2]:
+            to_mid = mid - v[[0, 2]]
+            self.assertGreater(float(np.dot(v[[3, 5]], to_mid)), 0)    # every point looks inland
+            self.assertGreater(float(v[4]), 0)                           # and up the slope
+        self.assertAlmostEqual(float(verts[-1, 6]), 4 * 1.0 + 4 * 0.375 * 2 ** 0.5, places=4)    # its length
+        saddle = np.array([[100.0, -100.0], [-100.0, 100.0]], np.float32)
+        verts, tris = glmap.coast_line(saddle, 0.0006)
+        self.assertEqual(len(tris) // 6, 2)                              # two pieces: top-left and bottom-right
+        self.assertEqual(glmap.coast_line(np.full((3, 3), 50.0), 0.0006)[0].shape, (0, 8))   # no sea: no coast
+        strips = glmap.coast_strips(0.3)
+        self.assertEqual([s[0] for s in strips], ["beach", "surf", "surf", "surf", "surf"])
+        self.assertEqual(strips[0][1:3], (0.15, -0.15))
+        for _, inland, sea, alpha, _ in strips[1:]:
+            self.assertAlmostEqual(inland - sea, 0.3)
+            self.assertTrue(0.0 <= alpha <= 1.0)
+        self.assertLess(strips[1][4], 1.0)                               # wet sand is darker
+        self.assertNotEqual(glmap.coast_strips(0.3)[3][2], glmap.coast_strips(0.6)[3][2])    # the surf moves
+
     def test_map_in_3d_finds_the_game_models_of_what_stands_on_the_map(self):
         """Maps > 3D's models (the user, 2026-10-15: 'towns, resources, units...'): a town takes its level's model
         of its owner's culture - Rome's descr_sm_settlements.txt ('roman { town { normal ... } }') and Medieval II's

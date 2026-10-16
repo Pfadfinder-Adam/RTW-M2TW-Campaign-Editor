@@ -11,7 +11,9 @@ games. What the games do (read in the engine's source, facts only - editor-notes
 - the pictures lie fixed on the world: a picture N pixels wide repeats every N / (64 x texture_density) tiles;
 - the light (descr_strategy_lighting.txt): colour = picture x min(ambient + diffuse x (normal . sun), 1), per point;
 - the sea is a flat sheet at height 0 under everything - land below 0 hides under it, so the coast is where the
-  ground crosses 0: water_surface.tga stretched over the whole map, with the waves and the sky's reflection.
+  ground crosses 0: water_surface.tga stretched over the whole map, with the waves and the sky's reflection;
+- along that line lie see-through strips: the beach (sea/beach_strip.tga) and the wet sand and surf (sea/surf2b.tga)
+  sliding in from the sea (coast_line, coast_strips).
 
 Everything lives on the card as pictures (the heights, the ground picture of each point): a brush stroke changes
 a few of their pixels, the next frame shows it. The frame is drawn off the screen and handed to the window as a
@@ -144,6 +146,8 @@ class MapData:
                                   "world/maps/base/water_surface.tga"])
         self.waves = _image(mod, ["terrain/aerial_map/sea/waves.tga"], mode="RGBA")
         self.sky = _image(mod, ["terrain/aerial_map/sea/sky_environment_summer.tga"])
+        self.beach = _image(mod, ["terrain/aerial_map/sea/beach_strip.tga"], mode="RGBA")
+        self.surf = _image(mod, ["terrain/aerial_map/sea/surf2b.tga"], mode="RGBA")
         self.light = lighting(mod)
 
     def _ground(self, mod, campaign, winter):
@@ -218,6 +222,147 @@ class MapData:
         c = int(round(min(max(x * 2, 0), self.cols - 1)))
         r = int(round(min(max(z * 2, 0), self.rows - 1)))
         return max(0.0, float(self.heights[r, c])) * 0.0005 * self.scale
+
+
+COAST_TIGHT = 0.5                               # the slope the strips lean to: half a step along a cell side,
+COAST_CORNER = 0.707                            # 0.707 across a corner (the engine's 'opposite' / 'adjacent')
+WET_SAND = 0.2176 ** (1 / 2.2)                  # the wet sand's dimming (the engine's linear 0.2176, as a gamma shade)
+
+
+def coast_line(heights, yscale):
+    """The coast as the games trace it (aerial_map_coastline): where the ground crosses height 0 on every half-tile
+    square of the points' grid - a square with two sides crossing gets one piece between them; one with all four (two
+    land corners facing each other) gets two, cutting off its top-left and bottom-right corners, as the ground's own
+    SW -> NE diagonal joins the other two. Pieces join into lines; each point of a line has a direction across the
+    shore, pointing inland and up the slope, and its length along the line (the strips' pictures run along it, one
+    repeat a tile). heights: metres (rows, cols), top row first; yscale: metres -> world units.
+    Returns (vertices (n, 8) float32: x, y, z, direction x, y, z, length, side - two a point, side 0 the strip's
+    inland edge, 1 its sea edge; triangles (m,) uint32)."""
+    h = np.asarray(heights, np.float64)
+    rows, cols = h.shape
+    empty = (np.zeros((0, 8), np.float32), np.zeros(0, np.uint32))
+    if rows < 2 or cols < 2:
+        return empty
+    land = h > 0
+    # where each side of a square crosses 0: across (r, c)-(r, c+1), down (r, c)-(r+1, c)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        ta = np.clip(-h[:, :-1] / (h[:, 1:] - h[:, :-1]), 0.0, 1.0)
+        td = np.clip(-h[:-1, :] / (h[1:, :] - h[:-1, :]), 0.0, 1.0)
+    xa = land[:, :-1] != land[:, 1:]
+    xd = land[:-1, :] != land[1:, :]
+    na = rows * (cols - 1)
+    ida = np.arange(na).reshape(rows, cols - 1)
+    idd = na + np.arange((rows - 1) * cols).reshape(rows - 1, cols)
+    ra, ca = np.nonzero(np.ones((rows, cols - 1), bool))
+    rd, cd = np.nonzero(np.ones((rows - 1, cols), bool))
+    px = np.concatenate([(ca + ta.ravel()) * 0.5, cd * 0.5])
+    pz = np.concatenate([ra * 0.5, (rd + td.ravel()) * 0.5])
+    slope = np.concatenate([np.abs(h[:, 1:] - h[:, :-1]).ravel(),
+                            np.abs(h[1:, :] - h[:-1, :]).ravel()]) * yscale / 0.5
+    top, bottom = np.where(xa[:-1], ida[:-1], -1), np.where(xa[1:], ida[1:], -1)
+    left, right = np.where(xd[:, :-1], idd[:, :-1], -1), np.where(xd[:, 1:], idd[:, 1:], -1)
+    sides = np.stack([top, right, bottom, left], -1)          # (rows-1, cols-1, 4), clockwise from the top
+    count = (sides >= 0).sum(-1)
+    sign = np.where(land, 1.0, -1.0)
+    cell = (sign[:-1, :-1], sign[:-1, 1:], sign[1:, :-1], sign[1:, 1:])
+    two = count == 2
+    s2 = sides[two]                                # the two crossed sides of each square, in clockwise order
+    order = np.argsort(s2 < 0, axis=1, kind="stable")[:, :2]
+    a2 = np.take_along_axis(s2, order, 1)
+    k2 = np.where(order[:, 1] - order[:, 0] == 2, COAST_TIGHT, COAST_CORNER)
+    tl, tr, bl, br = (c[two] for c in cell)
+    four = count == 4
+    s4 = sides[four]
+    t4, b4 = cell[0][four], cell[3][four]
+    # (side a, side b, the way inland x / z, slope factor) of every piece; a 4-crossing square's two pieces cut off
+    # its top-left and bottom-right corners
+    a = np.concatenate([a2[:, 0], s4[:, 0], s4[:, 2]])
+    b = np.concatenate([a2[:, 1], s4[:, 3], s4[:, 1]])
+    vx = np.concatenate([tr + br - tl - bl, -t4, b4])
+    vz = np.concatenate([bl + br - tl - tr, -t4, b4])
+    k = np.concatenate([k2, np.full(len(s4) * 2, COAST_CORNER)])
+    if not len(a):
+        return empty
+    dx, dz = px[b] - px[a], pz[b] - pz[a]
+    flip = -dz * vx + dx * vz < 0                  # walk with the land on the same hand everywhere
+    a, b = np.where(flip, b, a), np.where(flip, a, b)
+    dx, dz = np.where(flip, -dx, dx), np.where(flip, -dz, dz)
+    n = np.maximum(np.hypot(dx, dz), 1e-9)
+    d = np.stack([-dz / n, k * (slope[a] + slope[b]), dx / n], 1)
+    d /= np.linalg.norm(d, axis=1, keepdims=True)
+    seg_from, seg_to = a.tolist(), b.tolist()
+    starts = {e: i for i, e in enumerate(seg_from)}
+    nxt = [starts.get(e, -1) for e in seg_to]
+    has_prev = [False] * len(nxt)
+    for j in nxt:
+        if j >= 0:
+            has_prev[j] = True
+    used = [False] * len(nxt)
+    pts, dirs, lines = [], [], []                  # every line's points (crossing ids) and their segments
+
+    def chain(first):
+        line, i = [], first
+        while i >= 0 and not used[i]:
+            used[i] = True
+            line.append(i)
+            i = nxt[i]
+        closed = i == first
+        start = len(pts)
+        pts.append(seg_from[line[0]])
+        dirs.append((line[-1] if closed else line[0], line[0]))
+        for x, y in zip(line, line[1:]):
+            pts.append(seg_to[x])
+            dirs.append((x, y))
+        pts.append(seg_to[line[-1]])
+        dirs.append((line[-1], line[0]) if closed else (line[-1], line[-1]))
+        lines.append((start, len(pts)))
+
+    for i in range(len(nxt)):                      # open lines from their heads, then the closed ones (islands)
+        if not has_prev[i] and not used[i]:
+            chain(i)
+    for i in range(len(nxt)):
+        if not used[i]:
+            chain(i)
+    p = np.asarray(pts)
+    j = np.asarray(dirs)
+    pd = d[j[:, 0]] + d[j[:, 1]]                   # at a joint the two pieces' directions meet half way
+    pd /= np.maximum(np.linalg.norm(pd, axis=1, keepdims=True), 1e-9)
+    step = np.hypot(np.diff(px[p]), np.diff(pz[p]))
+    u = np.concatenate([[0.0], np.cumsum(step)])
+    first = np.zeros(len(p), bool)
+    for s, e in lines:
+        first[s] = True
+    u -= np.maximum.accumulate(np.where(first, u, 0.0))      # each line's length from its own start
+    one = np.stack([px[p], np.zeros(len(p)), pz[p], pd[:, 0], pd[:, 1], pd[:, 2], u], 1)
+    verts = np.repeat(one, 2, 0)
+    verts = np.concatenate([verts, np.tile([[0.0], [1.0]], (len(p), 1))], 1)
+    q = np.concatenate([np.arange(s, e - 1) for s, e in lines]) * 2
+    tris = np.stack([q, q + 1, q + 2, q + 2, q + 1, q + 3], 1).ravel()
+    return verts.astype(np.float32), tris.astype(np.uint32)
+
+
+def coast_strips(t):
+    """The coast's five strips at time t (0..1, a wave every 5 seconds - the engine's coastline): the beach (a fixed
+    strip 0.15 tile either side of the shore), two of wet sand and two of surf, each pair half a wave apart, sliding
+    in from the sea and fading. [(picture 'beach' / 'surf', inland edge, sea edge (tiles along the direction),
+    alpha, brightness)]."""
+    def travel(x):                                 # the engine's distance_t: starts slow, speeds up
+        return (0.25 + 0.75 * x) * x
+    size, distance, start = 0.3, 0.225, -0.4
+    out = [("beach", 0.15, -0.15, 1.0, 1.0)]
+    for shift in (0.0, 0.5):
+        dt = (t + shift) % 1.0
+        if dt < 0.8:
+            low, alpha = start + distance * travel(dt), dt / 0.8 * 0.5
+        else:
+            low, alpha = start + distance * travel(0.8 - (dt - 0.8) * 0.5), (1.0 - (dt - 0.8) / 0.2) * 0.5
+        out.append(("surf", low + size, low, alpha, WET_SAND))
+    for shift in (0.0, 0.5):
+        dt = (t + shift) % 1.0
+        alpha = math.sin(dt / 0.25 * math.pi / 2) if dt < 0.25 else 1.0 if dt < 0.75 else 1.0 - (dt - 0.75) / 0.25
+        low = start + distance * travel(dt)
+        out.append(("surf", low + size, low, alpha, 1.0))
+    return out
 
 
 TERRAIN_VS = """
@@ -315,6 +460,33 @@ void main() {
     vec2 r = (w + (eye.xz - w) * 0.15) / 32.0;
     c = mix(c, texture(sky, r).rgb, 0.5);
     colour = vec4(c, 1.0);
+}
+"""
+
+
+COAST_VS = """
+#version 330
+uniform mat4 mvp;
+uniform vec2 edges;
+in vec3 pos;
+in vec3 dir;
+in vec2 uv;
+out vec2 t;
+void main() {
+    t = vec2(uv.x, uv.y * 0.95);
+    gl_Position = mvp * vec4(pos + dir * (uv.y < 0.5 ? edges.x : edges.y), 1.0);
+}
+"""
+
+COAST_FS = """
+#version 330
+uniform sampler2D strip;
+uniform vec4 tint;
+in vec2 t;
+out vec4 colour;
+void main() {
+    vec4 c = texture(strip, t);
+    colour = vec4(c.rgb * tint.rgb, c.a * tint.a);
 }
 """
 
@@ -420,6 +592,13 @@ class GLMap:
         quad = np.array([[0, 0], [tc, 0], [0, tr_], [tc, tr_]], np.float32)
         qbo = self._keep(ctx.buffer(quad.tobytes()))
         self.sea_vao = self._keep(ctx.vertex_array(self.sea, [(qbo, "2f", "pos")]))
+        self.coast = self._keep(ctx.program(vertex_shader=COAST_VS, fragment_shader=COAST_FS))
+        self.strips = {"beach": self._picture(data.beach, 4, (0, 0, 0, 0), repeat=True),
+                       "surf": self._picture(data.surf, 4, (0, 0, 0, 0), repeat=True)}
+        for t in self.strips.values():
+            t.repeat_y = False
+        self.coast["strip"].value = 7
+        self.coast_vao, self._coast_buffers, self.coast_dirty = None, [], True
         self.fbo, self.fbo_size = None, None
         L = data.light
         d = np.asarray(L["direction"], np.float64) * (1.0, 1.0, -1.0)    # the game's z runs north, ours south
@@ -440,6 +619,9 @@ class GLMap:
         self.sea["waves_mean"].value = float(data.waves[..., 0].mean()) / 255.0 if data.waves is not None else 0.5
         for name, unit in (("water", 4), ("waves", 5), ("sky", 6)):
             self.sea[name].value = unit
+        # the strips are lit as flat ground facing up (the engine's coastline shader)
+        self.strip_light = np.minimum(np.asarray(L["ambient"]) + np.asarray(L["diffuse"]) * max(float(to_light[1]), 0.0),
+                                      1.0)
 
     def _keep(self, obj):
         self._gone.append(obj)
@@ -461,6 +643,7 @@ class GLMap:
         self.data.heights[row:row + block.shape[0], col:col + block.shape[1]] = block
         self.heights.write(np.ascontiguousarray(block).tobytes(),
                            viewport=(col, row, block.shape[1], block.shape[0]))
+        self.coast_dirty = True                                  # the shore traced again at the next frame
 
     def set_layers(self, row, col, block):
         """The ground picture (layer) of a block of points from (row, col) changed on the card."""
@@ -469,8 +652,22 @@ class GLMap:
         self.layers.write(np.ascontiguousarray(block).tobytes(),
                           viewport=(col, row, block.shape[1], block.shape[0]))
 
-    def render(self, cam, w, h):
-        """The map seen from cam as a (h, w, 3) uint8 picture, top row first."""
+    def _coast(self):
+        """The coast's strips traced again from the heights (made once, then after a heights change)."""
+        for obj in self._coast_buffers:
+            obj.release()
+        self._coast_buffers, self.coast_vao, self.coast_dirty = [], None, False
+        verts, tris = coast_line(self.data.heights, 0.0005 * self.data.scale)
+        if not len(tris):
+            return
+        vbo, ibo = self.ctx.buffer(verts.tobytes()), self.ctx.buffer(tris.tobytes())
+        self.coast_vao = self.ctx.vertex_array(self.coast, [(vbo, "3f 3f 2f", "pos", "dir", "uv")], ibo,
+                                               index_element_size=4)
+        self._coast_buffers = [self.coast_vao, vbo, ibo]
+
+    def render(self, cam, w, h, t=0.3):
+        """The map seen from cam as a (h, w, 3) uint8 picture, top row first; t: the moment of the surf's wave
+        (0..1)."""
         ctx = self.ctx
         w, h = max(16, int(w)), max(16, int(h))
         if self.fbo_size != (w, h):
@@ -499,16 +696,36 @@ class GLMap:
         self.terrain["mvp"].write(mvp_bytes)
         self.terrain["yscale"].value = 0.0005 * self.data.scale
         self.vao.render()
+        if self.coast_dirty:
+            self._coast()
+        if self.coast_vao is not None:                           # see-through strips over the ground, as the game
+            self.coast["mvp"].write(mvp_bytes)
+            self.fbo.depth_mask = False
+            ctx.enable(ctx.BLEND)
+            ctx.blend_func = ctx.SRC_ALPHA, ctx.ONE_MINUS_SRC_ALPHA
+            ctx.depth_func = "<="
+            ctx.polygon_offset = (-2.0, -256.0)
+            for key, inland, sea, alpha, bright in coast_strips(t % 1.0):
+                if alpha <= 0.0:
+                    continue
+                self.strips[key].use(7)
+                self.coast["edges"].value = (inland, sea)
+                self.coast["tint"].value = tuple(float(v) * bright for v in self.strip_light) + (alpha,)
+                self.coast_vao.render()
+            ctx.polygon_offset = (0.0, 0.0)
+            ctx.depth_func = "<"
+            ctx.disable(ctx.BLEND)
+            self.fbo.depth_mask = True
         raw = self.fbo.read(components=3)
         return np.frombuffer(raw, np.uint8).reshape(h, w, 3)[::-1]
 
     def release(self):
-        for obj in reversed(self._gone + ([self.fbo] if self.fbo is not None else [])):
+        for obj in reversed(self._gone + self._coast_buffers + ([self.fbo] if self.fbo is not None else [])):
             try:
                 obj.release()
             except Exception:
                 pass
-        self._gone, self.fbo = [], None
+        self._gone, self._coast_buffers, self.fbo = [], [], None
 
 
 __all__ = ["available", "context", "MapData", "GLMap", "Camera", "lighting"]
