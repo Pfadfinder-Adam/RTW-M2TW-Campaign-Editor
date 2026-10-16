@@ -155,6 +155,7 @@
   its own where others wear the same file. Keep for Apply, written with Apply (one backup).
 
 ### Changed
+- Every window: words on labels, ticks and buttons that do not fit a narrowed window end in '...' and show whole when the mouse rests on them; widened, the window gives them back whole.
 - Interface: no Undo / Redo / Preview / Keep for Apply of its own any more - the main window's buttons act on it as on every work; the title, hint line and bottom bar are gone, the screen got their room.
 - Interface: the menu backdrop shows where the game plays its video (Rome, Alexander, Medieval II), not the still picture under it; Barbarian Invasion keeps its picture.
 - Recruitment Order: chariots, then elephants (each: those that charge first, then those that shoot), then war dogs and pigs stand after all the cavalry - before, handlers stood with the infantry and shooting chariots with the horse archers.

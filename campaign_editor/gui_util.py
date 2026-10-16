@@ -1022,6 +1022,7 @@ def install_window_helpers(root):
     root.bind_all("<ButtonPress-1>", away, add="+")
     keys(root)
     sortable(root)
+    cut_when_squeezed(root)
     for cls in ("TEntry", "TCombobox", "Entry"):
         root.bind_class(cls, "<Enter>", enter, add="+")
         root.bind_class(cls, "<Leave>", hide, add="+")
@@ -1245,6 +1246,97 @@ def cut_to(text, fits):
         else:
             hi = mid - 1
     return text[:lo].rstrip() + "..."
+
+
+CUT_CLASSES = ("TLabel", "TCheckbutton", "TRadiobutton", "TButton", "Label", "Checkbutton", "Radiobutton", "Button")
+_SQUEEZED = {}                       # widget path -> widget, the ones showing their words cut now
+
+
+def squeeze(w):
+    """One label / tick / button: when the window gives it less room than its words take, the words end in '...'
+    and the hover tip shows them whole (the user, 2026-10-16, again: 'everywhere'). Words changed by the code since
+    are taken as its new words. A wrapping label, one with a text variable or a picture, and one_line's are left as
+    they are."""
+    import tkinter.font as tkfont
+    try:
+        if not w.winfo_exists() or hasattr(w, "set_text"):
+            return
+        keys = w.keys()
+        if "textvariable" in keys and str(w.cget("textvariable")):
+            return
+        if "image" in keys and str(w.cget("image")):
+            return
+        if "wraplength" in keys and str(w.cget("wraplength")) not in ("", "0"):
+            return
+        text = str(w.cget("text"))
+        full, cut = getattr(w, "_ce_full", None), getattr(w, "_ce_cut", None)
+        if full is None or (cut is not None and text != cut) or (cut is None and text != full):
+            full, cut = text, None                     # new words from the code
+        if "\n" in full or not full.strip():
+            return
+        top = w.winfo_toplevel()
+        if cut is None and top.winfo_width() >= top.winfo_reqwidth():
+            return                  # the window has the room its contents ask for: a word cut now would only be a
+            #                         passing size while it is laid out (and a natural-size window then shrank to it)
+        room = w.winfo_width()
+        if room <= 1 or not w.winfo_toplevel().winfo_ismapped():    # not laid out yet: its first sizes mean nothing
+            return
+        try:
+            f = tkfont.Font(font=w.cget("font"))
+        except (tk.TclError, ValueError):
+            f = tkfont.nametofont("TkDefaultFont")
+        extra = max(0, w.winfo_reqwidth() - f.measure(text))      # its padding, a tick's box
+        shown = cut_to(full, lambda t: f.measure(t) + extra <= room)
+        w._ce_full = full
+        if shown != text:
+            w.configure(text=shown)
+        w._ce_cut = shown if shown != full else None
+        if w._ce_cut is not None:
+            _SQUEEZED[str(w)] = w
+            if not getattr(w, "_ce_tip", False):
+                w._ce_tip = True
+                Tip(w, lambda: w._ce_full if getattr(w, "_ce_cut", None) else "")
+        else:
+            _SQUEEZED.pop(str(w), None)
+    except tk.TclError:
+        pass
+
+
+def cut_when_squeezed(root):
+    """Every label, tick and button of every window: words cut with '...' when the window is too narrow for them,
+    whole in the hover tip (squeeze); a window made wider gives them their whole words back first, so they grow
+    again (a cut text takes less room, and a window of its natural size only ever grows from it - no see-saw)."""
+    widths = {}
+
+    def on_size(e):
+        w = e.widget
+        for cls in CUT_CLASSES:
+            if w.winfo_class() == cls:
+                squeeze(w)
+                return
+
+    def on_window(e):
+        top = e.widget
+        if not isinstance(top, (tk.Tk, tk.Toplevel)):
+            return
+        old = widths.get(str(top))
+        widths[str(top)] = e.width
+        if old is not None and e.width <= old:
+            return
+        for path, w in list(_SQUEEZED.items()):
+            try:
+                if not w.winfo_exists():
+                    _SQUEEZED.pop(path, None)
+                elif w.winfo_toplevel() is top and getattr(w, "_ce_cut", None) and str(w.cget("text")) == w._ce_cut:
+                    w.configure(text=w._ce_full)       # whole again; its <Configure> cuts it again if still narrow
+                    w._ce_cut = None
+                    _SQUEEZED.pop(path, None)
+            except tk.TclError:
+                _SQUEEZED.pop(path, None)
+    for cls in CUT_CLASSES:
+        root.bind_class(cls, "<Configure>", on_size, add="+")
+    for cls in ("Tk", "Toplevel"):
+        root.bind_class(cls, "<Configure>", on_window, add="+")
 
 
 def one_line(label, text="", extra=0, **pack):

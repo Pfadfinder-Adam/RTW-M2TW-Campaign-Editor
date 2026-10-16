@@ -12134,6 +12134,45 @@ building smith
         self.assertEqual(img.getpixel((0, 25)), colours["MID_LEFT"])
         self.assertEqual(img.getpixel((44, 25)), colours["MID_RIGHT"])
 
+    def test_words_cut_with_dots_when_the_window_is_too_narrow(self):
+        """The user, 2026-10-16 (again, 'everywhere'): a label / tick / button whose words do not fit the window ends
+        in '...' and shows them whole on hover; the window made wider gives them back whole; a window of its own size
+        never see-saws; a wrapping label is left alone."""
+        try:
+            import tkinter as tk
+            from tkinter import ttk
+            root = tk.Tk()
+        except Exception as e:
+            self.skipTest("no window: %s" % e)
+        from campaign_editor import gui_util as GU
+        try:
+            GU.cut_when_squeezed(root)
+            words = "A rather long line of words that a narrow window cannot hold whole"
+            lab = ttk.Label(root, text=words)
+            lab.pack(fill="x")
+            tick = ttk.Checkbutton(root, text=words)
+            tick.pack(fill="x")
+            wrap = ttk.Label(root, text=words, wraplength=80)
+            wrap.pack(fill="x")
+            root.update()
+            self.assertEqual(lab.cget("text"), words)               # its own size: whole, and it stays so
+            root.geometry("150x200")
+            for _ in range(5):
+                root.update()
+            self.assertTrue(lab.cget("text").endswith("..."))
+            self.assertTrue(str(tick.cget("text")).endswith("..."))
+            self.assertEqual(lab._ce_full, words)
+            self.assertEqual(wrap.cget("text"), words)
+            lab.configure(text="Short")                               # the code's new words: taken as they are
+            root.update()
+            self.assertEqual(lab.cget("text"), "Short")
+            root.geometry("900x200")
+            for _ in range(5):
+                root.update()
+            self.assertEqual(tick.cget("text"), words)                # wider: whole again
+        finally:
+            root.destroy()
+
     def test_cut_out_texture_points_are_not_drawn(self):
         """The games' alpha test (a tester's card: a round shield showed as a square with its picture): a texture
         point below alpha 128 is not drawn - the part behind it shows, in the NumPy drawing and the plain one."""
