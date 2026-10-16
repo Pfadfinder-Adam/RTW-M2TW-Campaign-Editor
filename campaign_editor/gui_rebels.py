@@ -16,13 +16,13 @@ from tkinter import messagebox, simpledialog, ttk
 
 from . import rebels as RB
 from . import theme
-from .gui_util import AutoKeep, ShortHint, ask
+from .gui_util import AutoKeep, ShortHint, ask, Page
 
 TITLE = "Rebels"
 ALL = "every faction"
 
 
-class RebelsWindow(AutoKeep, tk.Toplevel):
+class RebelsWindow(AutoKeep, Page):
     _ak_fields = ('types', 'removed', 'given')
 
     def __init__(self, app):
@@ -363,7 +363,7 @@ class RebelsWindow(AutoKeep, tk.Toplevel):
         """A small question with a list: the rebel type picked, or None."""
         w = tk.Toplevel(self)
         w.title(TITLE)
-        w.transient(self)
+        w.transient(self.winfo_toplevel())
         w.grab_set()
         f = ttk.Frame(w, padding=12)
         f.pack(fill="both", expand=True)
@@ -514,19 +514,14 @@ class RebelsWindow(AutoKeep, tk.Toplevel):
 
 
 def open_rebels(app, regions=None):
-    """One window: opened again it comes to the front; regions: those picked on its Regions tab."""
-    if not app.mod:
-        messagebox.showinfo(TITLE, "Load a mod first.")
-        return None
-    w = getattr(app, "_rebels_window", None)
-    if w is None or not w.winfo_exists() or w.mod is not app.mod or w.campaign != app.v_campaign.get():
-        if w is not None and w.winfo_exists():
-            w.destroy()
-        w = app._rebels_window = RebelsWindow(app)
-    w.lift()
-    if not w.path:
-        messagebox.showinfo(TITLE, "This mod has no %s - no rebel types to change." % RB.FILE, parent=w)
-        return w
-    if regions:
+    """Rebels: a work of the main window (App.show_page); regions: those picked on its Regions tab."""
+    w = app.show_page("rebels")
+    if isinstance(w, RebelsWindow) and w.path and regions:
         w.pick_regions(regions)
     return w
+
+
+def make_page(app):
+    if not app.mod:
+        return None
+    return RebelsWindow(app)

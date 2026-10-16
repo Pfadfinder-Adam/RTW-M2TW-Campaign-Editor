@@ -9,7 +9,7 @@ from tkinter import messagebox, simpledialog, ttk
 
 from . import theme
 from .gui_util import right_click
-from .gui_util import AutoKeep, one_window, ShortHint
+from .gui_util import AutoKeep, Page, ShortHint
 from .gui_util import scroll_body
 from . import events as EV
 from .plan import Plan
@@ -17,8 +17,7 @@ from .plan import Plan
 TITLE = "Events and later factions"
 
 
-@one_window
-class EventsWindow(AutoKeep, tk.Toplevel):
+class EventsWindow(AutoKeep, Page):
     def __init__(self, app):
         super().__init__(app)
         self.app, self.mod = app, app.mod
@@ -144,7 +143,7 @@ class EventsWindow(AutoKeep, tk.Toplevel):
                                       "region": ev0.get("region") or ""}
         w = tk.Toplevel(self)
         w.title("How a faction comes into the campaign")
-        w.transient(self)
+        w.transient(self.winfo_toplevel())
         fr = scroll_body(w, 10)          # resizable, scrolls when the window is lower than it
         v_fac, v_way = tk.StringVar(value=fac0), tk.StringVar(value=WAY_LABELS[WAY_KEYS.index(ch["way"])])
         v_of, v_date, v_reg = tk.StringVar(value=ch.get("of") or ""), tk.StringVar(value=ch.get("date") or ""), \
@@ -489,10 +488,14 @@ class EventsWindow(AutoKeep, tk.Toplevel):
 
 
 def open_events(app):
+    """Events: a work of the main window (App.show_page)."""
+    return app.show_page("events")
+
+
+def make_page(app):
+    """The work's tool, or the words why it cannot show (no mod, no descr_events.txt)."""
     if not app.mod:
-        messagebox.showinfo(TITLE, "Load a mod first (Mod or Browse..., then Load).", parent=app)
-        return
+        return None
     if not EV.path_of(app.mod, app.v_campaign.get()):
-        messagebox.showinfo(TITLE, "The campaign %s has no descr_events.txt." % app.v_campaign.get(), parent=app)
-        return
-    EventsWindow(app)
+        return "The campaign %s has no descr_events.txt." % app.v_campaign.get()
+    return EventsWindow(app)

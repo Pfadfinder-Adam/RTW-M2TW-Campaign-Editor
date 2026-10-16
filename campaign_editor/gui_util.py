@@ -1672,6 +1672,95 @@ def ask(title, text, yes, no="Cancel", danger=False, parent=None, icon=None):
                       danger=0 if danger else None) == 0
 
 
+class Page(ttk.Frame):
+    """A tool that was a window of its own, now a work of the main window (the user, 2026-10-16: 'Events, Mercenaries,
+    Rebels, Traits and all these buttons - windows of the main window instead of separate ones'). It keeps the code
+    written for a window: the window manager's calls do nothing here, and the main window holds it like the Module
+    builder (App.editor: kind, mod, dirty / pending / make_plan / rebind). Its changes are kept by themselves
+    (AutoKeep) and written with Apply changes; its Close shows the map again."""
+    page = True
+
+    def __init__(self, master=None, **kw):
+        super().__init__(master, **kw)
+
+    # the window manager's calls of a window: nothing to do in the main window
+    def title(self, *a):
+        return ""
+
+    def transient(self, *a):
+        return None
+
+    def geometry(self, *a):
+        return ""
+
+    def minsize(self, *a):
+        return None
+
+    def maxsize(self, *a):
+        return None
+
+    def protocol(self, *a):
+        return None
+
+    def resizable(self, *a):
+        return None
+
+    def withdraw(self):
+        return None
+
+    def deiconify(self):
+        return None
+
+    def iconify(self):
+        return None
+
+    def attributes(self, *a):
+        return None
+
+    # what the main window asks of a work
+    @property
+    def kind(self):
+        return type(self).__name__
+
+    def dirty(self):
+        return False                     # its changes are kept by themselves, written with Apply changes
+
+    def pending(self):
+        return 0
+
+    def make_plan(self):
+        raise ValueError("its changes are kept by themselves - Apply changes writes them")
+
+    def rebind(self, mod):
+        return 0                         # another mod: the main window makes it again on that mod (App.editor)
+
+    def destroy(self):
+        if not getattr(self, "_page_gone", False):
+            self._page_gone = True
+            try:
+                if hasattr(self, "ak_close"):
+                    self.ak_close()          # what still waits is kept first, as a window's Close did
+            except Exception:
+                pass
+            app = getattr(self, "app", None)
+            super().destroy()
+            gone = getattr(app, "page_closed", None)
+            if gone is not None:
+                gone(self)
+            return
+        super().destroy()
+
+
+class PageNote(Page):
+    """A work that cannot show its tool now (no mod loaded, the file it edits missing): the words why."""
+
+    def __init__(self, master, app, words):
+        super().__init__(master)
+        self.app, self.mod = app, app.mod
+        self.campaign = app.v_campaign.get() if getattr(app, "v_campaign", None) is not None else None
+        ttk.Label(self, text=words, wraplength=700, justify="left").pack(anchor="nw", padx=12, pady=12)
+
+
 def close_guard(w, title, dirty, write, after=None):
     """Closing a window never throws its work away silently (NN/g 'close-as-discard'): dirty() -> words of what is
     neither written nor kept for the write (or '' / None); with it, Close asks 'Keep for Apply / Keep editing /

@@ -3,9 +3,9 @@ beside a changed one; a change waits for Apply changes by itself (gui_util.AutoK
 changes / Apply changes / Undo / Redo; a backup first)."""
 
 import tkinter as tk
-from tkinter import messagebox, ttk
+from tkinter import ttk
 
-from .gui_util import AutoKeep, one_window, ShortHint, tip
+from .gui_util import AutoKeep, ShortHint, tip, Page
 from . import campaignrules as CR
 from .gui_util import ScrollFrame
 from .plan import Plan
@@ -14,8 +14,7 @@ CHANGED = "#fff3b0"
 BAD = "#f4b6b6"
 
 
-@one_window
-class RulesWindow(AutoKeep, tk.Toplevel):
+class RulesWindow(AutoKeep, Page):
     def __init__(self, app):
         super().__init__(app)
         self.app, self.mod = app, app.mod
@@ -231,7 +230,11 @@ class RulesWindow(AutoKeep, tk.Toplevel):
 
 
 def open_rules(app):
+    """Campaign rules: a work of the main window (App.show_page)."""
+    return app.show_page("rules")
+
+
+def make_page(app):
     if not app.mod:
-        messagebox.showinfo("Campaign rules", "Load a mod first (Mod or Browse..., then Load).", parent=app)
-        return
-    RulesWindow(app)
+        return None
+    return RulesWindow(app)

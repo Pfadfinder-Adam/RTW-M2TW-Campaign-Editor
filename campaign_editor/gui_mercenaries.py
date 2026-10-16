@@ -16,7 +16,7 @@ import hashlib
 import tkinter as tk
 from tkinter import messagebox, simpledialog, ttk
 
-from .gui_util import AutoKeep, ShortHint
+from .gui_util import AutoKeep, ShortHint, Page
 from .gui_util import ask
 from . import mercenaries as M
 from . import theme
@@ -33,7 +33,7 @@ def _hash(path):
         return hashlib.sha1(fh.read()).hexdigest()
 
 
-class MercWindow(AutoKeep, tk.Toplevel):
+class MercWindow(AutoKeep, Page):
     _ak_fields = ('pools',)
 
     def __init__(self, app):
@@ -645,25 +645,25 @@ class MercWindow(AutoKeep, tk.Toplevel):
 
 
 def open_mercenaries(app, region=None, new_from=None):
-    """One window: opened again it comes to the front; region picks that region's pool, new_from makes a pool of
-    those regions."""
-    if not app.mod:
-        messagebox.showinfo(TITLE, "Load a mod first.")
-        return None
-    w = getattr(app, "_merc_window", None)
-    if w is None or not w.winfo_exists() or w.mod is not app.mod or w.campaign != app.v_campaign.get():
-        if w is not None and w.winfo_exists():
-            w.destroy()
-        w = app._merc_window = MercWindow(app)
-        if not region:
-            w.nb.select(1)                      # from the work bar: the pools first
-    w.lift()
+    """Mercenaries: a work of the main window (App.show_page); region picks that region's pool, new_from makes a pool
+    of those regions."""
+    w = app.show_page("mercs")
+    if not isinstance(w, MercWindow):
+        return w
     if not w.path:
-        messagebox.showinfo(TITLE, "This campaign has no descr_mercenaries.txt - nothing to hire.", parent=w)
         return w
     if region:                                  # the region's own list, the garrison way (it says if it has none)
         w.pick_region(region)
     elif new_from:
         w.nb.select(1)
         w.new_pool(list(new_from))
+    return w
+
+
+def make_page(app):
+    if not app.mod:
+        return None
+    w = MercWindow(app)
+    if w.path:
+        w.nb.select(1)                          # from the work bar: the pools first
     return w

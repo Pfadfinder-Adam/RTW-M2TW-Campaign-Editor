@@ -1553,17 +1553,13 @@ class App(tk.Tk):
 
     # the tools that open a window of their own, on the work bar after the works: (key, button, App method, hover)
     WINDOW_BUTTONS = [
-        ("rules", "Campaign rules...", "campaign_rules", "ages, agents, towns, diplomacy, unit sizes - every rule of "
-                                                         "the campaign"),
-        ("events", "Events...", "events_window", "events and later factions: plagues, volcanoes, historic messages"),
-        ("traits", "Traits and retinue...", "traits_window", "what they give, their names, new ones"),
         ("recolour", "Recolour...", "recolour_window", "a faction's pictures in its colours: cards, textures, "
                                                        "symbols"),
-        ("mercs", "Mercenaries...", "mercenaries_window", "who is for hire in which regions: pools of regions and "
-                                                          "their units"),
-        ("rebels", "Rebels...", "rebels_window", "who rises when a region revolts: rebel types, their units, which "
-                                                 "regions have which"),
     ]
+    # tools that were windows of their own, now works of the main window (the user, 2026-10-16: 'Events, Mercenaries,
+    # Rebels, Traits ... windows of the main window instead of separate ones'): key -> module with make_page(app)
+    PAGE_WORKS = {"rules": "gui_rules", "events": "gui_events", "traits": "gui_traits", "mercs": "gui_mercenaries",
+                  "rebels": "gui_rebels"}
     # the top row by topic (the author, 2026-10-09), each tool with a window of its own beside its work; the row
     # scrolls when the window is narrower - drag it with the left button
     # Bigger map (x3) is on the Maps bar beside the zoom, Many towns in the map's Select + right click (a tester,
@@ -1574,7 +1570,8 @@ class App(tk.Tk):
                    "settlements": "Settlements", "units": "Units",
                    "buildings": "Buildings", "characters": "Characters",
                    "terrain": "Terrain editor", "addons": "Add-ons", "religions": "Religions",
-                   "builder": "Module builder", "interface": "Interface"}
+                   "builder": "Module builder", "interface": "Interface", "rules": "Campaign rules",
+                   "events": "Events", "traits": "Traits and retinue", "mercs": "Mercenaries", "rebels": "Rebels"}
     WORK_HINTS = {"map": "the campaign map alone, no faction to pick: drag any faction's towns, ports, armies, agents and "
                          "fleets, give towns to anyone, change any army's units, resources, forts, regions",
                   "religions": "the game's religions and each region's shares (Medieval II)", "addons": "ready-made scripts that add something new to the game (Sack Settlement...)", "builder": "a new add-on made of blocks, no code (REX / M2EX) - here in the window, a module not saved yet stays while you look at other works", "interface": "the game's menu screens: move, size, copy and remove their pieces","new": "make a new faction from a template", "edit": "change a faction that is in the game",
@@ -1585,6 +1582,11 @@ class App(tk.Tk):
                   "units": "every line of a unit in export_descr_unit.txt, its card and picture",
                   "buildings": "every line of a building chain in export_descr_buildings.txt, its pictures",
                   "characters": "any faction's characters: names, ages, traits, ancillaries, portraits, family tree",
+                  "rules": "ages, agents, towns, diplomacy, unit sizes - every rule of the campaign",
+                  "events": "events and later factions: plagues, volcanoes, historic messages",
+                  "traits": "what they give, their names, new ones",
+                  "mercs": "who is for hire in which regions: pools of regions and their units",
+                  "rebels": "who rises when a region revolts: rebel types, their units, which regions have which",
                   "terrain": "paint the campaign map's ground, rivers, fords and cliffs"}
 
     def _bar_pressed(self):
@@ -1736,6 +1738,8 @@ class App(tk.Tk):
     def editor(self):
         """The unit, building or character editor on show, made the first time; None for the faction work."""
         w = self.v_work.get()
+        if w in self.PAGE_WORKS:
+            return self._page(w)
         if w not in ("units", "buildings", "characters", "addons", "religions", "settlements", "builder", "interface"):
             return None                                 # (the Terrain editor is a tab of Maps now)
         if w not in self.editors:
@@ -1761,6 +1765,56 @@ class App(tk.Tk):
                 from .gui_editors import RecordEditor
                 self.editors[w] = RecordEditor(self, self, "unit" if w == "units" else "building")
         return self.editors[w]
+
+    def _page(self, w):
+        """A tool that was a window, as a work (gui_util.Page): made the first time, again on another mod or campaign
+        or after its file was written (Apply leaves .mod None); without a mod, or without the file it edits, the
+        words why."""
+        page = self.editors.get(w)
+        camp = self.v_campaign.get()
+        try:
+            alive = page is not None and page.winfo_exists()
+        except tk.TclError:
+            alive = False
+        if alive and page.mod is self.mod and self.mod is not None and getattr(page, "campaign", camp) == camp:
+            return page
+        if alive:
+            page._page_gone = True               # made again: not a Close (the map stays where it is)
+            try:
+                if hasattr(page, "ak_close"):
+                    page.ak_close()
+            except Exception:
+                pass
+            page.destroy()
+        from importlib import import_module
+        from .gui_util import PageNote
+        try:
+            got = import_module("campaign_editor." + self.PAGE_WORKS[w]).make_page(self)
+        except Exception as e:
+            log.error("%s: %s\n%s" % (self.WORK_TITLES[w], e, traceback.format_exc()))
+            got = "%s could not be read: %s" % (self.WORK_TITLES[w], e)
+        if got is None:
+            got = "Load a mod first (Mod or Browse..., then Load)."
+        if isinstance(got, str):
+            got = PageNote(self, self, got)
+        self.editors[w] = got
+        return got
+
+    def show_page(self, w):
+        """The work w shown (Events, Mercenaries, ...) and its tool returned."""
+        if self.v_work.get() != w:
+            self.v_work.set(w)
+            self.work_changed()
+        return self._page(w)
+
+    def page_closed(self, page):
+        """A work's Close: it goes, the map shows."""
+        for k, ed in list(self.editors.items()):
+            if ed is page:
+                del self.editors[k]
+                if self.v_work.get() == k and not getattr(self, "_closing", False):
+                    self.v_work.set("map")
+                    self.work_changed()
 
     def select_map_opts(self):
         """The Art tab's campaign-select map wish; {} while that part is put away (gui_art.MAP_PART)."""

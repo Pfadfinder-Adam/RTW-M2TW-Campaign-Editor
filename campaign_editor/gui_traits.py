@@ -8,15 +8,14 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, simpledialog, ttk
 
 from .gui_util import ask
-from .gui_util import AutoKeep, one_window, ShortHint
+from .gui_util import AutoKeep, Page, ShortHint
 from . import traitsedit as TE
 from .plan import Plan
 
 TITLE = "Traits and retinue"
 
 
-@one_window
-class TraitsWindow(AutoKeep, tk.Toplevel):
+class TraitsWindow(AutoKeep, Page):
     _ak_fields = ("pending", "texts", "pictures")
 
     def __init__(self, app, pick=None):
@@ -444,11 +443,16 @@ class TraitsWindow(AutoKeep, tk.Toplevel):
 
 
 def open_traits(app, pick=None):
+    """Traits and retinue: a work of the main window (App.show_page); pick shows that trait / ancillary."""
+    page = app.show_page("traits")
+    if pick and isinstance(page, TraitsWindow):
+        page.reload(pick)
+    return page
+
+
+def make_page(app):
     if not app.mod:
-        messagebox.showinfo(TITLE, "Load a mod first (Mod or Browse..., then Load).", parent=app)
-        return
+        return None
     if not (TE.file_of(app.mod, "trait") or TE.file_of(app.mod, "ancillary")):
-        messagebox.showinfo(TITLE, "This mod has neither export_descr_character_traits.txt nor "
-                                   "export_descr_ancillaries.txt.", parent=app)
-        return
-    TraitsWindow(app, pick)
+        return ("This mod has neither export_descr_character_traits.txt nor export_descr_ancillaries.txt.")
+    return TraitsWindow(app, None)

@@ -927,6 +927,41 @@ building smith
         self.assertEqual([a.key for a in rows["Sack Settlement"] if a.fits("rome")], ["sack_settlement"])
         self.assertEqual([a.key for a in rows["Sack Settlement"] if a.fits("medieval2")], ["raze_settlement"])
 
+    def test_tools_that_were_windows_are_works_of_the_main_window(self):
+        """The user, 2026-10-16 (#311-#313): Events, Mercenaries, Rebels, Traits and Campaign rules are works of the
+        main window, not windows of their own: each a gui_util.Page (the window manager's calls do nothing), made by
+        its module's make_page (None without a mod), shown on the work bar."""
+        try:
+            import tkinter as tk
+            from campaign_editor.gui import App
+            root = tk.Tk()
+        except Exception as e:
+            self.skipTest("no window: %s" % e)
+        from importlib import import_module
+        from types import SimpleNamespace
+        from campaign_editor import gui_util as GU
+        try:
+            names = {"rules": "RulesWindow", "events": "EventsWindow", "traits": "TraitsWindow",
+                     "mercs": "MercWindow", "rebels": "RebelsWindow"}
+            self.assertEqual(set(App.PAGE_WORKS), set(names))
+            for key, mod in App.PAGE_WORKS.items():
+                m = import_module("campaign_editor." + mod)
+                self.assertTrue(issubclass(getattr(m, names[key]), GU.Page), key)
+                self.assertIsNone(m.make_page(SimpleNamespace(mod=None)))
+                self.assertIn(key, App.WORK_TITLES)
+                self.assertNotIn(key, [k for k, *_ in App.WINDOW_BUTTONS])
+            page = GU.Page(root)
+            for call in (page.title, page.transient, page.geometry, page.minsize, page.protocol, page.withdraw,
+                         page.deiconify):
+                call()
+            self.assertEqual((page.dirty(), page.pending(), page.rebind(None)), (False, 0, 0))
+            closed = []
+            page.app = SimpleNamespace(page_closed=closed.append)
+            page.destroy()
+            self.assertEqual(closed, [page])
+        finally:
+            root.destroy()
+
     def test_last_town_given_away_its_general_steps_out(self):
         """Report #306: giving a faction's last town away with its general inside was refused ('has no other town to
         go to' - give it another town first, Apply, then again). He steps out onto a free tile beside the town, as
