@@ -212,6 +212,18 @@ def armour_models(lines):
     return [(levels[i] if i < len(levels) else "", m) for i, m in enumerate(models)]
 
 
+def armour_tiers(lines):
+    """How many armour upgrades a garrison / army line may name for this unit (descr_strat 'armour N'): one per
+    armour_ug_levels value, 1 (armour 0 only) without that line - the engine's own rule (REX logs 'armour N is
+    beyond this unit's M upgrade tiers; clamped', the original exes read past the list). None for REX's 'soldiers'
+    block (its tiers are set inside the block)."""
+    from .packs import _values, soldiers_block
+    if soldiers_block(lines or []):
+        return None
+    levels = [x for x in (_values(lines or [], "armour_ug_levels") or [[]])[0] if x]
+    return max(1, len(levels))
+
+
 def mount_classes(mod):
     """{mount type (lower): class} of descr_mount.txt."""
     from .packs import _block_lines, _values, type_blocks

@@ -336,7 +336,7 @@ class GarrisonEditor(ttk.Frame):
         m = tk.Menu(self, tearoff=False)
         m.add_command(label=entry_label(entry), state="disabled")
         m.add_separator()
-        for key, label, now, top in (("exp", "Experience", ex, 9), ("armour", "Armour", ar, 3),
+        for key, label, now, top in (("exp", "Experience", ex, 9), ("armour", "Armour", ar, max(ar, self._armour_top(t))),
                                      ("weapon", "Weapon", we, 3)):
             sub = tk.Menu(m, tearoff=False)
             sub.var = tk.IntVar(value=now)                       # kept with its menu (a lost one shows no dot)
@@ -357,6 +357,19 @@ class GarrisonEditor(ttk.Frame):
         m.add_separator()
         m.add_command(label="Take it out", command=lambda: self.take(i))
         self._popup(e, m)
+
+    def _armour_top(self, unit):
+        """The highest armour upgrade the unit has (its armour_ug_levels); 3 when its EDU block cannot be read."""
+        tops = self.__dict__.setdefault("_tops", {})
+        if (self.mod, unit) not in tops:
+            from .models import armour_tiers, unit_lines
+            try:
+                lines = unit_lines(self.mod, unit) if self.mod else None
+                n = armour_tiers(lines) if lines else None
+            except Exception:  # a broken EDU: offer what the game's own cap allows
+                n = None
+            tops[(self.mod, unit)] = n - 1 if n else 3
+        return tops[(self.mod, unit)]
 
     def _unit_items(self, m, unit):
         """The unit itself: in the Unit editor, in 3D, where it is recruited (BACKLOG A1)."""

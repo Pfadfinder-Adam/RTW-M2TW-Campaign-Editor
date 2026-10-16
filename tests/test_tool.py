@@ -17137,5 +17137,15 @@ class CopiedBuildingPicturesTest(unittest.TestCase):
             for rel in ("#%s_camp_tent.tga", "#%s_camp_tent_constructed.tga", "construction/#%s_camp_tent.tga"):
                 self.assertIn("ui/%s/buildings/%s" % (cult, rel % cult), got)
 
+
+class ArmourTiersTest(unittest.TestCase):
+    def test_tiers_follow_armour_ug_levels(self):
+        # descr_strat 'armour N' only up to the unit's own upgrades (REX: 'beyond this unit's M upgrade tiers')
+        from campaign_editor import models as MO
+        self.assertEqual(MO.armour_tiers(["armour_ug_levels 2, 3", "armour_ug_models A, A_ug1"]), 2)
+        self.assertEqual(MO.armour_tiers(["armour_ug_levels 1"]), 1)
+        self.assertEqual(MO.armour_tiers(["type hun horde peasants", "soldier peasant, 40, 0, 1"]), 1)   # Rome
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -217,6 +217,7 @@
   line of the block** in both editors; the editor remembers whether it was open.
 
 ### Fixed
+- Garrison / army right click offered armour 1-3 to every unit, though most units have fewer armour upgrades (the game drops the rest) -> it offers only the unit's own upgrades.
 - Coast & heights still drew the rivers, fords and cliffs over the heights -> only land, sea and heights are shown there.
 - The map's Layers / what... and the Tools / Support drop-downs opened again (a blink) on a second click instead of closing (Windows) -> a second click closes them.
 - Building editor: its lines had no '?' saying what each value means (the units' had) -> every line of a building chain has one; Add line... moved into the Stats window, beside the lines it adds to.
