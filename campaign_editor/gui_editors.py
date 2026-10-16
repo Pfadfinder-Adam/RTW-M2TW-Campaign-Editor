@@ -96,7 +96,6 @@ class RecordEditor(ttk.Frame):
                     "where they are recruited" if kind == "unit" else "the units they recruit"))
         ttk.Button(tools, text="Where it is recruited..." if kind == "unit" else "Where it can be built...",
                    command=self.where_window).pack(side="left", padx=(0, 6))
-        ttk.Button(tools, text="Add line...", command=self.add_dialog).pack(side="left")
         ttk.Button(tools, text="New %s step by step..." % ("unit" if kind == "unit" else "building"),
                    command=self.copy_dialog).pack(side="left", padx=6)
         ttk.Button(tools, text="Undo all changes here", command=self.reset).pack(side="left")
@@ -140,6 +139,13 @@ class RecordEditor(ttk.Frame):
         if not getattr(self, "_unmap_bound", False):
             self._unmap_bound = True
             self.bind("<Unmap>", lambda e: self.toggle_lines() if e.widget is self and self._lines_open else None, "+")
+        # 'Add line...' in the lines' own window, where the lines are (report #316: 'this button belongs in the
+        # stats window itself')
+        bar = ttk.Frame(top, padding=(6, 6, 6, 0))
+        bar.pack(fill="x")
+        ttk.Button(bar, text="Add line...", command=self.add_dialog).pack(side="left")
+        ttk.Label(bar, text="x beside a line takes it out; the '?' says what each value means",
+                  foreground=theme.palette()["muted"]).pack(side="left", padx=8)
         box = self._lines_box = ttk.Frame(top, padding=6)
         box.pack(fill="both", expand=True)
         self._lines_label()
@@ -388,7 +394,7 @@ class RecordEditor(ttk.Frame):
                             row=row, column=0, padx=(0, 4))
                     row += 1
                 pending.remove((at, n, lines))
-        from . import edufields as EF
+        from . import edbfields as BF, edufields as EF
         from .limits import game_kind
         m2 = game_kind(self.mod) == "medieval2"
         for fd in self.fields:
@@ -399,10 +405,11 @@ class RecordEditor(ttk.Frame):
             head.grid(row=row, column=1, sticky="w", padx=(0, 8))
             ttk.Label(head, text="    " * fd.depth + fd.key, font=("", 9, "bold", "overstrike") if gone else
                       ("", 9, "bold")).pack(side="left")
-            if self.kind == "unit" and EF.explain(fd.key, v.get(), m2):
-                # what each value means, for what is typed there now (a modder: 'we can edit every line but do
-                # not know what the numbers mean')
-                hint(head, lambda fd=fd, v=v: EF.explain(fd.key, v.get(), m2), width=640).pack(side="left")
+            # what each value means, for what is typed there now (a modder: 'we can edit every line but do not know
+            # what the numbers mean'; the buildings too - report #316)
+            explain = EF.explain if self.kind == "unit" else BF.explain
+            if explain(fd.key, v.get(), m2):
+                hint(head, lambda fd=fd, v=v, x=explain: x(fd.key, v.get(), m2), width=640).pack(side="left")
             e = tk.Entry(self.form, textvariable=v, width=90,
                          background=REMOVED if gone else CHANGED if fd.line in self.changes else theme.field(),
                          foreground="#000000" if gone or fd.line in self.changes else theme.palette()["fg"])

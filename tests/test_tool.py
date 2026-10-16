@@ -3488,6 +3488,22 @@ building smith
         with self.assertRaises(LntError):
             lnt.set_state("no_such", "art", "p", "r")
 
+    def test_building_lines_explained(self):
+        """Report #316: the Building editor's lines had no '?' (the units' had): each line of a chain says what it
+        does and what each value is - recruit / recruit_pool / agent split into their numbers, the condition named,
+        a level's own line, the fixed words ('bonus'); an unknown line gets none."""
+        from campaign_editor import edbfields as BF
+        got = BF.explain("recruit_pool", '"Peasants" 1 0.5 4 0 requires factions { england, }')
+        for part in ("1. unit = Peasants", "3. units added a turn = 0.5", "4. most units the pool holds = 4",
+                     "then: requires factions { england, }"):
+            self.assertIn(part, got)
+        self.assertIn("2. experience it starts with = 0", BF.explain("recruit", '"roman hastati" 0'))
+        self.assertIn("1. bonus - this word itself", BF.explain("happiness_bonus", "bonus 2"))
+        self.assertIn("2. amount = 2", BF.explain("happiness_bonus", "bonus 2"))
+        self.assertIn("1. size = town", BF.explain("settlement_min", "town"))
+        self.assertIn("a level of the chain", BF.explain("wooden_wall", "requires factions { barbarian, }"))
+        self.assertIsNone(BF.explain("no_such_line", "1"))
+
     def test_unit_entries_keep_experience_and_the_right_click(self):
         """A garrison / an army carries each unit's exp / armour / weapon (they were written back as 0 0 0 at every
         change); the right click (the user, 2026-10-16: a context menu, not buttons) sets them, adds more like it,
