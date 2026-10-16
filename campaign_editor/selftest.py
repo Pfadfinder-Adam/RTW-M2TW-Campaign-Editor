@@ -1558,6 +1558,27 @@ def s_interface(c, mod):
     return plan
 
 
+@step("Interface: a button's 'mouse over' picture made its 'pressed' one (the first button whose picture has both "
+      "states - in vanilla the back arrow of the new-game page) in the menu layout file",
+      "the new-game page: with the mouse over the back arrow it shows the picture it shows when pressed")
+def s_interface_states(c, mod):
+    from . import lnt as L
+    path = L.find(mod)
+    if not path:
+        raise Skip("no menu layout file (data/menu/Rome.lnt or mtw2.lnt)")
+    doc = L.Lnt.load(path)
+    objects = doc.objects()
+    for page in ["main_menu"] + doc.pages():
+        for x in doc.pieces(page):
+            regs = objects.get(x["object"] or "", {}).get("regions", {})
+            if "highlighted" in regs and "selected" in regs and regs["highlighted"] != regs["selected"]:
+                doc.set_state(x["object"], "highlighted", *regs["selected"])
+                plan = Plan(mod, "interface", "interface", {})
+                L.plan_write(plan, path, doc)
+                return plan
+    raise Skip("no button picture with a 'mouse over' and a 'pressed' state")
+
+
 @step("Load: the campaign's locked factions (unlockable / nonplayable, each with a town at the start) opened to play - "
       "the Senate, the Pope and the rebels stay locked",
       "the faction-select screen offers the opened factions (Egypt, the Gauls... in Rome; the Aztecs in Medieval II) "
@@ -2765,6 +2786,7 @@ COVERAGE = {
     "Maps > 3D > Make the minimap from it": ["s_minimap"],
     "Maps > 3D > Game's editor (the game's own campaign-map editor)": ["s_game_editor"],
     "Interface: the game's menu screens, their pieces moved, sized, copied": ["s_interface"],
+    "Interface: the pictures of a button's states": ["s_interface_states"],
     "Load: locked factions opened to play": ["s_open_factions"],
     "Unit packs export / import": ["s_unit_pack"],
     "Check and install a pack": ["s_modpack"],

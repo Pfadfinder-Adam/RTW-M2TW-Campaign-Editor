@@ -19,6 +19,7 @@ from .gui_util import ShortHint
 TITLE = "Interface"
 WORDS = "#ffdd77"                                    # the menus' gold words (RomeTW.exe: RGB 255, 221, 119)
 HANDLE = 7                                   # the corner square that sizes a piece, in screen pixels
+SHOWN = (("normal", None), ("mouse over", "highlighted"), ("pressed", "selected"), ("ticked", "checked"))
 KINDS = {"UIP_MENU_BUTTON": "a button that opens a page", "UIP_BACK_BUTTON": "the back button",
          "UIP_STATIC_TEXT": "words", "UIP_EMPTY_ART": "a picture"}
 
@@ -34,6 +35,7 @@ class InterfacePanel(ttk.Frame):
         self.words = {}
         self.undo, self.redo = [], []
         self.page, self.picked = None, None
+        self.hover = None                    # the button under the mouse: drawn as the game shows it, 'mouse over'
         self._pics, self._tex, self._fonts = {}, {}, {}
         self._drag = None
         self._build()
@@ -129,7 +131,9 @@ class InterfacePanel(ttk.Frame):
             "to move it, drag its corner to size it, the arrows nudge it (Shift: 10 pixels). A double click on a "
             "button opens the page it leads to. A right click on a piece: its values, Copy, Rename, Remove. Copy makes the next numbered piece - the game finds many pieces by "
             "their numbers (more faction buttons: copy the last one). Pieces with no picture of their own (empty_...) "
-            "are drawn by the game itself; here they show as frames with their words. Nothing is written before "
+            "are drawn by the game itself; here they show as frames with their words. A button under the mouse shows its "
+            "'mouse over' picture as in the game; Buttons shown draws every button pressed, ticked...; a piece's right "
+            "click > Pictures of its states sets the picture of each. Nothing is written before "
             "Keep for Apply, then Apply changes (a backup first).")).pack(fill="x")
         body = ttk.Panedwindow(screens, orient="horizontal")
         body.pack(fill="both", expand=True, padx=10, pady=6)
@@ -172,6 +176,8 @@ class InterfacePanel(ttk.Frame):
         c.bind("<Configure>", lambda e: self.draw())
         c.bind("<ButtonPress-1>", self._press)
         c.bind("<B1-Motion>", self._motion)
+        c.bind("<Motion>", self._hover)
+        c.bind("<Leave>", lambda e: self._set_hover(None))
         c.bind("<ButtonRelease-1>", self._release)
         c.bind("<Double-Button-1>", self._double)
         for key, dx, dy in (("Left", -1, 0), ("Right", 1, 0), ("Up", 0, -1), ("Down", 0, 1)):
@@ -183,6 +189,12 @@ class InterfacePanel(ttk.Frame):
         self.v_frames = tk.BooleanVar(value=False)       # the game's own look first; frames on a tick
         ttk.Checkbutton(mb, text="Frames of every piece", variable=self.v_frames, command=self.draw).pack(
             side="left", padx=(theme.BUTTON_GAP * 2, 0))
+        # every button drawn in one state, as the game shows it then (the one under the mouse: 'mouse over')
+        ttk.Label(mb, text="Buttons shown").pack(side="left", padx=(theme.BUTTON_GAP * 2, 4))
+        self.v_state = tk.StringVar(value=SHOWN[0][0])
+        cb = ttk.Combobox(mb, textvariable=self.v_state, state="readonly", width=11, values=[w for w, _ in SHOWN])
+        cb.pack(side="left")
+        cb.bind("<<ComboboxSelected>>", lambda e: self.draw())
         ttk.Button(mb, text="Redo", command=self.do_redo).pack(side="right")
         ttk.Button(mb, text="Undo", command=self.do_undo).pack(side="right", padx=(0, theme.BUTTON_GAP))
         self.lbl_way = ttk.Label(mb, foreground=theme.palette()["muted"])
@@ -303,6 +315,8 @@ class InterfacePanel(ttk.Frame):
                           command=lambda: self.ask_value("text", "The text key of its words (menu_english.txt):"))
         m.add_command(label="Tooltip (text key): %s..." % (x["tooltip"] or "none"),
                       command=lambda: self.ask_value("tooltip", "The text key of its tooltip:"))
+        if x["object"] in self.doc.objects():
+            m.add_command(label="Pictures of its states (normal, mouse over, pressed)...", command=self.ask_states)
         m.add_separator()
         m.add_command(label="Copy (the next number)", command=self.copy_piece)
         slot = L.RE_SLOT.match(x["name"] or "")
@@ -362,6 +376,97 @@ class InterfacePanel(ttk.Frame):
         ttk.Button(b, text="OK", command=ok).pack(side="left")
         ttk.Button(b, text="Cancel", command=d.destroy).pack(side="left", padx=(theme.BUTTON_GAP, 0))
         d.bind("<Return>", ok)
+        d.bind("<Escape>", lambda e: d.destroy())
+        return d
+
+    def ask_states(self):
+        """The picture of each state of the picked piece's UI object (normal, mouse over, pressed, ticked): a texture
+        and a region of it; a state added, one taken out. Every piece drawn with the object changes with it."""
+        x = self.current()
+        obj = x and x["object"]
+        o = self.doc.objects().get(obj) if obj else None
+        if o is None:
+            return
+        old = getattr(self, "_states_win", None)
+        if old is not None and old.winfo_exists():
+            old.destroy()                                   # one at a time: the newest piece picked
+        d = self._states_win = tk.Toplevel(self)
+        d.title("%s - pictures of its states" % obj)
+        d.transient(self.winfo_toplevel())
+        f = ttk.Frame(d, padding=10)
+        f.pack(fill="both", expand=True)
+        users = self.doc.users(obj)
+        ttk.Label(f, foreground=theme.palette()["muted"], wraplength=520, justify="left", text=(
+            "UI object %s (%s) - %d piece(s) are drawn with it%s; a change shows on all of them." % (
+                obj, o["type"] or "?", len(users), (": " + ", ".join(n for _, n in users[:4]) +
+                                                    (" ..." if len(users) > 4 else "")) if users else ""))).grid(
+            row=0, column=0, columnspan=5, sticky="w", pady=(0, 6))
+        textures = self.doc.textures()
+        rows = {}
+
+        def regions_of(page):
+            return sorted(textures.get(page, {}).get("regions", {}))
+
+        def add_row(state, page, region):
+            r = len(rows) + 1
+            ttk.Label(f, text="%s (%s)" % (L.STATES.get(state, state), state)).grid(row=r, column=0, sticky="w")
+            vp, vr = tk.StringVar(value=page), tk.StringVar(value=region)
+            cp = ttk.Combobox(f, textvariable=vp, values=sorted(textures), width=30, state="readonly")
+            cp.grid(row=r, column=1, padx=4, pady=2)
+            cr = ttk.Combobox(f, textvariable=vr, values=regions_of(page), width=26, state="readonly")
+            cr.grid(row=r, column=2, padx=4, pady=2)
+            cp.bind("<<ComboboxSelected>>", lambda e: cr.configure(values=regions_of(vp.get())))
+            out = ttk.Button(f, text="Take out", command=lambda: take_out(state))
+            out.grid(row=r, column=3, padx=(4, 0))
+            rows[state] = (vp, vr, [cp, cr, out], f.grid_slaves(row=r, column=0))
+
+        def take_out(state):
+            if len([k for k, v in rows.items() if v is not None]) < 2:
+                messagebox.showinfo(TITLE, "The object's only picture stays.", parent=d)
+                return
+            for w in rows[state][2] + rows[state][3]:
+                w.destroy()
+            rows[state] = None
+
+        for state, (page, region) in o["regions"].items():
+            add_row(state, page, region)
+        foot = ttk.Frame(f)
+        foot.grid(row=99, column=0, columnspan=5, sticky="we", pady=(8, 0))
+        free = [st for st in L.STATES if st not in o["regions"]]
+        v_new = tk.StringVar(value=free[0] if free else "")
+        if free:
+            ttk.Combobox(foot, textvariable=v_new, values=free, width=12, state="readonly").pack(side="left")
+
+            def add():
+                st = v_new.get()
+                if st and rows.get(st) is None:
+                    first = next((v for v in rows.values() if v is not None), None)
+                    add_row(st, first[0].get() if first else "", first[1].get() if first else "")
+            ttk.Button(foot, text="Add this state", command=add).pack(side="left", padx=(4, 0))
+
+        def ok(*_):
+            want = {k: (v[0].get(), v[1].get()) for k, v in rows.items() if v is not None}
+            gone = [k for k in o["regions"] if k not in want]
+            changed = gone or any(o["regions"].get(k) != pr for k, pr in want.items())
+            d.destroy()
+            if not changed:
+                return
+            self._remember()
+            try:
+                for k, (page, region) in want.items():
+                    if o["regions"].get(k) != (page, region):
+                        self.doc.set_state(obj, k, page, region)
+                for k in gone:
+                    self.doc.remove_state(obj, k)
+            except L.LntError as e:
+                self._restore(self.undo.pop())
+                messagebox.showerror(TITLE, str(e), parent=self)
+                return
+            self._pics.clear()
+            self.fill_form()
+            self.draw()
+        ttk.Button(foot, text="Cancel", command=d.destroy).pack(side="right")
+        ttk.Button(foot, text="OK", command=ok).pack(side="right", padx=(0, theme.BUTTON_GAP))
         d.bind("<Escape>", lambda e: d.destroy())
         return d
 
@@ -483,8 +588,14 @@ class InterfacePanel(ttk.Frame):
             self._pics[key] = None
         return self._pics[key]
 
-    def _picture(self, x, s):
-        art = self.doc.art(x)
+    def _state(self, x):
+        """The state a piece is drawn in: 'mouse over' under the mouse, else the one picked under the screen."""
+        if x["index"] == self.hover:
+            return "highlighted"
+        return dict(SHOWN).get(self.v_state.get())
+
+    def _picture(self, x, s, state=None):
+        art = self.doc.art(x, state)
         if not art:
             return None
         page, box, folder = art
@@ -530,7 +641,8 @@ class InterfacePanel(ttk.Frame):
         from . import menudraw as MD
         for x in self.doc.pieces(self.page):
             x0, y0, x1, y1 = self._rect(x)
-            pic = self._picture(x, s) if self.v_back.get() else None
+            state = self._state(x)
+            pic = self._picture(x, s, state) if self.v_back.get() else None
             k = MD.kind(x["identifier"], x["object"], self.doc.art(x) is not None)
             if pic is not None:
                 c.create_image(x0, y0, image=pic, anchor="nw")
@@ -545,7 +657,10 @@ class InterfacePanel(ttk.Frame):
             if words:
                 anchor = {"left": "w", "right": "e"}.get(x["align"] or "", "center")
                 tx = {"w": x0 + 3, "e": x1 - 3}.get(anchor, (x0 + x1) / 2)
-                img = self._words_image(words, x["font"], s, x1 - x0, *MD.text_colour(k))
+                colour, shadow = MD.text_colour(k)
+                if state in ("highlighted", "selected") and k in ("art", "button"):
+                    colour = (255, 255, 255)              # the game's words on a button under the mouse / pressed
+                img = self._words_image(words, x["font"], s, x1 - x0, colour, shadow)
                 if img is not None:                         # in the game's own letters
                     c.create_image(tx, (y0 + y1) / 2, image=img, anchor=anchor)
                 else:
@@ -574,6 +689,21 @@ class InterfacePanel(ttk.Frame):
                 if best is None or area < best[0]:
                     best = (area, x["index"])
         return (best[1], "move") if best else (None, None)
+
+    def _hover(self, e):
+        """The button under the mouse is drawn as the game shows it then (its 'mouse over' picture, white words)."""
+        if not self.doc or not self.page or self._drag:
+            return
+        name, _ = self._hit(e)
+        x = self.doc.piece(self.page, name) if name is not None else None
+        button = x is not None and ("BUTTON" in (x["identifier"] or "").upper() or "highlighted" in
+                                    self.doc.objects().get(x["object"] or "", {}).get("regions", {}))
+        self._set_hover(name if button else None)
+
+    def _set_hover(self, name):
+        if name != self.hover:
+            self.hover = name
+            self.draw()
 
     def _press(self, e):
         self.canvas.focus_set()

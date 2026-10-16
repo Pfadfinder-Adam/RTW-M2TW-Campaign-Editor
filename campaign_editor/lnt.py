@@ -15,6 +15,8 @@ import re
 
 FILES = ("Rome.lnt", "rome.lnt", "mtw2.lnt")
 PARAMS = ("x", "y", "width", "height")
+# the states a button's UI object draws (the vanilla files of both games): the game's name -> plain words
+STATES = {"enabled": "normal", "highlighted": "mouse over", "selected": "pressed", "checked": "ticked", "art": "picture"}
 
 _LEAF = re.compile(r"^<([^/<>][^<>]*)>(.*)</\1>$")
 _OPEN = re.compile(r"^<([^/<>][^<>]*)>(.*)$")
@@ -285,6 +287,50 @@ class Lnt:
         i = x["node"].start
         self.lines[i] = re.sub(r"(<UI piece>)\s*%s" % re.escape(x["name"]), lambda m: m.group(1) + new_name,
                                self.lines[i], count=1)
+        self.parse()
+
+    # ---- the pictures of an object's states (normal, mouse over, pressed, ticked) ----
+    def object_node(self, obj):
+        return next((o for o in self.root.all("UI object") if o.value == obj), None)
+
+    def users(self, obj):
+        """[(page, piece name)] of every piece drawn with this UI object - a change of its pictures shows on all."""
+        return [(p, x["name"]) for p in self.pages() for x in self.pieces(p) if x["object"] == obj]
+
+    def set_state(self, obj, state, page, region):
+        """The picture (texture page + region) the object shows in a state; a state it lacks is added as a copy of
+        its last <UI region> block, after it."""
+        o = self.object_node(obj)
+        if o is None:
+            raise LntError("no UI object %s" % obj)
+        r = next((r for r in o.all("UI region") if r.value == state), None)
+        if r is None:
+            last = o.all("UI region")
+            if not last:
+                raise LntError("UI object %s has no picture to copy" % obj)
+            block = self.lines[last[-1].start:last[-1].end + 1]
+            block[0] = re.sub(r"(<UI region>)[^\r\n]*", lambda m: m.group(1) + state, block[0], count=1)
+            self.lines[last[-1].end + 1:last[-1].end + 1] = block
+            self.parse()
+            o = self.object_node(obj)
+            r = next(r for r in o.all("UI region") if r.value == state)
+        for tag, value in (("page", page), ("region", region)):
+            leaf = r.find(tag)
+            if leaf is None:
+                raise LntError("UI object %s, state %s has no <%s>" % (obj, state, tag))
+            self._set_leaf(leaf, value)
+        self.parse()
+
+    def remove_state(self, obj, state):
+        """A state's picture taken out (the game then shows the object's first picture); its only one stays."""
+        o = self.object_node(obj)
+        regs = o.all("UI region") if o is not None else []
+        r = next((r for r in regs if r.value == state), None)
+        if r is None:
+            raise LntError("UI object %s has no state %s" % (obj, state))
+        if len(regs) == 1:
+            raise LntError("%s is the only picture of UI object %s - it stays" % (state, obj))
+        del self.lines[r.start:r.end + 1]
         self.parse()
 
     def set_text(self, page, name, key):

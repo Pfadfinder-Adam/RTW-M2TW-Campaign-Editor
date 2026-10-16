@@ -3220,6 +3220,29 @@ building smith
            "        </UI text>\r\n      </Parameters>\r\n      <object_id>empty_push_button</object_id>\r\n"
            "    </UI piece>\r\n  </lpage>\r\n  <lpage>new_game\r\n  </lpage>\r\n</layout>\r\n")
 
+    def test_button_state_pictures_set_added_and_taken_out(self):
+        """Interface: the pictures of a UI object's states (normal, mouse over, pressed, ticked) - one changed, one
+        added as a copy of the last, one taken out (the file back byte for byte); the only picture stays; every piece
+        drawn with the object is named."""
+        from campaign_editor.lnt import Lnt, LntError
+        raw = self.LNT.encode("latin-1")
+        lnt = Lnt(raw)
+        self.assertEqual(lnt.users("logo_obj"), [("main_menu", "main_logo")])
+        logo = lnt.piece("main_menu", "main_logo")
+        lnt.set_state("logo_obj", "highlighted", "textures\\FE_texture1.tga", "logo")
+        self.assertEqual(lnt.objects()["logo_obj"]["regions"]["highlighted"], ("textures\\FE_texture1.tga", "logo"))
+        self.assertEqual(lnt.art(logo, "highlighted")[1], (0, 36, 489, 204))
+        out = lnt.dump().decode("latin-1")
+        self.assertIn("  </UI region>\r\n  <UI region>highlighted\r\n    <page>", out)
+        lnt.remove_state("logo_obj", "highlighted")
+        self.assertEqual(lnt.dump(), raw)
+        lnt.set_state("logo_obj", "art", "textures\\FE_texture1.tga", "other")
+        self.assertIn("    <region>other</region>\r\n", lnt.dump().decode("latin-1"))
+        with self.assertRaises(LntError):
+            lnt.remove_state("logo_obj", "art")                     # its only picture
+        with self.assertRaises(LntError):
+            lnt.set_state("no_such", "art", "p", "r")
+
     def test_faction_slots_added_on_their_grid(self):
         """More factions to pick (open.md 'MENU SLOTS FOR MANY FACTIONS'): a faction-select page's CFP_symbol48_N slots
         made up to a number - copies of the last under the next numbers, the grid continued (the same columns, rows
@@ -3456,6 +3479,33 @@ building smith
             d = w.ask_place()                                         # the right click's Place and size...
             d.destroy()
             self.assertEqual(w.current()["text"], "UI_OTHER")
+            single = w.doc.piece("main_menu", "main_single")["index"]
+            w._set_hover(single)                                       # the mouse over a button: 'mouse over'
+            self.assertEqual(w._state(w.doc.piece("main_menu", single)), "highlighted")
+            w._set_hover(None)
+            w.v_state.set("pressed")
+            self.assertEqual(w._state(w.doc.piece("main_menu", single)), "selected")
+            w.v_state.set("normal")
+            w.picked = w.doc.piece("main_menu", "main_logo")["index"]
+
+            def press(d, text):
+                todo = [d]
+                while todo:
+                    c = todo.pop(0)
+                    if c.winfo_class() == "TButton" and c.cget("text") == text:
+                        return c.invoke()
+                    todo += c.winfo_children()
+                self.fail("no button %s" % text)
+            d = w.ask_states()                                        # right click: Pictures of its states...
+            press(d, "Add this state")                                 # the first state it lacks: normal (enabled)
+            press(d, "OK")
+            self.assertEqual(w.doc.objects()["logo_obj"]["regions"]["enabled"], ("textures\\FE_texture1.tga", "logo"))
+            d = w.ask_states()
+            press(d, "Take out")                                       # the first row: art
+            press(d, "OK")
+            self.assertEqual(list(w.doc.objects()["logo_obj"]["regions"]), ["enabled"])
+            w.do_undo()
+            self.assertEqual(sorted(w.doc.objects()["logo_obj"]["regions"]), ["art", "enabled"])
             w.picked = w.doc.piece("main_menu", "main_single")["index"]
             w.open_target()
             self.assertEqual(w.page, "new_game")
