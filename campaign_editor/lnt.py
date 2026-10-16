@@ -119,6 +119,11 @@ class Lnt:
         return {f.get("identifier", f.value): {"file": f.value, "height": f.get("lf_height")}
                 for f in self.root.all("font")}
 
+    def videos(self):
+        """{identifier: video file} of the <fmv> blocks - the moving menu backdrop (Rome Dump0000.m1v, Medieval II
+        Dump0000.bik); a piece shows it when its object_id is that identifier (fmv_backdrop)."""
+        return {f.get("identifier", f.value): f.value for f in self.root.all("fmv")}
+
     def objects(self):
         """{object name: {'type', 'regions': {state: (page, region)}}}."""
         out = {}

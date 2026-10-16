@@ -3611,10 +3611,27 @@ building smith
         self.assertEqual((sl.getpixel((5, 5))[0], sl.getpixel((115, 5))[0], sl.getpixel((25, 5))[0]), (120, 130, 70))
         self.assertIsNone(MD.tick(lambda name: None, 20))
 
+    def test_menu_backdrop_is_the_games_video(self):
+        """#296: the menu backdrop is a video (Rome Dump0000.m1v, Medieval II Dump0000.bik) - the <fmv> block names it
+        and the piece whose object_id is its identifier plays it; Barbarian Invasion shows the picture instead."""
+        from campaign_editor import lnt as L
+        doc = L.Lnt("<fmv>Dump0000.m1v\r\n  <identifier>fmv_backdrop</identifier>\r\n  <left>0</left>\r\n"
+                    "</fmv>\r\n")
+        self.assertEqual(doc.videos(), {"fmv_backdrop": "Dump0000.m1v"})
+        try:
+            from campaign_editor.gui_interface import InterfacePanel
+        except ImportError as e:                      # no tkinter here
+            self.skipTest(str(e))
+        bi = os.path.join(self.root, "bi", "data")
+        shutil.copytree(os.path.join(self.root, "data"), bi)
+        self.assertTrue(InterfacePanel._video_shown(ModData(self.root)))
+        self.assertFalse(InterfacePanel._video_shown(ModData(bi)))
+
     def test_interface_window_moves_copies_and_undoes(self):
         """Interface... (the user, 2026-10-15: 'a full interface editor'): the mod's menu layout drawn page by page; a
         piece picked, nudged, copied under the next number, the change undone and redone; a double click on a button
-        opens its page; nothing written before Keep for Apply."""
+        opens its page; no buttons of its own (#296): the main window's Undo / Redo step it, its make_plan is what
+        Preview changes / Apply changes write; nothing written before that."""
         try:
             import tkinter as tk
             root = tk.Tk()
@@ -3697,11 +3714,33 @@ building smith
             w.picked = w.doc.piece("main_menu", "main_single")["index"]
             w.open_target()
             self.assertEqual(w.page, "new_game")
-            self.assertTrue(w._unwritten())
+            self.assertTrue(w.dirty())
+            self.assertGreater(w.pending(), 0)
             self.assertEqual(tree_hash(self.root), before)             # nothing written yet
+            buttons, todo = [], [w]
+            while todo:
+                c = todo.pop(0)
+                if c.winfo_class() == "TButton":
+                    buttons.append(c.cget("text"))
+                todo += c.winfo_children()
+            for own in ("Undo", "Redo", "Preview", "Keep for Apply"):     # the main window's, never twice
+                self.assertNotIn(own, buttons)
+            root.status = tk.StringVar(master=root)
+            n = len(w.undo)
+            w.undo_step()                                              # the main window's Undo on this work
+            self.assertEqual(len(w.undo), n - 1)
+            w.redo_step()
+            self.assertEqual(len(w.undo), n)
+            plan = w.make_plan()                                       # what Preview / Apply changes write
+            self.assertEqual(len(plan.changed_files()), 1)
             w.load()                                                   # shown again on the same mod: work stays
             self.assertIsNotNone(w.doc.piece("main_menu", "main_single_2"))
-            self.assertEqual(w.rebind(ModData(self.root)), 1)          # another mod: changes not kept are said
+            self.assertEqual(w.rebind(ModData(self.root)), 0)          # the same mod again, its file unchanged: kept
+            self.assertTrue(w.dirty())
+            with open(os.path.join(menu, "Rome.lnt"), "ab") as fh:     # the file written meanwhile: said, read again
+                fh.write(b"\r\n")
+            self.assertEqual(w.rebind(ModData(self.root)), 1)
+            self.assertFalse(w.dirty())
             w.destroy()
         finally:
             root.destroy()

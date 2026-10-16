@@ -3,8 +3,10 @@ the menu layout file (Rome / Barbarian Invasion / Alexander Rome.lnt, Medieval I
 1024 x 768 layout with its own pictures and words. A piece is picked with a click, moved by dragging, sized by its
 corner, nudged with the arrows (Shift: 10 pixels); its right click holds the rest - place and size, the page it opens,
 its words and tooltip, Copy, Rename, Remove (no side panel: the screen gets the room). Copy makes the next numbered piece (the game finds many by their numbers), Remove takes one
-out; a double click on a button opens the page it leads to, as in the game. Undo / Redo; nothing is written before
-'Keep for Apply' and then Apply changes in the main window (a backup first; Restore undoes it).
+out; a double click on a button opens the page it leads to, as in the game. The main window's own buttons act on it as
+on every work (the user, 2026-10-16, #296: no buttons of its own beside them): Undo / Redo step its changes, Preview
+changes shows them, Apply changes writes the layout file (a backup first; Restore undoes it). The menu backdrop is the
+game's video (Rome, Alexander, Medieval II), a picture only in Barbarian Invasion.
 
 The idea and the first map of the format: Wholesome Queen's RTW Sprite & HUD Studio, given to make this editor
 better for everyone (CREDITS)."""
@@ -14,7 +16,7 @@ from tkinter import messagebox, simpledialog, ttk
 
 from . import lnt as L
 from . import theme
-from .gui_util import ShortHint
+from .gui_util import Tip
 
 TITLE = "Interface"
 WORDS = "#ffdd77"                                    # the menus' gold words (RomeTW.exe: RGB 255, 221, 119)
@@ -30,8 +32,9 @@ class InterfacePanel(ttk.Frame):
     def __init__(self, master, app):
         super().__init__(master)
         self.app, self.mod = app, None
-        self.path, self.doc = None, None
-        self.saved = self.kept = b""
+        self._path, self.doc = None, None
+        self.saved = b""
+        self._sig, self.video = None, True
         self.words = {}
         self.undo, self.redo = [], []
         self.page, self.picked = None, None
@@ -50,15 +53,15 @@ class InterfacePanel(ttk.Frame):
         if mod is self.mod and self.doc is not None:
             return
         self.mod = mod
-        self.path = L.find(mod) if mod else None
-        self.doc = L.Lnt.load(self.path) if self.path else None
+        self._path = L.find(mod) if mod else None
+        self.doc = L.Lnt.load(self._path) if self._path else None
         self.saved = self.doc.dump() if self.doc else b""
-        self.kept = self.saved
+        self._sig = self._signature()
+        self.video = self._video_shown(mod)
         self.words = L.menu_texts(mod) if self.doc else {}
         self.undo, self.redo = [], []
         self.page, self.picked = None, None
         self._pics, self._tex, self._fonts = {}, {}, {}
-        self.lbl_title.configure(text="The game's menu screens" + (" - %s" % mod.rel(self.path) if self.path else ""))
         self.lb_pages.delete(0, "end")
         self.tv.delete(*self.tv.get_children())
         if self.doc:
@@ -74,8 +77,13 @@ class InterfacePanel(ttk.Frame):
 
     # ---- a work of the main window (App.editor) ----
     def rebind(self, mod):
-        """Another mod loaded: its menus are read; changes not kept for Apply are dropped (said)."""
-        lost = 1 if self.doc is not None and self._unwritten() else 0
+        """The mod loaded again: changes waiting here stay while their file is unchanged (another work written
+        meanwhile); else its menus are read again and the changes go (said). After its own write it reads afresh."""
+        if self.mod is not None and self.dirty() and self._path and mod.data == self.mod.data and \
+                self._signature() == self._sig:
+            self.mod = mod
+            return 0
+        lost = 1 if self.mod is not None and self.dirty() else 0
         self.load()
         if self.sprites is not None and self.nb.index(self.nb.select()) == 1:
             self.sprites.load()
@@ -84,28 +92,53 @@ class InterfacePanel(ttk.Frame):
     kind = "Interface"
 
     def dirty(self):
-        return False                     # 'Keep for Apply' hands its changes to Apply, nothing waits here
+        """Changes wait for Apply changes (the main window's)."""
+        return bool(self.doc) and self.doc.dump() != self.saved
 
     def pending(self):
-        return 0
+        return max(1, len(self.undo)) if self.dirty() else 0
+
+    def path(self):
+        return self._path
+
+    def _signature(self):
+        """What the file is now (its bytes' md5): the changes wait on the lines as they were read."""
+        import hashlib
+        try:
+            with open(self._path, "rb") as fh:
+                return hashlib.md5(fh.read()).hexdigest()
+        except (OSError, TypeError):
+            return None
 
     def make_plan(self):
-        raise ValueError("Interface: press 'Keep for Apply' under the screen first - then Apply changes writes it.")
+        if not self.doc:
+            raise ValueError("Interface: this game / mod has no menu layout file.")
+        from .plan import Plan
+        plan = Plan(self.mod, "interface", "interface", {})
+        L.plan_write(plan, self._path, self.doc)
+        return plan
+
+    def undo_step(self):
+        """The main window's Undo (and Ctrl+Z) on this work."""
+        self._said(self.do_undo(), "Undone (%d more step(s) back).", "Nothing to undo here.", len(self.undo))
+
+    def redo_step(self):
+        self._said(self.do_redo(), "Redone.", "Nothing to redo here.", None)
+
+    def _said(self, done, yes, no, n):
+        status = getattr(self.app, "status", None)
+        if status is not None:
+            status.set((yes % n if n is not None else yes) if done else no)
 
     def may_close(self):
-        """The editor is closing: changes not kept for Apply are never thrown away silently."""
+        """The editor is closing: changes not written are never thrown away silently."""
         from .gui_util import ask_choice
-        if not self.doc or not self._unwritten():
+        if not self.dirty():
             return True
-        k = ask_choice(self, TITLE, "The menu screens have changes not kept for Apply yet.\n\nKeep them for Apply, "
-                                    "keep working, or throw them away?",
-                       ["Keep for Apply", "Keep working", "Throw them away"], default=0, cancel=1, danger=2)
-        if k in (1, None):
-            return False
-        if k == 0:
-            self.write()
-            return not self._unwritten()
-        return True
+        k = ask_choice(self, TITLE, "The menu screens have changes not written yet.\n\nKeep working (then Apply "
+                                    "changes writes them), or throw them away?",
+                       ["Keep working", "Throw them away"], default=0, cancel=0, danger=1)
+        return k == 1
 
     # ---- the window ----
     def _build(self):
@@ -118,17 +151,9 @@ class InterfacePanel(ttk.Frame):
         self._sprite_tab = ttk.Frame(self.nb)
         self.nb.add(self._sprite_tab, text="Sprite sheets")
         self.nb.bind("<<NotebookTabChanged>>", lambda e: self._tab_changed())
-        bar = ttk.Frame(screens, padding=(10, 4, 10, 10))
-        bar.pack(side="bottom", fill="x")
-        self.lbl_status = ttk.Label(bar, foreground=theme.palette()["muted"])
-        self.lbl_status.pack(side="left", fill="x", expand=True)
-        ttk.Button(bar, text="Keep for Apply", command=self.write).pack(side="right", padx=(0, theme.BUTTON_GAP))
-        ttk.Button(bar, text="Preview", command=self.preview).pack(side="right", padx=(0, theme.BUTTON_GAP))
-        top = ttk.Frame(screens, padding=(10, 8, 10, 0))
-        top.pack(fill="x")
-        self.lbl_title = ttk.Label(top, font=("", 12, "bold"))
-        self.lbl_title.pack(anchor="w")
-        ShortHint(top, text=(
+        # no title, hint line or bottom bar of its own (the user, 2026-10-16, #296: their room goes to the screen; the
+        # main window's Preview changes / Apply changes / Undo / Redo act on this work): the help sits in a '?'
+        help_text = (
             "Every screen of the game's menus as the game lays it out (1024 x 768); the wheel zooms, the held wheel moves "
             "it, Fit shows it whole. Click a piece to pick it, drag it "
             "to move it, drag its corner to size it, the arrows nudge it (Shift: 10 pixels). A double click on a "
@@ -136,10 +161,11 @@ class InterfacePanel(ttk.Frame):
             "their numbers (more faction buttons: copy the last one). Pieces with no picture of their own (empty_...) "
             "are drawn by the game itself; here they show as frames with their words. A button under the mouse shows its "
             "'mouse over' picture as in the game; Buttons shown draws every button pressed, ticked...; a piece's right "
-            "click > Pictures of its states sets the picture of each. Nothing is written before "
-            "Keep for Apply, then Apply changes (a backup first).")).pack(fill="x")
+            "click > Pictures of its states sets the picture of each. The menu backdrop is the game's video "
+            "(Rome, Alexander, Medieval II; a picture only in Barbarian Invasion) - shown as a dark screen with its "
+            "file's name. Undo / Redo, Preview changes and Apply changes are the main window's (a backup first).")
         body = ttk.Panedwindow(screens, orient="horizontal")
-        body.pack(fill="both", expand=True, padx=10, pady=6)
+        body.pack(fill="both", expand=True, padx=6, pady=(4, 2))
         # left: the pages and the pieces of the page on show
         left = ttk.Frame(body)
         body.add(left, weight=1)
@@ -205,15 +231,20 @@ class InterfacePanel(ttk.Frame):
         cb = ttk.Combobox(mb, textvariable=self.v_state, state="readonly", width=11, values=[w for w, _ in SHOWN])
         cb.pack(side="left")
         cb.bind("<<ComboboxSelected>>", lambda e: self.draw())
-        ttk.Button(mb, text="Redo", command=self.do_redo).pack(side="right")
-        ttk.Button(mb, text="Fit", command=self.fit).pack(side="right", padx=(0, theme.BUTTON_GAP * 2))
-        ttk.Button(mb, text="Undo", command=self.do_undo).pack(side="right", padx=(0, theme.BUTTON_GAP))
+        q = ttk.Label(mb, text=" ? ", foreground="#2050c0", cursor="question_arrow", font=("", 9, "bold"))
+        q.pack(side="right")
+        Tip(q, lambda: help_text, width=560)
+        ttk.Button(mb, text="Fit", command=self.fit).pack(side="right", padx=(0, theme.BUTTON_GAP))
         self.lbl_way = ttk.Label(mb, foreground=theme.palette()["muted"])
         self.lbl_way.pack(side="left", padx=(theme.BUTTON_GAP * 2, 0))
         # the piece picked, in one line under the screen; everything done to it is on its right click (the user,
         # 2026-10-15: no side panel - the buttons and values in the context menu, the screen gets the room)
-        self.lbl_info = ttk.Label(mid, foreground=theme.palette()["muted"])
-        self.lbl_info.pack(fill="x", pady=(2, 0))
+        line = ttk.Frame(mid)
+        line.pack(fill="x", pady=(2, 0))
+        self.lbl_status = ttk.Label(line, foreground=theme.palette()["muted"])     # the file, the page, its pieces
+        self.lbl_status.pack(side="right")
+        self.lbl_info = ttk.Label(line, foreground=theme.palette()["muted"])
+        self.lbl_info.pack(side="left", fill="x", expand=True)
         c.bind("<Button-3>", self._menu)
         self.tv.bind("<Button-3>", self._tree_menu)
 
@@ -517,7 +548,7 @@ class InterfacePanel(ttk.Frame):
     def _texture(self, page, folder=""):
         if page not in self._tex:
             self._tex[page] = None
-            p = L.texture_file(self.mod, self.path, page, folder)
+            p = L.texture_file(self.mod, self._path, page, folder)
             if p:
                 try:
                     from .recolour import read_picture
@@ -546,7 +577,7 @@ class InterfacePanel(ttk.Frame):
         """A part picture of data/menu (buttons_composite2.tga...) as RGBA, cached; None when not there."""
         if name not in self._tex:
             self._tex[name] = None
-            p = L.texture_file(self.mod, self.path, name)
+            p = L.texture_file(self.mod, self._path, name)
             if p:
                 try:
                     from .recolour import read_picture
@@ -680,7 +711,12 @@ class InterfacePanel(ttk.Frame):
         pal_sel = "#ffd400"
         # the game draws its 'background' page (the backdrop) under every menu page
         if self.v_back.get() and self.page != "background" and "background" in self.doc.pages():
-            for x in self.doc.pieces("background"):
+            back = self.doc.pieces("background")
+            films = [i for i, x in enumerate(back) if self._film(x)]
+            for x in back[films[-1]:] if films else back:     # what lies under the video is never seen
+                if self._film(x):
+                    self._draw_film(x)
+                    continue
                 pic = self._picture(x, s)
                 if pic is not None:
                     x0, y0, _, _ = self._rect(x)
@@ -688,6 +724,8 @@ class InterfacePanel(ttk.Frame):
         from . import menudraw as MD
         for x in self.doc.pieces(self.page):
             x0, y0, x1, y1 = self._rect(x)
+            if self.v_back.get() and self._film(x):
+                self._draw_film(x)
             state = self._state(x)
             pic = self._picture(x, s, state) if self.v_back.get() else None
             k = MD.kind(x["identifier"], x["object"], self.doc.art(x) is not None)
@@ -718,12 +756,34 @@ class InterfacePanel(ttk.Frame):
                 c.create_rectangle(x1 - HANDLE, y1 - HANDLE, x1, y1, fill=pal_sel, outline="")
         arts = [self.doc.art(x) for x in self.doc.pieces(self.page)]
         unseen = [a for a in arts if a and self._texture(a[0], a[2]) is None]
-        self.lbl_status.configure(text="page %s - %d pieces%s%s" % (
-            self.page, len(self.doc.pieces(self.page)), "  (changes not kept for Apply yet)" if self._unwritten()
-            else "", ("  - %d picture(s) not found as files (Medieval II keeps them in its .pack files until the game "
+        self.lbl_status.configure(text="%s - page %s - %d pieces%s" % (
+            self.mod.rel(self._path), self.page, len(self.doc.pieces(self.page)), ("  - %d picture(s) not found as files (Medieval II keeps them in its .pack files until the game "
                       "is unpacked): shown as frames" % len(unseen)) if unseen else ""))
 
     # ---- the mouse and the keys ----
+    def _film(self, x):
+        """The video the game plays in this piece (its <fmv> file), or None - none in Barbarian Invasion (the user,
+        2026-10-16: the menu backdrop is a video in both games, Barbarian Invasion shows its picture)."""
+        return self.doc.videos().get(x["object"] or "") if self.video else None
+
+    def _draw_film(self, x):
+        x0, y0, x1, y1 = self._rect(x)
+        c = self.canvas
+        c.create_rectangle(x0, y0, x1, y1, fill="#0c0c14", outline="")
+        c.create_text(x0 + 8, y1 - 8, anchor="sw", fill="#8a8fa0", font=("", 9),
+                      text="\u25b6 the game's video plays here: %s" % self._film(x))
+
+    @staticmethod
+    def _video_shown(mod):
+        """Whether the game plays the menu video: Rome, Alexander, Medieval II; not Barbarian Invasion."""
+        if mod is None:
+            return True
+        from .emergence import is_bi
+        try:
+            return not is_bi(mod)
+        except Exception:
+            return True
+
     def _hit(self, e):
         """(piece's place on the page, 'size' on its corner / 'move') under the mouse - the smallest piece first."""
         best = None
@@ -819,6 +879,14 @@ class InterfacePanel(ttk.Frame):
     def _remember(self):
         self.undo.append((list(self.doc.lines), self.page, self.picked))
         self.redo.clear()
+        self.after_idle(self._marked)
+
+    def _marked(self):
+        """The work button's * and Apply changes' words follow the changes waiting here."""
+        for name in ("_mark_work", "update_actions"):
+            f = getattr(self.app, name, None)
+            if f is not None:
+                f()
 
     def _restore(self, state):
         lines, page, picked = state
@@ -828,14 +896,20 @@ class InterfacePanel(ttk.Frame):
         self.show_page(page if page in self.doc.pages() else self.doc.pages()[0], picked)
 
     def do_undo(self):
-        if self.undo:
-            self.redo.append((list(self.doc.lines), self.page, self.picked))
-            self._restore(self.undo.pop())
+        if not self.undo:
+            return False
+        self.redo.append((list(self.doc.lines), self.page, self.picked))
+        self._restore(self.undo.pop())
+        self._marked()
+        return True
 
     def do_redo(self):
-        if self.redo:
-            self.undo.append((list(self.doc.lines), self.page, self.picked))
-            self._restore(self.redo.pop())
+        if not self.redo:
+            return False
+        self.undo.append((list(self.doc.lines), self.page, self.picked))
+        self._restore(self.redo.pop())
+        self._marked()
+        return True
 
     def set_value(self, key, value):
         x = self.current()
@@ -908,7 +982,7 @@ class InterfacePanel(ttk.Frame):
         self.fill_pieces()
         self.fill_form()
         self.draw()
-        self.lbl_status.configure(text="%d slot(s) added on %s - their grid continued; Keep for Apply writes them"
+        self.lbl_status.configure(text="%d slot(s) added on %s - their grid continued; Apply changes writes them"
                                        % (n, self.page))
 
     def rename_piece(self):
@@ -949,36 +1023,9 @@ class InterfacePanel(ttk.Frame):
             self.show_page(x["menu_id"])
             self.fill_pages()
 
-    # ---- writing ----
+    # ---- writing: the main window's Preview changes / Apply changes (make_plan) ----
     def _unwritten(self):
-        return bool(self.doc) and self.doc.dump() != self.kept
-
-    def _plan(self):
-        from .plan import Plan
-        plan = Plan(self.mod, "interface", "interface", {})
-        L.plan_write(plan, self.path, self.doc)
-        return plan
-
-    def preview(self):
-        if not self.doc or self.doc.dump() == self.saved:
-            messagebox.showinfo(TITLE, "Nothing changed yet.", parent=self)
-            return
-        self.app.show_text("Interface - every change (nothing written yet)", self._plan().report())
-
-    def write(self):
-        from .gui_util import keep_for_apply
-        if not self.doc:
-            return False
-
-        def after(bdir):
-            from . import log
-            log.write("Menu layout changed (backup %s)" % bdir)
-        got = keep_for_apply(self, "interface", "The game's menu screens", self._plan, after, TITLE)
-        if got:
-            self.kept = self.doc.dump()
-            self.draw()
-        return got
-
+        return self.dirty()
 
 
 def open_interface(app):

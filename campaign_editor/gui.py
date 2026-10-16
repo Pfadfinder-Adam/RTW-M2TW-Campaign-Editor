@@ -6167,7 +6167,7 @@ class App(tk.Tk):
         out = []
         here = os.path.normcase(os.path.abspath(self.mod.data)) if self.mod else None
         for key, name in (("units", "Units"), ("buildings", "Buildings"),
-                          ("characters", "Characters"), ("terrain", "Terrain editor")):
+                          ("characters", "Characters"), ("terrain", "Terrain editor"), ("interface", "Interface")):
             ed = self.editors.get(key)
             # only an editor on the mod loaded now: one left on another mod's files never writes into them
             if ed is not None and ed.mod is not None and ed.dirty() and \
@@ -6937,7 +6937,7 @@ def main():
             open_builder(app)
             return
         face = app.editors.get("interface")
-        if face is not None and not face.may_close():           # menu changes not kept for Apply yet
+        if face is not None and not face.may_close():           # menu changes not written yet: keep working
             from .gui_interface import open_interface
             open_interface(app)
             return
