@@ -347,6 +347,28 @@ def unlisted_factions(s):
     return [fb.name for fb in s.factions if fb.name not in listed]
 
 
+def undiscovered_line(lines, fb):
+    """The line number of 'undiscovered' in a faction's head (before its towns and characters), else None."""
+    for i in range(fb.start + 1, fb.end):
+        t = tokens(lines[i])
+        if not t:
+            continue
+        if t[0] in BLOCK_ENDS:
+            return None
+        if t[0] == "undiscovered":
+            return i
+    return None
+
+
+def undiscovered_playable(s):
+    """Factions in the playable (or unlockable - unlocked ones count as playable) list whose head says 'undiscovered':
+    Medieval II stops reading the factions there ('Playable faction <x> marked as undiscovred.', world.cpp
+    parse_factions) and every faction after it is lost - the tester, 2026-10-16: the Aztecs and the rebels' armies
+    gone after the game's own editor saved aztecs into playable."""
+    listed = {n.rstrip(",") for x in (s.playable, s.unlockable) if x for _, n in x["items"]}
+    return [fb.name for fb in s.factions if fb.name in listed and undiscovered_line(s.lines, fb) is not None]
+
+
 # the option lines the original exes read in a faction's head (before its towns and characters); any other line there
 # is skipped SILENTLY (RomeTW.exe FUN_00dae835; medieval2.exe's reader) - a misspelt word does nothing
 FACTION_OPTIONS = {"rome": {"superfaction", "re_emergent", "dead_until_resurrected", "denari"},

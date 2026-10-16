@@ -798,6 +798,14 @@ def _move_list(plan, f, fac, playable):
     indent = re.match(r"\s*", f.text(items[0][0])).group(0) if items else "\t"
     f.insert(at, [indent + fac])
     plan.note(f, "%s moved to the %s list" % (fac, "playable" if playable else "nonplayable"))
+    if playable:                       # Medieval II stops at a playable 'undiscovered' faction (strat.undiscovered_playable)
+        from .strat import undiscovered_line
+        fb = Strat(f).faction(fac)
+        i = undiscovered_line(f.texts(), fb) if fb else None
+        if i is not None:
+            del f.raw[i]
+            plan.note(f, "%s: its 'undiscovered' line taken out - Medieval II refuses a playable faction marked "
+                         "undiscovered and loses every faction after it" % fac)
 
 
 def plan_tiles(plan, campaign):

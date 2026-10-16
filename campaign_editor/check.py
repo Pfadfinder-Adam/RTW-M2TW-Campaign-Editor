@@ -158,6 +158,11 @@ def check_mod(mod, campaign, deep=False, progress=None, found=None):
         bad("%s: its block in descr_strat.txt is in none of the playable / unlockable / nonplayable lists at the "
             "file's top - the game stops at the start ('Faction %s not listed in playable/nonplayable header section.'); add it "
             "to one of the lists (Edit faction: tick Playable)" % (n, n))
+    from .strat import undiscovered_playable
+    for n in undiscovered_playable(s):
+        bad("%s: playable (or unlockable) but its block in descr_strat.txt says 'undiscovered' - Medieval II stops "
+            "reading the factions there ('Playable faction <%s> marked as undiscovred.') and every faction after it "
+            "is lost (no towns, no armies); untick Playable (Edit faction) or delete the 'undiscovered' line" % (n, n))
     ev = event_lines(s.lines)
     if ev:
         bad("descr_strat.txt has %d event line(s) at its top (line %s) - the game does not read them there "

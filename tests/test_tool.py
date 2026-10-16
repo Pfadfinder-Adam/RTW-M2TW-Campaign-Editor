@@ -17149,3 +17149,54 @@ class ArmourTiersTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class UndiscoveredPlayableTest(unittest.TestCase):
+    """Tester 2026-10-16: aztecs (undiscovered) in the playable list - Medieval II stops reading the factions at
+    'Playable faction <aztecs> marked as undiscovred.', the rebels' armies after it are lost."""
+    OLD = ("campaign\timperial_campaign\r\n"
+           "playable\r\n\tengland\r\nend\r\n"
+           "unlockable\r\nend\r\n"
+           "nonplayable\r\n\taztecs\r\n\tslave\r\nend\r\n\r\n"
+           "start_date\t1080 summer\r\n"
+           "faction\tengland, comparative smith\r\nai_label\tcatholic\r\ndenari\t1000\r\n"
+           "faction\taztecs, balanced smith\r\nai_label\tdefault\r\nundiscovered\r\ndenari\t1000\r\n"
+           "faction\tslave, balanced smith\r\nai_label\tslave_faction\r\ndenari\t1000\r\n")
+    NEW = OLD.replace("playable\r\n\tengland\r\nend", "playable\r\n\tengland\r\n\taztecs\r\nend", 1).replace(
+        "nonplayable\r\n\taztecs\r\n", "nonplayable\r\n")
+
+    def test_found(self):
+        from campaign_editor.strat import undiscovered_playable
+        f = TextFile.from_bytes("descr_strat.txt", self.NEW.encode("latin-1"))
+        self.assertEqual(undiscovered_playable(Strat(f)), ["aztecs"])
+        f = TextFile.from_bytes("descr_strat.txt", self.OLD.encode("latin-1"))
+        self.assertEqual(undiscovered_playable(Strat(f)), [])
+
+    def test_game_editor_lists_put_back(self):
+        from campaign_editor import gameeditor as GE
+        out, said = GE.strat_back(self.OLD.encode("latin-1"), self.NEW.encode("latin-1"))
+        self.assertEqual(out.decode("latin-1"), self.OLD)
+        self.assertTrue(any("lists put back" in s for s in said))
+        out, said = GE.strat_back(self.OLD.encode("latin-1"), self.OLD.encode("latin-1"))
+        self.assertEqual(out.decode("latin-1"), self.OLD)
+        self.assertFalse(any("lists" in s for s in said))
+
+    def test_made_playable_loses_undiscovered(self):
+        from campaign_editor import edit
+        from campaign_editor.strat import undiscovered_playable
+
+        class P:
+            def __init__(self):
+                self.notes = []
+
+            def note(self, f, text):
+                self.notes.append(text)
+        f = TextFile.from_bytes("descr_strat.txt", self.OLD.encode("latin-1"))
+        p = P()
+        edit._move_list(p, f, "aztecs", True)
+        s = Strat(f)
+        self.assertIn("aztecs", [n for _, n in s.playable["items"]])
+        self.assertNotIn("aztecs", [n for _, n in s.nonplayable["items"]])
+        self.assertEqual(undiscovered_playable(s), [])
+        self.assertNotIn("undiscovered", f.texts())
+        self.assertTrue(any("undiscovered" in n for n in p.notes))

@@ -229,6 +229,45 @@ def _decode(data):
     return data.decode("latin-1", errors="replace"), "latin-1"
 
 
+def _lists_span(text):
+    """(start, end, text) of the playable ... nonplayable lists' lines at the file's top (from the 'playable' line
+    to the 'end' after 'nonplayable', or the last list's 'end'), else None."""
+    lines = text.splitlines(keepends=True)
+    pos, start, end, open_ = 0, None, None, None
+    for l in lines:
+        w = l.split(";")[0].split()
+        head = w[0] if w else ""
+        if head in ("playable", "unlockable", "nonplayable") and open_ is None:
+            if start is None:
+                start = pos
+            open_ = head
+        elif head == "end" and open_:
+            end = pos + len(l)
+            if open_ == "nonplayable":
+                break
+            open_ = None
+        elif head and open_ is None and start is not None:
+            break
+        pos += len(l)
+    return (start, end, text[start:end]) if start is not None and end else None
+
+
+def _lists_of(text):
+    """{list: [factions]} of the lists' text (_lists_span) - to see whether two files list the same."""
+    out, cur = {}, None
+    for l in text.splitlines():
+        w = l.split(";")[0].split()
+        if not w:
+            continue
+        if w[0] in ("playable", "unlockable", "nonplayable"):
+            cur = out.setdefault(w[0], [])
+        elif w[0] == "end":
+            cur = None
+        elif cur is not None:
+            cur.append(w[0].rstrip(","))
+    return out
+
+
 def strat_back(old, new):
     """(new descr_strat bytes with what the editor drops put back, [what was dropped, in words]). old / new bytes."""
     old_t, _ = _decode(old)
@@ -240,6 +279,13 @@ def strat_back(old, new):
         new_t = new_t.rstrip("\r\n") + nl + nl + nl.join(script) + nl
         said.append("the 'script' lines (%s) put back - the game's editor does not save them" % " / ".join(
             s.strip() for s in script))
+    lists = _lists_span(old_t)
+    if lists:
+        now = _lists_span(new_t)
+        if now and _lists_of(now[2]) != _lists_of(lists[2]):
+            new_t = new_t[:now[0]] + lists[2] + new_t[now[1]:]
+            said.append("the playable / unlockable / nonplayable lists put back as they were - the game's editor "
+                        "rewrites them from memory (an undiscovered faction it lists as playable stops Medieval II)")
     a, b = _counts(old_t), _counts(new_t)
     for key in ("faction", "settlement", "character", "character_record", "army", "navy", "resource", "landmark",
                 "region", "building", "unit", "relative", "core_attitudes", "faction_relationships"):
