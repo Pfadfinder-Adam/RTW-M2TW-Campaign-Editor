@@ -77,7 +77,12 @@ class ModelViewer(tk.Toplevel):
         frm.pack(fill="both", expand=True)
         self.canvas = tk.Canvas(frm, width=SIZE[0], height=SIZE[1], highlightthickness=0,
                                 background="#2e3036")
-        self.canvas.grid(row=0, column=0, rowspan=8, sticky="nw")
+        self.canvas.grid(row=0, column=0, rowspan=8, sticky="nsew")
+        # the view grows with the window (#308: 'the 3D window never widens'), drawn again once the size settles
+        self.view_size = SIZE
+        frm.columnconfigure(0, weight=1)
+        frm.rowconfigure(7, weight=1)
+        self.canvas.bind("<Configure>", self._resized, add="+")
         side = ttk.Frame(frm, padding=(10, 0))
         side.grid(row=0, column=1, sticky="nw")
         ttk.Label(side, text=info.name, font=("", 10, "bold")).pack(anchor="w")
@@ -591,7 +596,8 @@ class ModelViewer(tk.Toplevel):
         if msg:
             self.canvas.delete("all")
             self._shown = None
-            self.canvas.create_text(SIZE[0] // 2, SIZE[1] // 2, text=msg, fill="#ddd", width=SIZE[0] - 40)
+            w, h = self.view_size
+            self.canvas.create_text(w // 2, h // 2, text=msg, fill="#ddd", width=w - 40)
             self.info_lbl.configure(text="")
             return
         self.draw()
@@ -663,6 +669,23 @@ class ModelViewer(tk.Toplevel):
         box = body.getchannel("A").point(lambda v: 255 if v > 8 else 0).getbbox()
         return CM.cut_out(*shots), box
 
+    def _resized(self, e):
+        size = (max(80, e.width), max(80, e.height))
+        if size == tuple(self.view_size):
+            return
+        self.view_size = size
+        if getattr(self, "_resize_job", None):
+            self.after_cancel(self._resize_job)
+        self._resize_job = self.after(150, self._redraw_sized)
+
+    def _redraw_sized(self):
+        self._resize_job = None
+        try:
+            if self._play is None:                 # a playing animation draws the new size by itself
+                self.draw()
+        except tk.TclError:
+            pass
+
     def draw(self, quick=False):
         if self.mesh is None:
             return
@@ -671,7 +694,7 @@ class ModelViewer(tk.Toplevel):
         if self._frame is None:                 # sized once - an animation playing keeps it (no jerking camera)
             # a siege engine: on the engine and its crew as they stand (its moves hide the shot far under it)
             self._frame = MV.frame_of(mesh, groups) if not self.engine else self._engine_frame()
-        img = MV.render(mesh, SIZE, self.yaw, self.pitch, self.zoom, tex, att, groups,
+        img = MV.render(mesh, self.view_size, self.yaw, self.pitch, self.zoom, tex, att, groups,
                         quality=1 if quick else 2, more=more, frame=self._frame, pan=self.pan,
                         textured=not quick or (quick == "play" and MV._fast is not None))   # NumPy: whole texture
         if quick == "play" and self._photo is not None and getattr(self, "_shown", None) is not None and \

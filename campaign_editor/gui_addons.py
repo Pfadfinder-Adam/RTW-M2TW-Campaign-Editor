@@ -191,6 +191,8 @@ class AddonsPanel(SettingsForm, ttk.Frame):
             # '(old)': an older version is in the game - the page says what Update it does (a longer word was cut
             # at the list's edge)
             self.lb.insert("end", a.title + ("   (added)" if a.own else "") + (" (old)" if a.key in old else ""))
+        # as wide as its longest name - 'One Recruitment Grid (Medieva' was cut at the edge (#310)
+        self.lb.configure(width=max([28] + [len(self.lb.get(i)) + 2 for i in range(self.lb.size())]))
         keys = [a.key for a in self.addons]
         self.lb.selection_clear(0, "end")
         self.lb.selection_set(keys.index(pick) if pick in keys else self._first_fitting())
