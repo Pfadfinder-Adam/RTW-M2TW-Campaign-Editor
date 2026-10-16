@@ -942,7 +942,7 @@ building smith
         from campaign_editor import gui_util as GU
         try:
             names = {"rules": "RulesWindow", "events": "EventsWindow", "traits": "TraitsWindow",
-                     "mercs": "MercWindow", "rebels": "RebelsWindow", "recolour": "RecolourPage"}
+                     "mercs": "MercPage", "rebels": "RebelsPage", "recolour": "RecolourPage"}
             self.assertEqual(set(App.PAGE_WORKS), set(names))
             for key, mod in App.PAGE_WORKS.items():
                 m = import_module("campaign_editor." + mod)

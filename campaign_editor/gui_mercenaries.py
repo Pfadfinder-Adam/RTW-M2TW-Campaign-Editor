@@ -33,7 +33,7 @@ def _hash(path):
         return hashlib.sha1(fh.read()).hexdigest()
 
 
-class MercWindow(AutoKeep, Page):
+class _Merc(AutoKeep):
     _ak_fields = ('pools',)
 
     def __init__(self, app):
@@ -645,12 +645,22 @@ class MercWindow(AutoKeep, Page):
 
 
 def open_mercenaries(app, region=None, new_from=None):
-    """Mercenaries: a work of the main window (App.show_page); region picks that region's pool, new_from makes a pool
-    of those regions."""
-    w = app.show_page("mercs")
-    if not isinstance(w, MercWindow):
-        return w
+    """A window of its own over the map (the map's right click - the user, 2026-10-16: 'as it was, a window over the
+    map'); one window: opened again it comes to the front; region picks that region's pool, new_from makes a pool of
+    those regions. The top row's Mercenaries is the work (make_page)."""
+    if not app.mod:
+        messagebox.showinfo(TITLE, "Load a mod first.")
+        return None
+    w = getattr(app, "_merc_window", None)
+    if w is None or not w.winfo_exists() or w.mod is not app.mod or w.campaign != app.v_campaign.get():
+        _close(w)
+        _close(app.editors.get("mercs") if isinstance(app.editors.get("mercs"), MercPage) else None)
+        w = app._merc_window = MercWindow(app)
+        if not region:
+            w.nb.select(1)                      # the pools first
+    w.lift()
     if not w.path:
+        messagebox.showinfo(TITLE, "This campaign has no descr_mercenaries.txt - nothing to hire.", parent=w)
         return w
     if region:                                  # the region's own list, the garrison way (it says if it has none)
         w.pick_region(region)
@@ -660,10 +670,30 @@ def open_mercenaries(app, region=None, new_from=None):
     return w
 
 
+class MercWindow(_Merc, tk.Toplevel):
+    """Mercenaries in a window of its own over the map (the map's right click)."""
+
+
+class MercPage(_Merc, Page):
+    """Mercenaries as a work of the main window (the top row)."""
+
+
 def make_page(app):
     if not app.mod:
         return None
-    w = MercWindow(app)
+    _close(getattr(app, "_merc_window", None))      # the window over the map goes, its changes kept
+    w = MercPage(app)
     if w.path:
         w.nb.select(1)                          # from the work bar: the pools first
     return w
+
+
+def _close(w):
+    """The other copy (the work or the window over the map) goes first, its changes kept: one editor on the file."""
+    try:
+        if w is not None and w.winfo_exists():
+            w._page_gone = True                         # a work made to go: the main window keeps its own work
+            w.ak_close()
+            w.destroy()
+    except Exception:
+        pass

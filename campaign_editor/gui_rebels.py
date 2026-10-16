@@ -22,7 +22,7 @@ TITLE = "Rebels"
 ALL = "every faction"
 
 
-class RebelsWindow(AutoKeep, Page):
+class _Rebels(AutoKeep):
     _ak_fields = ('types', 'removed', 'given')
 
     def __init__(self, app):
@@ -514,14 +514,46 @@ class RebelsWindow(AutoKeep, Page):
 
 
 def open_rebels(app, regions=None):
-    """Rebels: a work of the main window (App.show_page); regions: those picked on its Regions tab."""
-    w = app.show_page("rebels")
-    if isinstance(w, RebelsWindow) and w.path and regions:
+    """A window of its own over the map (the map's right click - the user, 2026-10-16); one window: opened again it
+    comes to the front; regions: those picked on its Regions tab. The top row's Rebels is the work (make_page)."""
+    if not app.mod:
+        messagebox.showinfo(TITLE, "Load a mod first.")
+        return None
+    w = getattr(app, "_rebels_window", None)
+    if w is None or not w.winfo_exists() or w.mod is not app.mod or w.campaign != app.v_campaign.get():
+        _close(w)
+        _close(app.editors.get("rebels") if isinstance(app.editors.get("rebels"), RebelsPage) else None)
+        w = app._rebels_window = RebelsWindow(app)
+    w.lift()
+    if not w.path:
+        messagebox.showinfo(TITLE, "This mod has no %s - no rebel types to change." % RB.FILE, parent=w)
+        return w
+    if regions:
         w.pick_regions(regions)
     return w
+
+
+class RebelsWindow(_Rebels, tk.Toplevel):
+    """Rebels in a window of its own over the map (the map's right click)."""
+
+
+class RebelsPage(_Rebels, Page):
+    """Rebels as a work of the main window (the top row)."""
 
 
 def make_page(app):
     if not app.mod:
         return None
-    return RebelsWindow(app)
+    _close(getattr(app, "_rebels_window", None))    # the window over the map goes, its changes kept
+    return RebelsPage(app)
+
+
+def _close(w):
+    """The other copy (the work or the window over the map) goes first, its changes kept: one editor on the file."""
+    try:
+        if w is not None and w.winfo_exists():
+            w._page_gone = True                         # a work made to go: the main window keeps its own work
+            w.ak_close()
+            w.destroy()
+    except Exception:
+        pass
