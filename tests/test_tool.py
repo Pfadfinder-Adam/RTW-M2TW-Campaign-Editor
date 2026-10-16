@@ -883,6 +883,26 @@ building smith
                                    map_only=lambda m=map_only: m)
             self.assertEqual(App.apply_words(fake), words, work)
 
+    def test_every_map_sign_grows_under_the_mouse(self):
+        """Report #304: towns, ports and characters grew under the mouse, resources, wonders, forts, watchtowers and
+        special places did not - every sign is found near the mouse now."""
+        try:
+            import tkinter as tk
+            from campaign_editor.gui_map import MapView
+            root = tk.Tk()
+        except Exception as e:
+            self.skipTest("no window: %s" % e)
+        from types import SimpleNamespace
+        try:
+            c = tk.Canvas(root, width=200, height=200)
+            for i, tag in enumerate(("res:3", "fort:12", "special:a", "city:X")):
+                c.create_polygon(20 + 40 * i, 20, 30 + 40 * i, 30, 20 + 40 * i, 40, tags=(tag.split(":")[0], tag))
+            fake = SimpleNamespace(canvas=c, _aura=lambda: 12, _hot=None, _hot_k=1.0)
+            for i, tag in enumerate(("res:3", "fort:12", "special:a", "city:X")):
+                self.assertEqual(MapView._marker_near(fake, 24 + 40 * i, 30)[0], tag)
+        finally:
+            root.destroy()
+
     def test_last_town_given_away_its_general_steps_out(self):
         """Report #306: giving a faction's last town away with its general inside was refused ('has no other town to
         go to' - give it another town first, Apply, then again). He steps out onto a free tile beside the town, as

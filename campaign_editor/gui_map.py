@@ -2034,7 +2034,7 @@ class MapView(ttk.Frame):
         return max(8.0, min(28.0, 34.0 - self.z * 1.2))
 
     def _marker_near(self, sx, sy):
-        """(tag, how near 0..1) of the town, port or character sign nearest the mouse within its aura, or (None, 0)
+        """(tag, how near 0..1) of the map sign nearest the mouse within its aura, or (None, 0)
         (a tester: the port's anchor did not grow like the rest)."""
         r = self._aura()
         c = self.canvas
@@ -2043,7 +2043,9 @@ class MapView(ttk.Frame):
             hb = c.bbox(self._hot)
         for item in c.find_overlapping(sx - r, sy - r, sx + r, sy + r):
             for tag in c.gettags(item):
-                if not tag.startswith(("char:", "city:", "port:")):
+                # every sign grows: towns, ports, characters and also resources, wonders, forts, watchtowers and
+                # special places (#304: 'not all signs grow - the tower, the wonder, the 3D model, resources, forts')
+                if not tag.startswith(("char:", "city:", "port:", "res:", "fort:", "special:")):
                     continue
                 box = c.bbox(tag)
                 if not box:
