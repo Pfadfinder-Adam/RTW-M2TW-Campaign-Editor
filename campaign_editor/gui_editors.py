@@ -1788,14 +1788,38 @@ class RecordEditor(ttk.Frame):
             messagebox.showerror("Import", "Cannot read %s: %s" % (src, e))
             return
         size = need[:2] if need else None
-        if size and tuple(got) != tuple(size):
-            if not ask("Import", "%s is %d x %d; this mod's own are %d x %d.\n\n"
-                                                 "Resize it to %d x %d?" % ((os.path.basename(src),) + tuple(got) +
-                                                                            tuple(size) + tuple(size)), yes='Resize it', no='Keep its size'):
-                size = None
+        if size:
+            size = self._pick_size(src, tuple(got), tuple(size), any("unit_info" in t.replace("\\", "/").lower()
+                                                                     for t in targets))
+            if size is False:
+                return
         self.imports = E.queue_import(self.imports, src, targets, size)
         self.app.status.set("%s: %s for %d place(s) - Preview, then Apply." % (label, os.path.basename(src), len(targets)))
         self.show_pictures()
+
+    def _pick_size(self, src, got, own, info):
+        """The size a picture goes in (PICTURE RESOLUTION, a Stainless Steel modder's wish): the mod's own, two to
+        four times it (sharper cards for HD mods - as Make a card's Size), or the file's own size; the pick kept for
+        the next one (the same setting as Make a card / Make a picture). None = its own size, False = not imported."""
+        key = "picture_scale" if info else "card_scale"
+        try:
+            last = max(1, min(4, int(settings.get(key, 1) or 1)))
+        except (TypeError, ValueError):
+            last = 1
+        sizes = [tuple(d * k for d in own) for k in (1, 2, 3, 4)]
+        words = ["the mod's own (%d x %d)" % sizes[0]] + ["x%d (%d x %d)" % ((k,) + sizes[k - 1]) for k in (2, 3, 4)]
+        if got == sizes[last - 1]:
+            return sizes[last - 1]                     # already the size picked last: nothing to ask
+        words.append("its own (%d x %d)" % got)
+        k = ask_choice(self, "Import", "%s is %d x %d; this mod's own are %d x %d.\n\nIn which size does it go in?" % (
+            (os.path.basename(src),) + got + own), words, default=sizes.index(got) if got in sizes else last - 1,
+            cancel=None)
+        if k is None:
+            return False
+        if k == 4:
+            return None
+        settings.put(key, k + 1)
+        return sizes[k]
 
     # ---- writing ----
     def dirty(self):

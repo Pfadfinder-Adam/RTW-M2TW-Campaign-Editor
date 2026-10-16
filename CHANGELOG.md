@@ -11,6 +11,7 @@
 - **Changed**: a slimmer Unit editor and Models tab; the support buttons in one drop-down.
 
 ### Added
+- Units: Import... of a card or description picture offers its size - the mod's own, two to four times bigger, or the file's own; the pick is kept for the next one, as in Make a card.
 - Garrisons and armies: a right click on a unit opens a menu - its experience, armour and weapon, one or five more like it, every one like it out, replace it with another (its numbers kept); on the roster add several, fill the army or add with experience. The numbers show under the card.
 - Make a card / Make a picture: a **Size** choice - the mod's own size, or two, three or four times bigger for sharper cards and pictures.
 - Interface: the wheel zooms the screen round the mouse, the held wheel moves it, **Fit** shows it whole - as on the map.

@@ -962,6 +962,33 @@ building smith
         finally:
             root.destroy()
 
+    def test_imported_card_size_picked_like_make_a_card(self):
+        """A Stainless Steel modder's wish (PICTURE RESOLUTION): Import... of a card / info picture offers the mod's
+        own size, x2 to x4 or the file's own (was: resize yes / no), the pick kept for the next one."""
+        try:
+            from campaign_editor import gui_editors as GE
+        except ImportError as e:
+            self.skipTest("no tkinter: %s" % e)
+        from campaign_editor import settings
+        asked, pick = [], [2]
+        old = GE.ask_choice
+        GE.ask_choice = lambda parent, title, text, words, **kw: (asked.append((words, kw)), pick[0])[1]
+        was = settings.get("card_scale")
+        try:
+            got = GE.RecordEditor._pick_size(None, "a.tga", (200, 260), (48, 64), False)
+            self.assertEqual(got, (144, 192))                          # x3
+            self.assertEqual(settings.get("card_scale"), 3)
+            self.assertEqual(len(asked[0][0]), 5)
+            self.assertEqual(GE.RecordEditor._pick_size(None, "b.tga", (144, 192), (48, 64), False), (144, 192))
+            self.assertEqual(len(asked), 1)                            # already the size picked: not asked
+            pick[0] = 4
+            self.assertIsNone(GE.RecordEditor._pick_size(None, "c.tga", (10, 10), (48, 64), False))    # its own
+            pick[0] = None
+            self.assertIs(GE.RecordEditor._pick_size(None, "d.tga", (10, 10), (48, 64), False), False)
+        finally:
+            GE.ask_choice = old
+            settings.put("card_scale", was if was is not None else 1)
+
     def test_last_town_given_away_its_general_steps_out(self):
         """Report #306: giving a faction's last town away with its general inside was refused ('has no other town to
         go to' - give it another town first, Apply, then again). He steps out onto a free tile beside the town, as
