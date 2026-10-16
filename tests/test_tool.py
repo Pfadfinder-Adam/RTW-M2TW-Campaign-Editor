@@ -17200,3 +17200,15 @@ class UndiscoveredPlayableTest(unittest.TestCase):
         self.assertEqual(undiscovered_playable(s), [])
         self.assertNotIn("undiscovered", f.texts())
         self.assertTrue(any("undiscovered" in n for n in p.notes))
+
+
+class RexSoldiersLineTest(unittest.TestCase):
+    def test_men_of_a_soldiers_block_unit(self):
+        """HLR (tester 2026-10-16): 37 units say 'soldiers 50, 0, 1.8...' with a { } block of models - 50 men, not 0."""
+        from campaign_editor.units import read_units
+        text = ("type barb warband\r\ndictionary barb_warband\r\ncategory infantry\r\nclass light\r\n"
+                "soldiers        50, 0, 1.8, 0.4, 1.7\r\n{\r\n\tskeleton\tceltic_heavy_infantry\r\n\tdefault\r\n\t{\r\n"
+                "\t\tceltic_heavy_infantry\r\n\t}\r\n}\r\nstat_cost 1, 400, 100, 0, 0, 400\r\n")
+        u = read_units(TextFile.from_bytes("export_descr_unit.txt", text.encode("latin-1")))[0]
+        self.assertEqual(u.soldiers, 50)
+        self.assertIn("50 men", u.summary())

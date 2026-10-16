@@ -217,6 +217,7 @@
   line of the block** in both editors; the editor remembers whether it was open.
 
 ### Fixed
+- Units with REX's 'soldiers' line and a block of models (as in HLR) showed 0 men -> their real number of men.
 - Medieval II: a faction marked undiscovered made playable (by Edit faction or by the game's own editor) lost every faction after it, rebels' armies too -> its 'undiscovered' line goes, the game's editor no longer changes the faction lists, and Check mod files warns.
 - Garrison / army right click offered armour 1-3 to every unit, though most units have fewer armour upgrades (the game drops the rest) -> it offers only the unit's own upgrades.
 - Coast & heights still drew the rivers, fords and cliffs over the heights -> only land, sea and heights are shown there.

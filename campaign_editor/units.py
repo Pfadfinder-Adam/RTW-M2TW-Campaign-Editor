@@ -81,6 +81,9 @@ def _read_units(edu):
         elif key == "soldier" and len(t) > 2:
             n = _ints(" ".join(t[2:3]))
             cur.soldiers = n[0] if n else 0
+        elif key == "soldiers" and len(t) > 1:          # REX: 'soldiers men, extras, mass...' + a { } block of models
+            n = _ints(" ".join(t[1:2]))
+            cur.soldiers = n[0] if n else 0
         elif key == "attributes":
             cur.attributes = [a.strip() for a in rest.split(",") if a.strip()]
         elif key == "stat_cost":
