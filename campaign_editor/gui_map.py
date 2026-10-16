@@ -2221,7 +2221,8 @@ class MapView(ttk.Frame):
             units = c.get("unit_names") or []
             text = "%s - %s of %s" % (c["name"] or "(no name)", what, c["faction"])
             if units:
-                text += " - " + ", ".join(units)
+                from .strat import entry_label
+                text += " - " + ", ".join(entry_label(u) for u in units)
             out.append((text, tuple(c["xy"]), c["name"] or ""))
         for f in self.forts:
             out.append(("%s%s of %s" % (f.kind, " '%s'" % f.name if f.name else "", f.owner or "no faction"),

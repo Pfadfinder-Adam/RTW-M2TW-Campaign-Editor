@@ -9,7 +9,7 @@ from .build import template_display, validate
 from .clone import FE_NAMES, description_key, entry_end
 from .plan import Plan
 from .start import MAX_UNITS, _has_army, _units, unit_name
-from .strat import first_names, RE_XY, Character, Settlement, Strat, character_line, village_block
+from .strat import first_names, RE_XY, Character, Settlement, Strat, character_line, entry_type, unit_line, village_block
 from .textio import tokens
 
 RE_RGB = re.compile(r"red\s*(\d+)\s*,\s*green\s*(\d+)\s*,\s*blue\s*(\d+)")
@@ -138,7 +138,7 @@ def edit(mod, campaign, faction, opts):
         apply_roster(plan, faction, opts["roster"], campaign)
         taken = {k[5:] for k, v in opts["roster"].items() if k.startswith("unit:") and v is False}
         for region, units in (opts.get("garrisons") or {}).items():
-            gone = sorted(set(units) & taken)
+            gone = sorted({entry_type(u) for u in units} & taken)
             if gone:
                 plan.warn(None, "%s's new garrison has %s, taken away on the Roster" % (region, ", ".join(gone)))
     if opts.get("figures") or opts.get("figures_like"):   # before the art: a new texture line may get a picture
@@ -685,7 +685,7 @@ def _army_edits(plan, f, faction=None, units=None, remove=None):
             plan.note(f, "%s (%s): no unit left - the army left the map with its last unit" % (c.name, c.kind))
             continue
         room = MAX_UNITS - len(keep)
-        lines = ["unit\t\t%s\t\t\t\texp 0 armour 0 weapon_lvl 0" % t for t in m["units"]][:room]
+        lines = [unit_line(t) for t in m["units"]][:room]
         new = [l for i, l in enumerate(chunk) if i not in units or i in keep]
         at = units[0] + len(keep)
         new[at:at] = lines
@@ -839,7 +839,7 @@ def _garrisons(plan, f, s, campaign, faction=None, picked=None, add=False):
         if len(types) > room:
             plan.warn(f, "%s: only %d of the %d unit(s) fit - an army holds %d at most" % (
                 region, max(room, 0), len(types), MAX_UNITS))
-        lines = ["unit\t\t%s\t\t\t\texp 0 armour 0 weapon_lvl 0" % t for t in types][:room]
+        lines = [unit_line(t) for t in types][:room]
         jobs.append((region, holder, lines, xy))
     def at(job):                                        # bottom up: every line above keeps its place
         h = job[1]

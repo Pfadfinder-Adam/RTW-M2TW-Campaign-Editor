@@ -30,7 +30,7 @@ from .gui_garrison import GarrisonEditor, Pictures
 from .gui_map import MapView
 from .plan import Plan, backup_label, backups, restore_to
 from .scan import IGNORE_HELP, ignore_path, make_manifest, scan as scan_mod
-from .start import unit_name
+from .start import unit_entry
 from .strat import Strat, first_names
 from .textio import tokens
 from .units import faction_units, read_units
@@ -1940,7 +1940,7 @@ class App(tk.Tk):
             if not c.xy:
                 continue
             lines = self.strat.lines[c.start:c.end]
-            units = [unit_name(l) for l in lines if tokens(l)[:1] == ["unit"]]
+            units = [unit_entry(l) for l in lines if tokens(l)[:1] == ["unit"]]
             if c.kind == "admiral":
                 kind = "fleet"
             elif c.kind not in ("general", "named character"):
@@ -3743,7 +3743,7 @@ class App(tk.Tk):
                         taken.discard(c.xy)
                         taken.add(dest)
                         fleet_moves[c.start] = dest
-        from .start import unit_name
+        from .start import unit_entry
         removed = {(f, x["name"], tuple(x["from"])) for f, xs in self.map_removed.items() for x in xs}
         from .family import _parse_relative
         for fb in self.strat.factions:
@@ -3763,7 +3763,7 @@ class App(tk.Tk):
                     cid, town_moves.get(c.xy) or fleet_moves.get(c.start) or c.xy)
                 ulines = [l for l in lines if tokens(l)[:1] == ["unit"]]
                 chars.append({"id": cid, "faction": fb.name, "name": c.name, "kind": c.kind, "xy": xy,
-                              "army": army, "units": len(ulines), "unit_names": [unit_name(l) for l in ulines],
+                              "army": army, "units": len(ulines), "unit_names": [unit_entry(l) for l in ulines],
                               "from": c.xy, "named": bool(c.named), "role": c.role, "line": c.line,
                               "family": c.name in family or bool(c.role)})
                 if army:
@@ -5756,11 +5756,11 @@ class App(tk.Tk):
             held = (holder.role or "general") if holder is not None and holder.named else False
             now = []
             if holder is not None:
-                now = [unit_name(l) for l in self.strat.lines[holder.start:holder.end] if tokens(l)[:1] == ["unit"]]
+                now = [unit_entry(l) for l in self.strat.lines[holder.start:holder.end] if tokens(l)[:1] == ["unit"]]
                 now = now[1:] if holder.named else now                 # without the bodyguard
             else:                                      # the town's own garrison (garrisoned_army, no captain)
                 st = self.strat.settlement_of(region) if self.strat else None
-                now = list(st.garrison) if st is not None else []
+                now = list(st.garrison_entries) if st is not None else []
             units = self._with_types(units, now)
 
         def auto(lo, hi, cap):                         # Suggest: the template's units, by the numbers beside it
@@ -5959,8 +5959,9 @@ class App(tk.Tk):
     def _with_types(self, units, types):
         """The roster plus any unit these types name that it lacks (another faction's,
         a mercenary): a garrison as it stands must show whole."""
+        from .strat import entry_type
         have = {u.type for u in units}
-        missing = set(types) - have
+        missing = {entry_type(t) for t in types} - have
         if not missing:
             return units
         edu = self.mod.file("edu")

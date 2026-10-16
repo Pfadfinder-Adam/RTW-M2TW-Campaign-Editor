@@ -5,6 +5,7 @@ take it out."""
 import tkinter as tk
 from tkinter import ttk
 
+from .strat import entry_label, entry_stats, entry_type, with_stats
 from .units import unit_card
 
 try:                                   # pictures need Pillow; without it the cards are text
@@ -65,9 +66,18 @@ class Pictures:
         return self.cache[key]
 
 
+def stats_marks(entry):
+    """The marks under a card for a unit's numbers above 0: 'xp3 a1 w2' (the game shows chevrons and dots)."""
+    e, a, w = entry_stats(entry)
+    return " ".join(x for x in (("xp%d" % e) if e else "", ("a%d" % a) if a else "", ("w%d" % w) if w else "") if x)
+
+
 class GarrisonEditor(ttk.Frame):
     """Roster cards on the left, the town's garrison on the right. Every change
-    goes straight to on_change(list of unit types)."""
+    goes straight to on_change(list of units: a type, or a type with its exp / armour / weapon - strat.unit_entry).
+    Left click adds / takes out; the right click opens a menu (the user, 2026-10-16: 'правый клик становится
+    контекстным меню'): a unit's experience, armour, weapon, one more like it, all like it out, replace it; on the
+    roster add several or with experience."""
 
     def __init__(self, master, pictures=None):
         super().__init__(master)
@@ -102,8 +112,8 @@ class GarrisonEditor(ttk.Frame):
         self.info.pack(fill="x")
         body = ttk.Panedwindow(self, orient="horizontal")
         body.pack(fill="both", expand=True)
-        left = ttk.LabelFrame(body, text="Roster - click to add")
-        right = ttk.LabelFrame(body, text="Garrison - click to take out")
+        left = ttk.LabelFrame(body, text="Roster - click to add, right click for more")
+        right = ttk.LabelFrame(body, text="Garrison - click to take out, right click for more")
         body.add(left, weight=3)
         body.add(right, weight=2)
         self.roster = self._scroll(left)
@@ -161,7 +171,8 @@ class GarrisonEditor(ttk.Frame):
             self.b_auto.pack_forget()
         self.mod, self.faction, self.units = mod, faction, units
         self.by_type = {u.type: u for u in units}
-        self.garrison = [t for t in current if t in self.by_type]
+        self.garrison = [t for t in current if entry_type(t) in self.by_type]
+        self.replacing = None
         self.on_change, self.auto, self.held = on_change, auto, held
         # held: the name of whoever holds the town (a garrison), or True for a general's own army (his bodyguard
         # stays - no town to name; it read "the True's town")
@@ -191,15 +202,21 @@ class GarrisonEditor(ttk.Frame):
         wheel(canvas, scroll_y(canvas))
         return inner
 
-    def _card(self, parent, unit, command):
+    def _card(self, parent, unit, command, entry=None, menu=None):
         path = unit_card(self.mod, unit, self.faction)
         img = self.pics.get(path) or self.pics.missing(unit.type)     # no picture: a grey card with its name
         text = unit.type if img is None else str(unit.upkeep)          # upkeep under the card
+        marks = stats_marks(entry) if entry is not None else ""
+        if marks:                                    # exp / armour / weapon above 0: shown under the card
+            text = marks if img is not None else "%s\n%s" % (text, marks)
         b = tk.Button(parent, image=img, text=text, compound="top", wraplength=90, width=None if img else 12,
                       relief="flat", command=command, cursor="hand2", font=("", 8), pady=0)
         b.image = img
-        b.bind("<Enter>", lambda e: self.info.configure(text=unit.summary()))
+        words = unit.summary() + ((" - " + entry_label(entry)[len(unit.type):].strip(" ()")) if marks else "")
+        b.bind("<Enter>", lambda e: self.info.configure(text=words))
         b.bind("<Leave>", lambda e: self.info.configure(text=""))
+        if menu is not None:
+            b.bind("<Button-3>", lambda e: menu(e))
         return b
 
     def _reflow(self, inner):
@@ -242,7 +259,7 @@ class GarrisonEditor(ttk.Frame):
         for w in self.roster.winfo_children():
             w.destroy()
         for u in self.visible():
-            self._card(self.roster, u, lambda u=u: self.add(u))
+            self._card(self.roster, u, lambda u=u: self.add(u), menu=lambda e, u=u: self.roster_menu(e, u))
         self.roster.cols = 0
         self._reflow(self.roster)
         self.roster.canvas.yview_moveto(0)
@@ -259,7 +276,8 @@ class GarrisonEditor(ttk.Frame):
                 g.bind("<Enter>", lambda e: self.info.configure(text=words))
                 g.bind("<Leave>", lambda e: self.info.configure(text=""))
         for i, t in enumerate(self.garrison):
-            self._card(self.chosen, self.by_type[t], lambda i=i: self.take(i))
+            self._card(self.chosen, self.by_type[entry_type(t)], lambda i=i: self.take(i), entry=t,
+                       menu=lambda e, i=i: self.chosen_menu(e, i))
         self.chosen.cols = 0
         self._reflow(self.chosen)
         if not self.units:
@@ -270,8 +288,8 @@ class GarrisonEditor(ttk.Frame):
                                  "empty - the tool picks one (or press Suggest)")
             return
         room = MAX_UNITS - (1 if self.held else 0)
-        cost = sum(self.by_type[t].price for t in self.garrison)
-        upkeep = sum(self.by_type[t].upkeep for t in self.garrison)
+        cost = sum(self.by_type[entry_type(t)].price for t in self.garrison)
+        upkeep = sum(self.by_type[entry_type(t)].upkeep for t in self.garrison)
         self.total.configure(text="%s%d / %d units%s   cost %d   upkeep %d" % (
             "as it stands now (unchanged): " if getattr(self, "unchanged", False) else "",
             len(self.garrison), room, " (+ the bodyguard)" if self.held else "", cost, upkeep))
@@ -283,14 +301,104 @@ class GarrisonEditor(ttk.Frame):
         if self.on_change:
             self.on_change(list(self.garrison))
 
-    def add(self, unit):
-        if len(self.garrison) >= MAX_UNITS - (1 if self.held else 0):
+    def room(self):
+        return MAX_UNITS - (1 if self.held else 0) - len(self.garrison)
+
+    def add(self, unit, n=1, exp=0):
+        if self.replacing is not None:               # 'Replace with...' picked: this card takes its place
+            i, self.replacing = self.replacing, None
+            if 0 <= i < len(self.garrison):
+                old = self.garrison[i]
+                self.garrison[i] = with_stats(unit.type, *entry_stats(old))
+                self.changed()
+            return
+        n = min(n, self.room())
+        if n <= 0:
             self.bell()
             return
-        self.garrison.append(unit.type)
+        self.garrison += [with_stats(unit.type, exp)] * n
         self.changed()
 
+    # ---- the right click ----
+    def _popup(self, e, m):
+        try:
+            m.tk_popup(e.x_root, e.y_root)
+        finally:
+            m.grab_release()
+
+    def chosen_menu(self, e, i):
+        """A unit of the garrison: its numbers, more like it, all like it out, replace it."""
+        if not 0 <= i < len(self.garrison):
+            return
+        entry = self.garrison[i]
+        t = entry_type(entry)
+        ex, ar, we = entry_stats(entry)
+        m = tk.Menu(self, tearoff=False)
+        m.add_command(label=entry_label(entry), state="disabled")
+        m.add_separator()
+        for key, label, now, top in (("exp", "Experience", ex, 9), ("armour", "Armour", ar, 3),
+                                     ("weapon", "Weapon", we, 3)):
+            sub = tk.Menu(m, tearoff=False)
+            sub.var = tk.IntVar(value=now)                       # kept with its menu (a lost one shows no dot)
+            for v in range(top + 1):
+                sub.add_radiobutton(label=str(v), value=v, variable=sub.var,
+                                    command=lambda k=key, v=v: self.set_stats(i, **{k: v}))
+            sub.add_separator()
+            sub.add_command(label="Every %s here gets %d" % (t, now),
+                            command=lambda k=key, v=now: self.set_stats(i, every=True, **{k: v}))
+            m.add_cascade(label="%s: %d" % (label, now), menu=sub)
+        m.add_separator()
+        m.add_command(label="One more like it", command=lambda: self.more(i, 1))
+        m.add_command(label="5 more like it", command=lambda: self.more(i, 5))
+        m.add_command(label="Take out every %s" % t, command=lambda: self.take_all(t))
+        m.add_command(label="Replace with... (then click a card on the left)", command=lambda: self.replace(i))
+        m.add_separator()
+        m.add_command(label="Take it out", command=lambda: self.take(i))
+        self._popup(e, m)
+
+    def roster_menu(self, e, unit):
+        """A roster card: add several, add with experience."""
+        m = tk.Menu(self, tearoff=False)
+        m.add_command(label=unit.type, state="disabled")
+        m.add_separator()
+        for n in (1, 2, 5):
+            m.add_command(label="Add %d" % n, command=lambda n=n: self.add(unit, n))
+        m.add_command(label="Add to fill the army (%d)" % max(0, self.room()), command=lambda: self.add(unit, self.room()))
+        sub = tk.Menu(m, tearoff=False)
+        for v in range(1, 10):
+            sub.add_command(label="Experience %d" % v, command=lambda v=v: self.add(unit, 1, v))
+        m.add_cascade(label="Add with experience", menu=sub)
+        self._popup(e, m)
+
+    def set_stats(self, i, every=False, **values):
+        """exp / armour / weapon of the unit at i - or, every: of every unit of its type here."""
+        if not 0 <= i < len(self.garrison):
+            return
+        t = entry_type(self.garrison[i])
+        for k in range(len(self.garrison)):
+            if k == i or every and entry_type(self.garrison[k]) == t:
+                self.garrison[k] = with_stats(self.garrison[k], **values)
+        self.changed()
+
+    def more(self, i, n):
+        n = min(n, self.room())
+        if n <= 0 or not 0 <= i < len(self.garrison):
+            self.bell()
+            return
+        self.garrison[i + 1:i + 1] = [self.garrison[i]] * n
+        self.changed()
+
+    def take_all(self, t):
+        self.garrison = [x for x in self.garrison if entry_type(x) != t]
+        self.changed()
+
+    def replace(self, i):
+        self.replacing = i
+        self.total.configure(text="Replace %s: click the unit to put in its place on the left (it keeps the "
+                                  "numbers)" % entry_type(self.garrison[i]))
+
     def take(self, i):
+        self.replacing = None
         del self.garrison[i]
         self.changed()
 

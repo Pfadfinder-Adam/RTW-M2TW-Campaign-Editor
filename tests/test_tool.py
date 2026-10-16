@@ -1702,7 +1702,7 @@ building smith
         plan = edit(mod, "test", "alpha", {
             "display_name": "Alphan Empire", "adjective": "Alphic", "long_description": "Rewritten",
             "primary_colour": (9, 8, 7), "ai": "fortified mao", "denari": 4000, "playable": False,
-            "garrisons": {"A_R": ["rebel spear"]}})
+            "garrisons": {"A_R": ["rebel spear|4|1|2"]}})               # with its exp / armour / weapon
         plan.apply()
         mod = ModData(self.root)
         now = read_faction(mod, "test", "alpha")
@@ -1714,6 +1714,8 @@ building smith
         self.assertEqual([l.split("\t")[2] for l in s.lines[aaron.start:aaron.end] if l.startswith("unit")],
                          ["alpha general", "rebel spear"])          # the bodyguard stays
         self.assertIn("alpha", [n for _, n in s.nonplayable["items"]])
+        self.assertIn("rebel spear\t\t\t\texp 4 armour 1 weapon_lvl 2",
+                      "\n".join(l for l in s.lines[aaron.start:aaron.end] if l.startswith("unit")))
         restore(mod, backups(mod)[0])
         after = {k: v for k, v in tree_hash(self.root).items() if not k.startswith(("faction_tool_backups", "CampaignEditor_backups"))}
         self.assertEqual(before, after)
@@ -3318,6 +3320,54 @@ building smith
             lnt.remove_state("logo_obj", "art")                     # its only picture
         with self.assertRaises(LntError):
             lnt.set_state("no_such", "art", "p", "r")
+
+    def test_unit_entries_keep_experience_and_the_right_click(self):
+        """A garrison / an army carries each unit's exp / armour / weapon (they were written back as 0 0 0 at every
+        change); the right click (the user, 2026-10-16: a context menu, not buttons) sets them, adds more like it,
+        takes all like it out, replaces one keeping its numbers, adds several or with experience from the roster."""
+        from campaign_editor import strat as S
+        line = "unit\t\tTown Militia\t\t\t\texp 3 armour 1 weapon_lvl 0"
+        e = S.unit_entry(line)
+        self.assertEqual(e, "Town Militia|3|1|0")
+        self.assertEqual(S.unit_entry("unit Town Militia exp 0 armour 0 weapon_lvl 0"), "Town Militia")
+        self.assertEqual((S.entry_type(e), S.entry_stats(e)), ("Town Militia", (3, 1, 0)))
+        self.assertEqual(S.unit_line(e), line)
+        self.assertEqual(S.unit_line("Archers"), "unit\t\tArchers\t\t\t\texp 0 armour 0 weapon_lvl 0")
+        self.assertEqual(S.with_stats(e, exp=12, weapon=2), "Town Militia|9|1|2")   # the game's ranges
+        self.assertEqual(S.with_stats(e, exp=0, armour=0), "Town Militia")
+        self.assertEqual(S.entry_label(e), "Town Militia (exp 3, armour 1)")
+        try:
+            import tkinter as tk
+            root = tk.Tk()
+        except Exception as err:
+            self.skipTest("no window: %s" % err)
+        from types import SimpleNamespace
+        from campaign_editor.gui_garrison import GarrisonEditor
+        try:
+            got = []
+            ed = GarrisonEditor(root)
+            u = lambda t: SimpleNamespace(type=t, category="infantry", upkeep=100, price=300, mercenary=False,
+                                          general=False, ownership=["all"], summary=lambda: t)
+            units = [u("Town Militia"), u("Archers")]
+            ed.load(None, None, "Rome", units, [e, "Archers"], got.append)
+            ed.set_stats(1, exp=4)
+            self.assertEqual(ed.garrison, [e, "Archers|4|0|0"])
+            ed.more(0, 2)
+            self.assertEqual(ed.garrison, [e, e, e, "Archers|4|0|0"])
+            ed.set_stats(0, every=True, weapon=2)
+            self.assertEqual(ed.garrison[:3], ["Town Militia|3|1|2"] * 3)
+            ed.replace(3)
+            ed.add(units[0])                                    # the card clicked takes its place, its numbers kept
+            self.assertEqual(ed.garrison[3], "Town Militia|4|0|0")
+            ed.take_all("Town Militia")
+            self.assertEqual(ed.garrison, [])
+            ed.add(units[1], n=5, exp=2)
+            self.assertEqual(ed.garrison, ["Archers|2|0|0"] * 5)
+            ed.add(units[1], n=99)                              # never past the 20 an army holds
+            self.assertEqual(len(ed.garrison), 20)
+            self.assertEqual(got[-1], ed.garrison)
+        finally:
+            root.destroy()
 
     def test_faction_slots_added_on_their_grid(self):
         """More factions to pick (open.md 'MENU SLOTS FOR MANY FACTIONS'): a faction-select page's CFP_symbol48_N slots

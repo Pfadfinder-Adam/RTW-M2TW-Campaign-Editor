@@ -5,7 +5,7 @@ import re
 from types import SimpleNamespace
 
 from .emergence import DEAD_WORDS
-from .strat import FEMALE_KINDS, Strat, RE_XY, character_line, first_names, village_block
+from .strat import FEMALE_KINDS, Strat, RE_XY, character_line, first_names, unit_line, village_block
 from .textio import strip_comment, tokens
 
 
@@ -76,7 +76,7 @@ def _own_garrison(plan, f, s, template, region, st, block_raw, start, own_held):
     pad = next((u[:len(u) - len(u.lstrip())] for u in old if tokens(u)[:1] == ["unit"]), "\t")
     picked = (start.get("garrisons") or {}).get(region)
     if picked is not None:
-        lines = ["unit\t%s\t\t\texp 0 armour 0 weapon_lvl 0" % u for u in picked][:MAX_UNITS]
+        lines = [unit_line(u, "\t", "\t\t\t") for u in picked][:MAX_UNITS]
         why = "your garrison of %d unit(s) holds the town (its own garrison, no captain)" % len(lines)
     elif start.get("garrison", "replace") == "keep":
         own_held.add(region)
@@ -218,6 +218,13 @@ def _has_army(lines):
 
 def _units(lines):
     return [l for l in lines if tokens(l)[:1] == ["unit"]]
+
+
+def unit_entry(line):
+    """The unit of a line with its exp / armour / weapon (strat.unit_entry) - what a garrison or an army window
+    carries, so a change keeps each unit's numbers."""
+    from .strat import unit_entry as _e
+    return _e(line)
 
 
 def unit_name(line):
@@ -485,7 +492,7 @@ def build_start(plan, campaign, start):
         if r not in regions:
             continue
         room = MAX_UNITS - (1 if r in held else 0)
-        custom[r] = ["unit\t\t%s\t\t\t\texp 0 armour 0 weapon_lvl 0" % tp for tp in types][:room]
+        custom[r] = [unit_line(tp) for tp in types][:room]
         if len(types) > room:
             plan.warn(f, "%s: %d unit(s) over the %d an army holds were left out" % (r, len(types) - room, MAX_UNITS))
     captains = first_names(pool, "general")
@@ -810,7 +817,7 @@ def extra_characters(plan, f, campaign, chars, pool, armies_at, owner=None):
         out.append(character_line(f, name, rtw_kind, c.get("age") or 30, xy, sub_faction=sub))
         if army:
             out.append("army")
-            out += ["unit\t\t%s\t\t\t\texp 0 armour 0 weapon_lvl 0" % u for u in units[:MAX_UNITS]]
+            out += [unit_line(u) for u in units[:MAX_UNITS]]
         out.append("")
         plan.note(f, "%s %s at %d, %d%s" % (kind, name, xy[0], xy[1],
                                               " with %d unit(s)" % min(len(units), MAX_UNITS) if army else ""))

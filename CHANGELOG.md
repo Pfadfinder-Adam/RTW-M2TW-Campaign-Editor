@@ -11,6 +11,7 @@
 - **Changed**: a slimmer Unit editor and Models tab; the support buttons in one drop-down.
 
 ### Added
+- Garrisons and armies: a right click on a unit opens a menu - its experience, armour and weapon, one or five more like it, every one like it out, replace it with another (its numbers kept); on the roster add several, fill the army or add with experience. The numbers show under the card.
 - Make a card / Make a picture: a **Size** choice - the mod's own size, or two, three or four times bigger for sharper cards and pictures.
 - Interface: the wheel zooms the screen round the mouse, the held wheel moves it, **Fit** shows it whole - as on the map.
 - Check mod files (both games): the campaign map's rivers - a piece joined to nothing by a side, which the game leaves out; 2 x 2 river blocks and rivers rejoining themselves as notes.
@@ -207,6 +208,7 @@
   line of the block** in both editors; the editor remembers whether it was open.
 
 ### Fixed
+- A changed garrison or army had every unit's experience, armour and weapon put back to 0 -> each unit keeps its own.
 - Make a picture: the game's ground showed nothing when a card's ground had been picked before -> cards and pictures keep their own ground, and a picture gets the game's scroll paper it is shown on in the unit's details; the picture is also shown bigger as the window grows.
 - 3D view and Make a card: round shields, fur and feathers showed as squares with their picture -> the see-through parts of a texture are left out, as in the game.
 - 3D view of a Barbarian Invasion campaign-map figure (a special place's model): its parts fell together into one heap -> the figure stands whole.

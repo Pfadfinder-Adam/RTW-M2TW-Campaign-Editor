@@ -9,8 +9,8 @@ import re
 
 from .buildings import (available, castles_allowed, population_of, ranks_ok, read_buildings, set_buildings, settlement_info,
                         settlement_kind, SETTLEMENT_LEVELS)
-from .start import MAX_UNITS, _has_army, _units, unit_name
-from .strat import Strat
+from .start import MAX_UNITS, _has_army, _units, unit_entry, unit_name
+from .strat import Strat, entry_type
 
 PORT = re.compile(r"(^|_)port(_|$)", re.I)
 
@@ -65,14 +65,15 @@ def towns(mod, campaign, only=None):
             xy = tiles.get(st.region)
             army = next((c for c in fb.characters if xy and c.xy == xy and _has_army(s.lines[c.start:c.end])),
                         None)
-            units = [unit_name(l) for l in _units(s.lines[army.start:army.end])] if army else list(st.garrison)
+            units = [unit_entry(l) for l in _units(s.lines[army.start:army.end])] if army else \
+                list(st.garrison_entries)
             near = [] if army or st.garrison or not xy else [            # never another town's own garrison
                 (c.name, owner, tuple(c.xy)) for c, owner in armies
                 if max(abs(c.xy[0] - xy[0]), abs(c.xy[1] - xy[1])) <= 1 and (c.xy == xy or c.xy not in on_towns)]
             out.append({"region": st.region, "name": (regions.get(st.region) or {}).get("settlement") or st.region,
                         "owner": fb.name, "culture": _culture(mod, fb.name), "level": level,
                         "kind": settlement_kind(lines) if castles else None, "buildings": items,
-                        "units": len(units), "upkeep": sum(upkeep.get(u, 0) for u in units),
+                        "units": len(units), "upkeep": sum(upkeep.get(entry_type(u), 0) for u in units),
                         "port": st.region in port, "unit_names": units, "population": population_of(lines),
                         "army": army.name if army else None, "tile": tuple(xy) if xy else None, "near": near,
                         # the town's own garrison (no captain: 'garrisoned_army' in its block)

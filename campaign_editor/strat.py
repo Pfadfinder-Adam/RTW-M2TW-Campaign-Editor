@@ -21,12 +21,67 @@ class Settlement:
         # engines read it - a tester's Medieval II map held 900 towns so; Rome: 'must add at least one unit to the
         # garrison army of %s'). garrison_at = the garrisoned_army line or None; garrison_units = its unit lines
         self.garrison_at, self.garrison_units, self.garrison, self.garrison_end = None, [], [], None
+        self.garrison_entries = []          # the same units with their exp / armour / weapon (unit_entry)
 
 
 def unit_of(line):
     """'unit   Town Militia   exp 0 armour 0 weapon_lvl 0' -> 'Town Militia'."""
     body = strip_comment(line).strip()[len("unit"):].strip()
     return re.split(r"\s+exp\s+\d+", body)[0].strip()
+
+
+# A unit as the editor carries it in a garrison or an army: its type alone ('Town Militia'), or with the line's
+# experience, armour and weapon when any is above 0 ('Town Militia|3|1|0') - so a change to an army keeps what each
+# unit had (they were written back as 0 0 0) and the right click can set them. One place for the whole web.
+SEP = "|"
+RE_STATS = re.compile(r"\bexp\s+(\d+)(?:\s+armour\s+(\d+))?(?:\s+weapon_lvl\s+(\d+))?")
+LIMITS = {"exp": 9, "armour": 3, "weapon": 3}
+
+
+def unit_entry(line):
+    """'unit  Town Militia  exp 3 armour 1 weapon_lvl 0' -> 'Town Militia|3|1|0' ('Town Militia' when all are 0)."""
+    m = RE_STATS.search(strip_comment(line))
+    stats = tuple(int(x or 0) for x in m.groups()) if m else (0, 0, 0)
+    return with_stats(unit_of(line), *stats)
+
+
+def entry_type(entry):
+    return str(entry).split(SEP, 1)[0]
+
+
+def entry_stats(entry):
+    """(exp, armour, weapon) of an entry; 0 0 0 for a bare type."""
+    parts = str(entry).split(SEP)[1:4]
+    out = []
+    for i in range(3):
+        try:
+            out.append(int(parts[i]))
+        except (IndexError, ValueError):
+            out.append(0)
+    return tuple(out)
+
+
+def with_stats(entry, exp=None, armour=None, weapon=None):
+    """The entry with these numbers (None keeps its own), held within the game's ranges (exp 0-9, 0-3, 0-3)."""
+    e, a, w = entry_stats(entry)
+    e, a, w = [max(0, min(top, int(v if v is not None else old)))
+               for v, old, top in ((exp, e, 9), (armour, a, 3), (weapon, w, 3))]
+    t = entry_type(entry)
+    return t if (e, a, w) == (0, 0, 0) else "%s%s%d%s%d%s%d" % (t, SEP, e, SEP, a, SEP, w)
+
+
+def entry_label(entry):
+    """'Town Militia (exp 3, armour 1)' - the words a list or a tip shows."""
+    e, a, w = entry_stats(entry)
+    bits = [("exp %d" % e) if e else "", ("armour %d" % a) if a else "", ("weapon %d" % w) if w else ""]
+    bits = [b for b in bits if b]
+    return entry_type(entry) + (" (%s)" % ", ".join(bits) if bits else "")
+
+
+def unit_line(entry, lead="\t\t", gap="\t\t\t\t"):
+    """The descr_strat line of an entry: 'unit<lead>Type<gap>exp E armour A weapon_lvl W'."""
+    e, a, w = entry_stats(entry)
+    return "unit%s%s%sexp %d armour %d weapon_lvl %d" % (lead, entry_type(entry), gap, e, a, w)
 
 
 def garrison_lines(lines, start, end):
@@ -174,6 +229,7 @@ class Strat:
                 st = Settlement(i, j, region, fb.name)
                 st.garrison_at, st.garrison_units, st.garrison_end = garrison_lines(lines, i, j)
                 st.garrison = [unit_of(lines[k]) for k in st.garrison_units]
+                st.garrison_entries = [unit_entry(lines[k]) for k in st.garrison_units]
                 fb.settlements.append(st)
                 i = j
                 continue
