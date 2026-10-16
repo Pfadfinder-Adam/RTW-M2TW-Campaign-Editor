@@ -3295,6 +3295,43 @@ building smith
         self.assertEqual(L.slots_short(lnt, 6), [])
         self.assertEqual(L.Lnt(lnt.dump()).dump(), lnt.dump())
 
+    def test_missing_texture_inside_a_campaign_map_model(self):
+        """Check mod files: a texture named INSIDE a campaign-map model (.cas) that is not there stops the game ('Failed
+        to find texture', read in both exes' code). Only the models whose texture the game takes from the model are
+        looked at: resources, settlements, faction symbols, descr_model_strat types with no texture line; found as
+        .tga, .tga.dds or .dds beside the model, a bare name in its textures folder, the mod's own or the game's."""
+        from campaign_editor import castex
+        from campaign_editor.check import check_mod
+        mod = ModData(self.root)
+
+        def cas(rel, *textures):
+            body = b"\x00".join(b"\x10\x00\x00\x00" + t.encode("latin-1") for t in textures) + b"\x00"
+            write_bytes = os.path.join(mod.data, *rel.split("/"))
+            os.makedirs(os.path.dirname(write_bytes), exist_ok=True)
+            with open(write_bytes, "wb") as fh:
+                fh.write(b"\x00" * 40 + body + b"\x00" * 8)
+        cas("models_strat/resource_gold.cas", "textures\\gold.tga")
+        cas("models_strat/resource_wool.cas", "wool.TGA")                      # a bare name
+        cas("models_strat/navy.cas", "textures\\galley.tga")                 # its type has texture lines
+        self.assertEqual(castex.texture_names(open(os.path.join(mod.data, "models_strat", "resource_gold.cas"),
+                                                   "rb").read()), ["textures\\gold.tga"])
+        with open(os.path.join(mod.data, "descr_sm_resources.txt"), "a", encoding="latin-1") as fh:
+            fh.write("\ntype gold\nitem data/models_strat/resource_gold.CAS\n"
+                     "type wool\nitem ../mymod/data/models_strat/resource_wool.cas\n")
+        with open(os.path.join(mod.data, "descr_model_strat.txt"), "a", encoding="latin-1") as fh:
+            fh.write("\ntype my_admiral\ntexture romans_julii, data/models_strat/textures/navy.tga\n"
+                     "model_flexi data/models_strat/navy.cas, max\n")
+        got = castex.problems(mod)
+        self.assertEqual(len(got), 2, got)
+        self.assertIn("models_strat/resource_gold.CAS (a resource's model) names the texture 'textures\\gold.tga'",
+                      got[0])
+        self.assertIn("'wool.TGA'", got[1])
+        self.assertIn("names the texture 'textures\\gold.tga'", check_mod(mod, "test"))
+        write(os.path.join(mod.data, "models_strat", "textures", "gold.tga.dds"), "x")
+        write(os.path.join(mod.data, "models_strat", "textures", "wool.tga"), "x")
+        self.assertEqual(castex.problems(mod), [])
+        self.assertIn("MODEL TEXTURES:", check_mod(mod, "test"))
+
     def test_menu_problems_in_check_mod(self):
         """Check mod files looks at the menus too (the Interface work's file): a button leading to a page there is
         not, a piece showing a picture no region has, Rome's picture file not found; the pages the games make in

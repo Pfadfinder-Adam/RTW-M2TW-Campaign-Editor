@@ -499,6 +499,19 @@ def check_mod(mod, campaign, deep=False, progress=None, found=None):
                 "only %d; Interface > right click on a slot > Faction slots... adds the rest"
                 % (os.path.basename(LNT.find(mod)), page, have, pickable, have))
 
+    # ---- the textures named inside the campaign-map models (a missing one stops the game) ----
+    from . import castex
+    try:
+        models = castex.used_models(mod)
+        lost = castex.problems(mod)
+    except OSError:
+        models, lost = {}, []
+    for p in lost:
+        bad(p)
+    if models:
+        say("MODEL TEXTURES: %d campaign-map model(s) that take their texture from the model - %s" % (
+            len(models), "%d texture(s) not found" % len(lost) if lost else "every texture found"))
+
     # ---- deep: rehearse the tool's work for every faction ----
     if deep:
         say("")
