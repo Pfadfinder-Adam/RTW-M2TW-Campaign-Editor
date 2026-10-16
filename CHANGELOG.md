@@ -11,7 +11,7 @@
 - **Changed**: a slimmer Unit editor and Models tab; the support buttons in one drop-down.
 
 ### Added
-- Maps > 3D is drawn by the graphics card the way the games draw their campaign map: the ground blended between grounds with the game's own masks, its light and its sea; the older picture stays where the card cannot.
+- Maps > 3D is drawn by the graphics card the way the games draw their campaign map: the ground blended between grounds with the game's own masks, its light and its sea - it moves without lag and loads faster.
 - Check mod files finds more units the game stops on: a mount / engine / ship / animal line the unit's kind does not take, a handler without its animals, an unknown mount, a missile with under 2 shots or (Rome) under 20 m of range.
 - Garrisons and armies: a unit's right click (and a roster card's) opens it in the Unit editor, shows it in 3D or tells where it is recruited.
 - Apply changes' list: a right click on Units, Buildings, Characters or Terrain throws their changes away too, as for the windows' kept changes.
@@ -159,6 +159,7 @@
   its own where others wear the same file. Keep for Apply, written with Apply (one backup).
 
 ### Changed
+- Maps > 3D: the older 3D picture drawn without the graphics card is gone, and with it the towns and armies drawn as little pictures - the game's models come back on the graphics card later.
 - Maps > 3D: the game's own editor button and the heights slider taken away - the relief stands as high as in the game.
 - Recolour: no 'from the colours of' list - the colours each picture carries now are found by themselves; the 'now' swatches stay to correct them.
 - Recolour, Campaign rules, Events, Traits and retinue, Mercenaries and Rebels are works of the main window on the top row, not windows of their own (the map's right click still opens Mercenaries and Rebels in a window over the map); their changes are kept by themselves and written with Apply changes.

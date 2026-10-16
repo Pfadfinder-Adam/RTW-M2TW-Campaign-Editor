@@ -354,7 +354,6 @@ class Camera:
         self.pitch = math.radians(53.13)
         self.far_limit = max(cols, rows) * 1.6
         self.dist = self.far_limit * 0.6
-        self.exaggerate = 1.0
 
     def eye(self, ground=0.0):
         cp = math.cos(self.pitch)
@@ -483,7 +482,7 @@ class GLMap:
         ctx.viewport = (0, 0, w, h)
         ctx.clear(0.0, 0.0, 0.0, 1.0, depth=1.0)
         ctx.enable(ctx.DEPTH_TEST)
-        ground = self.data.ground_height(cam.x, cam.z) * cam.exaggerate
+        ground = self.data.ground_height(cam.x, cam.z)
         mvp, eye = cam.matrix(w, h, ground)
         mvp_bytes = np.ascontiguousarray(mvp.T).tobytes()        # column-major, as OpenGL reads it
         self.water.use(4)
@@ -498,7 +497,7 @@ class GLMap:
         self.ground.use(2)
         self.masks.use(3)
         self.terrain["mvp"].write(mvp_bytes)
-        self.terrain["yscale"].value = 0.0005 * self.data.scale * cam.exaggerate
+        self.terrain["yscale"].value = 0.0005 * self.data.scale
         self.vao.render()
         raw = self.fbo.read(components=3)
         return np.frombuffer(raw, np.uint8).reshape(h, w, 3)[::-1]

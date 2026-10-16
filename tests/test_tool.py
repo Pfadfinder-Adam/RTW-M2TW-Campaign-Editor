@@ -7955,9 +7955,6 @@ building smith
         self.assertGreater(int(winter.rgb[cm.rgb.shape[0] // 2, cm.rgb.shape[1] // 2][0]), 150)    # the snow
         corner = cm.rgb[-1, 0]                                         # the water point (bottom-left, top-down)
         self.assertGreater(int(corner[2]), int(corner[0]))
-        cam = T3.Camera(cm)
-        pic = T3.render(cm, cam, 64, 40)
-        self.assertEqual(pic.shape, (40, 64, 3))
 
     def test_map_on_the_graphics_card(self):
         """Maps > 3D on the graphics card (glmap, path A of the live 3D map - the user, 2026-10-16): each heights point
@@ -8018,30 +8015,6 @@ building smith
             self.assertGreater(mid[0], mid[2] + 40)
         finally:
             gl.release()
-
-    def test_map_in_3d_near_edge_cut_like_the_sides(self):
-        """Report #265: with the camera south of the map, its near (bottom) edge went on down to the picture's bottom
-        as stretched stripes - the first ground row drawn into every row under it. Under the edge there is no map:
-        the background shows, as at the sides."""
-        try:
-            import numpy as np
-        except ImportError:
-            self.skipTest("no NumPy")
-        from campaign_editor import terrain3d as T3
-        h, w = 60, 60
-        height = np.full((h, w), 40.0, np.float32)
-        rgb = np.zeros((h, w, 3), np.float32)
-        rgb[..., 0] = 200                                     # red land
-        cm = T3.ColourMap(rgb, height, 1, 40.0, [])
-        cam = T3.Camera(cm)
-        cam.x, cam.y, cam.alt = 30.0, 75.0, 20.0             # south of the map, looking north at it
-        sky = (10, 20, 250)
-        pic = T3.render(cm, cam, 80, 60, sky=sky)
-        col = pic[:, 40]
-        red = np.nonzero(col[:, 0] > 150)[0]
-        self.assertTrue(red.size)                                  # the map is seen
-        self.assertLess(red.max(), 59)                              # ... and it ends above the picture's bottom
-        self.assertGreater(int(pic[59, 40][2]), 150)                 # under it the background, not the map stretched
 
     def test_map_in_3d_finds_the_game_models_of_what_stands_on_the_map(self):
         """Maps > 3D's models (the user, 2026-10-15: 'towns, resources, units...'): a town takes its level's model
