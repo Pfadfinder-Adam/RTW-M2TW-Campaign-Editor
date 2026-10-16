@@ -3650,6 +3650,24 @@ building smith
             d.destroy()
             self.assertEqual(w.current()["text"], "UI_OTHER")
             single = w.doc.piece("main_menu", "main_single")["index"]
+            quit_like = dict(w.doc.piece("main_menu", single), identifier="UIP_QUIT_DIALOG")
+            self.assertTrue(w._is_button(quit_like))                    # Quit: no 'BUTTON' in its identifier
+            self.assertFalse(w._is_button(w.doc.piece("main_menu", "main_logo")))
+            root.geometry("900x700")
+            root.update()
+            s0, ox0, oy0 = w._scale()
+            e = SimpleNamespace(x=300, y=200)
+            point = ((300 - ox0) / s0, (200 - oy0) / s0)
+            w._wheel(e, 1)                                              # the wheel zooms round the mouse
+            s1, ox1, oy1 = w._scale()
+            self.assertGreater(s1, s0)
+            self.assertAlmostEqual((300 - ox1) / s1, point[0], places=6)
+            w._pan_start(SimpleNamespace(x=10, y=10))
+            w._pan_move(SimpleNamespace(x=40, y=30))                    # the held wheel moves the screen
+            self.assertEqual(w._scale()[1:], (ox1 + 30, oy1 + 20))
+            w.fit()
+            self.assertEqual(w._scale(), (s0, ox0, oy0))
+            root.update()
             w._set_hover(single)                                       # the mouse over a button: 'mouse over'
             self.assertEqual(w._state(w.doc.piece("main_menu", single)), "highlighted")
             w._set_hover(None)

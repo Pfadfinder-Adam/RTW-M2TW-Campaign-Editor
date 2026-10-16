@@ -36,6 +36,8 @@ class InterfacePanel(ttk.Frame):
         self.undo, self.redo = [], []
         self.page, self.picked = None, None
         self.hover = None                    # the button under the mouse: drawn as the game shows it, 'mouse over'
+        self.zoom, self.pan = 1.0, [0.0, 0.0]   # the wheel zooms (1 = the whole screen fits), the held wheel moves it
+        self._panning, self._draw_due = None, False
         self._pics, self._tex, self._fonts = {}, {}, {}
         self._drag = None
         self._build()
@@ -127,7 +129,8 @@ class InterfacePanel(ttk.Frame):
         self.lbl_title = ttk.Label(top, font=("", 12, "bold"))
         self.lbl_title.pack(anchor="w")
         ShortHint(top, text=(
-            "Every screen of the game's menus as the game lays it out (1024 x 768). Click a piece to pick it, drag it "
+            "Every screen of the game's menus as the game lays it out (1024 x 768); the wheel zooms, the held wheel moves "
+            "it, Fit shows it whole. Click a piece to pick it, drag it "
             "to move it, drag its corner to size it, the arrows nudge it (Shift: 10 pixels). A double click on a "
             "button opens the page it leads to. A right click on a piece: its values, Copy, Rename, Remove. Copy makes the next numbered piece - the game finds many pieces by "
             "their numbers (more faction buttons: copy the last one). Pieces with no picture of their own (empty_...) "
@@ -177,6 +180,13 @@ class InterfacePanel(ttk.Frame):
         c.bind("<ButtonPress-1>", self._press)
         c.bind("<B1-Motion>", self._motion)
         c.bind("<Motion>", self._hover)
+        # as on the map: the wheel zooms round the mouse, the held wheel (middle button) moves the screen
+        c.bind("<MouseWheel>", lambda e: self._wheel(e, 1 if e.delta > 0 else -1))
+        c.bind("<Button-4>", lambda e: self._wheel(e, 1))
+        c.bind("<Button-5>", lambda e: self._wheel(e, -1))
+        c.bind("<ButtonPress-2>", self._pan_start)
+        c.bind("<B2-Motion>", self._pan_move)
+        c.bind("<ButtonRelease-2>", lambda e: setattr(self, "_panning", None))
         c.bind("<Leave>", lambda e: self._set_hover(None))
         c.bind("<ButtonRelease-1>", self._release)
         c.bind("<Double-Button-1>", self._double)
@@ -196,6 +206,7 @@ class InterfacePanel(ttk.Frame):
         cb.pack(side="left")
         cb.bind("<<ComboboxSelected>>", lambda e: self.draw())
         ttk.Button(mb, text="Redo", command=self.do_redo).pack(side="right")
+        ttk.Button(mb, text="Fit", command=self.fit).pack(side="right", padx=(0, theme.BUTTON_GAP * 2))
         ttk.Button(mb, text="Undo", command=self.do_undo).pack(side="right", padx=(0, theme.BUTTON_GAP))
         self.lbl_way = ttk.Label(mb, foreground=theme.palette()["muted"])
         self.lbl_way.pack(side="left", padx=(theme.BUTTON_GAP * 2, 0))
@@ -474,8 +485,34 @@ class InterfacePanel(ttk.Frame):
     def _scale(self):
         w, h = self.doc.size()
         cw, ch = max(1, self.canvas.winfo_width()), max(1, self.canvas.winfo_height())
-        s = min(cw / w, ch / h)
-        return s, (cw - w * s) / 2, (ch - h * s) / 2
+        s = min(cw / w, ch / h) * self.zoom
+        return s, (cw - w * s) / 2 + self.pan[0], (ch - h * s) / 2 + self.pan[1]
+
+    def _wheel(self, e, d):
+        """The wheel zooms round the point under the mouse (as on the map)."""
+        if not self.doc or not self.page:
+            return
+        s, ox, oy = self._scale()
+        lx, ly = (e.x - ox) / s, (e.y - oy) / s              # the layout point under the mouse stays under it
+        self.zoom = max(0.25, min(8.0, self.zoom * (1.2 if d > 0 else 1 / 1.2)))
+        s2, ox2, oy2 = self._scale()
+        self.pan[0] += e.x - (ox2 + lx * s2)
+        self.pan[1] += e.y - (oy2 + ly * s2)
+        self.draw()
+
+    def _pan_start(self, e):
+        self._panning = (e.x, e.y, list(self.pan))
+
+    def _pan_move(self, e):
+        if self._panning:
+            x0, y0, pan = self._panning
+            self.pan = [pan[0] + e.x - x0, pan[1] + e.y - y0]
+            self.draw()
+
+    def fit(self):
+        """The whole screen in the window again."""
+        self.zoom, self.pan = 1.0, [0.0, 0.0]
+        self.draw()
 
     def _texture(self, page, folder=""):
         if page not in self._tex:
@@ -623,6 +660,16 @@ class InterfacePanel(ttk.Frame):
         return x0, y0, x0 + w * s, y0 + h * s
 
     def draw(self):
+        """Drawn once the mouse and the keys are quiet (a drag sends many moves a frame: each used to draw the whole
+        screen again - it lagged)."""
+        if not self._draw_due:
+            self._draw_due = True
+            self.after_idle(self._draw_now)
+
+    def _draw_now(self):
+        self._draw_due = False
+        if len(self._pics) > 3000:                     # sizes seen while zooming / sizing: drop the old ones
+            self._pics.clear()
         c = self.canvas
         c.delete("all")
         if not self.doc or not self.page:
@@ -696,9 +743,17 @@ class InterfacePanel(ttk.Frame):
             return
         name, _ = self._hit(e)
         x = self.doc.piece(self.page, name) if name is not None else None
-        button = x is not None and ("BUTTON" in (x["identifier"] or "").upper() or "highlighted" in
-                                    self.doc.objects().get(x["object"] or "", {}).get("regions", {}))
-        self._set_hover(name if button else None)
+        self._set_hover(name if x is not None and self._is_button(x) else None)
+
+    def _is_button(self, x):
+        """A piece that answers the mouse: a push / toggle button by its UI object (empty_push_button - the Quit and
+        Continue buttons are UIP_QUIT_DIALOG / UIP_MAIN_CONTINUE, no 'BUTTON' in the name), or a picture with a
+        'mouse over' state."""
+        obj = (x["object"] or "").lower()
+        o = self.doc.objects().get(x["object"] or "", {})
+        return obj in ("empty_push_button", "empty_toggle_button") or o.get("type") in ("push_button",
+                                                                                           "toggle_button") or \
+            "BUTTON" in (x["identifier"] or "").upper() or "highlighted" in o.get("regions", {})
 
     def _set_hover(self, name):
         if name != self.hover:

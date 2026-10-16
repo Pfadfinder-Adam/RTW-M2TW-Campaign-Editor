@@ -11,6 +11,7 @@
 - **Changed**: a slimmer Unit editor and Models tab; the support buttons in one drop-down.
 
 ### Added
+- Interface: the wheel zooms the screen round the mouse, the held wheel moves it, **Fit** shows it whole - as on the map.
 - Check mod files (both games): the campaign map's rivers - a piece joined to nothing by a side, which the game leaves out; 2 x 2 river blocks and rivers rejoining themselves as notes.
 - Check mod files (both games): a file the banners, standards or projectile files name that is not there, or a whole path on one PC (C:\...); an event without its words in historic_events.txt as a note (its scroll shows empty).
 - Check mod files (Medieval II): a name in battle_models.modeldb whose number before it is not its length (a space too many by hand) - the game reads everything after it wrong; two models of one name as a note.
@@ -200,6 +201,7 @@
   line of the block** in both editors; the editor remembers whether it was open.
 
 ### Fixed
+- Interface: Quit, Continue and the other buttons without 'BUTTON' in their kind did not light up under the mouse; dragging or sizing a piece lagged (the screen was drawn again for every mouse move - now once the mouse is quiet).
 - Medieval II: a unit with card_pic_dir / info_pic_dir showed as having no card in the editor (and was named in Check mod files) - its card is looked for in that folder first, as the game does.
 - Medieval II: two or more factions recoloured and kept for one Apply - only the first was written, the others stopped with "battle_models.modeldb was changed by another part of this write" -> each is laid over the file as the one before left it, all are written.
 - Avoid Growth in Rome stood a little off Automanage on 4:3 and 16:10 screens -> it keeps its place on any screen shape.
