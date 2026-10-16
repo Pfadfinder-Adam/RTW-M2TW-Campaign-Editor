@@ -217,6 +217,7 @@
   line of the block** in both editors; the editor remembers whether it was open.
 
 ### Fixed
+- Coast & heights still drew the rivers, fords and cliffs over the heights -> only land, sea and heights are shown there.
 - The map's Layers / what... and the Tools / Support drop-downs opened again (a blink) on a second click instead of closing (Windows) -> a second click closes them.
 - Building editor: its lines had no '?' saying what each value means (the units' had) -> every line of a building chain has one; Add line... moved into the Stats window, beside the lines it adds to.
 - A repaint that put a watchtower's or fort's tile into another region left its line under the old region, and the game skipped it -> the line moves into the new region's block; one painted into the sea is named in a warning.

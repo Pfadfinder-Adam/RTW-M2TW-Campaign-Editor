@@ -142,14 +142,16 @@ class TerrainEditor(ttk.Frame):
     def _rivers_for_mode(self):
         """Painting rivers, cliffs and volcanoes shows them always - no Rivers tick there (a tester: 'where are the
         rivers in the rivers editor', 'the tick is not needed in this mode, on by default always'); the other brushes
-        keep the tick and its last value. The Coast & heights tab shows them always too, with no tick (report #289:
-        'on the heights maps this tick is not needed - again')."""
-        painting = self.v_what.get() == "features" or self.group == "heights"
-        if painting:
+        keep the tick and its last value. The Coast & heights tab has no tick and shows NO rivers, fords or cliffs -
+        only the land, the sea and the heights (report #289: 'the tick is not needed'; #318: 'the rivers must not
+        show in the heights editor at all')."""
+        heights = self.group == "heights"
+        painting = self.v_what.get() == "features" and not heights
+        if painting or heights:
             self._rivers_tick.pack_forget()
         elif not self._rivers_tick.winfo_manager():
             self._rivers_tick.pack(side="left", padx=(8, 0), after=self._brush_box)
-        want = True if painting else self.v_rivers_here.get()
+        want = False if heights else True if painting else self.v_rivers_here.get()
         if self.view.v_rivers.get() != want:
             self.view.v_rivers.set(want)
             if self.mod is not None:

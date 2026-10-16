@@ -13098,8 +13098,9 @@ building smith
                                                                      v_shore=SimpleNamespace(get=lambda: False))))
 
     def test_no_rivers_tick_on_coast_and_heights(self):
-        """Report #289: the Rivers tick on the Coast & heights tab is not needed - the rivers are drawn there always
-        (as in the rivers brush); the Terrain tab's ground brushes keep the tick."""
+        """Report #289: the Rivers tick on the Coast & heights tab is not needed; #318: and the rivers, fords and
+        cliffs are NOT drawn there at all (only land, sea and heights); the rivers brush always shows them, the
+        Terrain tab's ground brushes keep the tick."""
         try:
             from campaign_editor.gui_terrain import TerrainEditor
         except ImportError:                                # no tkinter here (the CI test job has it)
@@ -13117,8 +13118,8 @@ building smith
                                 v_rivers_here=SimpleNamespace(get=lambda: False), mod=None, _brush_box=None)
             TerrainEditor._rivers_for_mode(e)
             return got["shown"], val["v"]
-        self.assertEqual(ed("heights", "coast"), (False, True))
-        self.assertEqual(ed("heights", "heights"), (False, True))
+        self.assertEqual(ed("heights", "coast"), (False, False))
+        self.assertEqual(ed("heights", "heights"), (False, False))
         self.assertEqual(ed("terrain", "features"), (False, True))
         self.assertEqual(ed("terrain", "ground"), (True, False))
 
