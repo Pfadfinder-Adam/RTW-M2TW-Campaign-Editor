@@ -554,7 +554,8 @@ def check_mod(mod, campaign, deep=False, progress=None, found=None):
     # ---- deep: rehearse the tool's work for every faction ----
     if deep:
         say("")
-        say("REHEARSAL (in memory, nothing written)")
+        say("REHEARSAL (in memory, nothing written): the editor tries its own work on every faction - a town taken, "
+            "an army, a new faction made from it; a line below is about the editor, not a fault in your files")
         fails = rehearse(mod.data, campaign, step)
         ok = len([f for f in in_strat if f != "slave"]) - len(fails)
         say("    %d faction(s) fine" % ok)

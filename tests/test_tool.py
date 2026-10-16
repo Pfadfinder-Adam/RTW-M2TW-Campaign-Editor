@@ -42,6 +42,18 @@ class ToolTest(unittest.TestCase):
     def tearDown(self):
         shutil.rmtree(self.root)
 
+    def test_new_faction_takes_a_one_town_factions_only_town(self):
+        """Discord (Bodkin_Arrow, the rehearsal of Check mod files): papal_states / portugal 'refused: ... stands in the
+        town and has no other settlement to move him to'. The town is given; its leader steps out beside it, said."""
+        mod = ModData(self.root)
+        plan = build(mod, "test", "alpha", "beta", {"start": {"regions": ["A_R"], "leader": {"name": "Boris"}}})
+        f = plan.files[mod.campaign_file("test", "descr_strat.txt")]
+        s = Strat(f)
+        aaron = next(c for c in s.faction("alpha").characters if c.name == "Aaron Alphid")
+        self.assertNotEqual(aaron.xy, (1, 1))
+        self.assertLessEqual(max(abs(aaron.xy[0] - 1), abs(aaron.xy[1] - 1)), 2)
+        self.assertTrue(any("Aaron Alphid" in w and "next to it" in w for _, w in plan.warnings))
+
     def test_round_trip_is_byte_exact(self):
         mod = ModData(self.root)
         for p in [mod.file("sm_factions"), mod.text_files()[0]]:

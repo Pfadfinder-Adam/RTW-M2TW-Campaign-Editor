@@ -397,10 +397,12 @@ def build_start(plan, campaign, start):
     for r, c in relocate:
         owner = s.faction(c.owner)
         keep = [x.region for x in owner.settlements if x.region not in regions and tiles.get(x.region)]
-        if not keep:
-            raise ValueError("%s: %s of %s stands in the town and %s has no other settlement to "
-                             "move him to - pick another town or edit descr_strat.txt by hand"
-                             % (r, c.name, c.owner, c.owner))
+        if not keep:                   # no town of his own left: he steps out onto the land beside it (Discord: a
+            xy = place(r, c.name)      # one-town faction's leader refused the whole new faction)
+            edits[c.start] = _set_xy(f.text(c.start), xy)
+            plan.warn(f, "%s: %s of %s stood in the town and %s has no other town - he now stands next to it "
+                         "(%d, %d)" % (r, c.name, c.owner, c.owner, xy[0], xy[1]))
+            continue
         xy = tiles[keep[0]]
         where = keep[0]
         if _has_army(s.lines[c.start:c.end]):
