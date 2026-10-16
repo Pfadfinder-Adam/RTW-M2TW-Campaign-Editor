@@ -13,6 +13,7 @@
 ### Added
 - Maps > 3D is drawn by the graphics card the way the games draw their campaign map: the ground blended between grounds with the game's own masks, its light and its sea - it moves without lag and loads faster.
 - Maps > 3D: the coast has the game's beach and surf along it, the surf rolling in as in the game (not on rivers and cliffs, as the game); Layers shows or leaves out the sea (the sea floor seen) and the beach and surf.
+- Maps > 3D: a heights brush right on the 3D map - a circle under the mouse (Ctrl + wheel or [ ] for its size), the land rising or sinking while the button is held; the same brush as Coast & heights (Undo, Apply shared).
 - Maps > 3D with REX / M2EX: the sea looked purple and too light -> the light is the engine's own (its descr_strategy_lighting_ex.txt, added up in linear light), the sea blue as in the game.
 - Maps > 3D and the minimap: a mod's ground pictures named with '../' (HLR) or kept only in the mod's packs showed as a flat colour -> they are found, read from the packs (Medieval II's, REX's and M2EX's .pack too), and where one still cannot be read the game's own picture of that ground is shown.
 - Check mod files finds more units the game stops on: a mount / engine / ship / animal line the unit's kind does not take, a handler without its animals, an unknown mount, a missile with under 2 shots or (Rome) under 20 m of range.

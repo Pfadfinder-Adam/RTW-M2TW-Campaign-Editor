@@ -134,8 +134,14 @@ def heights_metres(mod, campaign):
     rgb = _picture(mod, campaign, "map_heights.tga")
     if rgb is None:
         return None
-    top, low = T.max_land_height(mod, campaign), T.min_sea_height(mod, campaign)
-    r, g, b = (rgb[..., k].astype(np.float32) for k in range(3))
+    return metres_of(rgb, T.max_land_height(mod, campaign), T.min_sea_height(mod, campaign))
+
+
+def metres_of(rgb, top, low):
+    """map_heights colours (..., 3) as metres: land grey * top / 255, water its depth (the one formula of
+    heights_metres and the 3D view's brush)."""
+    rgb = np.asarray(rgb)
+    r, b = rgb[..., 0].astype(np.float32), rgb[..., 2].astype(np.float32)
     land = (rgb[..., 0] == rgb[..., 1]) & (rgb[..., 1] == rgb[..., 2])
     return np.where(land, r * top / 255.0, low * (255.0 - b) / 255.0).astype(np.float32)
 

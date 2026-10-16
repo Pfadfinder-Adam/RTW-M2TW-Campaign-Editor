@@ -649,7 +649,7 @@ class GLMap:
             t.repeat_y = False
         self.coast["strip"].value = 7
         self.coast_vao, self._coast_buffers, self.coast_dirty = None, [], True
-        self.fbo, self.fbo_size = None, None
+        self.fbo, self.fbo_size, self.last = None, None, None
         L = data.light
         d = np.asarray(L["direction"], np.float64) * (1.0, 1.0, -1.0)    # the game's z runs north, ours south
         to_light = -d / max(np.linalg.norm(d), 1e-9)
@@ -721,6 +721,31 @@ class GLMap:
                                                index_element_size=4)
         self._coast_buffers = [self.coast_vao, vbo, ibo]
 
+    def ground_at(self, fx, fy):
+        """The map point (x, z in tiles, y in world units) seen at (fx, fy) - fractions of the last frame from its
+        top-left corner - read from the frame's depth; None off the map (the black beyond it)."""
+        if self.fbo is None or self.last is None:
+            return None
+        mvp, w, h = self.last
+        px, py = min(w - 1, max(0, int(fx * w))), min(h - 1, max(0, int((1.0 - fy) * h)))
+        d = float(np.frombuffer(self.fbo.read(viewport=(px, py, 1, 1), attachment=-1, dtype="f4"), np.float32)[0])
+        if d >= 1.0:
+            return None
+        ndc = np.array([(px + 0.5) / w * 2 - 1, (py + 0.5) / h * 2 - 1, d * 2 - 1, 1.0])
+        p = np.linalg.inv(mvp.astype(np.float64)) @ ndc
+        return tuple(p[:3] / p[3])
+
+    def to_screen(self, points):
+        """World points (n, 3) -> (n, 2) fractions of the last frame from its top-left corner (None behind the
+        eye)."""
+        if self.last is None:
+            return None
+        mvp = self.last[0].astype(np.float64)
+        p = np.c_[np.asarray(points, np.float64), np.ones(len(points))] @ mvp.T
+        if (p[:, 3] <= 1e-6).any():
+            return None
+        return np.c_[(p[:, 0] / p[:, 3] + 1) / 2, 1 - (p[:, 1] / p[:, 3] + 1) / 2]
+
     def render(self, cam, w, h, t=0.3, show=None):
         """The map seen from cam as a (h, w, 3) uint8 picture, top row first; t: the moment of the surf's wave
         (0..1); show: {layer: False} leaves a layer out (LAYERS - the sea off shows the sea floor)."""
@@ -738,6 +763,7 @@ class GLMap:
         ctx.enable(ctx.DEPTH_TEST)
         ground = self.data.ground_height(cam.x, cam.z)
         mvp, eye = cam.matrix(w, h, ground)
+        self.last = (mvp, w, h)
         mvp_bytes = np.ascontiguousarray(mvp.T).tobytes()        # column-major, as OpenGL reads it
         self.water.use(4)
         self.waves.use(5)

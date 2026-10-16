@@ -25,7 +25,9 @@ HINT = ("The campaign map in 3D, drawn by the graphics card the way the games dr
         "map_heights, the game's light and sea, the beach and the surf rolling in along the coast. Layers shows or "
         "leaves out each of them (the sea left out shows the sea floor; the surf can stand still). What the brushes of Terrain and Coast & "
         "heights painted shows here before it is written. Right drag: move over the map; the wheel held down and "
-        "dragged: turn and look up or down; the wheel turned: nearer / farther; the arrow keys or W A S D move too. The relief stands as "
+        "dragged: turn and look up or down; the wheel turned: nearer / farther; the arrow keys or W A S D move too. "
+        "Heights brush: the left button raises or lowers the land under the circle while held (Ctrl + wheel or [ ] "
+        "for its size) - the brush of Coast & heights, its Undo and Apply shared. The relief stands as "
         "high as in the game. The game's mountains, rivers, trees, towns and "
         "armies come in later versions - this shows the ground they stand on.")
 
@@ -55,6 +57,19 @@ class Map3DView(ttk.Frame):
         lb = ttk.Button(bar, text="Layers \u25be")
         lb.pack(side="left", padx=(theme.BUTTON_GAP * 2, 0))
         self._layers_panel = DropPanel(lb, build_layers)
+        # the heights brush right on the 3D map: the Terrain editor's own (its strokes, Undo and Apply shared), the
+        # land changing under the circle while the button is held, not when the stroke ends
+        self.v_brush_on = tk.BooleanVar(value=False)
+        self._paint, self._mouse, self._ring = False, None, None
+        from .gui_util import tip as _tip
+        _tip(ttk.Checkbutton(bar, text="Heights brush", variable=self.v_brush_on, command=self._brush_toggled),
+             "The left button raises (or lowers, smooths, levels) the land under the circle, like the heights brush "
+             "of Coast & heights - the same brush: its strokes, Undo and Apply are shared. Held longer, it does "
+             "more; the map changes while you hold it. Ctrl + the wheel, or [ and ], make the circle smaller or "
+             "bigger; 'brush' beside it has the rest.").pack(side="left", padx=(theme.BUTTON_GAP * 2, 0))
+        bb = ttk.Button(bar, text="brush \u25be")
+        bb.pack(side="left", padx=(2, 0))
+        self._brush_panel = DropPanel(bb, self._build_brush)
         from .gui_util import tip
         ttk.Button(bar, text="Whole map", command=self.reset_view).pack(side="left", padx=(theme.BUTTON_GAP * 2, 0))
         ttk.Button(bar, text="Draw it again", command=self.rebuild).pack(side="left", padx=(theme.BUTTON_GAP, 0))
@@ -80,6 +95,16 @@ class Map3DView(ttk.Frame):
         c.bind("<B2-Motion>", self._motion)
         c.bind("<ButtonRelease-3>", self._release)
         c.bind("<ButtonRelease-2>", self._release)
+        c.bind("<Motion>", self._hover)
+        c.bind("<ButtonPress-1>", self._paint_start)
+        c.bind("<B1-Motion>", self._hover)
+        c.bind("<ButtonRelease-1>", self._paint_end)
+        c.bind("<Leave>", lambda e: self._hover(None))
+        c.bind("<Control-MouseWheel>", lambda e: self._resize(1 if e.delta > 0 else -1))
+        c.bind("<Control-Button-4>", lambda e: self._resize(1))
+        c.bind("<Control-Button-5>", lambda e: self._resize(-1))
+        c.bind("<KeyPress-bracketright>", lambda e: self._resize(1))
+        c.bind("<KeyPress-bracketleft>", lambda e: self._resize(-1))
         c.bind("<MouseWheel>", lambda e: self._zoom(-1 if e.delta > 0 else 1))
         c.bind("<Button-4>", lambda e: self._zoom(-1))
         c.bind("<Button-5>", lambda e: self._zoom(1))
@@ -255,6 +280,7 @@ class Map3DView(ttk.Frame):
         self._photo = ImageTk.PhotoImage(im)
         self.canvas.delete("all")
         self.canvas.create_image(0, 0, anchor="nw", image=self._photo)
+        self._draw_ring()
 
     def _layers_changed(self):
         self.draw()
@@ -288,6 +314,154 @@ class Map3DView(ttk.Frame):
     def _sharp(self):
         self._sharp_job = None
         self.draw()
+
+    # ---- the heights brush ----
+    def _terrain(self):
+        """The Terrain editor (made and bound to the mod the first time, without showing its tab), or None."""
+        app = self.app
+        if app.mod is None:
+            return None
+        ed = app.editors.get("terrain")
+        if ed is None:
+            from .gui_terrain import TerrainEditor
+            ed = app.editors["terrain"] = TerrainEditor(app.nb, app)
+        if ed.mod is None or os.path.normcase(os.path.abspath(ed.mod.data)) != \
+                os.path.normcase(os.path.abspath(app.mod.data)):
+            app._rebind(ed)
+        return ed if ed._bound() else None
+
+    def _build_brush(self, f):
+        ed = self._terrain()
+        if ed is None:
+            ttk.Label(f, text="load a mod first").pack(anchor="w")
+            return
+        for val, text in (("raise", "Raise"), ("lower", "Lower"), ("smooth", "Smooth"), ("level", "Level to height")):
+            ttk.Radiobutton(f, text=text, value=val, variable=ed.v_tool).pack(anchor="w")
+        row = ttk.Frame(f)
+        row.pack(anchor="w", pady=(4, 0))
+        ttk.Label(row, text="height to level to (0-255)").pack(side="left")
+        ttk.Spinbox(row, from_=0, to=255, width=4, textvariable=ed.v_level).pack(side="left", padx=(4, 0))
+        row = ttk.Frame(f)
+        row.pack(anchor="w", pady=(4, 0))
+        ttk.Label(row, text="size (heights points across - 2 a tile)").pack(side="left")
+        ttk.Spinbox(row, from_=1, to=80, width=4, textvariable=ed.v_brush,
+                    command=self._draw_ring).pack(side="left", padx=(4, 0))
+        row = ttk.Frame(f)
+        row.pack(anchor="w", pady=(4, 0))
+        ttk.Label(row, text="strength").pack(side="left")
+        s = ttk.Scale(row, from_=1, to=10, orient="horizontal", length=140,
+                      command=lambda v: ed.v_strength.set(int(float(v))))
+        s.set(ed.v_strength.get())
+        s.pack(side="left", padx=(4, 0))
+
+    def _brush_toggled(self):
+        if self.v_brush_on.get() and self._terrain() is None:
+            self.lbl.configure(text="the heights brush needs a mod loaded")
+            self.v_brush_on.set(False)
+        self._draw_ring()
+
+    def _resize(self, way):
+        ed = self._terrain()
+        if ed is None:
+            return
+        try:
+            n = int(ed.v_brush.get())
+        except (tk.TclError, ValueError):
+            n = 4
+        n = max(1, min(80, n + way * max(1, n // 6)))
+        ed.v_brush.set(n)
+        self.lbl.configure(text="brush size %d (heights points across - %.1f tiles)" % (n, n / 2.0))
+        self._draw_ring()
+
+    def _point(self, x, y):
+        """The map point under canvas (x, y) as (world point, map_heights point px, py bottom-up), or None."""
+        if not self._on() or x is None:
+            return None
+        W, H = max(1, self.canvas.winfo_width()), max(1, self.canvas.winfo_height())
+        p = self.gl.ground_at(x / W, y / H)
+        if p is None:
+            return None
+        return p, (2.0 * p[0], (self.gl.data.rows - 1) - 2.0 * p[2])
+
+    def _hover(self, e):
+        self._mouse = None if e is None else (e.x, e.y)
+        self._draw_ring()
+
+    def _draw_ring(self):
+        """The brush's circle on the ground under the mouse (its size as it works)."""
+        c = self.canvas
+        c.delete("ring")
+        if not (self.v_brush_on.get() and self._mouse and self._on()):
+            return
+        got = self._point(*self._mouse)
+        ed = self.app.editors.get("terrain")
+        if got is None or ed is None:
+            return
+        import math
+        import numpy as np
+        try:
+            n = max(1, int(ed.v_brush.get()))
+        except (tk.TclError, ValueError):
+            return
+        (x, _, z), r = got[0], n / 4.0                   # n points across, a point half a tile
+        d = self.gl.data
+        ring = [(x + r * math.cos(a), 0.0, z + r * math.sin(a)) for a in np.linspace(0, 2 * math.pi, 49)]
+        ring = [(px, d.ground_height(px, pz), pz) for px, _, pz in ring]
+        s = self.gl.to_screen(ring)
+        if s is None:
+            return
+        W, H = c.winfo_width(), c.winfo_height()
+        flat = [v for a, b in s for v in (a * W, b * H)]
+        c.create_line(*flat, fill="#000000", width=3, tags="ring")
+        c.create_line(*flat, fill="#ffffff", width=1, tags="ring")
+
+    def _paint_start(self, e):
+        self.canvas.focus_set()
+        if not self.v_brush_on.get() or not self._on():
+            return
+        ed = self._terrain()
+        if ed is None:
+            return
+        ed._stroke()                                     # one Undo step a stroke, as on the 2D map
+        self._paint, self._mouse = True, (e.x, e.y)
+        self._puff()
+
+    def _paint_end(self, e):
+        if self._paint:
+            self._paint = False
+            self._for = self._stamp()                    # the card already shows what was painted
+            self._sharp_later()
+
+    def _puff(self):
+        """One puff of the brush where the mouse is (every 0.05 s while held): the Terrain editor paints its copy
+        of map_heights, the card takes the same points at once."""
+        if not self._paint:
+            return
+        ed = self.app.editors.get("terrain")
+        got = self._point(*self._mouse) if self._mouse else None
+        if ed is not None and got is not None and ed.spray(*got[1]):
+            self._send_heights(ed, got[1])
+            self.draw(half=True)
+        self.after(50, self._puff)
+
+    def _send_heights(self, ed, at):
+        """The points the brush can have changed, read from the Terrain editor's map_heights, sent to the card."""
+        import numpy as np
+        from . import terrain as T, terrain3d as T3
+        img = ed._img("map_heights.tga")
+        d = self.gl.data
+        _, r, _ = T.spray_footprint(at, ed.v_brush.get())
+        k = int(r) + 2
+        x0, x1 = max(0, int(at[0]) - k), min(d.cols - 1, int(at[0]) + k + 1)
+        y0, y1 = max(0, int(at[1]) - k), min(d.rows - 1, int(at[1]) + k + 1)
+        if img is None or x1 < x0 or y1 < y0:
+            return
+        rgb = np.array([[img.get(x, y) for x in range(x0, x1 + 1)] for y in range(y1, y0 - 1, -1)], np.uint8)
+        camp = self.app.v_campaign.get()
+        if getattr(self, "_limits", None) is None or self._limits[0] != camp:
+            self._limits = (camp, T.max_land_height(ed.mod, camp), T.min_sea_height(ed.mod, camp))
+        metres = T3.metres_of(rgb, self._limits[1], self._limits[2])
+        self.gl.set_heights((d.rows - 1) - y1, x0, metres)
 
     # ---- the mouse and keys ----
     def _press(self, e, how):
