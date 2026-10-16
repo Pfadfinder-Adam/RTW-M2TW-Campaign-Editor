@@ -117,7 +117,23 @@ def on_ground(picture, ground=None):
 SHEETS = ("shared.sd.xml", "battle.sd.xml", "strategy.sd.xml", "shared2.sd.xml", "battle3.sd.xml", "strat3.sd.xml")
 CARD_GROUNDS = (("STRAT_CARD_BACKGROUND", "the game's card ground (campaign)"),
                 ("BATTLE_CARD_BACKGROUND", "the game's card ground (battle)"))
+# a unit's description picture is see-through: the game shows it on the paper of the unit's details scroll (the
+# user, 2026-10-16: 'the game's ground' was empty in Make a picture)
+PICTURE_GROUNDS = (("SCROLL_MID", "the game's scroll paper (as in the unit's details)"),)
 PICTURE_FRAME = "PORTRAIT_FRAME"            # Medieval II's frame round a unit's picture (the user, 2026-10-10)
+
+
+def paper(mod, size, culture=None):
+    """The game's scroll paper (SCROLL_MID repeated, at its own scale) as big as the picture, or None."""
+    from PIL import Image
+    piece = game_sprite(mod, "SCROLL_MID", culture)
+    if piece is None:
+        return None
+    out = Image.new("RGBA", size, (0, 0, 0, 0))
+    for y in range(0, size[1], piece.height):
+        for x in range(0, size[0], piece.width):
+            out.alpha_composite(piece, (x, y))
+    return out
 
 
 def game_sprite(mod, name, culture=None):

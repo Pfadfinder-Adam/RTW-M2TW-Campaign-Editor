@@ -39,15 +39,21 @@ class CardMaker(tk.Toplevel):
         self.v_scale = tk.DoubleVar(value=float(kept.get("scale", 100.0)))
         self.v_up = tk.DoubleVar(value=float(kept.get("up", 0.0)))
         self.v_side = tk.DoubleVar(value=float(kept.get("side", 0.0)))
-        self.v_ground = tk.StringVar(value=settings.get("card_ground", "clear"))
+        # the ground kept for cards and pictures apart (a card's 'battle card ground' does not exist for a picture:
+        # Make a picture then drew none at all)
+        self._ground_key = "picture_ground" if info else "card_ground"
+        self.v_ground = tk.StringVar(value=settings.get(self._ground_key, "clear"))
         self.colour = tuple(settings.get("card_colour", [58, 64, 52]))[:3]
         self.ground_pic = None
         # the game's own pieces (the user, 2026-10-10): its card grounds for a card, Medieval II's frame round a
         # unit's picture - from the faction's culture's interface pages
         fac = viewer.v_fac.get() if hasattr(viewer, "v_fac") else ""
         self.culture = dict(viewer.mod.factions()).get(fac) if fac else None
-        self.game_grounds = {} if info else {
+        self.game_grounds = {"SCROLL_MID": CM.paper(viewer.mod, self.size, self.culture)} if info else {
             key: CM.game_sprite(viewer.mod, key, self.culture) for key, _ in CM.CARD_GROUNDS}
+        g = self.v_ground.get()
+        if g.startswith("game:") and self.game_grounds.get(g[5:]) is None:      # this game / kind has not that one
+            self.v_ground.set(next(("game:" + k for k, v in self.game_grounds.items() if v is not None), "clear"))
         self.frame_pic = CM.game_sprite(viewer.mod, CM.PICTURE_FRAME, self.culture) \
             if info and game_kind(viewer.mod) == "medieval2" else None
         inner = CM.game_sprite(viewer.mod, CM.PICTURE_FRAME + "_INT", self.culture) if self.frame_pic else None
@@ -88,7 +94,8 @@ class CardMaker(tk.Toplevel):
                       command=lambda v: self._slid()).pack(anchor="w")
         ttk.Button(side, text="Back to the start", command=self.reset).pack(anchor="w", pady=(4, 0))
         ttk.Label(side, text="Ground").pack(anchor="w", pady=(8, 0))
-        grounds = list(GROUNDS) + [("game:" + key, words) for key, words in CM.CARD_GROUNDS
+        grounds = list(GROUNDS) + [("game:" + key, words) for key, words in (
+                                   CM.PICTURE_GROUNDS if self.info else CM.CARD_GROUNDS)
                                    if self.game_grounds.get(key) is not None]
         for key, words in grounds:
             row = ttk.Frame(side)
@@ -287,7 +294,7 @@ class CardMaker(tk.Toplevel):
             return None
         pic = CM.cut(self.figure, self.current(), self.size)
         g = self.v_ground.get()
-        settings.put("card_ground", g)
+        settings.put(self._ground_key, g)
         if g == "colour":
             pic = CM.on_ground(pic, self.colour)
         if g == "picture" and self.ground_pic is not None:
@@ -339,10 +346,15 @@ class CardMaker(tk.Toplevel):
         c.create_rectangle(fx0, fy0, x1, y1, outline="#ffd24a", width=2)
         c.create_text(10, 6, anchor="nw", fill="#ddd", text="drag him, wheel: nearer")
         left = PW + 20
-        big = max(1, min((W - left - pic.width - 40) // pic.width, (H - 34) // pic.height))  # pixel by pixel, sharp
+        room = min((W - left - pic.width - 40) / pic.width, (H - 34) / pic.height)
+        big = max(1, int(room))                         # pixel by pixel, sharp
+        if big < 2 and room >= 1.2:                     # a big picture (Rome 160 x 210): as big as the room gives
+            big = round(room, 1)
         x = left
-        for k, label in [(1, "its size")] + ([(big, "x %d" % big)] if big > 1 else []):
-            im = pic.resize((pic.width * k, pic.height * k), Image.NEAREST) if k > 1 else pic
+        for k, label in [(1, "its size")] + ([(big, ("x %d" if big == int(big) else "x %.1f") % big)]
+                                            if big > 1 else []):
+            im = pic.resize((int(pic.width * k), int(pic.height * k)),
+                            Image.NEAREST if k == int(k) else Image.LANCZOS) if k > 1 else pic
             board = self._board(im.size)
             board.alpha_composite(im)
             ph = ImageTk.PhotoImage(board)

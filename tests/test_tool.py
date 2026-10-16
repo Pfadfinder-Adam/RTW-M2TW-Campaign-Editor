@@ -11721,7 +11721,8 @@ building smith
               '<sprite_definitions version="7">\n  <page file="sharedpage_01.tga" w="64" h="64">\n'
               '    <sprite name="STRAT_CARD_BACKGROUND" x="0" y="0" w="12" h="16" alpha="0"/>\n'
               '    <sprite name="PORTRAIT_FRAME" x="20" y="0" w="10" h="10" alpha="1"/>\n'
-              '    <sprite name="PORTRAIT_FRAME_INT" x="40" y="0" w="6" h="6" alpha="1"/>\n  </page>\n'
+              '    <sprite name="PORTRAIT_FRAME_INT" x="40" y="0" w="6" h="6" alpha="1"/>\n'
+              '    <sprite name="SCROLL_MID" x="0" y="20" w="8" h="8" alpha="0"/>\n  </page>\n'
               '</sprite_definitions>\n')
         for culture, colour in (("northern_european", (90, 90, 95)), ("greek", (200, 180, 120))):
             os.makedirs(os.path.join(ui, culture, "interface"))
@@ -11738,6 +11739,8 @@ building smith
         on = CM.on_ground(card, ground)
         self.assertEqual(on.getpixel((2, 2)), (200, 180, 120, 255))     # the game's ground behind the man
         self.assertEqual(on.getpixel((24, 30)), (10, 200, 10, 255))
+        paper = CM.paper(mod, (20, 30), "greek")          # a picture's ground: the scroll's paper, repeated
+        self.assertEqual((paper.size, paper.getpixel((19, 29))), ((20, 30), (200, 180, 120, 255)))
         frame = CM.game_sprite(mod, "PORTRAIT_FRAME", "northern_european")
         pic = Image.new("RGBA", (40, 60), (0, 0, 255, 255))
         got = CM.framed(pic, frame, CM.game_sprite(mod, "PORTRAIT_FRAME_INT").size, scale=2)
