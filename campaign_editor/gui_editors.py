@@ -926,7 +926,7 @@ class RecordEditor(ttk.Frame):
                 anchor="w", pady=(2, 0))
 
     def recolour_texture(self, faction, path):
-        """Recolour this one texture for the faction (gui_recolour.open_one: Keep for Apply, written with Apply)."""
+        """Recolour this one texture for the faction (gui_recolour.open_one: waits for Apply changes by itself)."""
         from .gui_recolour import open_one
         try:
             return open_one(self.app, faction, path, parent=self)

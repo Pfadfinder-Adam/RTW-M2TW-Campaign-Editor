@@ -91,8 +91,7 @@ class BannerWindow(tk.Toplevel):
                                      command=lambda: self._set("no_symbol", not self.v_sym.get()))
         self.c_sym.pack(side="left", padx=(12, 0))
         ttk.Button(row2, text="Symbol picture...", command=self._pick_symbol).pack(side="left", padx=4)
-        ttk.Button(row2, text="Undo", command=self._undo).pack(side="left", padx=(12, 0))
-        ttk.Button(row2, text="Symbol back in the middle", command=self._reset).pack(side="left", padx=4)
+        ttk.Button(row2, text="Symbol back in the middle", command=self._reset).pack(side="left", padx=(12, 0))
         from . import settings as _settings
         ttk.Label(row2, text="Snap").pack(side="left", padx=(12, 0))
         grids = list(B.GRIDS)

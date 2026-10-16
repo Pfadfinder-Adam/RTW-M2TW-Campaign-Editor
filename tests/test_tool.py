@@ -11300,7 +11300,8 @@ building smith
             root = tk.Tk()
         except Exception as e:
             self.skipTest("no window: %s" % e)
-        from campaign_editor import gui_campaignscript as GS, gui_rules as GR, gui_traits as GT
+        from campaign_editor import gui_campaignscript as GS, gui_events as GE, gui_mercenaries as GM
+        from campaign_editor import gui_rebels as GRB, gui_rules as GR, gui_traits as GT
         camp = os.path.join(self.root, "data", "world", "maps", "campaign", "test")
         write(os.path.join(camp, "campaign_script.txt"), "script\n\tif I_LocalFaction alpha\n\t\tset_counter a 1\n"
               "\tend_if\n\tset_counter b 2\nend_script\n")
@@ -11312,8 +11313,11 @@ building smith
         root.session_drop = lambda key: parts.pop(key, None)
         root.session_kept = lambda key: key in parts
         root.show_text = lambda *a: None
+        root._m2 = lambda: False
+        root.town_owners = lambda: {}
         try:
-            for cls in (GS.CampaignScriptWindow, GR.RulesWindow, GT.TraitsWindow):
+            for cls in (GS.CampaignScriptWindow, GR.RulesWindow, GT.TraitsWindow, GE.EventsWindow, GM.MercWindow,
+                        GRB.RebelsWindow):
                 buttons, todo = [], []
                 w = cls(root, "test") if cls is GS.CampaignScriptWindow else cls(root)
                 todo = [w]

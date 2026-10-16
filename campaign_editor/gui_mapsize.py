@@ -235,12 +235,12 @@ def open_map_size(app, view=None):
         def written(bdir):
             log.write("Map size changed (backup %s)%s" % (bdir, "".join("\n- " + x for x in done.get("warn") or ())))
         app.session_add("map_size", label, None, after=written, build=lambda: build(n, gone))
-        v_state.set("KEPT for Apply: %s. Apply changes (bottom left) writes it after every other change waiting - "
+        v_state.set("Waiting for Apply changes: %s. Apply changes (bottom left) writes it after every other change waiting - "
                     "a town given on the Map meanwhile counts. On the first start the game builds map.rwm again (a "
                     "while)." % label)
         for b in bar.winfo_children():
             b.destroy()
-        ttk.Button(bar, text="Keep for Apply", command=keep).pack(side="left")
+        ttk.Button(bar, text="Set this size", command=keep).pack(side="left")
         ttk.Button(bar, text="Preview", command=show_all).pack(side="left", padx=(6, 0))
         ttk.Button(bar, text="Throw the cut away", command=throw).pack(side="left", padx=(6, 0))
         ttk.Button(bar, text="Close", command=w.destroy).pack(side="left", padx=(6, 0))
@@ -251,8 +251,8 @@ def open_map_size(app, view=None):
         v_state.set("The kept change of the map's size is thrown away - nothing will be written for it.")
 
     if app.session_kept("map_size"):
-        v_state.set("A change of the map's size is kept for Apply already - Keep for Apply replaces it.")
-    ttk.Button(bar, text="Keep for Apply", command=keep).pack(side="left")
+        v_state.set("A change of the map's size waits for Apply changes already - 'Set this size' replaces it.")
+    ttk.Button(bar, text="Set this size", command=keep).pack(side="left")
     ttk.Button(bar, text="Preview", command=show_all).pack(side="left", padx=(6, 0))
     ttk.Button(bar, text="Close", command=w.destroy).pack(side="left", padx=(6, 0))
     return w

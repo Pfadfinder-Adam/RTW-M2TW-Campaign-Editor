@@ -1,8 +1,9 @@
 """The window 'Recolour the faction's pictures': every picture of a faction that carries its colours (unit cards,
 battle textures, symbols, banners, captain cards...) moved from the colours they carry now (the template's, for a
 cloned faction - guessed, can be changed) to the faction's own colours (descr_sm_factions.txt, can be changed).
-Before / after of the picked picture; Keep for Apply puts them in the session's list - the main window's Apply
-writes them with the rest (one backup; Undo this write puts them back)."""
+Before / after of the picked picture. What is picked waits for Apply changes by itself as a RECIPE (gui_util.AutoKeep;
+as Lightroom keeps its edits): the pictures are recoloured only by Preview changes / Apply changes, the window staying
+hidden until then (one backup; Undo this write puts them back); Undo / Redo step its picks and touch-ups."""
 
 import os
 import tkinter as tk
@@ -10,7 +11,7 @@ from tkinter import colorchooser, messagebox, ttk
 
 from . import recolour as R
 from . import theme
-from .gui_util import ShortHint, hint
+from .gui_util import AutoKeep, ShortHint, hint
 
 TITLE = "Recolour the faction's pictures"
 SIDE = 360
@@ -43,7 +44,9 @@ def open_one(app, faction, path, parent=None):
     return w
 
 
-class RecolourWindow(tk.Toplevel):
+class RecolourWindow(AutoKeep, tk.Toplevel):
+    _ak_fields = ("ticked", "source", "target", "edits")
+
     def __init__(self, app, faction, only=None, pending=None, to=None):
         super().__init__(app)
         self.app, self.mod, self.faction = app, app.mod, faction
@@ -61,9 +64,12 @@ class RecolourWindow(tk.Toplevel):
         self.geometry("%dx%d" % (min(sw - 40, 600 + 2 * self.side + 60), min(sh - 80, 720)))
         self.colours = R.faction_colours(self.mod)
         self._cache, self._photos, self._by = {}, [], {}
+        self._ak_busy = True
         self._take(faction)
         self._build()
         self.fill()
+        self.protocol("WM_DELETE_WINDOW", self.close)
+        self.ak_start()
 
     def _take(self, faction):
         """Read the faction's pictures and guess the colours they carry now."""
@@ -91,18 +97,14 @@ class RecolourWindow(tk.Toplevel):
         want = self._faction_of.get(self.v_faction.get(), self.v_faction.get())
         if want == self.faction:
             return
-        if any(self.edits.values()):
-            from .gui_util import ask_choice
-            if ask_choice(self, TITLE, "The brush changes on %s's pictures are not written yet. Switch to %s and "
-                                       "throw them away?" % (self.faction, want),
-                          ["Switch", "Stay on %s" % self.faction], default=1, cancel=1) != 0:
-                self.v_faction.set(self._shown_of(self.faction))
-                return
+        self.ak_close()                                  # what waits for the faction shown stays kept
+        self._ak_busy = True
         self._cache, self.edits, self.zoom = {}, {}, {}
         self._take(want)
         self.v_from.set(self.source_of)
         self._paint_swatches()
         self.fill()
+        self.ak_start()
 
     # ---- the window ----
     def _build(self):
@@ -211,7 +213,7 @@ class RecolourWindow(tk.Toplevel):
                     "takes the whole patch of the picture's own colour joined to that point (a hood, a shield's "
                     "field) and paints it at once - 'alike' is how far a colour may differ and still belong (bigger "
                     "= a bigger area); click again to add more, 'keep as it was' + a click gives an area back. Mouse "
-                    "wheel: zoom. The touch-ups are kept for that picture until Keep for Apply or Clear.").pack(
+                    "wheel: zoom. The touch-ups are kept for that picture until Apply changes writes them, or Clear.").pack(
             side="left")
         self.edits, self.zoom = {}, {}
         a = self.after
@@ -227,11 +229,9 @@ class RecolourWindow(tk.Toplevel):
         bot.pack(fill="x", pady=(8, 0))
         ttk.Button(bot, text="Tick all", command=lambda: self._tick_all(True)).pack(side="left")
         ttk.Button(bot, text="Untick all", command=lambda: self._tick_all(False)).pack(side="left", padx=4)
-        ttk.Button(bot, text="Preview", command=self.preview).pack(side="left", padx=(16, 0))
-        ttk.Button(bot, text="Keep for Apply", command=self.write).pack(side="left", padx=4)
         self.status = ttk.Label(bot, foreground="#555")
         self.status.pack(side="left", padx=8)
-        ttk.Button(bot, text="Close", command=self.destroy).pack(side="right")
+        ttk.Button(bot, text="Close", command=self.close).pack(side="right")
 
     def _swatch(self, parent, side, k):
         b = ttk.Button(parent, width=3, command=lambda: self._pick(side, k))
@@ -269,6 +269,7 @@ class RecolourWindow(tk.Toplevel):
         self._cache = {}
         self._paint_swatches()
         self.show()
+        self.ak_changed()
 
     # ---- the list ----
     def fill(self):
@@ -313,6 +314,7 @@ class RecolourWindow(tk.Toplevel):
         if iid in self.ticked and not self.items[int(iid[1:])]["skip"]:
             self.ticked[iid] = on
             self.tree.item(iid, text=self._mark(iid))
+            self.ak_changed()
 
     def _click(self, e):
         iid = self.tree.identify_row(e.y)
@@ -438,6 +440,7 @@ class RecolourWindow(tk.Toplevel):
             self.tree.item(iid, text=self._mark(iid))
         self._cache.pop(key, None)
         self.show()
+        self.ak_changed()
 
     def _painted(self):
         pts = getattr(self, "_stroke", [])
@@ -468,6 +471,7 @@ class RecolourWindow(tk.Toplevel):
             self.tree.item(iid, text=self._mark(iid))
         self._cache.pop(key, None)
         self.show()
+        self.ak_changed()
 
     def clear_edits(self):
         it = getattr(self, "_shown", None)
@@ -477,6 +481,7 @@ class RecolourWindow(tk.Toplevel):
         it.pop("edits", None)
         self._cache.pop(self._key(it), None)
         self.show()
+        self.ak_changed()
 
     def _wheel(self, e, step):
         it = getattr(self, "_shown", None)
@@ -515,32 +520,69 @@ class RecolourWindow(tk.Toplevel):
                 plan.note(None, "%s: no part in the 'from' colours - unchanged" % it["rel"])
         return plan
 
-    def preview(self):
-        try:
-            plan = self._plan()
-        except ValueError as e:
-            messagebox.showinfo(TITLE, str(e), parent=self)
-            return
-        self.status.configure(text="")
-        self.app.show_text("Preview - " + TITLE, plan.report(), wrap="word")
+    # ---- kept by itself, as a recipe (gui_util.AutoKeep) ----
+    def _ak_key(self):
+        return "recolour:%s" % (self.pending or self.faction) + (":%s" % os.path.normcase(self.only) if self.only
+                                                                 else "")
 
-    def write(self):
-        """Keep for Apply: the recoloured pictures go into the session's list, written by the main window's Apply
-        changes with everything else (one write, one Undo)."""
-        from .gui_util import keep_for_apply
-        if self.pending:
-            return self._keep_pending()
+    def _ak_label(self):
+        n = len(self.picked())
+        return "%s: %d picture(s) of %s" % (TITLE, n, self.pending or self.faction)
+
+    def _ak_set(self, st):
+        import pickle
+        for a, v in zip(self._ak_fields, pickle.loads(st)):
+            setattr(self, a, v)
+        for it in self.items:                          # the touch-ups ride on the pictures too (plan_recolour)
+            ed = self.edits.get(self._key(it))
+            if ed:
+                it["edits"] = ed
+            else:
+                it.pop("edits", None)
+        for iid in self.ticked:
+            self.tree.item(iid, text=self._mark(iid))
+        for gid in self.tree.get_children(""):
+            self._group_mark(gid)
+        self._cache = {}
+        self._paint_swatches()
+        self.show()
+
+    def ak_keep(self):
+        """The recipe into Apply changes' list - the pictures are recoloured when Preview / Apply builds it (heavy:
+        never at every click); nothing ticked takes it out."""
+        self._ak_job = None
+        app, key = self.app, self._ak_key()
+        if not self.picked():
+            app.session_drop(key)
+            self._ak_saw(None)
+            return
+        windows = app.__dict__.setdefault("_ak_windows", {})
+        old = windows.get(key)
         try:
-            plan = self._plan()
-        except ValueError as e:
-            messagebox.showinfo(TITLE, str(e), parent=self)
-            return False
-        n, faction, target = len(plan.binaries), self.faction, list(self.target)
+            if old is not None and old is not self and old.winfo_exists() and not old.winfo_viewable():
+                old.destroy()                          # an older hidden window of the same recipe
+        except tk.TclError:
+            pass
+        if self.pending:
+            self._keep_pending()
+        else:
+            app.session_add(key, self._ak_label(), None, self._ak_after, build=self._plan, quiet=True)
+        windows[key] = self
+        self._ak_saw(self._ak_last)
+
+    @property
+    def _ak_after(self):
+        faction, target = self.faction, list(self.target)
 
         def after(bdir):
             from . import log
             log.write("%s %s (backup %s)" % (TITLE, faction, bdir))
-            if not self.winfo_exists() or self.faction != faction:
+            if not self.winfo_exists():
+                return
+            if not self.winfo_viewable():                 # closed: it only held the recipe
+                self.destroy()
+                return
+            if self.faction != faction:
                 return
             self.mod = self.app.mod
             self._cache, self.edits = {}, {}
@@ -548,15 +590,33 @@ class RecolourWindow(tk.Toplevel):
             self.items = self._targets()
             self.source = list(target)
             self.v_from.set(self.faction if tuple(target) == tuple(self.colours.get(self.faction, ())) else CUSTOM)
+            self._ak_busy = True
             self.fill()
-            self.status.configure(text="%d picture(s) written (backup %s)" % (n, bdir))
-        key = "recolour:%s" % faction + (":%s" % os.path.normcase(self.only) if self.only else "")
-        if keep_for_apply(self, key, "%s: %d picture(s) of %s" % (TITLE, n, faction),
-                          lambda: plan, after, TITLE):
-            self.status.configure(text="%d picture(s) kept - Apply changes in the main window writes them" % n)
-            return True
-        return False
+            self.ak_start()
+            self.status.configure(text="written (backup %s)" % bdir)
+        return after
 
+    def ak_dropped(self):
+        self._ak_saw(None)
+        if self.winfo_exists() and not self.winfo_viewable():
+            self.destroy()
+            return
+        self._ak_busy = True
+        self._cache, self.edits = {}, {}
+        for it in self.items:
+            it.pop("edits", None)
+        self._take(self.faction)
+        self.fill()
+        self.ak_start()
+
+    def close(self):
+        """Closing: what is picked stays waiting for Apply changes - the window only hides then (it holds the
+        recipe the write builds)."""
+        self.ak_close()
+        if self._ak_key() in (self.app.session_parts() if hasattr(self.app, "session_parts") else {}):
+            self.withdraw()
+        else:
+            self.destroy()
 
     def _keep_pending(self):
         """A new faction not created yet: what is ticked here (the template's pictures) is recoloured on the new
@@ -573,9 +633,8 @@ class RecolourWindow(tk.Toplevel):
         n = len(items)
         source, target, frm = list(self.source), list(self.target), self._from_of()
         if any(self.edits.values()):
-            messagebox.showinfo(TITLE, "The brush touch-ups are not carried over: they are made on the pictures "
-                                       "themselves - recolour again after %s is created to touch them up." % new,
-                                parent=self)
+            self.status.configure(text="the brush touch-ups are not carried over to %s's own copies - touch them up "
+                                       "again once it is created" % new)
         app = self.app
 
         def build():
@@ -593,8 +652,8 @@ class RecolourWindow(tk.Toplevel):
                     plan.warn(None, "%s: %s" % (it["rel"], how))
             return plan
         app.session_add("recolour:%s" % new, "%s: %d picture(s) of the new faction %s" % (TITLE, n, new),
-                        None, build=build)
-        self.status.configure(text="%d picture(s) kept - Apply changes creates %s and recolours them" % (n, new))
+                        None, build=build, quiet=True)
+        self.status.configure(text="%d picture(s) waiting - Apply changes creates %s and recolours them" % (n, new))
         return True
 
 

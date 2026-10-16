@@ -2035,6 +2035,9 @@ class App(tk.Tk):
         steps of its own (the Terrain editor's strokes), never to the faction tabs' work unseen; the others
         say what to use instead (the user clicked the bottom Undo in the Terrain editor and nothing said so)."""
         ed = self.editor()
+        if ed is None and self.editors.get("terrain") is not None and self.map_work() and \
+                self.tab_name() in self.TERRAIN_TABS:
+            ed = self.editors["terrain"]                 # Maps > Terrain / Coast & heights: its strokes
         if ed is None:
             return False
         step = getattr(ed, "redo_step" if redo else "undo_step", None)
@@ -2658,7 +2661,7 @@ class App(tk.Tk):
 
     def region_point(self, what):
         """The next click on the map puts the town (or port) of the region picked in 'Paint with': a new region's;
-        a region of the map's moves there (Keep for Apply, as a drag on the Map would); a wasteland's town is given
+        a region of the map's moves there (waiting for Apply changes, as a drag on the Map would); a wasteland's town is given
         there (its own window - a wasteland has no port before its town, report #157)."""
         name = self.v_paint.get().replace("  (new)", "").strip()
         old = self._old_region(name)
@@ -5259,6 +5262,15 @@ class App(tk.Tk):
                 return
         from .gui_recolour import RecolourWindow
         new, template = self.v["name"].get().strip().lower(), self.v["template"].get().strip()
+        pending = self.editor() is None and self.v_mode.get() == "new" and new and new not in names and template in names
+        held = (getattr(self, "_ak_windows", None) or {}).get("recolour:%s" % (new if pending else faction))
+        try:
+            if held is not None and held.winfo_exists():     # its picks still wait for Apply: the same window again
+                held.deiconify()
+                held.lift()
+                return
+        except tk.TclError:
+            pass
         if self.editor() is None and self.v_mode.get() == "new" and new and new not in names and template in names:
             # a faction not created yet (#224): its template's pictures shown, recoloured on its own copies when
             # Apply creates it - no 'create it first'

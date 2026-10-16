@@ -76,9 +76,7 @@ class TerrainEditor(ttk.Frame):
         self._rivers_tick = ttk.Checkbutton(top, text="Rivers", variable=self.v_rivers_here,
                                             command=self._rivers_toggled)
         self._rivers_tick.pack(side="left", padx=(8, 0))
-        ttk.Button(top, text="Redo stroke", command=self.redo_stroke).pack(side="right", padx=(0, 4))
         self.v_shore = tk.BooleanVar(value=True)       # the shore as the game draws it (Land and sea's 2nd row)
-        ttk.Button(top, text="Undo stroke", command=self.undo_stroke).pack(side="right", padx=4)
         from .gui_util import first
         first(*[w for w in top.pack_slaves() if w.pack_info().get("side") == "right"][::-1])
         rights = [w for w in top.pack_slaves() if w.pack_info().get("side") == "right"]
@@ -591,7 +589,7 @@ class TerrainEditor(ttk.Frame):
         the tile is not, and the other way round holes in the land'): every map_ground_types point on the other side
         of the waterline than map_heights says, ringed on the map; on a yes each gets the ground round it on its own
         side - the heights lead (terrain.ground_off_heights / ground_under_heights). Kept with the coast's points:
-        Undo stroke, Preview, Apply."""
+        Undo / Redo (the bottom ones, Ctrl+Z / Ctrl+Y), Preview, Apply."""
         if not self._bound():
             return
         heights, ground = self._img("map_heights.tga"), self._img("map_ground_types.tga")
@@ -614,10 +612,10 @@ class TerrainEditor(ttk.Frame):
                 "  - %d sea ground in the land (holes of sea in the land)\n\n"
                 "They are ringed on the map. Put the ground right under the heights? Each point takes the ground "
                 "round it on its own side - the sea's on the water, the land's on the land; the heights stay as "
-                "they are. Kept until Apply; Undo stroke takes it back." % (len(wrong), water, len(wrong) - water)),
+                "they are. Kept until Apply; Undo (bottom, or Ctrl+Z) takes it back." % (len(wrong), water, len(wrong) - water)),
                 yes="Put the ground right", no="Only show them", parent=self):
             return
-        self._stroke()                                  # one step back with Undo stroke
+        self._stroke()                                  # one step back with Undo (bottom, Ctrl+Z)
         self._coast_points({"ground": T.ground_under_heights(heights, ground, wrong)})
         self.view.mark_points(None)
         self._say_off("%d point(s) of the ground put right under the heights - Preview, then Apply changes (Undo "

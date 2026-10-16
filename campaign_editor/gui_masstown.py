@@ -117,9 +117,10 @@ class MassTownWindow(tk.Toplevel):
         self.nb.bind("<<NotebookTabChanged>>", lambda e: self.fill_chosen())
         bar = ttk.Frame(outer)
         bar.pack(fill="x", pady=(8, 0))
-        ttk.Button(bar, text="Preview", command=self.preview).pack(side="left")
-        self.b_write = ttk.Button(bar, text="Keep for Apply", command=self.write)
-        self.b_write.pack(side="left", padx=4)
+        # an action on the towns chosen (not a form): its button does it - the change waits for Apply changes
+        # with the rest; the window's Undo (the bottom one, Ctrl+Z) takes the last one back
+        self.b_write = ttk.Button(bar, text="Do it for the chosen towns", command=self.write)
+        self.b_write.pack(side="left")
         self.status = ttk.Label(bar, foreground="#555")
         self.status.pack(side="left", padx=8)
         ttk.Button(bar, text="Close", command=self.destroy).pack(side="right")
@@ -441,7 +442,7 @@ class MassTownWindow(tk.Toplevel):
                 a = b = max(1, min(M.MAX_UNITS, sizes[t["owner"]].get(t["level"], lo)))
             self.garrisons[r] = M.random_garrison(self._town_pool(t), a, b, cap, self.rng)
         self.fill_chosen()
-        self.status.configure(text="garrisons drawn - Preview, or Keep for Apply")
+        self.status.configure(text="garrisons drawn - 'Do it for the chosen towns' takes them")
 
     # ---- writing ----
     def opts(self):
@@ -488,17 +489,32 @@ class MassTownWindow(tk.Toplevel):
         plan.towns_written = len(o.get("build") or o.get("remove") or o.get("garrisons") or o.get("towns") or {})
         return plan
 
-    def preview(self):
-        try:
-            plan = self._plan()
-        except ValueError as e:
-            messagebox.showinfo(TITLE, str(e), parent=self)
+    def _seen_again(self):
+        self.mod = self.app.kept_view()               # the towns as kept: the change is seen in the lists
+        self.pools = {}
+        self._read()
+        self.garrisons = {}
+        self.fill_all()
+        self.fill_chosen()
+
+    def _undo(self):
+        """The last 'Do it' taken back (out of Apply changes' list), the towns shown as they are then."""
+        done = getattr(self, "_done", [])
+        while done and done[-1] not in self.app.session_parts():
+            done.pop()                                  # written or thrown away since
+        if not done:
+            self.app.status.set("Nothing to undo in this window.")
             return
-        self.app.show_text("Preview - " + TITLE, plan.report(), wrap="word")
+        self.app.session_drop(done.pop())
+        self._seen_again()
+        self.status.configure(text="taken back - not written")
+
+    def _redo(self):
+        self.app.status.set("Redo: press 'Do it for the chosen towns' again.")
 
     def write(self):
-        """Keep for Apply: this change for many towns goes into the session's list (each one a part of its own),
-        written by the main window's Apply changes with everything else."""
+        """'Do it for the chosen towns': this change for many towns goes into the session's list (each one a part
+        of its own), written by the main window's Apply changes with everything else."""
         from .gui_util import keep_for_apply
         try:
             plan = self._plan()
@@ -519,16 +535,12 @@ class MassTownWindow(tk.Toplevel):
                 self.fill_all()
                 self.fill_chosen()
                 self.status.configure(text="written for %d town(s) (backup %s)" % (n, bdir))
-        if keep_for_apply(self, "towns:%d" % App._towns_kept, "%s: %d town(s)" % (TITLE, n), lambda: plan, after,
-                          TITLE):
-            self.mod = self.app.kept_view()               # the towns as kept: the change is seen in the lists
-            self.pools = {}
-            self._read()
-            self.garrisons = {}
-            self.fill_all()
-            self.fill_chosen()
-            self.status.configure(text="kept for %d town(s) - shown in the lists; Apply changes in the main window "
-                                       "writes it" % n)
+        key = "towns:%d" % App._towns_kept
+        if keep_for_apply(self, key, "%s: %d town(s)" % (TITLE, n), lambda: plan, after, TITLE):
+            self.__dict__.setdefault("_done", []).append(key)
+            self._seen_again()
+            self.status.configure(text="done for %d town(s) - shown in the lists, waiting for Apply changes (Undo "
+                                       "takes it back)" % n)
             return True
         return False
 

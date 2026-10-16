@@ -8,7 +8,7 @@ line out). New type / Copy / Rename beside the list, Delete set apart; a type re
 (rebels.plan_types).
 
 'Regions': every region with its owner and rebel type, a faction filter; the rows picked (or the map's selection) get
-the type picked under the table at once. Nothing is written before 'Keep for Apply' and then Apply changes in the main
+the type picked under the table at once. A change waits for Apply changes in the main
 window (a backup first; Restore undoes it)."""
 
 import tkinter as tk
@@ -16,13 +16,15 @@ from tkinter import messagebox, simpledialog, ttk
 
 from . import rebels as RB
 from . import theme
-from .gui_util import ShortHint, ask
+from .gui_util import AutoKeep, ShortHint, ask
 
 TITLE = "Rebels"
 ALL = "every faction"
 
 
-class RebelsWindow(tk.Toplevel):
+class RebelsWindow(AutoKeep, tk.Toplevel):
+    _ak_fields = ('types', 'removed', 'given')
+
     def __init__(self, app):
         super().__init__(app)
         self.app, self.mod, self.campaign = app, app.mod, app.v_campaign.get()
@@ -38,7 +40,9 @@ class RebelsWindow(tk.Toplevel):
         slave = [u.type for u in units if "slave" in [o.lower() for o in getattr(u, "ownership", []) or []]]
         self.unit_names = slave + sorted(u.type for u in units if u.type not in slave)
         self._build()
+        self._ak_busy = True
         self.reload()
+        self.ak_start()
 
     # ---- the window ----
     def _build(self):
@@ -47,8 +51,6 @@ class RebelsWindow(tk.Toplevel):
         self.lbl_problems = ttk.Label(bar, foreground=theme.ink("#c00000"), wraplength=700, justify="left")
         self.lbl_problems.pack(side="left", fill="x", expand=True)
         ttk.Button(bar, text="Close", command=self.close).pack(side="right")
-        ttk.Button(bar, text="Keep for Apply", command=self.write).pack(side="right", padx=(0, 6))
-        ttk.Button(bar, text="Preview", command=self.preview).pack(side="right", padx=(0, 6))
         top = ttk.Frame(self, padding=(10, 10, 10, 0))
         top.pack(fill="x")
         self.lbl_title = ttk.Label(top, font=("", 12, "bold"))
@@ -59,7 +61,7 @@ class RebelsWindow(tk.Toplevel):
             "Who rises when a region revolts. Each region names a rebel type (descr_regions.txt); a type lists the "
             "units the game raises for it (descr_rebel_factions.txt) and the name players read "
             "(rebel_faction_descr.txt). Brigands and pirates are types too. A type renamed or deleted takes its "
-            "regions along. Keep for Apply, then Apply changes in the main window writes it.")).pack(
+            "regions along. A change waits for Apply changes in the main window.")).pack(
             anchor="w", fill="x", pady=(2, 6))
         self.nb = ttk.Notebook(self)
         self.nb.pack(fill="both", expand=True, padx=10)
@@ -347,7 +349,7 @@ class RebelsWindow(tk.Toplevel):
                 len(regs), t.name, ", ".join(regs[:12]) + (" ..." if len(regs) > 12 else "")), others)
             if not to:
                 return
-        elif not ask(TITLE, "Delete the rebel type %s? (written with Keep for Apply, then Apply changes)" % t.name,
+        elif not ask(TITLE, "Delete the rebel type %s? (written with Apply changes)" % t.name,
                      parent=self, yes="Delete the type", no="Keep it", danger=True):
             return
         for r in regs:
@@ -414,6 +416,7 @@ class RebelsWindow(tk.Toplevel):
                 self.given[r] = t
         self.fill_regions(regs)
         self.fill(self.current())
+        self.ak_changed()
 
     def pick_regions(self, regions):
         """These regions picked on the Regions tab (the map's right click)."""
@@ -457,6 +460,7 @@ class RebelsWindow(tk.Toplevel):
         why = RB.problems(self.mod, self.types) if self.path else []
         self.lbl_problems.configure(text=("Not right yet (the game would stumble on it): " + "; ".join(why[:4]) + (
             " (and %d more)" % (len(why) - 4) if len(why) > 4 else "")) if why else "")
+        self.ak_changed()
 
     def _plan(self):
         from .plan import Plan
@@ -466,46 +470,47 @@ class RebelsWindow(tk.Toplevel):
         RB.plan_types(plan, self.campaign, self.types, given=self.given)
         return plan
 
-    def preview(self):
-        try:
-            plan = self._plan()
-        except ValueError as e:
-            messagebox.showerror(TITLE, str(e), parent=self)
-            return
-        if not plan.changed_files():
-            messagebox.showinfo(TITLE, "Nothing changed yet.", parent=self)
-            return
-        self.app.show_text("Rebels - every change (nothing written yet)", plan.report())
+    # ---- kept by itself (gui_util.AutoKeep) ----
+    def _ak_key(self):
+        return "rebels:%s" % self.campaign if self.path else None
 
-    def write(self):
-        from .gui_util import keep_for_apply
+    def _ak_label(self):
+        return "Rebel types (%s)" % self.campaign
 
+    def _ak_plan(self):
+        return self._plan()
+
+    def ak_refresh(self):
+        name = self.current().name if self.current() else None
+        self.fill(next((x for x in self.types if x.name == name), None))
+
+    @property
+    def _ak_after(self):
         def after(bdir):
             from . import log
             log.write("Rebel types changed (backup %s)" % bdir)
             if self.winfo_exists():
-                self.mod = self.app.mod
-                name = self.current().name if self.current() else None
-                self.reload()
-                t = next((x for x in self.types if x.name == name), None)
-                if t:
-                    self.fill(t)
-        return keep_for_apply(self, "rebels:%s" % self.campaign, "Rebel types (%s)" % self.campaign, self._plan,
-                              after, TITLE)
+                self.ak_reload()
+        return after
 
-    def _unwritten(self):
-        if not self.path:
-            return ""
-        from .gui_util import kept_or_not
-        return kept_or_not(self.app, "rebels:%s" % self.campaign, self._plan)
+    def ak_reload(self):
+        self.mod = self.app.mod
+        name = self.current().name if self.current() else None
+        self._ak_busy = True
+        self.reload()
+        x = next((q for q in self.types if q.name == name), None) if name else None
+        if x:
+            self.fill(x)
+        self.ak_start()
 
     def _forget(self):
         if getattr(self.app, "_rebels_window", None) is self:
             self.app._rebels_window = None
 
     def close(self):
-        from .gui_util import close_guard
-        close_guard(self, TITLE, self._unwritten, self.write, after=self._forget)()
+        self.ak_close()
+        self._forget()
+        self.destroy()
 
 
 def open_rebels(app, regions=None):

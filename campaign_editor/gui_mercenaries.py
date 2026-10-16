@@ -9,14 +9,14 @@ shares its list with the other regions of its pool: said above the cards, and 'A
 regions can be changed the map's own way - a box adds, Shift + box takes away - and 'Take the map's selection'
 gives the pool exactly what is selected. 'New pool from the map's selection' makes a pool of the selected regions.
 Right: the pool's units with their numbers in plain words; a picked unit's numbers are changed in the fields under
-the list. Nothing is written before 'Keep for Apply' and then Apply changes in the main window, which writes it with
+the list. A change waits for Apply changes in the main window, which writes it with
 the rest of the session (a backup first; Undo this write / Tools > Restore a backup undo it)."""
 
 import hashlib
 import tkinter as tk
 from tkinter import messagebox, simpledialog, ttk
 
-from .gui_util import ShortHint
+from .gui_util import AutoKeep, ShortHint
 from .gui_util import ask
 from . import mercenaries as M
 from . import theme
@@ -33,7 +33,9 @@ def _hash(path):
         return hashlib.sha1(fh.read()).hexdigest()
 
 
-class MercWindow(tk.Toplevel):
+class MercWindow(AutoKeep, tk.Toplevel):
+    _ak_fields = ('pools',)
+
     def __init__(self, app):
         super().__init__(app)
         self.app, self.mod, self.campaign = app, app.mod, app.v_campaign.get()
@@ -45,7 +47,9 @@ class MercWindow(tk.Toplevel):
         self.protocol("WM_DELETE_WINDOW", self.close)
         self.units = M.mercenary_units(self.mod)
         self._build()
+        self._ak_busy = True
         self.reload()
+        self.ak_start()
 
     # ---- the window ----
     def _build(self):
@@ -54,8 +58,6 @@ class MercWindow(tk.Toplevel):
         self.lbl_problems = ttk.Label(bar, foreground=theme.ink("#c00000"), wraplength=700, justify="left")
         self.lbl_problems.pack(side="left", fill="x", expand=True)
         ttk.Button(bar, text="Close", command=self.close).pack(side="right")
-        ttk.Button(bar, text="Keep for Apply", command=self.write).pack(side="right", padx=(0, 6))
-        ttk.Button(bar, text="Preview", command=self.preview).pack(side="right", padx=(0, 6))
         top = ttk.Frame(self, padding=(10, 10, 10, 0))
         top.pack(fill="x")
         self.lbl_title = ttk.Label(top, font=("", 12, "bold"))
@@ -65,7 +67,7 @@ class MercWindow(tk.Toplevel):
         ShortHint(top, text=(
             "Who is for hire where. A region takes its mercenaries from its pool: the regions of one pool share one "
             "list. 'For hire in a region' makes a region's list the way a garrison is made; 'Pools' groups the "
-            "regions on the map (a box adds, Shift + box takes away). Keep for Apply, then Apply changes in the main window writes it.")
+            "regions on the map (a box adds, Shift + box takes away). A change waits for Apply changes in the main window.")
                   ).pack(anchor="w", fill="x", pady=(2, 6))
         # the picked unit's numbers: under both tabs, for the unit picked on either
         ed = ttk.LabelFrame(self, text="The picked unit", padding=8)
@@ -272,7 +274,7 @@ class MercWindow(tk.Toplevel):
         self.after_idle(lambda: self._reflow(self.cards_all, True))
 
     def take_here(self, u):
-        """A right click on a card for hire here: that unit goes out of the list (nothing is written before Keep for Apply)."""
+        """A right click on a card for hire here: that unit goes out of the list (nothing is written before Apply changes)."""
         p = next((q for q in self.pools if any(x is u for x in q.units)), None)
         if p is None:
             return
@@ -455,6 +457,7 @@ class MercWindow(tk.Toplevel):
         why = M.problems(self.mod, self.campaign, [p for p in self.pools if p.regions]) if self.path else []
         self.lbl_problems.configure(text=("Not right in the pools (the game may stumble on it): " + "; ".join(why[:4]) +
                                           (" (and %d more)" % (len(why) - 4) if len(why) > 4 else "")) if why else "")
+        self.ak_changed()
 
     # ---- the map ----
     def _map(self):
@@ -549,7 +552,7 @@ class MercWindow(tk.Toplevel):
         if p is None:
             return
         if not ask(TITLE, "Delete the pool %s? Its regions (%s) will have no mercenaries for hire "
-                                          "(written with Keep for Apply, then Apply changes)." % (p.name, ", ".join(p.regions) or "none"),
+                                          "(written with Apply changes)." % (p.name, ", ".join(p.regions) or "none"),
                                    parent=self, yes='Delete the pool', no='Keep it', danger=True):
             return
         self.pools.remove(p)
@@ -598,64 +601,47 @@ class MercWindow(tk.Toplevel):
         M.plan_pools(plan, self.campaign, self.pools)
         return plan
 
-    def _try_plan(self):
-        try:
-            return self._plan()
-        except ValueError as e:
-            messagebox.showerror(TITLE, str(e), parent=self)
-            if "read again" in str(e):
-                self.reload()
-            return None
+    # ---- kept by itself (gui_util.AutoKeep) ----
+    def _ak_key(self):
+        return "mercenaries:%s" % self.campaign if self.path else None
 
-    def preview(self):
-        plan = self._try_plan()
-        if plan is None:
-            return
-        if not plan.changed_files():
-            messagebox.showinfo(TITLE, "Nothing changed yet.", parent=self)
-            return
-        self.app.show_text("Mercenaries - every change (nothing written yet)", plan.report())
+    def _ak_label(self):
+        return "Mercenary pools (%s)" % self.campaign
 
-    def write(self):
-        """Keep for Apply: the pools' changes go into the session's list, written by the main window's Apply changes
-        with everything else (one write, one Undo)."""
-        from .gui_util import keep_for_apply
-        try:
-            self._plan()
-        except ValueError as e:
-            messagebox.showerror(TITLE, str(e), parent=self)
-            if "read again" in str(e):
-                self.reload()
-            return False
+    def _ak_plan(self):
+        return self._plan()
 
+    def ak_refresh(self):
+        name = self.pool().name if self.pool() else None
+        self.fill(next((x for x in self.pools if x.name == name), None))
+
+    @property
+    def _ak_after(self):
         def after(bdir):
             from . import log
             log.write("Mercenary pools changed (backup %s)" % bdir)
             if self.winfo_exists():
-                self.mod = self.app.mod
-                name = self.pool().name if self.pool() else None
-                self.reload()
-                p = next((q for q in self.pools if q.name == name), None) if name else None
-                if p:
-                    self.fill(p)
-        return keep_for_apply(self, "mercenaries:%s" % self.campaign, "Mercenary pools (%s)" % self.campaign,
-                              self._plan, after, TITLE)
+                self.ak_reload()
+        return after
 
-    def _unwritten(self):
-        """Words of what is neither written nor kept for the write, or '' (the close guard asks before throwing it
-        away)."""
-        if not self.path:
-            return ""
-        from .gui_util import kept_or_not
-        return kept_or_not(self.app, "mercenaries:%s" % self.campaign, self._plan)
+    def ak_reload(self):
+        self.mod = self.app.mod
+        name = self.pool().name if self.pool() else None
+        self._ak_busy = True
+        self.reload()
+        x = next((q for q in self.pools if q.name == name), None) if name else None
+        if x:
+            self.fill(x)
+        self.ak_start()
 
     def _forget(self):
         if getattr(self.app, "_merc_window", None) is self:
             self.app._merc_window = None
 
     def close(self):
-        from .gui_util import close_guard                 # never closes over unwritten changes silently
-        close_guard(self, TITLE, self._unwritten, self.write, after=self._forget)()
+        self.ak_close()
+        self._forget()
+        self.destroy()
 
 
 def open_mercenaries(app, region=None, new_from=None):

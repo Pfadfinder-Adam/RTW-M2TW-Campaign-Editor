@@ -1,14 +1,15 @@
 """The Map editor's special places (specialplaces.py): a right click on the map > 'Special place here...' or on a
 place's diamond > its window; a double click on the diamond opens it too. The window: its name, what it gives (two
 lines), its text, its model (any of the campaign map's, or one's own .cas) and size, a picture, money a turn for its
-holder - and the window the game will show, drawn as it will look. Keep for Apply puts every place of the mod into
+holder - and the window the game will show, drawn as it will look. Every change puts every place of the mod into
 the session's list (one part 'Special places'), written by Apply with the rest."""
 
 import os
 import tkinter as tk
-from tkinter import filedialog, messagebox, ttk
+from tkinter import filedialog, ttk
 
 from . import specialplaces as SP
+from .gui_util import AutoKeep
 
 TITLE = "Special place"
 OWN = "(my own .cas file...)"
@@ -50,8 +51,9 @@ def culture_of(app):
     return f
 
 
-def keep(app, win=None):
-    """Every place of the mod into the session's list (one part, replaced when kept again)."""
+def keep(app, win=None, quiet=False):
+    """Every place of the mod into the session's list (one part, replaced when kept again); quiet: a place's window
+    keeping its change by itself (no box, nothing changed takes the part out)."""
     from .gui_util import keep_for_apply
     pics, own = _extra(app)
     lst = places(app)
@@ -60,8 +62,17 @@ def keep(app, win=None):
         app._special = None                           # read again from what was written
         if hasattr(app, "show_map"):
             app.show_map()
-    return keep_for_apply(win or app, "special_places", "Special places: %d" % len(lst),
-                          lambda: SP.plan(app.mod, lst, culture_of(app), dict(pics), dict(own)), after, TITLE)
+
+    def make():
+        return SP.plan(app.mod, lst, culture_of(app), dict(pics), dict(own))
+    if quiet:
+        plan = make()
+        if plan.changed_files():
+            app.session_add("special_places", "Special places: %d" % len(lst), plan, after, quiet=True)
+        else:
+            app.session_drop("special_places")
+        return True
+    return keep_for_apply(win or app, "special_places", "Special places: %d" % len(lst), make, after, TITLE)
 
 
 def open_place(app, place_id=None, xy=None):
@@ -92,7 +103,7 @@ def move(app, place_id, xy):
         return
     p.x, p.y = int(xy[0]), int(xy[1])
     if getattr(p, "_new", False):                     # not kept yet: its window keeps it with the rest
-        app.status.set("Special place moved to %d, %d - Keep for Apply in its window." % (p.x, p.y))
+        app.status.set("Special place moved to %d, %d - give it a name and a text in its window." % (p.x, p.y))
     elif keep(app):
         app.status.set("Special place %s moved to %d, %d - written with the next Apply (Preview first)."
                        % (p.title, p.x, p.y))
@@ -113,7 +124,7 @@ def delete(app, place_id):
     app.show_map()
 
 
-class PlaceWindow(tk.Toplevel):
+class PlaceWindow(AutoKeep, tk.Toplevel):
     def __init__(self, app, place):
         super().__init__(app)
         self.app, self.place, self.mod = app, place, app.mod
@@ -193,16 +204,21 @@ class PlaceWindow(tk.Toplevel):
         bot = ttk.Frame(left)
         bot.pack(anchor="w", pady=(10, 0))
         ttk.Button(bot, text="Show the game's window", command=self.preview).pack(side="left")
-        ttk.Button(bot, text="Keep for Apply", command=self.keep).pack(side="left", padx=4)
         if not getattr(place, "_new", False):
             ttk.Button(bot, text="Delete this place", command=self.delete).pack(side="left", padx=(12, 0))
-        ttk.Button(bot, text="Close", command=self.destroy).pack(side="left", padx=(12, 0))
+        ttk.Button(bot, text="Close", command=self.close).pack(side="left", padx=(12, 0))
+        self.protocol("WM_DELETE_WINDOW", self.close)
         ttk.Label(right, text="In the game (its words drawn here roughly - the game's font wraps them):",
                   foreground="#555").pack(anchor="w")
         self.canvas = tk.Canvas(right, width=SP.WIDTH + 10, height=620, highlightthickness=0, background="#2e3036")
         self.canvas.pack(anchor="nw", fill="both", expand=True)
         self._photo = None
         self._shown_picture()
+        for v in (self.v_title, self.v_money, self.v_size, self.v_model):
+            v.trace_add("write", self.ak_changed)
+        for t in (self.t_bonus, self.t_text):
+            t.bind("<KeyRelease>", self.ak_changed, add="+")
+        self.ak_start()
         self.preview()
 
     # ---- the fields ----
@@ -235,11 +251,13 @@ class PlaceWindow(tk.Toplevel):
                                                      ("All files", "*.*")])
         if path:
             self.picture = path
+            self.ak_changed()
             self._shown_picture()
             self.preview()
 
     def no_picture(self):
         self.picture = ""
+        self.ak_changed()
         self._shown_picture()
         self.preview()
 
@@ -303,7 +321,8 @@ class PlaceWindow(tk.Toplevel):
         self.canvas.create_image(5, 5, anchor="nw", image=self._photo)
         self.canvas.configure(height=min(900, img.height + 10))
         probs = SP.problems(p)
-        self.lbl_problems.configure(text=("Before Keep for Apply: " + "; ".join(probs) + ".") if probs else "")
+        self.lbl_problems.configure(text=("Not kept for Apply yet - it needs: " + "; ".join(probs) + ".") if probs
+                                    else "")
 
     def _owner(self):
         region = self.app._cmap.region_at(self.place.x, self.place.y) if getattr(self.app, "_cmap", None) else None
@@ -312,12 +331,39 @@ class PlaceWindow(tk.Toplevel):
         names = self.app.shown_names() if hasattr(self.app, "shown_names") else {}
         return names.get(f) or f
 
-    # ---- keeping ----
-    def keep(self):
+    # ---- kept by itself (gui_util.AutoKeep): every change waits for Apply changes once it has its name and text ----
+    def _ak_key(self):
+        return "special_places"
+
+    def _ak_state(self):
         p = self._values()
-        probs = SP.problems(p)
-        if probs:
-            messagebox.showerror(TITLE, "Before it is kept: " + "; ".join(probs) + ".", parent=self)
+        return (p.title, p.money, p.size, p.model, p.bonus, p.text, self.picture)
+
+    def _ak_set(self, st):
+        title, money, size, model, bonus, text, picture = st
+        self.v_title.set(title)
+        self.v_money.set(str(money or ""))
+        self.v_size.set(size)
+        self.v_model.set(model)
+        for t, v in ((self.t_bonus, bonus), (self.t_text, text)):
+            t.delete("1.0", "end")
+            t.insert("1.0", v)
+        self.picture = picture
+        self.preview()
+
+    def _ak_saw(self, st):
+        """The place itself is the shared list's (places): nothing more to remember."""
+
+    def ak_keep(self):
+        """The place into the mod's list of places and the list into Apply changes' list - once it has what the game
+        needs (a name and a text; said in the window till then)."""
+        self._ak_job = None
+        p = self._values()
+        try:
+            self.preview()                              # the game's window drawn as it is now
+        except Exception:
+            pass
+        if SP.problems(p):
             return
         lst = places(self.app)
         old = next((q for q in lst if q is self.place), None)
@@ -329,11 +375,15 @@ class PlaceWindow(tk.Toplevel):
             p.id = max([q.id for q in lst] + [0]) + 1
         if self.picture:
             _extra(self.app)[0][p.id] = self.picture
-        if keep(self.app, self):
-            self.place = p
-            self.app.status.set("Special place %s kept - Apply changes (bottom left) writes it with the rest." % p.title)
+        self.place = p
+        keep(self.app, self, quiet=True)
+        self.title("%s - %s" % (TITLE, p.title))
+        if hasattr(self.app, "show_map"):
             self.app.show_map()
-            self.destroy()
+
+    def close(self):
+        self.ak_close()
+        self.destroy()
 
     def delete(self):
         from .gui_util import ask
