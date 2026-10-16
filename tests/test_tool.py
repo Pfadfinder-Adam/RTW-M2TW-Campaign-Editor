@@ -8203,6 +8203,86 @@ building smith
         self.assertTrue(page["guide"].endswith("\\faction_logo_x_guides.tga"))
         self.assertEqual(third.find("FACTION_LOGO_X"), {"page": "faction_logo_x.tga", "box": (0, 0, 10, 3)})
 
+    def test_every_sprite_sheet_as_the_game_reads_it(self):
+        """Interface > Sprite sheets: every sheet of the mod's ui folder - the binary .rsd / .sd the plain game reads,
+        the .sd.xml an engine on 'sprite_format xml' reads, a sheet with only one of the two that one; its pages with
+        their sprites; a page found in each culture folder that has it."""
+        from campaign_editor import spritesheet as SS, symbols as SY
+        mod = ModData(self.root)
+        ui = os.path.join(mod.data, "ui")
+        os.makedirs(os.path.join(ui, "roman", "interface"), exist_ok=True)
+        sh = SS.Sheet(5, "T", [{"guide": "g", "file": "p.tga", "flag": 0, "w": 4, "h": 4, "mask": b"\0\0\0"}],
+                      [{"name": "BIN_A", "page": 0, "x0": 1, "x1": 2, "y0": 0, "y1": 3, "flag": 1, "tail": 0}])
+        with open(os.path.join(ui, "strat3.rsd"), "wb") as fh:
+            fh.write(SS.write(sh))
+        xml = '<sprite_definitions version="7">\n  <page file="p.tga" w="4" h="4">\n    <sprite name="XML_A" x="0" ' \
+              'y="1" w="3" h="2" alpha="1"/>\n  </page>\n</sprite_definitions>\n'
+        for name in ("strat3.sd.xml", "radar.sd.xml"):
+            with open(os.path.join(ui, name), "w") as fh:
+                fh.write(xml)
+        with open(os.path.join(ui, "roman", "interface", "p.tga"), "wb") as fh:
+            fh.write(b"x")
+        got = {s["name"]: s for s in SY.all_sheets(mod)}
+        self.assertEqual((got["strat3"]["kind"], got["strat3"]["pages"]), ("binary", [("p.tga", [("BIN_A", (1, 0, 2, 4))])]))
+        self.assertTrue(got["strat3"]["other"].endswith("strat3.sd.xml"))
+        self.assertEqual((got["radar"]["kind"], got["radar"]["other"]), ("text", None))
+        self.assertEqual(got["radar"]["pages"], [("p.tga", [("XML_A", (0, 1, 3, 2))])])
+        with open(os.path.join(mod.data, "descr_caps_ex.txt"), "w") as fh:
+            fh.write("sprite_format xml\n")
+        got = {s["name"]: s for s in SY.all_sheets(mod)}
+        self.assertEqual((got["strat3"]["kind"], got["strat3"]["pages"][0][1]), ("text", [("XML_A", (0, 1, 3, 2))]))
+        self.assertEqual([c for c, _ in SY.page_cultures(mod, "p.tga")], ["roman"])
+        with open(os.path.join(ui, "strat3.rsd"), "wb") as fh:
+            fh.write(b"bad")
+        os.remove(os.path.join(mod.data, "descr_caps_ex.txt"))
+        self.assertIn("cannot be read", {s["name"]: s for s in SY.all_sheets(mod)}["strat3"]["error"])
+
+    def test_sprite_sheets_tab_shows_finds_and_saves(self):
+        """Interface > Sprite sheets (the window): the sheet, its page and culture on show, the sprites listed; Find
+        looks through every sheet and a pick jumps to its page; a sprite saved as a PNG is its box of the page."""
+        try:
+            from PIL import Image
+            import tkinter as tk
+            root = tk.Tk()
+        except Exception as e:                        # no Pillow / tkinter / display
+            self.skipTest("no window: %s" % e)
+        from types import SimpleNamespace
+        from unittest import mock
+        from campaign_editor import gui_sprites
+        mod = ModData(self.root)
+        ui = os.path.join(mod.data, "ui")
+        os.makedirs(os.path.join(ui, "roman", "interface"), exist_ok=True)
+        for sheet, page, sprite in (("shared2", "a.tga", "ONE"), ("strat3", "b.tga", "TWO")):
+            with open(os.path.join(ui, sheet + ".sd.xml"), "w") as fh:
+                fh.write('<sprite_definitions version="7">\n  <page file="%s" w="8" h="8">\n    <sprite name="%s" '
+                         'x="2" y="1" w="3" h="4" alpha="1"/>\n  </page>\n</sprite_definitions>\n' % (page, sprite))
+            im = Image.new("RGBA", (8, 8), (0, 0, 0, 0))
+            im.putpixel((2, 1), (255, 0, 0, 255))
+            im.save(os.path.join(ui, "roman", "interface", page))
+        try:
+            root.withdraw()
+            panel = gui_sprites.SpriteSheetsPanel(root, SimpleNamespace(mod=mod))
+            panel.pack()
+            panel.load()
+            root.update()
+            self.assertEqual((panel.sheet["name"], panel.page, panel.culture), ("shared2", "a.tga", "roman"))
+            self.assertEqual([panel.tv.item(i, "text") for i in panel.tv.get_children()], ["ONE"])
+            panel.v_find.set("tw")
+            rows = panel.tv.get_children()
+            self.assertEqual([panel.tv.item(i, "text") for i in rows], ["TWO"])
+            panel.tv.selection_set(rows[0])
+            panel._tree_picked()
+            self.assertEqual((panel.sheet["name"], panel.page, panel.picked), ("strat3", "b.tga", "TWO"))
+            out = os.path.join(self.root, "two.png")
+            with mock.patch.object(gui_sprites.filedialog, "asksaveasfilename", return_value=out):
+                panel.save_png(True)
+            got = Image.open(out)
+            self.assertEqual(got.size, (3, 4))
+            self.assertEqual(got.getpixel((0, 0)), (255, 0, 0, 255))
+            panel.draw()
+        finally:
+            root.destroy()
+
     def test_logo_of_its_own_on_the_binary_sheets(self):
         """A modder on Discord (Barbarian Invasion, no REX): the faction logos said 'cannot be replaced' - the plain
         game reads the binary sprite sheets. Now a page and a sprite are added to the mod's own copy of the binary

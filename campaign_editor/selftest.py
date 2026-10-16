@@ -2809,6 +2809,7 @@ COVERAGE = {
     "Report a bug / Suggest, Answers to my reports": "sends to the internet - tried by hand",
     "Start the game (the bottom bar)": "starts the game - tried by hand: start CE_Test with it",
     "Credits": LOOK,
+    "Interface: Sprite sheets (every sprite of the sheets the game reads)": LOOK,
     "Delete this mod's folder": "deletes for good - tried by hand on a copy (the unit test checks what it refuses)",
     "Test mod": "this run",
 }
@@ -2846,6 +2847,7 @@ UI = {
     "Mercenaries": "Mercenaries: pools of regions and their units",
     "Rebels": "Rebels: rebel types, their units, the regions that have them",
     "Interface": "Interface: the game's menu screens, their pieces moved, sized, copied",
+    "Sprite sheets": "Interface: Sprite sheets (every sprite of the sheets the game reads)",
     "New religion": "Religions (Medieval II, Barbarian Invasion)", "Religions of a region": "Religions (Medieval II, Barbarian Invasion)",
     "Restore a backup": "Restore a backup", "Game manifest": "Settings, Help, the log, Save logs, Game manifest",
     "Log": "Settings, Help, the log, Save logs, Game manifest",

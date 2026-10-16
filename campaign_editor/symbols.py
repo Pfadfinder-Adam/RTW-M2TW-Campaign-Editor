@@ -723,3 +723,72 @@ def write(plan, faction, which, src):
         raise ValueError("%s: the %s cannot be replaced here - no sprite sheet the editor can add to; "
                          "%s with 'sprite_format xml' in the mod's own descr_caps_ex.txt can take it"
                          % (faction, LABELS[which][0], ENGINE[rome(plan.mod)]))
+
+
+# ---------------------------------------------------------------------------
+# Every sprite sheet of a mod, as the game reads it (Interface > Sprite sheets)
+# ---------------------------------------------------------------------------
+SHEET_ENDS = (".sd.xml", ".rsd", ".sd")
+
+
+def _sheet_files(mod):
+    """{stem: {'binary': path, 'xml': path}} of every sheet in the mod's ui folder, else the game's (the mod's wins)."""
+    out = {}
+    for data in (_game_data(mod), mod.data):          # the game's first: the mod's own copy replaces it
+        ui = _ci(data, "ui") if data else None
+        if not ui or not os.path.isdir(ui):
+            continue
+        for f in os.listdir(ui):
+            low = f.lower()
+            end = next((e for e in SHEET_ENDS if low.endswith(e)), None)
+            if end and os.path.isfile(os.path.join(ui, f)):
+                out.setdefault(low[:-len(end)], {})["xml" if end == ".sd.xml" else "binary"] = os.path.join(ui, f)
+    return out
+
+
+def xml_boxes(text):
+    """[(page file, [(sprite name, (x, y, w, h))])] of a .sd.xml text."""
+    return [(m.group(1), [(s.group(1), tuple(int(v) for v in s.groups()[1:])) for s in RE_SPRITE.finditer(m.group(2))])
+            for m in RE_PAGE.finditer(text)]
+
+
+def all_sheets(mod):
+    """Every sprite sheet of the mod as the game reads it: [{'name' (the sheet's stem), 'path' (the file read),
+    'kind' ('binary' / 'text'), 'other' (its twin the game does not read, or None), 'pages': [(page, [(sprite,
+    (x, y, w, h))])], 'error' (words, when it cannot be read)}], by name. The plain games and an engine on 'sd' read
+    the binary .rsd / .sd; an engine on 'sprite_format xml' the .sd.xml; a sheet with only one of the two: that one."""
+    from . import spritesheet as SS
+    xml_mode = sprite_mode(mod) == "xml"
+    out = []
+    for stem, files in sorted(_sheet_files(mod).items()):
+        use = "xml" if (xml_mode and "xml" in files) or "binary" not in files else "binary"
+        path = files[use]
+        other = files.get("binary" if use == "xml" else "xml")
+        sheet = {"name": stem, "path": path, "kind": "text" if use == "xml" else "binary", "other": other,
+                 "pages": [], "error": None}
+        try:
+            with open(path, "rb") as fh:
+                data = fh.read()
+            sheet["pages"] = xml_boxes(data.decode("latin-1")) if use == "xml" else SS.read(data).boxes()
+        except (OSError, ValueError, struct.error) as e:
+            sheet["error"] = "%s cannot be read: %s" % (os.path.basename(path), e)
+        out.append(sheet)
+    return out
+
+
+def page_cultures(mod, page):
+    """[(culture folder, path)] of every ui/<culture>/interface that has the page (the mod's or the game's), the base
+    skin first; a page lying in ui itself (Medieval II's radarpage_01.tga): [('', path)]."""
+    out = []
+    folders = _page_folders(mod, page)
+    order = skins(mod)
+    folders.sort(key=lambda c: order.index(c.lower()) if c.lower() in order else len(order))
+    for c in folders:
+        p = _find(mod, "ui", c, "interface", page)
+        if p:
+            out.append((c, p))
+    if not out:
+        p = _find(mod, "ui", page)
+        if p:
+            out.append(("", p))
+    return out

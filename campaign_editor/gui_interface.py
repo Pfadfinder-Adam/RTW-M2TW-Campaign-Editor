@@ -73,6 +73,8 @@ class InterfacePanel(ttk.Frame):
         """Another mod loaded: its menus are read; changes not kept for Apply are dropped (said)."""
         lost = 1 if self.doc is not None and self._unwritten() else 0
         self.load()
+        if self.sprites is not None and self.nb.index(self.nb.select()) == 1:
+            self.sprites.load()
         return lost
 
     kind = "Interface"
@@ -103,13 +105,22 @@ class InterfacePanel(ttk.Frame):
 
     # ---- the window ----
     def _build(self):
-        bar = ttk.Frame(self, padding=(10, 4, 10, 10))
+        # two tabs: the menu screens (the .lnt pages) and the sprite sheets the game takes its interface pictures from
+        self.nb = ttk.Notebook(self)
+        self.nb.pack(fill="both", expand=True)
+        screens = ttk.Frame(self.nb)
+        self.nb.add(screens, text="Menu screens")
+        self.sprites = None
+        self._sprite_tab = ttk.Frame(self.nb)
+        self.nb.add(self._sprite_tab, text="Sprite sheets")
+        self.nb.bind("<<NotebookTabChanged>>", lambda e: self._tab_changed())
+        bar = ttk.Frame(screens, padding=(10, 4, 10, 10))
         bar.pack(side="bottom", fill="x")
         self.lbl_status = ttk.Label(bar, foreground=theme.palette()["muted"])
         self.lbl_status.pack(side="left", fill="x", expand=True)
         ttk.Button(bar, text="Keep for Apply", command=self.write).pack(side="right", padx=(0, theme.BUTTON_GAP))
         ttk.Button(bar, text="Preview", command=self.preview).pack(side="right", padx=(0, theme.BUTTON_GAP))
-        top = ttk.Frame(self, padding=(10, 8, 10, 0))
+        top = ttk.Frame(screens, padding=(10, 8, 10, 0))
         top.pack(fill="x")
         self.lbl_title = ttk.Label(top, font=("", 12, "bold"))
         self.lbl_title.pack(anchor="w")
@@ -120,7 +131,7 @@ class InterfacePanel(ttk.Frame):
             "their numbers (more faction buttons: copy the last one). Pieces with no picture of their own (empty_...) "
             "are drawn by the game itself; here they show as frames with their words. Nothing is written before "
             "Keep for Apply, then Apply changes (a backup first).")).pack(fill="x")
-        body = ttk.Panedwindow(self, orient="horizontal")
+        body = ttk.Panedwindow(screens, orient="horizontal")
         body.pack(fill="both", expand=True, padx=10, pady=6)
         # left: the pages and the pieces of the page on show
         left = ttk.Frame(body)
@@ -182,6 +193,16 @@ class InterfacePanel(ttk.Frame):
         self.lbl_info.pack(fill="x", pady=(2, 0))
         c.bind("<Button-3>", self._menu)
         self.tv.bind("<Button-3>", self._tree_menu)
+
+    def _tab_changed(self):
+        """Sprite sheets read when their tab is first opened (and again for another mod)."""
+        if self.nb.index(self.nb.select()) != 1:
+            return
+        if self.sprites is None:
+            from .gui_sprites import SpriteSheetsPanel
+            self.sprites = SpriteSheetsPanel(self._sprite_tab, self.app)
+            self.sprites.pack(fill="both", expand=True)
+        self.sprites.load()
 
     # ---- pages and pieces ----
     def fill_pages(self):
