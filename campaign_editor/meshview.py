@@ -1067,8 +1067,19 @@ def frame_of(mesh, groups):
     return c, max(math.sqrt(sum((P[i][k] - c[k]) ** 2 for k in range(3))) for i in used) or 1.0
 
 
+def gpu_ok():
+    """True when View in 3D can be drawn by the graphics card (NumPy and OpenGL 3.3 there)."""
+    if _fast is None:
+        return False
+    try:
+        from . import glmesh
+        return glmesh.available()
+    except ImportError:
+        return False
+
+
 def render(mesh, size=(360, 440), yaw=35.0, pitch=8.0, zoom=1.0, texture=None, attach=None, groups=None,
-           quality=2, background=BACK, textured=True, more=None, fit=None, frame=None, pan=(0.0, 0.0)):
+           quality=2, background=BACK, textured=True, more=None, fit=None, frame=None, pan=(0.0, 0.0), gpu=False):
     """The mesh drawn as a Pillow picture, turned by yaw (round the up axis) and pitch (degrees) and lit from the
     upper left. textured: the pictures laid on every triangle (a still picture); else one colour per triangle
     (quick, for turning it with the mouse). texture = the man's picture, attach = weapons and shields; a part
@@ -1076,15 +1087,25 @@ def render(mesh, size=(360, 440), yaw=35.0, pitch=8.0, zoom=1.0, texture=None, a
     space is left-handed, so x is mirrored to show the man as he stands in the game. fit: the groups the view is
     sized and centred on (default the ones drawn) - two drawings of other parts then lie on each other; frame:
     (middle, radius) given (frame_of) - the view stays put while the model moves; pan: (x, y) the picture shifted, in
-    pixels of size (the right mouse button's drag)."""
+    pixels of size (the right mouse button's drag). gpu: drawn by the graphics card when it gives OpenGL 3.3
+    (glmesh - the View in 3D window; the same picture as the NumPy drawing, filled faster), else as before."""
     from PIL import Image, ImageChops, ImageDraw
     groups = groups if groups is not None else mesh.shown()
     W, H = size[0] * quality, size[1] * quality
     if _fast is not None and not getattr(mesh, "pure", False):
         pics = {0: texture, 1: attach}
         pics.update(more or {})
-        arr = _fast.draw(mesh, groups, fit, W, H, yaw, pitch, zoom, pics, textured, background, LIGHT, PLAIN,
-                         frame, (pan[0] * quality, pan[1] * quality))
+        arr = None
+        if gpu and gpu_ok():
+            try:
+                from . import glmesh
+                arr = glmesh.draw(mesh, groups, fit, W, H, yaw, pitch, zoom, pics, textured, background, LIGHT,
+                                  PLAIN, frame, (pan[0] * quality, pan[1] * quality))
+            except Exception:                   # the card failed: the NumPy drawing, never a crash
+                arr = None
+        if arr is None:
+            arr = _fast.draw(mesh, groups, fit, W, H, yaw, pitch, zoom, pics, textured, background, LIGHT, PLAIN,
+                             frame, (pan[0] * quality, pan[1] * quality))
         img = Image.fromarray(arr, "RGB")
         return img.reduce(quality) if quality > 1 else img      # each 2 x 2 averaged: the smooth edges
     img = Image.new("RGB", (W, H), background)

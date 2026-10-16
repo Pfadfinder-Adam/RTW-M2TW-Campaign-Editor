@@ -695,8 +695,8 @@ class ModelViewer(tk.Toplevel):
             # a siege engine: on the engine and its crew as they stand (its moves hide the shot far under it)
             self._frame = MV.frame_of(mesh, groups) if not self.engine else self._engine_frame()
         img = MV.render(mesh, self.view_size, self.yaw, self.pitch, self.zoom, tex, att, groups,
-                        quality=1 if quick else 2, more=more, frame=self._frame, pan=self.pan,
-                        textured=not quick or (quick == "play" and MV._fast is not None))   # NumPy: whole texture
+                        quality=1 if quick else 2, more=more, frame=self._frame, pan=self.pan, gpu=True,
+                        textured=not quick or (quick == "play" and MV._fast is not None) or MV.gpu_ok())
         if quick == "play" and self._photo is not None and getattr(self, "_shown", None) is not None and \
                 (self._photo.width(), self._photo.height()) == img.size:
             self._photo.paste(img)                  # the play: the same picture filled again (quicker than a new one)

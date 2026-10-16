@@ -147,21 +147,13 @@ def _make_triangles(mesh, groups):
     return np.concatenate(tris), np.concatenate(pic), np.concatenate(one)
 
 
-def draw(mesh, groups, fit, W, H, yaw, pitch, zoom, pics, textured, background, light, plain, frame=None,
-         pan=(0.0, 0.0)):
-    """The model drawn as an (H, W, 3) uint8 array; pics {picture number: PIL picture or None} (0 / 1 the man's
-    texture and attachment, 2 / 3 a mount's ...). textured False: one colour per triangle (its texture's colour at
-    the middle and the corners, as the quick look always was).
-
-    Pillow fills the front-facing triangles far to near with their numbers (a 'which triangle is seen here' map,
-    each outlined so no seams show - as the old drawing); then every seen pixel at once: its place inside its
-    triangle, the texture's colour there, the triangle's light."""
-    from PIL import Image, ImageDraw
+def screen(mesh, groups, fit, W, H, yaw, pitch, zoom, light, frame=None, pan=(0.0, 0.0)):
+    """The drawn parts on the picture - the one place both drawings (here and glmesh, on the graphics card) take
+    them from: (corners (m, 3), picture of each, one-texture flag of each, x, y on the picture and depth of every
+    point (bigger nearer), each triangle's light, the front-facing triangles far to near) or None."""
     tri = _triangles(mesh, groups)
-    out = np.empty((H, W, 3), dtype=np.uint8)
-    out[:] = background
     if tri is None:
-        return out
+        return None
     T, base, one = tri
     P = mesh.arr
     used = np.unique(T)
@@ -192,9 +184,58 @@ def draw(mesh, groups, fit, W, H, yaw, pitch, zoom, pics, textured, background, 
     L = L / np.sqrt((L * L).sum())
     shade = 0.32 + 0.68 * np.maximum(0.0, (nx * L[0] + ny * L[1] + nz * L[2]) / nl)
     keep = np.nonzero(nz > 0)[0]                         # facing away: not drawn (the game does not either)
+    keep = keep[np.argsort(sz[A[keep]] + sz[B[keep]] + sz[C[keep]], kind="stable")]     # far first
+    return T, base, one, sx, sy_, sz, shade, keep
+
+
+def tex_coords(mesh, T, base, one):
+    """(u, v of each triangle's corners (m, 3) each, picture of each) - two textures side by side unless the group
+    has one - or None without u v."""
+    uvs = _uv(mesh.uvs)
+    if uvs is None:
+        return None
+    U = uvs[T][:, :, 0]
+    V = uvs[T][:, :, 1]
+    half = np.where(one, 0, (U.mean(axis=1) >= 0.5).astype(np.int64))
+    U = np.where(one[:, None], U, U * 2 - half[:, None])
+    return U, V, base + half
+
+
+def flat_colours(arrays, U, V, pic, plain, count):
+    """One colour per triangle (its texture's colour at the middle and toward the corners) - the quick look."""
+    colour = np.empty((count, 3), dtype=np.float64)
+    colour[:] = plain
+    for k, arr in arrays.items():
+        sel = np.nonzero(pic == k)[0]
+        if arr is None or not len(sel):
+            continue
+        mu, mv = U[sel].mean(axis=1), V[sel].mean(axis=1)
+        acc = _sample(arr, mu, mv).astype(np.float64)
+        for j in range(3):
+            acc += _sample(arr, (mu * 2 + U[sel, j]) / 3, (mv * 2 + V[sel, j]) / 3)
+        colour[sel] = acc / 4
+    return colour
+
+
+def draw(mesh, groups, fit, W, H, yaw, pitch, zoom, pics, textured, background, light, plain, frame=None,
+         pan=(0.0, 0.0)):
+    """The model drawn as an (H, W, 3) uint8 array; pics {picture number: PIL picture or None} (0 / 1 the man's
+    texture and attachment, 2 / 3 a mount's ...). textured False: one colour per triangle (its texture's colour at
+    the middle and the corners, as the quick look always was). glmesh.draw does the same on the graphics card.
+
+    Pillow fills the front-facing triangles far to near with their numbers (a 'which triangle is seen here' map,
+    each outlined so no seams show - as the old drawing); then every seen pixel at once: its place inside its
+    triangle, the texture's colour there, the triangle's light."""
+    from PIL import Image, ImageDraw
+    out = np.empty((H, W, 3), dtype=np.uint8)
+    out[:] = background
+    got = screen(mesh, groups, fit, W, H, yaw, pitch, zoom, light, frame, pan)
+    if got is None:
+        return out
+    T, base, one, sx, sy_, sz, shade, keep = got
     if not len(keep):
         return out
-    keep = keep[np.argsort(sz[A[keep]] + sz[B[keep]] + sz[C[keep]], kind="stable")]     # far first
+    A, B, C = T[:, 0], T[:, 1], T[:, 2]
     X = np.stack([sx[A], sx[B], sx[C]], axis=1)
     Y = np.stack([sy_[A], sy_[B], sy_[C]], axis=1)
 
@@ -211,23 +252,18 @@ def draw(mesh, groups, fit, W, H, yaw, pitch, zoom, pics, textured, background, 
     if not len(px):
         return out
     t = ids[py, px] - 1
-    # which picture and u v: two textures side by side unless the group has one
-    uvs = _uv(mesh.uvs)
     arrays = {k: (_pic(im) if im is not None else None) for k, im in pics.items()}
     cuts = {k: (_see_through(im) if im is not None else None) for k, im in pics.items()}
-    if uvs is not None:
-        U = uvs[T][:, :, 0]
-        V = uvs[T][:, :, 1]
-        half = np.where(one, 0, (U.mean(axis=1) >= 0.5).astype(np.int64))
-        U = np.where(one[:, None], U, U * 2 - half[:, None])
-        pic = base + half
+    tc = tex_coords(mesh, T, base, one)
+    if tc is not None:
+        U, V, pic = tc
 
     def colours(py, px, t):
         """(colour of each pixel, which of them are cut out of their texture or None)."""
         col = np.empty((len(t), 3), dtype=np.float64)
         col[:] = plain
         cut = None
-        if uvs is None:
+        if tc is None:
             return col, cut
         if textured:
             # the pixel's place inside its triangle (its three weights), held inside it at the outlined edges
@@ -255,18 +291,7 @@ def draw(mesh, groups, fit, W, H, yaw, pitch, zoom, pics, textured, background, 
                             cut = np.zeros(len(t), dtype=bool)
                         cut[s_] = _sample(cuts[k], u[s_], v[s_]) < CUT
         else:                                            # one colour per triangle
-            colour = np.empty((len(T), 3), dtype=np.float64)
-            colour[:] = plain
-            for k, arr in arrays.items():
-                sel = np.nonzero(pic == k)[0]
-                if arr is None or not len(sel):
-                    continue
-                mu, mv = U[sel].mean(axis=1), V[sel].mean(axis=1)
-                acc = _sample(arr, mu, mv).astype(np.float64)
-                for j in range(3):
-                    acc += _sample(arr, (mu * 2 + U[sel, j]) / 3, (mv * 2 + V[sel, j]) / 3)
-                colour[sel] = acc / 4
-            col = colour[t]
+            col = flat_colours(arrays, U, V, pic, plain, len(T))[t]
         return col, cut
     col, cut = colours(py, px, t)
     out[py, px] = np.clip(col * shade[t][:, None], 0, 255).astype(np.uint8)

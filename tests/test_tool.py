@@ -12452,6 +12452,13 @@ building smith
         near = sum(1 for x, y in zip(a, b) if max(abs(x[k] - y[k]) for k in range(3)) <= 40)
         self.assertGreater(near / len(a), 0.95)                       # the same picture, edges aside
         self.assertNotEqual(len(set(a)), 1)                             # something was drawn
+        # the graphics card (View in 3D, glmesh): the same picture as the NumPy drawing, where there is OpenGL
+        pure.pure = False
+        if MV.gpu_ok():
+            gpu = MV.render(pure, (60, 80), 30, 10, 1.0, tex, None, pure.groups, quality=1, gpu=True)
+            c = list(zip(*[iter(gpu.tobytes())] * 3))
+            near = sum(1 for x, y in zip(b, c) if max(abs(x[k] - y[k]) for k in range(3)) <= 40)
+            self.assertGreater(near / len(b), 0.95)
 
     def test_a_horse_is_posed_on_its_own_bones(self):
         """A Medieval II horse (fs_horse: 23 bones - saddle, spine, neck, head, four legs, tail) is posed on its own
