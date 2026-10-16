@@ -180,6 +180,7 @@ class AddonsPanel(SettingsForm, ttk.Frame):
 
     def fill(self, pick=None):
         self.addons = AD.library()
+        self.rows = AD.rows(self.addons)              # one row per add-on, one per family of per-game parts
         self.lb.delete(0, "end")
         old = set()
         if getattr(self, "mod", None) is not None:
@@ -187,15 +188,16 @@ class AddonsPanel(SettingsForm, ttk.Frame):
                 old = {o["addon"].key for o in AD.outdated(self.mod)}
             except Exception:
                 old = set()
-        for a in self.addons:
+        for title, parts in self.rows:
             # '(old)': an older version is in the game - the page says what Update it does (a longer word was cut
             # at the list's edge)
-            self.lb.insert("end", a.title + ("   (added)" if a.own else "") + (" (old)" if a.key in old else ""))
+            self.lb.insert("end", title + ("   (added)" if parts[0].own else "") +
+                           (" (old)" if any(a.key in old for a in parts) else ""))
         # as wide as its longest name - 'One Recruitment Grid (Medieva' was cut at the edge (#310)
         self.lb.configure(width=max([28] + [len(self.lb.get(i)) + 2 for i in range(self.lb.size())]))
-        keys = [a.key for a in self.addons]
+        at = next((i for i, (_, parts) in enumerate(self.rows) if any(a.key == pick for a in parts)), None)
         self.lb.selection_clear(0, "end")
-        self.lb.selection_set(keys.index(pick) if pick in keys else self._first_fitting())
+        self.lb.selection_set(at if at is not None else self._first_fitting())
 
     def _first_fitting(self):
         """The first add-on made for the loaded mod's game (Sack for Rome, Raze for Medieval II)."""
@@ -203,16 +205,16 @@ class AddonsPanel(SettingsForm, ttk.Frame):
             return 0
         from .limits import game_kind
         game = game_kind(self.mod)
-        return next((i for i, a in enumerate(self.addons) if a.fits(game)), 0)
+        return next((i for i, (_, parts) in enumerate(self.rows) if any(a.fits(game) for a in parts)), 0)
 
     # ---- what the window asks of a work ----
     def rebind(self, mod):
         self.mod = mod
         sel = self.lb.curselection()
-        self.fill(self.addons[sel[0]].key if sel else None)     # the list says again which ones are older
+        self.fill(self.rows[sel[0]][1][0].key if sel else None)     # the list says again which ones are older
         sel = self.lb.curselection()
-        if mod is not None and (not sel or not self.addons[sel[0]].fits(__import__(
-                "campaign_editor.limits", fromlist=["game_kind"]).game_kind(mod))):
+        game = __import__("campaign_editor.limits", fromlist=["game_kind"]).game_kind(mod) if mod else None
+        if mod is not None and (not sel or not any(a.fits(game) for a in self.rows[sel[0]][1])):
             self.lb.selection_clear(0, "end")
             self.lb.selection_set(self._first_fitting())
         self.show()
@@ -228,9 +230,28 @@ class AddonsPanel(SettingsForm, ttk.Frame):
         raise ValueError("Add-ons write on their own: use Preview / Put it in on the Add-ons page.")
 
     # ---- the page ----
-    def addon(self):
+    def parts(self):
+        """The parts of the row picked that fit the loaded game (all of them without a mod)."""
         sel = self.lb.curselection()
-        return self.addons[sel[0] if sel else 0]
+        parts = self.rows[sel[0] if sel else 0][1]
+        if getattr(self, "mod", None) is None:
+            return parts
+        from .limits import game_kind
+        game = game_kind(self.mod)
+        return [a for a in parts if a.fits(game)] or parts
+
+    def addon(self):
+        """The add-on shown: the row's part for the loaded game (Sack Settlement: Rome's or Medieval II's); where two
+        parts fit one game, the one picked on the page."""
+        parts = self.parts()
+        want = (getattr(self, "_part", None) or {}).get(parts[0].key)
+        return next((a for a in parts if a.key == want), parts[0])
+
+    def _pick_part(self, first, key):
+        if not hasattr(self, "_part"):
+            self._part = {}
+        self._part[first] = key
+        self.show()
 
     def add(self):
         from tkinter import filedialog
@@ -305,7 +326,20 @@ class AddonsPanel(SettingsForm, ttk.Frame):
         for w in inner.winfo_children():
             w.destroy()
         a = self.addon()
-        ttk.Label(inner, text=a.title, font=("", 12, "bold")).grid(row=0, column=0, columnspan=3, sticky="w")
+        sel = self.lb.curselection()
+        title = self.rows[sel[0]][0] if sel else a.title
+        parts = self.parts()
+        head = ttk.Frame(inner)
+        head.grid(row=0, column=0, columnspan=3, sticky="w")
+        ttk.Label(head, text=title, font=("", 12, "bold")).pack(side="left")
+        if a.title != title:                          # the part for this game, said in small words
+            ttk.Label(head, text="  " + a.title, foreground="#555").pack(side="left")
+        if len(parts) > 1:                            # two parts fit this game: which one this page puts in
+            v = tk.StringVar(value=a.key)
+            for p in parts:
+                ttk.Radiobutton(head, text=AD.PART_WORDS.get(p.key, p.title), value=p.key, variable=v,
+                                command=lambda k=p.key: self._pick_part(parts[0].key, k)).pack(side="left",
+                                                                                              padx=(12, 0))
         ttk.Label(inner, text=a.summary, wraplength=760, justify="left").grid(
             row=1, column=0, columnspan=3, sticky="w", pady=(2, 4))
         ttk.Label(inner, text="Needs: " + a.needs, foreground="#555", wraplength=760, justify="left").grid(

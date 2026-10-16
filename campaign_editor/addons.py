@@ -228,6 +228,30 @@ ADDONS = [
 ]
 
 
+# add-ons made one per game shown as ONE row, the part for the loaded game put in (the user, 2026-10-16, #310: 'one
+# module that knows the game and puts in only the part that game needs - one name, as Sack Settlement')
+FAMILIES = {"sack_settlement": "Sack Settlement", "raze_settlement": "Sack Settlement",
+            "recruit_order": "Recruitment Order", "one_recruit_grid": "Recruitment Order"}
+# what each part is called on its family's page when two parts fit one game
+PART_WORDS = {"recruit_order": "the order of the cards (REX / M2EX)",
+              "one_recruit_grid": "one grid as in Rome (no engine needed)"}
+
+
+def rows(addons):
+    """[(title, [addon, ...])]: the add-ons of one family in one row (first place kept), the others alone."""
+    out, at = [], {}
+    for a in addons:
+        fam = FAMILIES.get(a.key)
+        if fam is None:
+            out.append((a.title, [a]))
+        elif fam in at:
+            out[at[fam]][1].append(a)
+        else:
+            at[fam] = len(out)
+            out.append((fam, [a]))
+    return out
+
+
 def by_key(key):
     return next(a for a in library() if a.key == key)
 

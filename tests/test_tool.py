@@ -915,6 +915,18 @@ building smith
         self.assertFalse(_token_hit("symbol48_white_alpha_grey.tga", "alpha", longer))
         self.assertTrue(_token_hit("symbol48_alpha_grey.tga", "alpha", longer))
 
+    def test_add_ons_made_per_game_are_one_row(self):
+        """Report #310: Recruitment Order and One Recruitment Grid repeated each other, Sack Settlement stood twice
+        (Rome / Medieval II) - one row each; the row puts in the part that fits the loaded game."""
+        from campaign_editor import addons as AD
+        rows = dict(AD.rows(AD.ADDONS))
+        self.assertEqual([a.key for a in rows["Sack Settlement"]], ["sack_settlement", "raze_settlement"])
+        self.assertEqual([a.key for a in rows["Recruitment Order"]], ["recruit_order", "one_recruit_grid"])
+        titles = [t for t, _ in AD.rows(AD.ADDONS)]
+        self.assertEqual(len(titles), len(set(titles)))
+        self.assertEqual([a.key for a in rows["Sack Settlement"] if a.fits("rome")], ["sack_settlement"])
+        self.assertEqual([a.key for a in rows["Sack Settlement"] if a.fits("medieval2")], ["raze_settlement"])
+
     def test_last_town_given_away_its_general_steps_out(self):
         """Report #306: giving a faction's last town away with its general inside was refused ('has no other town to
         go to' - give it another town first, Apply, then again). He steps out onto a free tile beside the town, as

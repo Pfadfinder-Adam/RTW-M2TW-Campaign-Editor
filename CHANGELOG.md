@@ -157,6 +157,7 @@
   its own where others wear the same file. Keep for Apply, written with Apply (one backup).
 
 ### Changed
+- Add-ons: Sack Settlement and Recruitment Order are one row each - the row puts in the part for the loaded game (Rome's or Medieval II's); on Medieval II, Recruitment Order offers its two parts (the order of the cards, or one grid as in Rome with no engine).
 - Models tab: a figure's 3D button stands with its picture's other buttons (Recolour, Replace, Save a copy), not beside its name.
 - Special place: 'My own .cas file...' is a button beside View in 3D, no longer a line at the end of the models list.
 - No Keep for Apply anywhere: Campaign script, Campaign rules, Traits and retinue, Events, Mercenaries, Rebels, a character's window, Special places and Recolour wait for Apply changes by themselves; Many towns at once does its change with 'Do it for the chosen towns' (Undo takes it back); Map size with 'Set this size'. The banner, emblem and Terrain windows lost their own Undo buttons - the bottom Undo / Redo and Ctrl+Z / Ctrl+Y act on them.
