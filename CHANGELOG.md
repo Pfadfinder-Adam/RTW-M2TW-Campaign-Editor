@@ -11,6 +11,7 @@
 - **Changed**: a slimmer Unit editor and Models tab; the support buttons in one drop-down.
 
 ### Added
+- Check mod files (both games): a file the banners, standards or projectile files name that is not there, or a whole path on one PC (C:\...); an event without its words in historic_events.txt as a note (its scroll shows empty).
 - Check mod files (Medieval II): a name in battle_models.modeldb whose number before it is not its length (a space too many by hand) - the game reads everything after it wrong; two models of one name as a note.
 - Check mod files: a texture named inside a campaign-map model (resources, settlements, faction symbols, campaign-map figures without a texture line) that is not there - both games stop as the campaign loads with "Failed to find texture".
 - Faction emblem on Medieval II: the battle banner sheet comes along - a white template of the mod's own banner sheets dyed in the faction's colours, the symbol on every banner shape of its units; Banner... under it to change them.

@@ -474,6 +474,12 @@ def check_mod(mod, campaign, deep=False, progress=None, found=None):
         why = EV.place_problem(mod, campaign, ev["kind"], ev.get("position"))
         if why:
             bad("descr_events.txt, event %s: %s" % (ev["name"], why))
+    gaps = EV.text_gaps(mod, campaign)
+    if gaps:
+        say("    note: %d event(s) without their words in historic_events.txt - the game shows their scroll empty "
+            "('Couldn't find title / description string'), no crash: %s; Events writes them" % (
+                len(gaps), "; ".join("%s (%s: no %s)" % (n, w, " / ".join(k.rsplit("_", 1)[1] for k in lack))
+                                     for n, w, lack in gaps[:5]) + (" ..." if len(gaps) > 5 else "")))
     from .diplomacy import foreign_lines
     foreign = foreign_lines(s)
     if foreign:
@@ -509,6 +515,8 @@ def check_mod(mod, campaign, deep=False, progress=None, found=None):
     except OSError:
         models, lost = {}, []
     for p in lost:
+        bad(p)
+    for p in castex.path_problems(mod):
         bad(p)
     if models:
         say("MODEL TEXTURES: %d campaign-map model(s) that take their texture from the model - %s" % (

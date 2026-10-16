@@ -3361,6 +3361,44 @@ building smith
         self.assertEqual(castex.problems(mod), [])
         self.assertIn("MODEL TEXTURES:", check_mod(mod, "test"))
 
+    def test_events_without_their_words(self):
+        """Check mod files: an event (descr_events.txt, or historic_event in the campaign script) whose {NAME_TITLE} /
+        {NAME_BODY} are not in historic_events.txt - a note, not a fault: the game logs 'Couldn't find title /
+        description string' and shows the scroll empty (our tester's runs, both games); an emergent faction's words
+        are elsewhere and not asked for. Every vanilla event has both."""
+        from campaign_editor import events as EV
+        from campaign_editor.check import check_mod
+        mod = ModData(self.root)
+        camp = os.path.dirname(mod.in_campaign("test", "descr_strat.txt"))
+        write(os.path.join(camp, "descr_events.txt"), "event historic my_event\ndate 3 summer\n\n"
+                                                       "event emergent_faction slavs\ndate 5\n")
+        write(os.path.join(camp, "campaign_script.txt"), "script\n    historic_event other_event\nend_script\n")
+        text = os.path.join(mod.data, "text")
+        os.makedirs(text, exist_ok=True)
+        with open(os.path.join(text, "historic_events.txt"), "w", encoding="utf-16") as fh:
+            fh.write("\u00ac comment\n{MY_EVENT_TITLE}A title\n")
+        got = EV.text_gaps(mod, "test")
+        self.assertEqual(got, [("my_event", "descr_events.txt", ["MY_EVENT_BODY"]),
+                               ("other_event", "campaign_script.txt", ["OTHER_EVENT_TITLE", "OTHER_EVENT_BODY"])])
+        report = check_mod(mod, "test")
+        self.assertIn("note: 2 event(s) without their words", report)
+        self.assertIn("my_event (descr_events.txt: no BODY)", report)
+
+    def test_files_named_in_banners_standards_projectiles(self):
+        """Check mod files: a file the banners / standards / projectile files name that is not there, and a whole path
+        on one PC (a drive letter) - found only there; a file found as .tga.dds counts. Vanilla: every path found."""
+        from campaign_editor import castex
+        mod = ModData(self.root)
+        write(os.path.join(mod.data, "banners", "strat_flag.tga.dds"), "x")
+        write(os.path.join(mod.data, "descr_standards.txt"),
+              "file_army_banner data/banners/strat_flag.tga\n"
+              "file_navy_banner data/banners/navy_banner.cas\n"
+              "faction_texture C:\\Users\\me\\mod\\data\\banners\\julii.tga\n")
+        got = castex.path_problems(mod)
+        self.assertEqual(len(got), 2, got)
+        self.assertIn("descr_standards.txt line 2: 'data/banners/navy_banner.cas' is not there", got[0])
+        self.assertIn("line 3: 'C:\\Users\\me\\mod\\data\\banners\\julii.tga' is a whole path on one PC", got[1])
+
     def test_menu_problems_in_check_mod(self):
         """Check mod files looks at the menus too (the Interface work's file): a button leading to a page there is
         not, a piece showing a picture no region has, Rome's picture file not found; the pages the games make in

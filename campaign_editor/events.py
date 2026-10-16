@@ -367,3 +367,33 @@ def _comment(text):
 def _rome(mod):
     from .limits import game_kind
     return game_kind(mod) != "medieval2"
+
+
+def text_gaps(mod, campaign):
+    """[(name, where, missing keys)] of the events whose texts players see are not in historic_events.txt: every
+    descr_events.txt event but an emergent faction (its words are THE_<faction>_EMERGE_...) and every historic_event
+    of the campaign script. Not a crash - the game logs 'Couldn't find title / description string for historic event'
+    and shows the scroll without its words (our tester's runs in both games, 2026-10-05); every vanilla event has
+    both texts."""
+    from .strtables import strings
+    table = strings(mod, "historic_events.txt")
+    names = []
+    p = path_of(mod, campaign)
+    if p:
+        names += [(e["name"], "descr_events.txt") for e in read(mod.load(p))
+                  if e["name"] and e["kind"] != "emergent_faction"]
+    sc = mod.in_campaign(campaign, "campaign_script.txt")
+    if sc and os.path.exists(sc):
+        for line in mod.load(sc).texts():
+            t = tokens(strip_comment(line))
+            if t[:1] == ["historic_event"] and len(t) > 1:
+                names.append((t[1], "campaign_script.txt"))
+    out, seen = [], set()
+    for name, where in names:
+        if name.lower() in seen:
+            continue
+        seen.add(name.lower())
+        lack = [k for k in ("%s_TITLE" % name.upper(), "%s_BODY" % name.upper()) if k not in table]
+        if lack:
+            out.append((name, where, lack))
+    return out
