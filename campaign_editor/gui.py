@@ -958,8 +958,10 @@ class App(tk.Tk):
         self.b_preview.pack(side="left", padx=(0, theme.BUTTON_GAP))
         self.b_create = ttk.Button(bar, text="Create faction", command=self.create)
         self.b_create.pack(side="left", padx=(0, theme.BUTTON_GAP))
-        ttk.Button(bar, text="Undo", command=self.undo).pack(side="left", padx=(0, theme.BUTTON_GAP))
-        ttk.Button(bar, text="Redo", command=self.redo).pack(side="left", padx=(0, theme.BUTTON_GAP))
+        self.b_undo = ttk.Button(bar, text="Undo", command=self.undo, takefocus=0)
+        self.b_undo.pack(side="left", padx=(0, theme.BUTTON_GAP))
+        self.b_redo = ttk.Button(bar, text="Redo", command=self.redo, takefocus=0)
+        self.b_redo.pack(side="left", padx=(0, theme.BUTTON_GAP))
         # the right side, packed from the right edge: the money places in ONE drop-down like Tools (the user,
         # 2026-10-14, report #262: 'Support me on...' over the places, each in its own colour), then each link in its
         # own colour (Discord's blue, YouTube's red, GitHub's grey - white words in either look)
@@ -2043,11 +2045,30 @@ class App(tk.Tk):
                         "its old value." % self.WORK_TITLES.get(self.v_work.get(), "editor"))
         return True
 
+    def _went_to(self, e):
+        """The window worked in last (the user, 2026-10-16: Undo / Redo act on the window active now): a click on
+        the bottom Undo / Redo themselves does not count."""
+        w = e.widget
+        try:
+            if w in (getattr(self, "b_undo", None), getattr(self, "b_redo", None)) or not hasattr(w, "winfo_toplevel"):
+                return
+            self._active_top = w.winfo_toplevel()
+        except (tk.TclError, AttributeError):
+            pass
+
     def _in_window(self, redo=False):
-        """Ctrl+Z / Ctrl+Y in a window of its own (the banner, the emblem...): its own Undo / Redo button's step;
-        a window without one is never undone from the main window unseen."""
-        w = self.focus_get()
-        top = w.winfo_toplevel() if w is not None else None
+        """Ctrl+Z / Ctrl+Y or the bottom Undo / Redo: the window worked in last (the town, the banner, the
+        emblem...) takes its own step; a window without steps of its own is never undone from the main window
+        unseen."""
+        top = getattr(self, "_active_top", None)
+        try:
+            if top is not None and not top.winfo_exists():
+                top = None
+        except tk.TclError:
+            top = None
+        if top is None:
+            w = self.focus_get()
+            top = w.winfo_toplevel() if w is not None else None
         if top is None or top is self:
             return False
         step = getattr(top, "_redo" if redo else "_undo", None)
@@ -2099,6 +2120,8 @@ class App(tk.Tk):
     def _keys(self):
         from .gui_util import keep_on_screen          # every window: resizable, never bigger than the screen
         self.bind_class("Toplevel", "<Map>", lambda e: keep_on_screen(e.widget), add="+")
+        self.bind_all("<FocusIn>", self._went_to, add="+")
+        self.bind_all("<ButtonPress>", self._went_to, add="+")
         self.bind_all("<Control-z>", self.undo)
         self.bind_all("<Control-Z>", self.redo)                  # Ctrl+Shift+Z
         self.bind_all("<Control-y>", self.redo)
@@ -6191,7 +6214,7 @@ class App(tk.Tk):
             parts = self._session = {}
         return {k: v for k, v in parts.items() if v["mod"] == here}
 
-    def session_add(self, key, label, plan, after=None, build=None):
+    def session_add(self, key, label, plan, after=None, build=None, quiet=False, problem=None):
         """A window's changes (its plan, made on the files as they are now) go into the session's list; kept again
         they replace the first. At the write each is laid over the files as the parts before it left them
         (plan.rebased: line by line; the same lines changed twice are refused in words). after(bdir) once written.
@@ -6200,9 +6223,12 @@ class App(tk.Tk):
         from .plan import keep
         self.session_parts()
         self._session[key] = {"label": label, "plan": keep(plan) if plan is not None else None, "after": after,
-                              "build": build, "mod": os.path.normcase(os.path.abspath(self.mod.data))}
+                              "build": build, "problem": problem,
+                              "mod": os.path.normcase(os.path.abspath(self.mod.data))}
         self._mark_work()
         self.update_actions()
+        if quiet:                                    # a window keeping its changes by itself, at every change
+            return
         n = len(self.pending_parts())
         self.status.set("%s - kept. %d change(s) wait for the write: Apply changes (bottom left) writes them all, "
                         "Preview changes shows them." % (label, n))
@@ -6218,6 +6244,27 @@ class App(tk.Tk):
             view._cache[path] = f
         return view
 
+    def session_throw(self, key):
+        """The modder throws a window's kept changes away (Apply changes' list, right click - the opposite of the
+        changes kept by themselves): out of the list, and the window, when open, shows the files again."""
+        self.session_drop(key)
+        w = (getattr(self, "_ak_windows", None) or {}).pop(key, None)
+        try:
+            if w is not None and w.winfo_exists() and hasattr(w, "ak_dropped"):
+                w.ak_dropped()
+        except tk.TclError:
+            pass
+        self.status.set("Thrown away - not written.")
+
+    def ak_flush(self):
+        """Every window keeping its changes by itself keeps what still waits (before Apply, before closing)."""
+        for w in list((getattr(self, "_ak_windows", None) or {}).values()):
+            try:
+                if w.winfo_exists():
+                    w.ak_close()
+            except tk.TclError:
+                pass
+
     def session_kept(self, key):
         return key in self.session_parts()
 
@@ -6228,6 +6275,8 @@ class App(tk.Tk):
 
     def _part_plan(self, key):
         part = (getattr(self, "_session", None) or {}).get(key)
+        if part is not None and part.get("problem"):        # a window's change the plan refused: said, not written
+            raise ValueError(part["problem"])
         if part is not None and part.get("build"):
             return part["build"]()
         if part is not None:
@@ -6444,6 +6493,7 @@ class App(tk.Tk):
         t.focus_set()
 
     def preview(self):
+        self.ak_flush()
         parts = self.pending_parts()
         if len(parts) <= 1:
             try:
@@ -6468,6 +6518,7 @@ class App(tk.Tk):
         self.show_text("Preview - nothing written yet", text)
 
     def create(self):
+        self.ak_flush()
         parts = self.pending_parts()
         if len(parts) <= 1:
             key = parts[0][0] if parts else None
@@ -6503,9 +6554,25 @@ class App(tk.Tk):
             except Exception as e:
                 note = "cannot be written: %s" % e
                 v.set(False)
-            ttk.Checkbutton(frm, text=label, variable=v).pack(anchor="w", pady=(6, 0))
-            ttk.Label(frm, text=note, foreground="#666", wraplength=540, justify="left").pack(anchor="w", padx=(24, 0))
+            tick = ttk.Checkbutton(frm, text=label, variable=v)
+            tick.pack(anchor="w", pady=(6, 0))
+            lab = ttk.Label(frm, text=note, foreground="#666", wraplength=540, justify="left")
+            lab.pack(anchor="w", padx=(24, 0))
             picks.append((key, label, v))
+            if key in self.session_parts():          # a window's kept changes: the right click throws them away
+
+                def menu(e, key=key, row=(tick, lab), item=picks[-1]):
+                    m = tk.Menu(w, tearoff=0)
+
+                    def throw():
+                        self.session_throw(key)
+                        for x in row:
+                            x.destroy()
+                        picks.remove(item)
+                    m.add_command(label="Throw these changes away", command=throw)
+                    m.tk_popup(e.x_root, e.y_root)
+                for x in (tick, lab):
+                    x.bind("<Button-3>", menu)
 
         def go():
             chosen = [(k, l) for k, l, v in picks if v.get()]
@@ -6936,11 +7003,21 @@ def main():
             from .gui_modbuilder import open_builder
             open_builder(app)
             return
-        face = app.editors.get("interface")
-        if face is not None and not face.may_close():           # menu changes not written yet: keep working
-            from .gui_interface import open_interface
-            open_interface(app)
-            return
+        if app.mod:                               # changes waiting for Apply: one question, here only (the user, 2026-10-16)
+            app.ak_flush()
+            waiting = app.pending_parts()
+            if waiting:
+                from .gui_util import ask_choice
+                k = ask_choice(app, APP, "%d piece(s) of work are not written yet:\n\n%s\n\nWrite them now (a backup "
+                                         "first), keep working, or throw them away?" % (
+                                             len(waiting), "\n".join("- " + label for _, label in waiting[:12])),
+                               ["Write them", "Keep working", "Throw them away"], default=0, cancel=1, danger=2)
+                if k in (1, None):
+                    return
+                if k == 0:
+                    app.create()
+                    if app.pending_parts():           # not all written (refused, or the window was cancelled)
+                        return
         app._closing = True                       # from here a fault is only logged, no window opens
         app.save_session()
         try:

@@ -1694,6 +1694,115 @@ def kept_or_not(app, key, make_plan):
     return "%d file(s) to change" % len(files)
 
 
+class AutoKeep:
+    """A window whose changes are kept for Apply BY THEMSELVES (the user, 2026-10-16: 'Keep is one more click ...
+    just do it'; open.md 'NO KEEP FOR APPLY'): no Keep button - a moment after each change the window's plan goes into
+    the session's list (App.session_add, quietly), nothing changed takes it out again; a problem (a plan refused) is
+    said in the window's own line and the part stays in the list with it, so Apply changes names it and writes the
+    rest (as VS Code's Problems). Its own step history: the main window's Undo / Redo and Ctrl+Z / Ctrl+Y act on the
+    window in front (App._in_window calls _undo / _redo). Closing the window keeps what it holds.
+
+    The window gives: _ak_key() (its session key, or None while it shows nothing), _ak_label(), _ak_plan() (a Plan;
+    ValueError = a problem), _ak_state() (its picks, comparable) and _ak_set(state) (shows them again); optionally
+    _ak_after(bdir) (once written), _ak_saw(state) (remember it for the next opening) and self._ak_line (a Label for
+    problems). It calls ak_start() once its picks are shown and ak_changed() after every change."""
+
+    AK_WAIT = 400                                   # ms after the last change (typing a number keeps once)
+
+    def ak_start(self):
+        self._ak_hist, self._ak_redo, self._ak_job, self._ak_busy = [], [], None, False
+        self._ak_last = self._ak_state()
+
+    def ak_changed(self, *_):
+        if getattr(self, "_ak_busy", True) or not hasattr(self, "_ak_last"):
+            return
+        st = self._ak_state()
+        if st == self._ak_last:
+            return
+        self._ak_hist.append(self._ak_last)
+        self._ak_redo.clear()
+        self._ak_last = st
+        self._ak_soon()
+
+    def _ak_soon(self):
+        if self._ak_job is not None:
+            try:
+                self.after_cancel(self._ak_job)
+            except tk.TclError:
+                pass
+        self._ak_job = self.after(self.AK_WAIT, self.ak_keep)
+
+    def ak_keep(self):
+        """Keep it now (also before the window closes): its plan in the session's list, or out of it when nothing is
+        changed; a refused plan said in the window and kept as the part's problem."""
+        self._ak_job = None
+        app = getattr(self, "app", None)
+        key = self._ak_key()
+        if app is None or key is None or not hasattr(app, "session_add"):
+            return
+        problem = None
+        try:
+            plan = self._ak_plan()
+            empty = not plan.changed_files()
+        except Exception as e:                       # said here and in Apply changes' list, the rest still written
+            plan, empty, problem = None, False, str(e)
+        line = getattr(self, "_ak_line", None)
+        if line is not None:
+            try:
+                line.configure(text=("Not written as it is: %s" % problem) if problem else "")
+            except tk.TclError:
+                pass
+        if empty:
+            app.session_drop(key)
+        else:
+            app.session_add(key, self._ak_label(), plan, getattr(self, "_ak_after", None), quiet=True,
+                            problem=problem)
+            app.__dict__.setdefault("_ak_windows", {})[key] = self
+        saw = getattr(self, "_ak_saw", None)
+        if saw is not None:
+            saw(None if empty else self._ak_last)
+
+    def _ak_step(self, src, dst, words):
+        if getattr(self, "_ak_busy", True) or not src:
+            status = getattr(getattr(self, "app", None), "status", None)
+            if status is not None:
+                status.set("Nothing to %s in this window." % words)
+            return
+        dst.append(self._ak_last)
+        self._ak_last = src.pop()
+        self._ak_busy = True
+        try:
+            self._ak_set(self._ak_last)
+        finally:
+            self._ak_busy = False
+        self._ak_soon()
+
+    def _undo(self):
+        self._ak_step(self._ak_hist, self._ak_redo, "undo")
+
+    def _redo(self):
+        self._ak_step(self._ak_redo, self._ak_hist, "redo")
+
+    def ak_dropped(self):
+        """Its changes thrown away in Apply changes' list: the window shows the files again (ak_reload), its steps
+        start anew."""
+        saw = getattr(self, "_ak_saw", None)
+        if saw is not None:
+            saw(None)
+        reload = getattr(self, "ak_reload", None)
+        if reload is not None:
+            reload()
+
+    def ak_close(self):
+        """Closing: what is still waiting is kept first (nothing is asked - it waits for Apply changes)."""
+        if getattr(self, "_ak_job", None) is not None:
+            try:
+                self.after_cancel(self._ak_job)
+            except tk.TclError:
+                pass
+            self.ak_keep()
+
+
 def keep_for_apply(win, key, label, make_plan, after=None, title=None):
     """A window's 'Keep for Apply': its changes made into a plan now (a mistake said at once) and put in the session's
     list (App.session_add) - written by the main window's Apply changes with everything else, in one go. False when

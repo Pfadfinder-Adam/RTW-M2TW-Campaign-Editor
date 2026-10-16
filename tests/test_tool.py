@@ -11218,10 +11218,83 @@ building smith
         self.assertTrue(any(r.kind == "slaves" and tuple(r.xy) == sea
                             for r in R.read(plan.files[mod.campaign_file("test", "descr_strat.txt")])))
 
+    def test_a_window_keeps_its_changes_by_itself(self):
+        """gui_util.AutoKeep (the user, 2026-10-16: no Keep for Apply): a change is kept a moment later, a refused one
+        is kept with its problem (said in the window's line; Apply changes names it), nothing changed takes it out;
+        Undo / Redo step the window's own changes; thrown away in Apply's list, the window shows the files again."""
+        try:
+            import tkinter as tk
+            from tkinter import ttk
+            root = tk.Tk()
+        except Exception as e:
+            self.skipTest("no window: %s" % e)
+        from campaign_editor.gui_util import AutoKeep
+        parts, shown = {}, []
+
+        class Plan1:
+            def __init__(self, n):
+                self.n = n
+
+            def changed_files(self):
+                return ["f"] if self.n else []
+
+        class Win(AutoKeep, tk.Toplevel):
+            def __init__(self, app):
+                super().__init__(app)
+                self.app, self.v = app, tk.StringVar(self, "0")
+                self._ak_line = ttk.Label(self)
+                self.v.trace_add("write", self.ak_changed)
+                self.ak_start()
+
+            def _ak_key(self):
+                return "w"
+
+            def _ak_label(self):
+                return "W"
+
+            def _ak_plan(self):
+                if self.v.get() == "bad":
+                    raise ValueError("the game would stop")
+                return Plan1(int(self.v.get()))
+
+            def _ak_state(self):
+                return self.v.get()
+
+            def _ak_set(self, st):
+                self.v.set(st)
+
+            def ak_reload(self):
+                shown.append("files")
+        root.session_add = lambda key, label, plan, after=None, **kw: parts.__setitem__(key, kw)
+        root.session_drop = lambda key: parts.pop(key, None)
+        try:
+            w = Win(root)
+            w.v.set("2")
+            w.ak_keep()
+            self.assertEqual(parts["w"].get("problem"), None)
+            w.v.set("bad")
+            w.ak_keep()
+            self.assertEqual(parts["w"]["problem"], "the game would stop")
+            self.assertIn("the game would stop", w._ak_line.cget("text"))
+            w._undo()
+            self.assertEqual(w.v.get(), "2")
+            w._undo()
+            w.ak_keep()
+            self.assertNotIn("w", parts)                               # back as it was: nothing waits
+            w._redo()
+            self.assertEqual(w.v.get(), "2")
+            w.ak_close()
+            self.assertIn("w", parts)                                  # closing keeps what still waited
+            self.assertIs(root._ak_windows["w"], w)
+            w.ak_dropped()
+            self.assertEqual(shown, ["files"])
+        finally:
+            root.destroy()
+
     def test_town_window_shows_its_kept_garrison_again(self):
         """Report R-20261012-C56BB7: a garrison kept for Apply in the Town window - opened again, the window showed
-        the old one (the town is read without its own kept part, which Keep replaces). The picks come back while
-        the part is kept, and are forgotten once it is written or dropped."""
+        the old one. Since 2026-10-16 the window keeps every change by itself (no Keep button), its Undo / Redo step
+        its own changes, closing keeps them; the picks come back while the part is kept, forgotten once written."""
         try:
             import tkinter as tk
             root = tk.Tk()
@@ -11232,25 +11305,47 @@ building smith
         except ImportError as e:                         # Pillow (CI's test job has none)
             root.destroy()
             self.skipTest("no Pillow: %s" % e)
-        from unittest import mock
         mod = ModData(self.root)
-        kept = set()
+        parts = {}
         root.mod, root.pictures, root.status = mod, None, tk.StringVar(root)
         root.v_campaign = tk.StringVar(root, "test")
         root.kept_view = lambda but=None: mod
-        root.session_kept = lambda key: key in kept
+        root.session_kept = lambda key: key in parts
+        root.session_add = lambda key, label, plan, after=None, **kw: parts.__setitem__(key, (plan, kw))
+        root.session_drop = lambda key: parts.pop(key, None)
         root.map_only = lambda: True
         region = next(iter(mod.city_tiles("test")))
+        key = "town:%s" % region
         try:
-            with mock.patch("campaign_editor.gui_util.keep_for_apply", return_value=True):
-                w = gui_town.TownWindow(root, region)
-                w.garrison = ["alpha general"]
-                self.assertTrue(w.write())
-            kept.add("town:%s" % region)
-            w.load(region)
+            w = gui_town.TownWindow(root, region)
+            buttons, todo = [], [w]
+            while todo:
+                c = todo.pop(0)
+                buttons += [c.cget("text")] if c.winfo_class() == "TButton" else []
+                todo += c.winfo_children()
+            self.assertNotIn("Keep for Apply", buttons)                # kept by itself (the user, 2026-10-16)
+            w.garrison = ["alpha general"]
+            w.ak_changed()
+            w.ak_keep()                                                # what the moment after the change does
+            self.assertIn(key, parts)
+            self.assertTrue(parts[key][1].get("quiet"))
+            w.v_pop.set("123")                                         # one more change, then Undo steps it back
+            w._undo()
+            self.assertEqual(w.v_pop.get(), str(w.town.get("population") or ""))
             self.assertEqual(w.garrison, ["alpha general"])
-            kept.clear()                                 # written (or dropped): the files say it now
-            w.load(region)
+            w._undo()
+            self.assertIsNone(w.garrison)
+            w.ak_keep()                                                # nothing changed any more: out of the list
+            self.assertNotIn(key, parts)
+            w._redo()
+            self.assertEqual(w.garrison, ["alpha general"])
+            w.ak_keep()
+            w.load(region)                                             # opened again: its kept picks come back
+            self.assertEqual(w.garrison, ["alpha general"])
+            w.close()                                                  # closing keeps it, asks nothing
+            self.assertIn(key, parts)
+            parts.clear()                                              # written (or dropped): the files say it now
+            w = gui_town.TownWindow(root, region)
             self.assertIsNone(w.garrison)
         finally:
             root.destroy()

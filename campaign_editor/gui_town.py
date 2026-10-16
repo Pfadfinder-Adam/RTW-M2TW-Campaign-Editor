@@ -2,21 +2,23 @@
 games, any owner (Maps too): its owner (hand it to another faction), city or castle (Medieval II), level,
 population, and - switched in the same window - its buildings (the Buildings tab's own editor: the pictures, a click
 builds a level) and its garrison (the Units & armies tab's card picker; a named character keeps his bodyguard).
-Preview / Keep for Apply (written by the main window's Apply with the rest of the session, a backup first); the writing is masstown.apply - the same one place the 'many
-towns at once' window uses, so one town and many follow the same rules."""
+Every change is kept for Apply by itself (gui_util.AutoKeep - no Keep button; the main window's Preview changes /
+Apply changes show and write it with the rest of the session, a backup first; its Undo / Redo and Ctrl+Z step this
+window's changes); the writing is masstown.apply - the same one place the 'many towns at once' window uses, so one
+town and many follow the same rules."""
 
 import re
 import tkinter as tk
-from tkinter import messagebox, ttk
+from tkinter import ttk
 
 from . import masstown as MT
-from .gui_util import FactionBox, hint
+from .gui_util import AutoKeep, FactionBox, hint
 from .plan import Plan
 
 TITLE = "Town"
 
 
-class TownWindow(tk.Toplevel):
+class TownWindow(AutoKeep, tk.Toplevel):
     def __init__(self, app, region):
         super().__init__(app)
         self.app = app
@@ -104,6 +106,8 @@ class TownWindow(tk.Toplevel):
     # ---- reading ----
     def load(self, region):
         """Show region's town as the files hold it now (also when the window is reused for another town)."""
+        self.ak_close()                                    # the town shown before: what waits is kept first
+        self._ak_busy = True
         self.region = region
         # the town as the other windows' kept changes leave it (its own kept part not: keeping again replaces it)
         self._read_from = self.app.mod
@@ -139,9 +143,10 @@ class TownWindow(tk.Toplevel):
         hint(head, "This town as the campaign starts: its owner, its size and its buildings. Changes are checked the "
                    "way the game checks them (a level the town is too small for, a castle-only building in a city, "
                    "one temple per town...). Buildings and Garrison switch this window between the two (as the "
-                   "Buildings and Units & armies tabs look). Preview shows every line; Keep for Apply puts the changes in "
-                   "the session's list - Apply changes in the main window writes them all at once (a backup first; "
-                   "Undo this write puts them back).", width=520).pack(side="left")
+                   "Buildings and Units & armies tabs look). Every change is kept for the write by itself: Preview "
+                   "changes in the main window shows every line, Apply changes writes them with the rest (a backup "
+                   "first; Undo this write puts them back). Undo / Redo (or Ctrl+Z / Ctrl+Y) step this window's "
+                   "changes; closing it keeps them.", width=520).pack(side="left")
         self.lbl_view = ttk.Label(head, foreground="#666", text="", wraplength=430, justify="left")
         self.lbl_view.pack(side="left", padx=10)
         top = ttk.Frame(b, padding=(0, 2))
@@ -207,14 +212,16 @@ class TownWindow(tk.Toplevel):
         self.v_owner.trace_add("write", lambda *a: self._owner_changed())
         self.v_level.trace_add("write", lambda *a: self.v_level.get() and self.bed.buildings is not None and
                                self.bed.set_level(self.v_level.get()))
+        for var in (self.v_owner, self.v_kind, self.v_level, self.v_pop, self.v_follow):
+            var.trace_add("write", self.ak_changed)
         bar = ttk.Frame(b)                                  # only as tall as its buttons
         bar.pack(side="bottom", fill="x", before=self.views)
         self.lbl_why = ttk.Label(bar, foreground="#a33", text="", wraplength=600, justify="left")
         self.lbl_why.pack(side="left", fill="x", expand=True)
         ttk.Button(bar, text="Close", command=self.close).pack(side="right")
-        ttk.Button(bar, text="Keep for Apply", command=self.write).pack(side="right", padx=4)
-        ttk.Button(bar, text="Preview", command=self.preview).pack(side="right")
+        self._ak_line = self.lbl_why
         self.show_view()
+        self.ak_start()
 
     def _restore(self, region):
         """This town's changes kept for Apply, shown again when it is opened again (a report: a garrison kept here
@@ -237,6 +244,57 @@ class TownWindow(tk.Toplevel):
         return {"owner": self.v_owner.get(), "kind": self.v_kind.get(), "level": self.v_level.get(),
                 "population": self.v_pop.get(), "picked": self.picked,
                 "garrison": None if self.garrison is None else list(self.garrison)}
+
+    # ---- kept by itself (gui_util.AutoKeep) ----
+    def _ak_key(self):
+        return "town:%s" % self.region if self.town is not None else None
+
+    def _ak_label(self):
+        return "Town %s: buildings / garrison / owner" % self.town["name"]
+
+    def _ak_plan(self):
+        return self._plan()
+
+    def _ak_state(self):
+        return dict(self._kept_state(), follow=bool(self.v_follow.get())) if self.town is not None else None
+
+    def _ak_set(self, st):
+        for var, key in ((self.v_owner, "owner"), (self.v_kind, "kind"), (self.v_level, "level"),
+                         (self.v_pop, "population")):
+            var.set(st[key])
+        self.v_follow.set(st["follow"])
+        self.picked = st["picked"]
+        self.garrison = None if st["garrison"] is None else list(st["garrison"])
+        self.load_buildings()
+        if self.ged_loaded:
+            self.load_garrison()
+
+    def ak_reload(self):
+        self._ak_job = None
+        self.load(self.region)
+
+    def _ak_saw(self, st):
+        """Shown again when this town opens again (a report: a garrison kept here showed the old one)."""
+        kept = self.app.__dict__.setdefault("_town_kept", {})
+        if st is None:
+            kept.pop(self.region, None)
+        else:
+            kept[self.region] = st
+
+    @property
+    def _ak_after(self):
+        """Once written: said in the log, the window shows the files as they are now (its town taken at keep time)."""
+        region = self.region
+        return lambda bdir: self._written(bdir, region)
+
+    def _written(self, bdir, region):
+        from . import log
+        log.write("Town %s changed (backup %s)" % (region, bdir))
+        try:
+            if self.winfo_exists() and self.region == region:
+                self.load(region)
+        except tk.TclError:
+            pass
 
     # ---- the two views ----
     def _tab_changed(self):
@@ -296,6 +354,7 @@ class TownWindow(tk.Toplevel):
                 if lvl:
                     self.v_level.set(lvl)
             self.lbl_why.configure(text="")
+            self.ak_changed()
         self.bed.load(self.region, self.v_level.get() or t["level"], edb, t["buildings"], self.picked,
                       self.mod.culture(owner), owner, owner, bpics, changed,
                       kind=(self.v_kind.get() or t.get("kind") or "city") if castles else None,
@@ -318,6 +377,7 @@ class TownWindow(tk.Toplevel):
             else:
                 self.garrison = list(types)
             self.lbl_why.configure(text="")
+            self.ak_changed()
         def suggest(lo, hi, cap):                       # the units the town's owner trains, by the numbers by Suggest
             import random
             pool = MT.town_pool(self.mod, t, MT.garrison_pool(self.mod, owner))
@@ -397,66 +457,26 @@ class TownWindow(tk.Toplevel):
         return plan
 
     def _fresh(self):
-        """The main window read the mod again (an Apply there): this window's town is read again too, so a write
-        never builds on files as they were before - True when it was (the modder looks again, then writes)."""
+        """The main window read the mod again (an Apply there): this window's town is read again too, so its changes
+        are never built on files as they were before."""
         if self.app.mod is getattr(self, "_read_from", self.mod):
             return False
         self.load(self.region)
-        messagebox.showinfo(TITLE, "The mod was written and read again in the main window - this town is shown "
-                                   "as the files hold it now. Pick your changes again, then Keep for Apply.", parent=self)
         return True
-
-    def preview(self):
-        if self.town is None or self._fresh():
-            return
-        try:
-            plan = self._plan()
-        except Exception as e:
-            messagebox.showerror(TITLE, str(e), parent=self)
-            return
-        if not plan.changed_files():
-            messagebox.showinfo(TITLE, "Nothing changed yet.", parent=self)
-            return
-        self.app.show_text("%s - preview (nothing written)" % self.town["name"], plan.report())
-
-    def write(self):
-        """Keep for Apply: the town's changes go into the session's list, written by the main window's Apply changes
-        with everything else (one write, one Undo)."""
-        if self.town is None or self._fresh():
-            return False
-        from .gui_util import keep_for_apply
-        region, name = self.region, self.town["name"]
-
-        def after(bdir):
-            from . import log
-            log.write("Town %s changed (backup %s)" % (region, bdir))
-            if self.winfo_exists() and self.region == region:
-                self.load(region)
-        state = self._kept_state()
-        done = keep_for_apply(self, "town:%s" % region, "Town %s: buildings / garrison / owner" % name, self._plan,
-                              after, TITLE)
-        if done:
-            if not hasattr(self.app, "_town_kept"):
-                self.app._town_kept = {}
-            self.app._town_kept[region] = state             # shown again when this town opens again
-        return done
-
-    def _unwritten(self):
-        """Words of what is neither written nor kept for the write, or '' (the close guard asks before throwing it
-        away)."""
-        if self.town is None:                             # a region without a town: nothing could change
-            return ""
-        from .gui_util import kept_or_not
-        return kept_or_not(self.app, "town:%s" % self.region, self._plan)
 
     def _forget(self):
         if getattr(self.app, "_town_window", None) is self:
             self.app._town_window = None
 
     def close(self):
-        from .gui_util import close_guard                 # never closes over unwritten changes silently
+        """Closing keeps what it holds (it waits for Apply changes) - nothing is asked."""
         self._keep_size()
-        close_guard(self, TITLE, self._unwritten, self.write, after=self._forget)()
+        self.ak_close()
+        self._forget()
+        try:
+            self.destroy()
+        except tk.TclError:
+            pass
 
 
 def open_town_window(app, region):
