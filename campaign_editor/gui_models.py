@@ -78,14 +78,16 @@ class ModelsEditor(ttk.Frame):
         title = fg["type"] + (" (level %d)" % (lv + 1) if len(fg["models"]) > 1 else "")
         ttk.Label(top, text=title, font=("", 10, "bold")).pack(side="left")
         ttk.Label(top, text=model, foreground="#555").pack(side="left", padx=(8, 4))
-        ttk.Button(top, text="3D", command=lambda: self.view_figure(model, faction)).pack(side="left")
+        if not pics:                                   # with its pictures it sits among their buttons (#309)
+            ttk.Button(top, text="3D", command=lambda: self.view_figure(model, faction)).pack(side="left")
         if model != now:
             ttk.Label(box, text="was %s (not written yet)" % now, foreground="#b05a00").pack(anchor="w")
         # Recolour... for a faction that exists (a new one is made first - Create faction - then recoloured)
         own = not new or new == faction
         for p in pics:
             a.art_editor.card(box, p, faction, new, wrap=a.art_editor.CELL - 60, slim=True, buttons=[
-                ("Recolour...", lambda q=p["path"]: self.recolour(faction, q))] if own else None).pack(
+                ("3D", lambda: self.view_figure(model, faction))] + (
+                [("Recolour...", lambda q=p["path"]: self.recolour(faction, q))] if own else [])).pack(
                 fill="x", pady=(4, 0))
         if not pics:
             from .gui_util import hint
