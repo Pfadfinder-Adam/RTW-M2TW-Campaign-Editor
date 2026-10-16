@@ -63,6 +63,14 @@ def _modules(ok, fail, window):
             fail("module %s" % n, "%s: %s" % (type(e).__name__, e))
     ok("%d modules import" % done + (" (not tried: %s - this Python lacks Pillow / tkinter / NumPy)" % ", ".join(lacking)
                                       if lacking else ""))
+    try:                                                    # the graphics card's 3D map (glmap): its OpenGL loader
+        import glcontext
+        import moderngl  # noqa: F401
+        glcontext.default_backend()
+        ok("moderngl and its OpenGL loader import (Maps > 3D on the graphics card)")
+    except Exception as e:                                  # noqa: BLE001 - the exe must have it, a Python may not
+        if getattr(sys, "frozen", False):
+            fail("moderngl", "%s: %s" % (type(e).__name__, e))
 
 
 def _bundled(ok, fail):

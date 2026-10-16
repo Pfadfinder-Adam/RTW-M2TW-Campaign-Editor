@@ -4,7 +4,11 @@ brushes painted and not written yet included: the picture is made again whenever
 Right drag: move over the map (the land follows the mouse); the wheel held down and dragged: turn left / right and
 look up / down; the wheel turned: nearer / farther; the arrow keys (or W A S D) move too (the user's own scheme,
 2026-10-15 - the left button stays free for picking things later). While the mouse moves the view is drawn at half size,
-then sharp again a moment after it stops."""
+then sharp again a moment after it stops.
+
+With a graphics card that gives OpenGL 3.3 (moderngl, in the exe) the card draws it the way the games do (glmap: the
+ground grid, the game's blend masks, its light, the sea sheet); without one, or with 'Graphics card' unticked, the
+older picture (terrain3d) with the models drawn on it."""
 
 import os
 import threading
@@ -34,6 +38,16 @@ class Map3DView(ttk.Frame):
         bar.pack(fill="x")
         self.v_winter = tk.BooleanVar(value=False)
         ttk.Checkbutton(bar, text="Winter", variable=self.v_winter, command=self.rebuild).pack(side="left")
+        self.gl, self.gcam = None, None
+        self.v_gpu = tk.BooleanVar(value=True)
+        b_gpu = ttk.Checkbutton(bar, text="Graphics card", variable=self.v_gpu, command=self._gpu_switched)
+        b_gpu.pack(side="left", padx=(theme.BUTTON_GAP * 2, 0))
+        from .gui_util import tip
+        tip(b_gpu, "Ticked: the graphics card draws the map the way the games draw it - the ground's points, the "
+                   "game's own blend between grounds, its light from descr_strategy_lighting, the sea sheet. "
+                   "Unticked (or without a card for it): the older picture, with the towns, armies and other "
+                   "models on it (the card draws them in a later version).")
+        self._gpu_why = ""
         ttk.Label(bar, text="Heights x").pack(side="left", padx=(theme.BUTTON_GAP * 2, 2))
         self.v_exag = tk.DoubleVar(value=1.0)
         sc = ttk.Scale(bar, from_=0.3, to=4.0, variable=self.v_exag, length=140,
@@ -46,7 +60,6 @@ class Map3DView(ttk.Frame):
         ttk.Button(bar, text="Draw it again", command=self.rebuild).pack(side="left", padx=(theme.BUTTON_GAP, 0))
         b_mini = ttk.Button(bar, text="Make the minimap from it", command=self.make_minimap)
         b_mini.pack(side="left", padx=(theme.BUTTON_GAP, 0))
-        from .gui_util import tip
         tip(b_mini, "The campaign's minimap (radar_map1 / radar_map2.tga - the small map in the game's bottom-left "
                     "corner) drawn again from this map seen from above: the ground's textures, relief, rivers, the "
                     "sea's depths; each picture keeps its size and border. Kept for Apply (Preview shows it).")
@@ -143,7 +156,20 @@ class Map3DView(ttk.Frame):
             work = (len(getattr(ed, "_undo", ())), len(getattr(ed, "_redo", ())),
                     tuple(len(getattr(ed, k, ())) for k in ("heights", "ground", "features", "climate", "coast")),
                     tuple(len(v) for v in (getattr(ed, "cpx", {}) or {}).values()), id(getattr(ed, "mod", None)))
-        return (getattr(mod, "data", None), self.app.v_campaign.get(), work, self.v_winter.get())
+        return (getattr(mod, "data", None), self.app.v_campaign.get(), work, self.v_winter.get(), self._use_gpu())
+
+    def _use_gpu(self):
+        """The card draws: ticked, and it works here (glmap.available)."""
+        if not self.v_gpu.get():
+            return False
+        from . import glmap
+        ok, why = glmap.available()
+        self._gpu_why = why
+        return ok
+
+    def _gpu_switched(self):
+        self._for = None
+        self.load()
 
     def load(self):
         """The tab opened: the picture made again when anything it shows changed since."""
@@ -172,12 +198,21 @@ class Map3DView(ttk.Frame):
 
         strat = getattr(self.app, "strat", None)
 
+        gpu = self._use_gpu()
+
         def work():
             t = time.time()
             try:
-                got["cmap"] = T3.colour_map(mod, campaign, winter=winter)
+                if gpu:                                  # the arrays the card needs (no OpenGL in this thread)
+                    from . import glmap
+                    got["data"] = glmap.MapData(mod, campaign, winter=winter)
+                else:
+                    got["cmap"] = T3.colour_map(mod, campaign, winter=winter)
             except Exception as e:                       # said in the bar, never a crash
                 got["error"] = str(e)
+            if gpu:
+                got["time"] = time.time() - t
+                return
             try:                                         # what stands on the map: towns, ports, forts, characters
                 from . import mapobjects3d as O
                 got["objs"] = O.objects(mod, campaign, strat) if strat is not None else []
@@ -195,6 +230,13 @@ class Map3DView(ttk.Frame):
             if "error" in got:
                 self.lbl.configure(text="cannot draw it: %s" % got["error"])
                 return
+            if "data" in got:
+                if self._gpu_ready(got["data"], stamp, got["time"]):
+                    return
+                self.v_gpu.set(False)                    # the card could not: the older picture instead
+                self._building = False
+                self.rebuild()
+                return
             old = self.cmap
             self.cmap = got["cmap"]
             self.objs = got.get("objs") or []
@@ -211,7 +253,34 @@ class Map3DView(ttk.Frame):
         th.start()
         self.after(250, done)
 
+    def _gpu_ready(self, data, stamp, took):
+        """The card takes the map (main thread: OpenGL lives here) - False when it cannot (said in the bar)."""
+        from . import glmap
+        old_gl = self.gl
+        try:
+            gl = glmap.GLMap(data)
+        except Exception as e:
+            self._gpu_why = str(e)
+            self.lbl.configure(text="the graphics card cannot draw it (%s) - the older picture" % e)
+            return False
+        if old_gl is not None:
+            old_gl.release()
+        same = old_gl is not None and old_gl.data.heights.shape == data.heights.shape
+        self.gl, self._for = gl, stamp
+        if self.gcam is None or not same:
+            self.gcam = glmap.Camera(data)
+        notes = "; ".join(data.notes)
+        self.lbl.configure(text="made in %.1f s (graphics card)%s" % (took, (" - " + notes) if notes else ""))
+        self.draw()
+        return True
+
     def reset_view(self, draw=True):
+        if self.gl is not None and self._use_gpu():
+            from . import glmap
+            self.gcam = glmap.Camera(self.gl.data)
+            if draw:
+                self.draw()
+            return
         if self.cmap is None:
             return
         from . import terrain3d as T3
@@ -222,6 +291,9 @@ class Map3DView(ttk.Frame):
 
     # ---- drawing ----
     def draw(self, half=False):
+        if self._gpu_on():
+            self._draw_gpu(half)
+            return
         if self.cmap is None or self.cam is None:
             return
         from PIL import Image, ImageTk
@@ -235,6 +307,31 @@ class Map3DView(ttk.Frame):
             arr = arr.copy()
             O.draw_objects(arr, depth, self.cmap, self.cam, self.objs, self.sprites, W // f, H // f,
                            cached_only=half)
+        im = Image.fromarray(arr)
+        if f > 1:
+            im = im.resize((W, H), Image.BILINEAR)
+        self._photo = ImageTk.PhotoImage(im)
+        self.canvas.delete("all")
+        self.canvas.create_image(0, 0, anchor="nw", image=self._photo)
+
+    def _gpu_on(self):
+        return self.gl is not None and self.gcam is not None and self.v_gpu.get()
+
+    def _draw_gpu(self, half=False):
+        from PIL import Image, ImageTk
+        W, H = max(50, self.canvas.winfo_width()), max(50, self.canvas.winfo_height())
+        f = 2 if half else 1
+        self.gcam.exaggerate = self.v_exag.get()
+        try:
+            arr = self.gl.render(self.gcam, W // f, H // f)
+        except Exception as e:                           # the card failed now: the older picture from here on
+            self.lbl.configure(text="the graphics card stopped drawing (%s) - the older picture" % e)
+            self.gl.release()
+            self.gl = None
+            self.v_gpu.set(False)
+            self._for = None
+            self.rebuild()
+            return
         im = Image.fromarray(arr)
         if f > 1:
             im = im.resize((W, H), Image.BILINEAR)
@@ -261,11 +358,21 @@ class Map3DView(ttk.Frame):
         self._drag = (how, e.x, e.y)
 
     def _motion(self, e):
-        if self._drag is None or self.cam is None:
+        if self._drag is None or (self.cam is None and not self._gpu_on()):
             return
         how, x0, y0 = self._drag
         dx, dy = e.x - x0, e.y - y0
         self._drag = (how, e.x, e.y)
+        if self._gpu_on():
+            cam = self.gcam
+            if how == "move":                           # the land follows the mouse
+                per = cam.dist / max(200.0, self.canvas.winfo_height()) * 1.1
+                cam.moved(dy * per, -dx * per)
+            else:
+                cam.yaw += dx * 0.006
+                cam.pitch = min(1.55, max(0.15, cam.pitch + dy * 0.004))
+            self._changed_view()
+            return
         cam = self.cam
         if how == "move":                               # the land follows the mouse
             per = (cam.alt + 40) / max(200.0, self.canvas.winfo_height()) * 3.0
@@ -280,6 +387,10 @@ class Map3DView(ttk.Frame):
         self._sharp_later()
 
     def _zoom(self, way):
+        if self._gpu_on():
+            self.gcam.zoom(1.15 if way > 0 else 1 / 1.15)
+            self._changed_view()
+            return
         if self.cam is None:
             return
         cam = self.cam
@@ -289,6 +400,11 @@ class Map3DView(ttk.Frame):
         self._changed_view()
 
     def _key(self, fwd, right):
+        if self._gpu_on():
+            step = self.gcam.dist * 0.08
+            self.gcam.moved(fwd * step, right * step)
+            self._changed_view()
+            return
         if self.cam is None:
             return
         step = (self.cam.alt + 40) * 0.25

@@ -7959,6 +7959,66 @@ building smith
         pic = T3.render(cm, cam, 64, 40)
         self.assertEqual(pic.shape, (40, 64, 3))
 
+    def test_map_on_the_graphics_card(self):
+        """Maps > 3D on the graphics card (glmap, path A of the live 3D map - the user, 2026-10-16): each heights point
+        names its ground picture (climate x ground through descr_aerial_map_ground_types.txt; a sea point the beach
+        picture, as the games do); a picture repeats every N / (64 x texture_density) tiles; the camera looks at a
+        map point; with OpenGL here the frame is drawn, and a brush's change of one point's picture shows at once."""
+        try:
+            import numpy as np
+            from PIL import Image
+        except ImportError:
+            self.skipTest("NumPy / Pillow not installed")
+        from campaign_editor import glmap
+        d = os.path.join(self.root, "data")
+        camp = os.path.join(d, "world", "maps", "campaign", "test")
+        W, H = 9, 9                                    # 4 x 4 tiles
+        grey = [[(200, 200, 200)] * W for _ in range(H)]
+        grey[0][0] = (0, 0, 120)                       # one sea point
+        write_tga(os.path.join(camp, "map_heights.tga"), W, H, grey)
+        write_tga(os.path.join(camp, "map_ground_types.tga"), W, H, [[(0, 128, 0)] * W for _ in range(H)])
+        write(os.path.join(d, "descr_aerial_map_ground_types.txt"),
+              "texture_density 2\nclimate default\n{\n\tfertility_high\tgreen.tga\tsnow.tga\n"
+              "\tbeach\tsand.tga\n}\n")
+        tex = os.path.join(d, "terrain", "aerial_map", "ground_types")
+        os.makedirs(tex)
+        Image.new("RGB", (256, 256), (0, 200, 0)).save(os.path.join(tex, "green.tga"))
+        Image.new("RGB", (16, 16), (250, 250, 250)).save(os.path.join(tex, "snow.tga"))
+        Image.new("RGB", (16, 16), (230, 200, 120)).save(os.path.join(tex, "sand.tga"))
+        mod = ModData(d)
+        data = glmap.MapData(mod, "test")
+        self.assertEqual((data.rows, data.cols), (9, 9))
+        self.assertEqual(data.tiles(), (4.0, 4.0))
+        green = int(data.layers[4, 4])
+        sea = int(data.layers[8, 0])                   # the sea point: bottom-left, top row first
+        self.assertNotEqual(green, sea)
+        self.assertGreater(int(data.pictures[green][0, 0, 1]), 150)
+        self.assertGreater(int(data.pictures[sea][0, 0, 0]), 200)                       # the beach picture
+        self.assertAlmostEqual(data.repeat[green], 64 * 2 / 256.0)                       # 256 px: every 2 tiles
+        self.assertTrue(any("template_weights" in n for n in data.notes))             # no masks: a plain fade
+        winter = glmap.MapData(mod, "test", winter=True)
+        self.assertGreater(int(winter.pictures[int(winter.layers[4, 4])][0, 0, 0]), 200)  # the snow
+        cam = glmap.Camera(data)
+        self.assertEqual((cam.x, cam.z), (2.0, 2.0))
+        cam.moved(1.0, 0.0)                            # forward = north = up the map
+        self.assertAlmostEqual(cam.z, 1.0)
+        self.assertGreater(glmap.lighting(mod)["diffuse"][0], 0)
+        if not glmap.available()[0]:
+            self.skipTest("no OpenGL 3.3 here: %s" % glmap.available()[1])
+        gl = glmap.GLMap(data)
+        try:
+            cam = glmap.Camera(data)
+            cam.dist = 3.0
+            pic = gl.render(cam, 64, 40)
+            self.assertEqual(pic.shape, (40, 64, 3))
+            mid = pic[20, 32].astype(int)
+            self.assertGreater(mid[1], mid[0] + 40)                                       # the green ground, lit
+            gl.set_layers(0, 0, np.full((9, 9), sea, np.uint16))                         # a brush: all sand
+            mid = gl.render(cam, 64, 40)[20, 32].astype(int)
+            self.assertGreater(mid[0], mid[2] + 40)
+        finally:
+            gl.release()
+
     def test_map_in_3d_near_edge_cut_like_the_sides(self):
         """Report #265: with the camera south of the map, its near (bottom) edge went on down to the picture's bottom
         as stretched stripes - the first ground row drawn into every row under it. Under the edge there is no map:

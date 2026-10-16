@@ -11,6 +11,7 @@
 - **Changed**: a slimmer Unit editor and Models tab; the support buttons in one drop-down.
 
 ### Added
+- Maps > 3D is drawn by the graphics card the way the games draw their campaign map: the ground blended between grounds with the game's own masks, its light and its sea; the older picture stays where the card cannot.
 - Check mod files finds more units the game stops on: a mount / engine / ship / animal line the unit's kind does not take, a handler without its animals, an unknown mount, a missile with under 2 shots or (Rome) under 20 m of range.
 - Garrisons and armies: a unit's right click (and a roster card's) opens it in the Unit editor, shows it in 3D or tells where it is recruited.
 - Apply changes' list: a right click on Units, Buildings, Characters or Terrain throws their changes away too, as for the windows' kept changes.
