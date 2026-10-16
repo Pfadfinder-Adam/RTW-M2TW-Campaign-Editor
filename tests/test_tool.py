@@ -7420,6 +7420,32 @@ building smith
             fh.write("\ntype\t\tbroken\nskeleton\t\tfs_hc_spearman_classic, fs_swordsman ; old\n")
         self.assertEqual(skeleton_problems(ModData(troot)), [("broken", ["fs_hc_spearman_classic"])])
 
+    def test_medieval2_animation_set_takes_a_carried_skeleton(self):
+        """Bring in Medieval II (BACKLOG B): the game's own data/Animations set is read (its 112 skeletons, 2401
+        animations) and one carried skeleton with its animations appended reads back the same - when the game's
+        files are here."""
+        import tempfile as _tf
+        from campaign_editor import animpacks as AP
+        folder = "/home/user/m2tw-game-data/Medieval II Total War/data/Animations"
+        base = AP.AnimSet.at(folder) if os.path.isdir(folder) else None
+        if base is None:
+            self.skipTest("no Medieval II animation set here")
+        name = sorted(base.skeletons())[0]
+        rec = base.record(name)
+        carried = {"skeletons": {name + "_brought": rec},
+                   "anims": {k: base.anim_bytes(k) for k in AP.anim_paths(rec)}}
+        out, added, _ = AP.merged(base, carried)
+        self.assertEqual(added, [name + "_brought"])
+        with _tf.TemporaryDirectory() as d:
+            for n, b in out.items():
+                with open(os.path.join(d, n), "wb") as fh:
+                    fh.write(b)
+            back = AP.AnimSet.at(d)
+            self.assertIsNotNone(back)
+            self.assertEqual(len(back.skeletons()), len(base.skeletons()) + 1)
+            self.assertEqual(back.record(name + "_brought"), rec)
+            self.assertEqual(len(back.anims()), len(base.anims()))      # its animations: the set has them already
+
     def test_unit_pack_carries_its_own_skeletons_and_animations(self):
         # the user, 2026-10-14 (after #260): 'a skeleton the target lacks must come along, its animations too' - a mod
         # (HLR) has skeletons of its own in its own animation set; the target's set (its own, or the game's) is
