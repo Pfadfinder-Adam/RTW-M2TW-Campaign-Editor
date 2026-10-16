@@ -23,8 +23,8 @@ HINT = ("The campaign map in 3D, laid with the game's own ground textures for ea
         "types.txt) - the relief of map_heights, the water, the rivers, and what stands on it in the game's own models: "
         "towns, ports, forts, watchtowers, resources, armies and agents in their faction's colours. What the brushes of Terrain and Coast & "
         "heights painted shows here before it is written. Right drag: move over the map; the wheel held down and "
-        "dragged: turn and look up or down; the wheel turned: nearer / farther; the arrow keys or W A S D move too. 'Heights x' makes the relief "
-        "taller or flatter (only here, nothing is written). The game's own 3D map has trees, towns and its own light "
+        "dragged: turn and look up or down; the wheel turned: nearer / farther; the arrow keys or W A S D move too. The relief stands as "
+        "high as in the game. The game's own 3D map has trees, towns and its own light "
         "on top - this shows the ground it lies on.")
 
 
@@ -48,11 +48,6 @@ class Map3DView(ttk.Frame):
                    "Unticked (or without a card for it): the older picture, with the towns, armies and other "
                    "models on it (the card draws them in a later version).")
         self._gpu_why = ""
-        ttk.Label(bar, text="Heights x").pack(side="left", padx=(theme.BUTTON_GAP * 2, 2))
-        self.v_exag = tk.DoubleVar(value=1.0)
-        sc = ttk.Scale(bar, from_=0.3, to=4.0, variable=self.v_exag, length=140,
-                       command=lambda v: self._changed_view())
-        sc.pack(side="left")
         self.v_models = tk.BooleanVar(value=True)
         ttk.Checkbutton(bar, text="Models", variable=self.v_models, command=self.draw).pack(
             side="left", padx=(theme.BUTTON_GAP * 2, 0))
@@ -67,10 +62,6 @@ class Map3DView(ttk.Frame):
         b_own.pack(side="left", padx=(theme.BUTTON_GAP, 0))
         tip(b_own, "A picture of your own (any size, .tga / .png / .jpg...) as the campaign's minimap: fitted into "
                    "each minimap picture, its size and border kept. Kept for Apply; Restore takes it back.")
-        b_game = ttk.Button(bar, text="Game's editor...", command=self.game_editor)
-        b_game.pack(side="left", padx=(theme.BUTTON_GAP, 0))
-        tip(b_game, "The campaign opened in the game's own campaign-map editor (copied to campaign/custom/ first), "
-                    "and what it saved taken back - the 'script' line put back, what it dropped listed.")
         hint(bar, HINT, width=460).pack(side="left", padx=(theme.BUTTON_GAP * 2, 0))
         self.lbl = ttk.Label(bar, foreground=theme.palette()["muted"])
         self.lbl.pack(side="left", padx=(theme.BUTTON_GAP * 2, 0))
@@ -103,10 +94,6 @@ class Map3DView(ttk.Frame):
                 os.path.normcase(os.path.abspath(mod.data)):
             return own
         return mod
-
-    def game_editor(self):
-        from .gui_gameeditor import open_window
-        open_window(self.app)
 
     def own_minimap(self):
         """'Own minimap...': a picture of the modder's own as the campaign's minimap (minimap.redraw picture=)."""
@@ -285,7 +272,7 @@ class Map3DView(ttk.Frame):
             return
         from . import terrain3d as T3
         self.cam = T3.Camera(self.cmap)
-        self.cam.exaggerate = self.v_exag.get()
+        self.cam.exaggerate = 1.0
         if draw:
             self.draw()
 
@@ -300,7 +287,7 @@ class Map3DView(ttk.Frame):
         from . import terrain3d as T3
         W, H = max(50, self.canvas.winfo_width()), max(50, self.canvas.winfo_height())
         f = 2 if half else 1
-        self.cam.exaggerate = self.v_exag.get()
+        self.cam.exaggerate = 1.0
         arr, depth = T3.render(self.cmap, self.cam, W // f, H // f, steps=None if not half else 300, with_depth=True)
         if self.v_models.get() and getattr(self, "objs", None):
             from . import mapobjects3d as O
@@ -321,7 +308,7 @@ class Map3DView(ttk.Frame):
         from PIL import Image, ImageTk
         W, H = max(50, self.canvas.winfo_width()), max(50, self.canvas.winfo_height())
         f = 2 if half else 1
-        self.gcam.exaggerate = self.v_exag.get()
+        self.gcam.exaggerate = 1.0
         try:
             arr = self.gl.render(self.gcam, W // f, H // f)
         except Exception as e:                           # the card failed now: the older picture from here on

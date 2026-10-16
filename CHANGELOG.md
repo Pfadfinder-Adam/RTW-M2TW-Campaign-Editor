@@ -4,7 +4,7 @@
 
 ### In short
 - **Added**: a whole faction brought from another mod; the campaign map in 3D, with the minimap and the
-  faction-select map drawn from it and the game's own map editor beside ours; one emblem for every flag, banner and
+  faction-select map drawn from it, drawn by the graphics card; one emblem for every flag, banner and
   logo of a faction, right beside its colours; locked factions opened to play; rebels, campaign script and special places on the map.
 - **Fixed**: faction logos can be replaced without REX / M2EX too; many fixes from testers' reports (units and
   buildings brought from other mods, the recruitment order, Medieval II's add-on words, crashes).
@@ -42,9 +42,6 @@
 - On Load: a campaign whose factions are locked (Rome's Egypt, Gauls...; Barbarian Invasion's Celts...; Medieval
   II's Aztecs) offers to open them to play - with a backup; the Roman Senate, the Pope, the rebels and factions
   that start with no town stay locked.
-- **Maps > 3D > Game's editor...**: the campaign opened in the game's own campaign-map editor - copied to
-  campaign/custom/ and the game started in it (Medieval II with M2EX straight in the editor; Rome, with REX too,
-  and plain Medieval II show it in their menus and the window says where to click) - and what it saved taken back, the script line it drops put back and anything it dropped listed.
 - Victory: **Take** offers the usual numbers of towns (15, 25, 50, 75, 100 - any other typed) and each **Hold** has
   its own **On the map...** to click the towns to hold.
 - Faction emblem (Rome): the symbol also reaches the flag on the faction's towns in battle, its 3D symbol on the
@@ -162,6 +159,7 @@
   its own where others wear the same file. Keep for Apply, written with Apply (one backup).
 
 ### Changed
+- Maps > 3D: the game's own editor button and the heights slider taken away - the relief stands as high as in the game.
 - Recolour: no 'from the colours of' list - the colours each picture carries now are found by themselves; the 'now' swatches stay to correct them.
 - Recolour, Campaign rules, Events, Traits and retinue, Mercenaries and Rebels are works of the main window on the top row, not windows of their own (the map's right click still opens Mercenaries and Rebels in a window over the map); their changes are kept by themselves and written with Apply changes.
 - Add-ons: Sack Settlement and Recruitment Order are one row each - the row puts in the part for the loaded game (Rome's or Medieval II's); on Medieval II, Recruitment Order offers its two parts (the order of the cards, or one grid as in Rome with no engine).
@@ -232,7 +230,6 @@
 - The bottom bar said 'Create faction' in Religions, Add-ons and other works -> only on the New faction tab; elsewhere 'Apply changes'.
 - Giving away a faction's last town with its general inside was refused until it had another town -> the general steps out onto a free tile beside the town, and a warning says so.
 - Bring units: the same units brought a second time (an earlier bring still in) came in again as copies - every card twice in the recruitment panel -> the list marks them 'here already', 'only those this mod has not' hides them, and picking them asks first; after the write the editor offers to recolour the brought units into their new faction's colours (they wore the other mod's colours in battle).
-- Game's editor (Rome): REX opened its main menu - it knows no switch into the campaign editor -> Rome's own exe (RomeTW.exe, RomeTW-BI.exe for Barbarian Invasion) starts it with the editor's switch, and after a try the window reads the game's log and says plainly whether the editor opened.
 - Words in a window narrower than its contents ran down to a bare '...' (form names, hints) until the window was made full screen -> only the end that does not fit is cut, the rest stays readable.
 - Interface stopped with an error on a menu file holding a modder's notes (<!-- ... -->) -> the notes are read past.
 - A changed garrison or army had every unit's experience, armour and weapon put back to 0 -> each unit keeps its own.
@@ -249,7 +246,6 @@
 - Recruitment Order in Medieval II showed the units back to front (the game lays its cards from the other end) -> they stand in the order picked, as in Rome; agents and ships still come first in the one-panel view - the game does that itself.
 - A captain who went over to another faction with his town kept a name of his old faction's list, and that name could later vanish from every list - the game closed as the campaign loaded -> he takes a name of his new faction's own list, a changed list keeps every name any character wears, and Load offers to put a lost name back.
 - Avoid Growth and Raze Settlement in Medieval II were sized and coloured by eye -> they now take the game's own box, gap, letters and ink, read from the game itself, on any screen size; the Raze button has a tooltip like the game's own.
-- Game's editor in Rome led only to the game's menus, where the campaign editor cannot be opened -> Rome with REX is started straight in the editor, like Medieval II with M2EX (an older REX says to update it).
 - The map's Layers list opened again on a second press instead of closing (Windows) -> the press itself closes it.
 - Bring units: the card shown when resting the mouse on a unit was another faction's -> it is the picked faction's card from the other mod, as on the right.
 - The Coast & heights tab showed a Rivers tick it does not need -> the rivers are always drawn there.

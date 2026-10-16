@@ -1541,7 +1541,7 @@ def s_minimap(c, mod):
     return plan
 
 
-@step("Maps > 3D > Game's editor...: the campaign copied to campaign/custom/ce_<campaign> for the game's own "
+@step("The game's own campaign editor (no button since #322): the campaign copied to campaign/custom/ce_<campaign> for the game's own "
       "campaign-map editor (Open in the game's editor without starting the game)",
       "start the game in its campaign editor (Game's editor... > Open in the game's editor, or the start line it "
       "shows): the map of ce_<campaign> loads with its towns and armies; Save there, close the game, Take the "
@@ -2798,7 +2798,7 @@ COVERAGE = {
     "Bring from another mod": ["s_bring"],
     "New faction > From another mod (a whole faction brought)": ["s_faction_bring"],
     "Maps > 3D > Make the minimap from it": ["s_minimap"],
-    "Maps > 3D > Game's editor (the game's own campaign-map editor)": ["s_game_editor"],
+    "The game's own campaign-map editor (gameeditor - no button since report #322)": ["s_game_editor"],
     "Interface: the game's menu screens, their pieces moved, sized, copied": ["s_interface"],
     "Interface: the pictures of a button's states": ["s_interface_states"],
     "Load: locked factions opened to play": ["s_open_factions"],
