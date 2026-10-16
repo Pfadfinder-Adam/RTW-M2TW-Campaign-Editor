@@ -12410,6 +12410,11 @@ building smith
             self.assertTrue(lab.cget("text").endswith("..."))
             self.assertTrue(str(tick.cget("text")).endswith("..."))
             self.assertEqual(lab._ce_full, words)
+            # cut, it still asks for its whole words' room: the layout gives it no less, so it never runs down to a
+            # bare '...' (#300, #302 - a form's names showed only '...' until the window was made full screen)
+            import tkinter.font as tkfont
+            self.assertGreaterEqual(lab.winfo_reqwidth(), tkfont.Font(font=lab.cget("font")).measure(words))
+            self.assertEqual(GU.words_of(lab), words)
             self.assertEqual(wrap.cget("text"), words)
             lab.configure(text="Short")                               # the code's new words: taken as they are
             root.update()
@@ -12418,6 +12423,31 @@ building smith
             for _ in range(5):
                 root.update()
             self.assertEqual(tick.cget("text"), words)                # wider: whole again
+            # a form's names beside their boxes (#300, #302): only the end that does not fit goes, never all to '...'
+            for w in (lab, tick, wrap):
+                w.destroy()
+            form = ttk.Frame(root)
+            form.pack(fill="x")
+            names = []
+            for row, name in enumerate(("Starting denari", "Removed towns go to", "Faction (edited)")):
+                names.append(ttk.Label(form, text=name))
+                names[-1].grid(row=row, column=0, sticky="ew")
+                ttk.Entry(form, width=40).grid(row=row, column=1, sticky="ew")
+            form.columnconfigure(0, weight=1)
+            form.columnconfigure(1, weight=1)
+            root.geometry("")
+            root.update()
+            root.geometry("%dx200" % (form.winfo_reqwidth() - 40))
+            for _ in range(10):
+                root.update()
+            shown = [str(n.cget("text")) for n in names]
+            self.assertTrue(any(t.endswith("...") for t in shown), shown)
+            self.assertTrue(all(len(t) > 8 for t in shown), shown)
+            root.geometry("1200x200")
+            for _ in range(10):
+                root.update()
+            self.assertEqual([str(n.cget("text")) for n in names],
+                             ["Starting denari", "Removed towns go to", "Faction (edited)"])
         finally:
             root.destroy()
 

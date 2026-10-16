@@ -1252,6 +1252,25 @@ CUT_CLASSES = ("TLabel", "TCheckbutton", "TRadiobutton", "TButton", "Label", "Ch
 _SQUEEZED = {}                       # widget path -> widget, the ones showing their words cut now
 
 
+def _ask_whole(w, font, full, extra):
+    """A cut widget still asks for the room of its whole words (its width in characters), so the window's layout
+    keeps giving it the same share and only the end that does not fit is cut - its smaller ask had made the layout
+    give it less, cut again, down to a bare '...' (#300, #302). Its own width comes back only when the window is
+    made wider (cut_when_squeezed), so the asks never see-saw."""
+    try:
+        if not hasattr(w, "_ce_width0"):
+            w._ce_width0 = w.cget("width")
+        need = font.measure(full) + extra
+        n = -(-font.measure(full) // max(1, font.measure("0")))
+        for _ in range(40):                         # the theme's character width is not quite the font's '0'
+            w.configure(width=n)
+            if w.winfo_reqwidth() >= need:
+                break
+            n += 1
+    except tk.TclError:
+        pass
+
+
 def squeeze(w):
     """One label / tick / button: when the window gives it less room than its words take, the words end in '...'
     and the hover tip shows them whole (the user, 2026-10-16, again: 'everywhere'). Words changed by the code since
@@ -1285,10 +1304,15 @@ def squeeze(w):
             f = tkfont.Font(font=w.cget("font"))
         except (tk.TclError, ValueError):
             f = tkfont.nametofont("TkDefaultFont")
-        extra = max(0, w.winfo_reqwidth() - f.measure(text))      # its padding, a tick's box
+        if hasattr(w, "_ce_width0"):                   # asking for its whole words' room: its padding as it was
+            extra = getattr(w, "_ce_extra", 0)
+        else:
+            extra = w._ce_extra = max(0, w.winfo_reqwidth() - f.measure(text))      # its padding, a tick's box
         shown = cut_to(full, lambda t: f.measure(t) + extra <= room)
         w._ce_full = full
         if shown != text:
+            if shown != full:
+                _ask_whole(w, f, full, extra)
             w.configure(text=shown)
         w._ce_cut = shown if shown != full else None
         if w._ce_cut is not None:
@@ -1300,6 +1324,12 @@ def squeeze(w):
             _SQUEEZED.pop(str(w), None)
     except tk.TclError:
         pass
+
+
+def words_of(w):
+    """A widget's whole words, also while a narrow window shows them cut with '...' (squeeze) - read these, never
+    cget('text'), to build new words from the old ones."""
+    return w._ce_full if getattr(w, "_ce_cut", None) else str(w.cget("text"))
 
 
 def cut_when_squeezed(root):
@@ -1328,6 +1358,9 @@ def cut_when_squeezed(root):
                 if not w.winfo_exists():
                     _SQUEEZED.pop(path, None)
                 elif w.winfo_toplevel() is top and getattr(w, "_ce_cut", None) and str(w.cget("text")) == w._ce_cut:
+                    if hasattr(w, "_ce_width0"):
+                        w.configure(width=w._ce_width0)
+                        del w._ce_width0
                     w.configure(text=w._ce_full)       # whole again; its <Configure> cuts it again if still narrow
                     w._ce_cut = None
                     _SQUEEZED.pop(path, None)

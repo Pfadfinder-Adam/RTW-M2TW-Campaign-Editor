@@ -4358,7 +4358,8 @@ class App(tk.Tk):
                 if w.winfo_class() in ("TLabel", "Label"):
                     base = getattr(w, "_plain_text", None)
                     if base is None:
-                        base = w._plain_text = str(w.cget("text"))
+                        from .gui_util import words_of
+                        base = w._plain_text = words_of(w)
                     w.configure(text=base if mine else base + words)
                     continue
                 try:
