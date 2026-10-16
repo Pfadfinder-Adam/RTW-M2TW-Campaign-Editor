@@ -866,6 +866,23 @@ building smith
         self.assertIn("Rebel", [c.name for c in s.faction("slave").characters])
         self.assertNotIn("Zed", [c.name for x in s.factions for c in x.characters])
 
+    def test_create_faction_only_on_the_new_faction_tab(self):
+        """Report #314: the bottom bar said 'Create faction' in Religions and other works - only the New faction tab
+        with a faction named creates one; everywhere else it is 'Apply changes'."""
+        try:
+            from campaign_editor.gui import App
+        except ImportError as e:
+            self.skipTest("no tkinter: %s" % e)
+        from types import SimpleNamespace
+        for work, editing, map_only, words in (("new", False, False, "Create faction"),
+                                                ("religions", False, False, "Apply changes"),
+                                                ("addons", False, False, "Apply changes"),
+                                                ("new", False, True, "Apply changes"),
+                                                ("edit", True, False, "Apply changes")):
+            fake = SimpleNamespace(v_work=SimpleNamespace(get=lambda w=work: w), editing=lambda e=editing: e,
+                                   map_only=lambda m=map_only: m)
+            self.assertEqual(App.apply_words(fake), words, work)
+
     def test_last_town_given_away_its_general_steps_out(self):
         """Report #306: giving a faction's last town away with its general inside was refused ('has no other town to
         go to' - give it another town first, Apply, then again). He steps out onto a free tile beside the town, as

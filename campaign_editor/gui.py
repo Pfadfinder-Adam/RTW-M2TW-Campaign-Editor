@@ -2510,7 +2510,7 @@ class App(tk.Tk):
         from .diplomacy import is_medieval, kinds
         self.dip_editor.load(me, others, base, self.dip_set, names,
                              lambda: self.status.set("%d diplomacy change(s) - Preview, then %s." % (
-                                 len(self.dip_set), "Apply changes" if self.editing() else "Create faction")),
+                                 len(self.dip_set), self.apply_words())),
                              kinds=kinds(self.strat), medieval=is_medieval(self.strat))
 
     # ------------------------------------------------------------------ regions
@@ -2690,7 +2690,7 @@ class App(tk.Tk):
             new[what] = tuple(xy)
             self.status.set("%s of the new region %s to %d, %d - Preview, then %s." % (
                 "Town" if what == "city" else "Port", region, xy[0], xy[1],
-                "Apply changes" if self.editing() or self.map_only() else "Create faction"))
+                self.apply_words()))
             self.show_map()
             return
         self.remember()
@@ -2700,7 +2700,7 @@ class App(tk.Tk):
             self.place_moves[(what, region)] = xy
         self.status.set("%s of %s to %d, %d - %d town(s)/port(s) moved; Preview, then %s." % (
             "Town" if what == "city" else "Port", region, xy[0], xy[1], len(self.place_moves),
-            "Apply changes" if self.editing() or self.map_only() else "Create faction"))
+            self.apply_words()))
         self.show_map()
 
     def _region_point_gone(self):
@@ -5118,7 +5118,7 @@ class App(tk.Tk):
     def _victory_changed(self):
         if self.victory.changed():
             self.status.set("Victory conditions changed - Preview, then %s." % (
-                "Apply changes" if self.editing() or self.map_only() else "Create faction"))
+                self.apply_words()))
         self._mark_work()
 
     def pick_colour(self, which):
@@ -6101,17 +6101,18 @@ class App(tk.Tk):
             return True
         return not self.editing() and not (self.v["template"].get().strip() and self.v["name"].get().strip())
 
-    def update_actions(self):
-        if getattr(self, "v_work", None) is not None and self.v_work.get() in ("units", "buildings"):
-            p, a = "Preview changes", "Apply changes"
-        elif self.editing():
-            p, a = "Preview changes", "Apply changes"
-        elif self.map_only():
+    def apply_words(self):
+        """The bottom bar's write button: 'Create faction' only on the New faction tab with a faction named (#314:
+        it showed in Religions and other works), 'Apply changes' everywhere else."""
+        work = self.v_work.get() if getattr(self, "v_work", None) is not None else "new"
+        if work != "new" or self.editing() or self.map_only():
             # no faction chosen yet: only the map's changes can be written - said beside the work
             # bar, the buttons keep their usual names (the user found "map changes" puzzling)
-            p, a = "Preview changes", "Apply changes"
-        else:
-            p, a = "Preview changes", "Create faction"
+            return "Apply changes"
+        return "Create faction"
+
+    def update_actions(self):
+        p, a = "Preview changes", self.apply_words()
         kept = len(self.session_parts()) if getattr(self, "mod", None) else 0
         if kept:                                       # the windows' changes kept for this one write
             a += "  (+%d kept)" % kept
