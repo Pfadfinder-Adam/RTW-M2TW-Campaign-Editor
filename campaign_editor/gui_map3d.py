@@ -23,14 +23,14 @@ from .gui_util import hint
 HINT = ("The campaign map in 3D, drawn by the graphics card the way the games draw it: the game's own ground textures "
         "for each climate (descr_aerial_map_ground_types.txt) blended with the game's own masks, the relief of "
         "map_heights, the game's light and sea, the beach and the surf rolling in along the coast, the game's own "
-        "mountains, hills and volcanoes (descr_aerial_map_tile_models.txt: placed as the game places them, the "
+        "mountains, hills, volcanoes and rivers (descr_aerial_map_tile_models.txt: placed as the game places them, the "
         "pieces picked by the tile - the game picks with its own dice). Layers shows or leaves out each of them "
         "(the sea left out shows the sea floor; the surf can stand still). What the brushes of Terrain and Coast & "
         "heights painted shows here before it is written. Right drag: move over the map; the wheel held down and "
         "dragged: turn and look up or down; the wheel turned: nearer / farther; the arrow keys or W A S D move too. "
         "Heights brush: the left button raises or lowers the land under the circle while held (Ctrl + wheel or [ ] "
         "for its size) - the brush of Coast & heights, its Undo and Apply shared. The relief stands as "
-        "high as in the game. The rivers, cliffs, trees, towns and armies come in later versions.")
+        "high as in the game. The cliffs, trees, towns and armies come in later versions.")
 
 
 class Map3DView(ttk.Frame):

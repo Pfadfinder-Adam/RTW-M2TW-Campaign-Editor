@@ -30,8 +30,8 @@ from . import terrain3d as T3
 
 SCALE = {"medieval2": 1.2, "rome": 0.6}         # the games' height scale (aerial_map.h)
 LAYERS = (("sea", "Sea"), ("coast", "Beach and surf"), ("mountains", "Mountains and volcanoes"),
-          ("hills", "Hills"))                   # what render(show=...) can leave out, as the window names it
-MODEL_LAYERS = {"mountains": 1, "hills": 2}     # tilemodels.KIND of each
+          ("hills", "Hills"), ("rivers", "Rivers"))     # what render(show=...) can leave out, as the window names it
+MODEL_LAYERS = {"mountains": 1, "hills": 2, "rivers": 3}     # tilemodels.KIND of each
 SEGMENT_TEXELS = 64                             # a picture's pixels a tile covers at texture_density 1
 LAYER = 512                                     # every ground picture is made this size on the card
 SEA_LIGHT = (0.5, 1.0, 1.0)                     # the way to the sea's own light (the engine's (-0.5, -1, -1) reversed)
@@ -225,7 +225,8 @@ class MapData:
     def _tile_models(self, mod, campaign, winter):
         """The tile models (mountains, hills, volcanoes - tilemodels) placed on this map, their pictures."""
         from . import tilemodels as TM
-        self.models = {"under": np.zeros((0, 7), np.float32), "over": {}}
+        self.models = {"under": np.zeros((0, 7), np.float32), "over": {}, "water": np.zeros((0, 6), np.float32)}
+        self.river_flow = _image(mod, ["terrain/aerial_map/water.tga"])
         self.voids = np.zeros(((self.rows - 1) // 2, (self.cols - 1) // 2), np.uint8)
         self.model_pictures, self.model_masks = {}, {}
         try:
@@ -588,9 +589,7 @@ out vec2 w;
 void main() { w = pos; gl_Position = mvp * vec4(pos.x, 0.0, pos.y, 1.0); }
 """
 
-SEA_FS = """
-#version 330
-""" + COLOUR_GLSL + """
+SEA_GLSL = COLOUR_GLSL + """
 uniform sampler2D water;
 uniform sampler2D waves;
 uniform sampler2D sky;
@@ -598,16 +597,51 @@ uniform vec2 tiles;
 uniform vec3 sea_light;
 uniform vec3 eye;
 uniform float waves_mean;
-out vec4 colour;
-in vec2 w;
-void main() {
-    vec2 uv = w / tiles;
-    vec3 c = dec(texture(water, uv).rgb) * sea_light;
+vec3 sea(vec2 w) {                      // the open water's colour at world point w (linear when the light is)
+    vec3 c = dec(texture(water, w / tiles).rgb) * sea_light;
     float wave = dec(texture(waves, w * 0.25).rgb).r;
     c *= linear == 1 ? wave : wave / max(waves_mean, 0.05);    // the old games: the waves around their own mean
     vec2 r = (w + (eye.xz - w) * 0.15) / 32.0;
-    c = mix(c, dec(texture(sky, r).rgb), 0.5);
-    colour = vec4(enc(c), 1.0);
+    return mix(c, dec(texture(sky, r).rgb), 0.5);
+}
+"""
+
+SEA_FS = """
+#version 330
+""" + SEA_GLSL + """
+out vec4 colour;
+in vec2 w;
+void main() { colour = vec4(enc(sea(w)), 1.0); }
+"""
+
+RIVER_VS = """
+#version 330
+uniform mat4 mvp;
+in vec3 pos;
+in vec2 uv;
+in float kind;
+out vec2 w;
+out vec2 t;
+out float y;
+flat out float kind_v;
+void main() { w = pos.xz; t = uv; y = pos.y; kind_v = kind; gl_Position = mvp * vec4(pos, 1.0); }
+"""
+
+RIVER_FS = """
+#version 330
+""" + SEA_GLSL + """
+uniform sampler2D flow;
+uniform float shift;
+uniform int shown;
+in vec2 w;
+in vec2 t;
+in float y;
+flat in float kind_v;
+out vec4 colour;
+void main() {                           // a river's water: the open water's look, its flow over it at a quarter
+    if (((shown >> int(kind_v + 0.5)) & 1) == 0) discard;
+    vec3 f = dec(texture(flow, t + vec2(shift, 0.0)).rgb) * sea_light;
+    colour = vec4(enc(mix(sea(w), f, 0.25)), clamp(y * 10.0, 0.0, 1.0));     // fading out at the sea's level
 }
 """
 
@@ -733,6 +767,8 @@ class GLMap:
         self.terrain = self._keep(ctx.program(vertex_shader=TERRAIN_VS, fragment_shader=TERRAIN_FS))
         self.under = self._keep(ctx.program(vertex_shader=UNDER_VS, fragment_shader=TERRAIN_FS))
         self.over = self._keep(ctx.program(vertex_shader=OVER_VS, fragment_shader=OVER_FS))
+        self.river = self._keep(ctx.program(vertex_shader=RIVER_VS, fragment_shader=RIVER_FS))
+        self.flow = self._picture(data.river_flow, 3, (60, 90, 120), repeat=True)
         self.sea = self._keep(ctx.program(vertex_shader=SEA_VS, fragment_shader=SEA_FS))
         self._model_buffers, self.voids = [], None
         self.model_pics = {k: self._picture(v, 4, (128, 120, 110, 255), repeat=True)
@@ -769,7 +805,7 @@ class GLMap:
         top = np.inf if lin else 1.0                # linear light is not cut at 1 (the shoulder bends it at the end)
         sea_l = np.minimum(np.asarray(L["ambient"]) + np.asarray(L["diffuse"]) * max(float(s[1]), 0.0), top)
         self.linear = lin
-        for prog in (self.terrain, self.under, self.over, self.sea, self.coast):
+        for prog in (self.terrain, self.under, self.over, self.sea, self.coast, self.river):
             prog["linear"].value = int(lin)
             prog["exposure"].value = float(L.get("exposure", 1.0))
         for prog in (self.terrain, self.under, self.over):   # the ground and the tile models: one light
@@ -786,11 +822,13 @@ class GLMap:
         self.over["pic"].value, self.over["mask"].value = 9, 10
         self.models_stale = False
         self._models()
-        self.sea["tiles"].value = (tc, tr_)
-        self.sea["sea_light"].value = tuple(float(v) for v in sea_l)
-        self.sea["waves_mean"].value = float(data.waves[..., 0].mean()) / 255.0 if data.waves is not None else 0.5
-        for name, unit in (("water", 4), ("waves", 5), ("sky", 6)):
-            self.sea[name].value = unit
+        for prog in (self.sea, self.river):             # the rivers' water looks like the open water
+            prog["tiles"].value = (tc, tr_)
+            prog["sea_light"].value = tuple(float(v) for v in sea_l)
+            prog["waves_mean"].value = float(data.waves[..., 0].mean()) / 255.0 if data.waves is not None else 0.5
+            for name, unit in (("water", 4), ("waves", 5), ("sky", 6)):
+                prog[name].value = unit
+        self.river["flow"].value = 11
         # the strips are lit as flat ground facing up (the engine's coastline shader)
         self.strip_light = np.minimum(np.asarray(L["ambient"]) + np.asarray(L["diffuse"]) * max(float(to_light[1]), 0.0),
                                       top)
@@ -815,6 +853,12 @@ class GLMap:
             vao = ctx.vertex_array(self.under, [(vbo, "3f 3f 1f", "pos", "nrm", "kind")])
             self._model_buffers += [vbo, vao]
             self.model_vaos.append(("under", None, None, vao))
+        water = d.models.get("water")
+        if water is not None and len(water):
+            vbo = ctx.buffer(np.ascontiguousarray(water).tobytes())
+            vao = ctx.vertex_array(self.river, [(vbo, "3f 2f 1f", "pos", "uv", "kind")])
+            self._model_buffers += [vbo, vao]
+            self.model_vaos.append(("water", None, None, vao))
         for (tex, page), arr in d.models["over"].items():
             vbo = ctx.buffer(np.ascontiguousarray(arr).tobytes())
             vao = ctx.vertex_array(self.over, [(vbo, "3f 3f 2f 2f 4f 1f", "pos", "nrm", "uv", "auv", "col", "kind")])
@@ -956,6 +1000,23 @@ class GLMap:
                 self.model_masks.get(page, self._white).use(10)
                 vao.render()
             ctx.depth_func = "<"
+            ctx.disable(ctx.BLEND)
+        waters = [vao for w_, _, _, vao in self.model_vaos if w_ == "water"]
+        if waters and bits & (1 << MODEL_LAYERS["rivers"]):      # the rivers' water over their beds
+            ctx.enable(ctx.BLEND)
+            ctx.blend_func = ctx.SRC_ALPHA, ctx.ONE_MINUS_SRC_ALPHA
+            self.fbo.depth_mask = False
+            ctx.depth_func = "<="
+            self.flow.use(11)
+            self.river["mvp"].write(mvp_bytes)
+            self.river["shown"].value = bits
+            self.river["shift"].value = float(t % 1.0)
+            if "eye" in self.river:
+                self.river["eye"].value = tuple(float(v) for v in eye)
+            for vao in waters:
+                vao.render()
+            ctx.depth_func = "<"
+            self.fbo.depth_mask = True
             ctx.disable(ctx.BLEND)
         if self.coast_dirty:
             self._coast()

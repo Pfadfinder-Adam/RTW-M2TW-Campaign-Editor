@@ -36,11 +36,32 @@ SLOTS = {"line": ((0, 2), (1, 2), (2, 2), (3, 2)), "l": ((0, 2), (1, 2), (2, 2),
          "square": ((1, 2), (2, 2), (1, 1), (2, 1))}
 VOLCANO_PARTS = ("top_left", "top", "top_right", "left", "centre", "right", "bottom_left", "bottom", "bottom_right")
 MOUNTAINS_HIGH, HILLS = "mountains_high", "hills"
-KIND = {"mountains": 1, "hills": 2, "volcano": 1, "volcano_dormant": 1}    # which Layers switch shows a tile set
+KIND = {"mountains": 1, "hills": 2, "volcano": 1, "volcano_dormant": 1, "river_a": 3}   # the Layers switch of a set
+SIDES = ("top", "bottom", "left", "right")
+LINE_KINDS = ("", "b_", "c_", "bg_", "bi_", "ag_", "ah_", "ai_", "cg_", "ch_", "ci_")
+SPLITS = ("t_out_lr", "t_out_lb", "t_out_rb", "b_out_lr", "b_out_lt", "b_out_rt", "l_out_tb", "l_out_tr",
+          "l_out_br", "r_out_tb", "r_out_tl", "r_out_bl")
+JOINS = ("t_in_lr", "t_in_lb", "t_in_rb", "b_in_lr", "b_in_lt", "b_in_rt", "l_in_tb", "l_in_tr", "l_in_br",
+         "r_in_tb", "r_in_tl", "r_in_bl")
+LINE, BEND_CW, BEND_ACW, SPLIT, JOIN, SOURCE, END, FORD = 0, 44, 60, 76, 88, 100, 104, 108
+# the engine's index of each river join / split by its sides: (out, ins) / (in, outs), sides t b l r
+JOIN_OF = {(name[0], frozenset(name[-2:])): k for k, name in enumerate(JOINS)}
 
 
 def link_of(index):
     """(tile set, link name) of an AERIAL_MAP_TILE_MODEL_INDEX the code places, or None."""
+    if 0 <= index < 44:
+        return "river_a", "line_%s%s" % (LINE_KINDS[index % 11], SIDES[index // 11])
+    if 44 <= index < 76:
+        k = (index - 44) % 16
+        return "river_a", "bend_%s_%s%s" % ("cw" if index < 60 else "acw", ("", "b_", "c_", "d_")[k % 4],
+                                            ("tl", "tr", "bl", "br")[k // 4])
+    if 76 <= index < 88:
+        return "river_a", "split_in_" + SPLITS[index - 76]
+    if 88 <= index < 100:
+        return "river_a", "join_out_" + JOINS[index - 88]
+    if 100 <= index < 112:
+        return "river_a", "%s_%s" % (("source", "end", "ford")[(index - 100) // 4], SIDES[(index - 100) % 4])
     if 136 <= index <= 153:
         return ("volcano" if index < 145 else "volcano_dormant"), VOLCANO_PARTS[(index - 136) % 9]
     if 181 <= index <= 292:
@@ -228,9 +249,157 @@ def assign(heights, ground_rgb, features_rgb=None):
                 tx, tz = x + dx, z + dz
                 if 0 <= tx < W and 0 <= tz < H:
                     idx[tz, tx] = 145 + k
+    if features_rgb is not None and features_rgb.shape[:2] == (H, W):
+        rivers(idx, features_rgb[::-1])
     _mountains(idx, seed, types[MOUNTAINS_HIGH])
     _hills(idx, seed, types[HILLS] & dry)
     return idx, seed
+
+
+def _river_index(f, t, x, z):
+    """The engine's river model for a tile entered from sides f and left by sides t (sets of 't' 'b' 'l' 'r'),
+    first match wins (world_map route_river): joins, splits, lines, clockwise / anticlockwise bends, ends."""
+    if len(t) == 1 and len(f) == 2:
+        k = JOIN_OF.get((next(iter(t)), frozenset(f)))
+        if k is not None:
+            return JOIN + k
+    if len(f) == 1 and len(t) == 2:
+        k = JOIN_OF.get((next(iter(f)), frozenset(t)))
+        if k is not None:
+            return SPLIT + k
+    alt3, alt4 = rnd(x, z, 11, 3), rnd(x, z, 12, 4)
+    for (a, b), base in ((("l", "r"), 0), (("r", "l"), 11), (("b", "t"), 22), (("t", "b"), 33)):
+        if a in f and b in t:
+            return LINE + base + alt3
+    for (a, b), k in ((("b", "r"), 0), (("l", "b"), 4), (("r", "t"), 8), (("t", "l"), 12)):
+        if a in f and b in t:
+            return BEND_CW + k + alt4
+    for (a, b), k in ((("r", "b"), 0), (("b", "l"), 4), (("t", "r"), 8), (("l", "t"), 12)):
+        if a in f and b in t:
+            return BEND_ACW + k + alt4
+    for a, k in (("l", 0), ("r", 1), ("b", 2), ("t", 3)):
+        if a in f:
+            return END + k
+    return None
+
+
+STEP = {"t": (0, 1), "b": (0, -1), "l": (-1, 0), "r": (1, 0)}
+BACK = {"t": "b", "b": "t", "l": "r", "r": "l"}
+
+
+def rivers(idx, feats):
+    """The rivers of map_features.tga (rows bottom first: white source, blue river, cyan ford) routed from each
+    source the way the engine does (world_map route_rivers): every river tile asks its neighbours in turn (up,
+    down, left, right) whether the river goes on there, a second river reaching a tile already routed makes it a
+    join; a dead end touching another river is refused; then the source's own model and the meanders of the long
+    straight runs (apply_river_variations)."""
+    H, W = idx.shape
+    code = (feats[..., 0].astype(np.int32) << 16) | (feats[..., 1].astype(np.int32) << 8) | feats[..., 2]
+    source = code == 0xffffff
+    ford = code == 0x00ffff
+    river = (code == 0x0000ff) | ford
+    dirs = {}                                         # (x, z): (sides it is entered from, sides it leaves by)
+
+    def valid(x, z):
+        return 0 <= x < W and 0 <= z < H
+
+    def route(fx, fz, x, z):                          # a generator: yields the neighbour to try, gets its answer
+        if not valid(x, z) or not river[z, x] or source[z, x]:
+            return False
+        f = {"t" if fz > z else "b" if fz < z else "l" if fx < x else "r"}
+        t = set()
+        if (x, z) in dirs:                            # routed before: its own sides kept (a join forms)
+            f |= dirs[(x, z)][0]
+            t |= dirs[(x, z)][1]
+        for side in "tblr":
+            if side not in f and side not in t:
+                dx, dz = STEP[side]
+                if (yield (x, z, x + dx, z + dz)):
+                    t.add(side)
+        if len(f) + len(t) == 1:                      # a dead end beside another river: not this way
+            for side in "tblr":
+                if side in f:
+                    continue
+                nx, nz = x + STEP[side][0], z + STEP[side][1]
+                if valid(nx, nz) and (river[nz, nx] or source[nz, nx]):
+                    return False
+        index = _river_index(f, t, x, z)
+        if index is None:
+            return False
+        if ford[z, x] and LINE <= index < LINE + 44 and index % 11 < 3:
+            index = FORD + index // 11
+        idx[z, x] = index
+        dirs[(x, z)] = (f, t)
+        return True
+
+    def run(fx, fz, x, z):                            # the recursion without Python's own stack (long rivers)
+        stack, answer = [route(fx, fz, x, z)], None
+        while stack:
+            try:
+                ask = stack[-1].send(answer) if answer is not None else next(stack[-1])
+                answer = None
+                stack.append(route(*ask))
+            except StopIteration as e:
+                stack.pop()
+                answer = bool(e.value)
+        return bool(answer)
+    zs, xs = np.nonzero(source[::-1])                 # the picture's order: top row first
+    for z, x in zip((H - 1 - zs).tolist(), xs.tolist()):
+        got = [run(x, z, x + dx, z + dz) for dx, dz in ((0, 1), (0, -1), (-1, 0), (1, 0))]
+        for ok, k in zip(got, (2, 3, 1, 0)):          # up: source_left, down: _right, left: _bottom, right: _top
+            if ok:
+                idx[z, x] = SOURCE + k
+                break
+    _meanders(idx)
+
+
+def _meanders(idx):
+    """The long straight river runs wind between three lanes (world_map apply_river_variations): each run of plain
+    lines gets crossing places at its tiles' edges - the run's two ends in the middle lane, the others any - and
+    each tile the piece that goes from its in-lane to its out-lane."""
+    H, W = idx.shape
+    k = 0
+    combo = {(0, 0): 8, (0, 1): 9, (0, 2): 10, (1, 0): 3, (1, 2): 4, (2, 0): 5, (2, 1): 6, (2, 2): 7}
+
+    def plain(v, base):
+        return base <= v < base + 3
+
+    def wind(tiles, base):
+        nonlocal k
+        edges = [1] + [_hash(k, i, 13) % 3 for i in range(1, len(tiles))] + [1]
+        k += 1
+        for i, (x, z) in enumerate(tiles):
+            e = (edges[i], edges[i + 1])
+            if e != (1, 1):
+                idx[z, x] = LINE + base + combo[e]
+    for z in range(H):                                 # flowing right (line_*top) or left (line_*bottom)
+        x = 0
+        while x < W:
+            for base, step in ((0, 1), (11, -1)):
+                if plain(idx[z, x], base):
+                    e = x
+                    while e < W and plain(idx[z, e], base):
+                        e += 1
+                    if e - x > 1:
+                        run = [(c, z) for c in range(x, e)]
+                        wind(run if step == 1 else run[::-1], base)
+                    x = e - 1
+                    break
+            x += 1
+    for x in range(W):                                 # flowing up (line_*left) or down (line_*right)
+        z = 0
+        while z < H:
+            for base, step in ((22, 1), (33, -1)):
+                if plain(idx[z, x], base):
+                    e = z
+                    while e < H and plain(idx[e, x], base):
+                        e += 1
+                    if e - z > 1:
+                        run = [(x, r) for r in range(z, e)]
+                        wind(run if step == 1 else run[::-1], base)
+                    z = e - 1
+                    break
+            z += 1
 
 
 def _rotated(slots, rot):
@@ -360,7 +529,9 @@ class Library:
                         continue
                     op = np.asarray(o.positions, np.float64).reshape(-1, 3)
                     d = ((op[:, None, :] - up[None, :, :]) ** 2).sum(-1)
-                    ovs.append((o, opts, d.argmin(1)))     # an overlay point takes its underlay point's place
+                    # an overlay point takes its underlay point's place (the engine matches within 0.005); one
+                    # with none so near (a river's water a little above its bed) is laid on the ground itself
+                    ovs.append((o, opts, d.argmin(1), d.min(1) < 0.006 ** 2))
                 out = (under, deg, ovs, s["flags"])
         self._models[key] = out
         return out
@@ -390,10 +561,19 @@ def _ground_h(heights, prow, pcol):
 
 def build(lib, idx, seed, heights, yscale):
     """The tile models laid on the map, as arrays for the card: {'under': (vertices (n, 7): x y z, normal, kind),
-    'over': {(texture file, alpha page): (vertices (n, 15): x y z, normal, u v, alpha u v, r g b a, kind)}} - triangles as vertex
-    triples (no index lists); our world: x east, y up, z SOUTH from the map's top (tiles)."""
+    'over': {(texture file, alpha page): (vertices (n, 15): x y z, normal, u v, alpha u v, r g b a, kind)},
+    'water': (vertices (n, 6): x y z, u v, kind) - the rivers' water} - triangles as vertex triples (no index
+    lists); our world: x east, y up, z SOUTH from the map's top (tiles)."""
     H, W = idx.shape
-    under, over = [], {}
+    under, over, water = [], {}, []
+
+    def place(P, deg, T, top):                    # a model's points on the tiles T, each riding the ground
+        tx, tz = turn(P[:, 0], P[:, 2], deg)
+        u, w = tx + 0.5, tz + 0.5
+        prow = 2 * top[:, None] + 2 * (1 - w)[None, :]
+        pcol = 2 * T[:, 0][:, None] + 2 * u[None, :]
+        Y = P[None, :, 1] + _ground_h(heights, prow, pcol) * yscale
+        return np.stack([T[:, 0][:, None] + u[None, :], Y, top[:, None] + (1 - w)[None, :]], -1), prow, pcol
     groups = {}
     for z, x in zip(*np.nonzero(idx >= 0)):
         groups.setdefault(int(idx[z, x]), []).append((int(x), int(z)))
@@ -406,16 +586,9 @@ def build(lib, idx, seed, heights, yscale):
         part, deg, ovs, flags = m
         P = np.asarray(part.positions, np.float64).reshape(-1, 3)
         F = np.asarray(part.faces, np.int64).reshape(-1, 3)
-        tx, tz = turn(P[:, 0], P[:, 2], deg)
-        u, w = tx + 0.5, tz + 0.5
         T = np.asarray(tiles, np.float64)                        # (n, 2): x, z (z up)
         top = (H - 1 - T[:, 1])                                   # the tile's row from the map's top
-        prow = 2 * top[:, None] + 2 * (1 - w)[None, :]
-        pcol = 2 * T[:, 0][:, None] + 2 * u[None, :]
-        Y = P[None, :, 1] + _ground_h(heights, prow, pcol) * yscale
-        X = T[:, 0][:, None] + u[None, :]
-        Z = top[:, None] + (1 - w)[None, :]
-        V = np.stack([X, Y, Z], -1)                               # (n, v, 3)
+        V, prow, pcol = place(P, deg, T, top)                     # (n, v, 3)
         A, B, C = V[:, F[:, 0]], V[:, F[:, 1]], V[:, F[:, 2]]
         fn = np.cross(B - A, C - A)
         fn *= np.where(fn[..., 1:2] < 0, -1.0, 1.0)              # the faces look up (our z runs south)
@@ -436,11 +609,19 @@ def build(lib, idx, seed, heights, yscale):
             tri = np.concatenate([V[:, F].reshape(len(T), -1, 3), vn[:, F].reshape(len(T), -1, 3),
                                   np.full((len(T), F.size, 1), float(kind))], -1)
             under.append(tri.reshape(-1, 7))
-        for o, opts, which in ovs:
-            if opts["water"] or opts["lava"] or not o.texture:
-                continue                                          # the rivers' and lava's water: later
+        for o, opts, which, close in ovs:
             OF = np.asarray(o.faces, np.int64).reshape(-1, 3)
-            OV = V[:, which]
+            own = place(np.asarray(o.positions, np.float64).reshape(-1, 3), deg, T, top)[0]
+            OV = np.where(close[None, :, None], V[:, which], own)
+            if opts["water"]:                                     # the rivers' water: its own pass
+                uv = np.asarray(o.uvs if o.uvs else [0.0] * (2 * len(which)), np.float64).reshape(-1, 2)
+                UV = np.broadcast_to(uv, (len(T),) + uv.shape)
+                tri = np.concatenate([OV[:, OF].reshape(len(T), -1, 3), UV[:, OF].reshape(len(T), -1, 2),
+                                      np.full((len(T), OF.size, 1), float(kind))], -1)
+                water.append(tri.reshape(-1, 6))
+                continue
+            if opts["lava"] or not o.texture:
+                continue                                          # the lava's flow: not yet
             if "seperate_overlay_normals" in flags:
                 on = np.asarray(o.normals, np.float64).reshape(-1, 3)
                 nx, nz = turn(on[:, 0], on[:, 2], deg)
@@ -470,7 +651,8 @@ def build(lib, idx, seed, heights, yscale):
                                   COL[:, OF].reshape(len(T), -1, 4), np.full((len(T), OF.size, 1), float(kind))], -1)
             over.setdefault((o.texture, opts["alpha"][0] if opts["alpha"] else None), []).append(tri.reshape(-1, 15))
     return {"under": np.concatenate(under).astype(np.float32) if under else np.zeros((0, 7), np.float32),
-            "over": {k: np.concatenate(v).astype(np.float32) for k, v in over.items()}}
+            "over": {k: np.concatenate(v).astype(np.float32) for k, v in over.items()},
+            "water": np.concatenate(water).astype(np.float32) if water else np.zeros((0, 6), np.float32)}
 
 
 def void_map(idx):

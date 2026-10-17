@@ -8161,7 +8161,7 @@ building smith
 
             def model(self, tile_set, link):
                 return (got[0], 0, [(got[0], {"water": False, "lava": False, "strips": 0,
-                                              "alpha": None}, np.arange(3))], set())
+                                              "alpha": None}, np.arange(3), np.ones(3, bool))], set())
         one = np.full((H, W), -1, np.int32)
         one[0, 0] = 297                                              # a hill at the bottom-left tile
         built = TM.build(Lib(), one, seed, heights, 0.001)
@@ -8171,6 +8171,31 @@ building smith
         self.assertEqual(o.shape, (3, 15))
         self.assertAlmostEqual(float(o[2, 1]), 0.2 + 0.5)             # its own 0.2 above the ground's 500 m x 0.001
         self.assertAlmostEqual(float(o[2, 2]), H - 1)                 # the top edge (z = 0.5) at the tile's north side
+        # rivers (world_map route_rivers): a source, a river running right to its end, a second river coming
+        # down into it - a join; the long straight run winds between the three lanes (line_bg ... line_ci)
+        W2, H2 = 10, 5
+        feats = np.zeros((H2, W2, 3), np.uint8)                       # top row first, as the picture
+
+        def put(x, z, colour):
+            feats[H2 - 1 - z, x] = colour
+        put(0, 1, (255, 255, 255))
+        for x in range(1, 9):
+            put(x, 1, (0, 0, 255))
+        put(5, 3, (255, 255, 255))
+        put(5, 2, (0, 0, 255))
+        put(3, 1, (0, 255, 255))                                      # a ford
+        idx2 = np.full((H2, W2), -1, np.int32)
+        TM.rivers(idx2, feats[::-1])
+        self.assertEqual(TM.link_of(int(idx2[1, 0])), ("river_a", "source_top"))   # it leaves to the right
+        self.assertEqual(TM.link_of(int(idx2[1, 8])), ("river_a", "end_top"))
+        self.assertEqual(TM.link_of(int(idx2[1, 5])), ("river_a", "join_out_r_in_tl"))
+        self.assertEqual(TM.link_of(int(idx2[3, 5])), ("river_a", "source_right"))  # it leaves downwards
+        self.assertEqual(TM.link_of(int(idx2[2, 5]))[1][:5], "line_")
+        self.assertEqual(TM.link_of(int(idx2[1, 3])), ("river_a", "ford_top"))
+        for x in (1, 2, 6, 7):
+            self.assertTrue(TM.link_of(int(idx2[1, x]))[1].endswith("_top"))           # all flowing right
+        self.assertEqual(TM.link_of(44), ("river_a", "bend_cw_tl"))
+        self.assertEqual(TM.link_of(99), ("river_a", "join_out_r_in_bl"))
 
     def test_map_in_3d_finds_the_game_models_of_what_stands_on_the_map(self):
         """Maps > 3D's models (the user, 2026-10-15: 'towns, resources, units...'): a town takes its level's model
