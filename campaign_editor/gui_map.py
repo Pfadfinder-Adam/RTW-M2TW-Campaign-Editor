@@ -1298,13 +1298,22 @@ class MapView(ttk.Frame):
         box = (self.ox, self.oy, self.ox + cw / self.z, self.oy + ch / self.z)
         base = self._base()
         pic = view_of(base, box, (cw, ch), Image.NEAREST, self._field(), self._per_tile(base))
-        self._photo = ImageTk.PhotoImage(pic)
-        c.itemconfigure("bg", image=self._photo)
+        self._put_bg(pic)
         ox, oy = self._drawn_at
         dx, dy = (ox - self.ox) * self.z, (oy - self.oy) * self.z
         c.move("all", dx, dy)
         c.move("bg", -dx, -dy)
         self._drawn_at = (self.ox, self.oy)
+
+    def _put_bg(self, pic):
+        """The background's new pixels into the picture the canvas shows (the same size: painted over in place - a
+        new picture given to the canvas at every mouse move cost Tk about 20 ms; the 2D map lagged, the user)."""
+        ph = getattr(self, "_photo", None)
+        if ph is not None and (ph.width(), ph.height()) == pic.size:
+            ph.paste(pic)
+            return
+        self._photo = ImageTk.PhotoImage(pic)
+        self.canvas.itemconfigure("bg", image=self._photo)
 
     PICTURE_PX = 8                                      # Save picture...: pixels per tile
 
@@ -1367,7 +1376,7 @@ class MapView(ttk.Frame):
             else:                                   # the borders alone
                 pol = self.cmap.political(self.owners, self.colours, None, alpha=0, borders=True,
                                           painted=self.region_painted)
-        key = (id(bg), id(pol), land)
+        key = (id(bg), id(pol), land, getattr(self.cmap, "hver", 0))     # hver: the heights picture painted on
         if getattr(self, "_base_key", None) != key:
             if land:                                    # a new region's land, in its colour, until Apply
                 pol = pol.copy()
@@ -1500,12 +1509,19 @@ class MapView(ttk.Frame):
                 names.append((not mine, sx + r + 2, sy, name))
         # the names last, one never over another: the player's own towns first, a name that would cover one
         # already written is left out (zoom in and it shows)
-        from tkinter import font as tkfont
-        measure = tkfont.Font(font=font)
-        line = measure.metrics("linespace")
+        # each name's width measured once (measuring them all at every zoom step took a third of its time)
+        fonts = self.__dict__.setdefault("_name_fonts", {})
+        if str(font) not in fonts:
+            from tkinter import font as tkfont
+            f = tkfont.Font(font=font)
+            fonts[str(font)] = (f, f.metrics("linespace"), {})
+        measure, line, widths = fonts[str(font)]
         taken = []
         for _, x0, y0, name in sorted(names, key=lambda n: n[0]):
-            box = (x0 - 2, y0 - line / 2, x0 + measure.measure(name) + 2, y0 + line / 2)
+            w = widths.get(name)
+            if w is None:
+                w = widths[name] = measure.measure(name)
+            box = (x0 - 2, y0 - line / 2, x0 + w + 2, y0 + line / 2)
             if any(box[0] < b[2] and b[0] < box[2] and box[1] < b[3] and b[1] < box[3] for b in taken):
                 continue
             taken.append(box)
@@ -2528,7 +2544,7 @@ class MapView(ttk.Frame):
             return
         if self.on_spray(*self._spray_at(*self._spray)):
             self._refresh_bg()
-        self.after(50, self._spray_tick)
+        self.after(30, self._spray_tick)
 
     def _refresh_bg(self):
         """Only the background again (the markers stay): quick enough to follow a spraying brush."""
@@ -2539,8 +2555,9 @@ class MapView(ttk.Frame):
         box = (self.ox, self.oy, self.ox + cw / self.z, self.oy + ch / self.z)
         base = self._base()
         pic = view_of(base, box, (cw, ch), Image.NEAREST, self._field(), self._per_tile(base))
-        self._photo = ImageTk.PhotoImage(pic)
-        c.itemconfigure("bg", image=self._photo)
+        self._put_bg(pic)
+        if self._spray:                                 # while the brush is held the coast's line waits for the
+            return                                      # release (its render draws it): ~700 lines a puff lagged
         dirty, self.shore_dirty = getattr(self, "shore_dirty", None), None
         if self.shore is not None:                      # the brush changed the coast: its line again - only the
             if self.z < SHORE_ZOOM:                     # blocks it changed when it says which (shore_dirty)

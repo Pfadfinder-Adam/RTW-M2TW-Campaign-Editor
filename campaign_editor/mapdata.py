@@ -203,7 +203,8 @@ class CampaignMap:
         """map_heights.tga as drawn (height_look), at 4 px per tile: each point a square CENTRED on its place - a
         tile's middle point on the tile's middle, its side and corner points on its edges and corners (at 2 px a
         tile every point sat half a point off: the user, 2026-10-09, 'show the map by points'); kept and changed
-        pixel by pixel (set_height) while the brushes work."""
+        pixel by pixel (set_height) while the brushes work - the blown-up picture too (made again at every puff
+        and every move of the map it took a big map's brush ~25 ms: the 2D map lagged, the user)."""
         if getattr(self, "_hpil", None) is None:
             t = self.mod._optional_map(self.campaign, "map_heights.tga")
             if t is None:
@@ -212,7 +213,12 @@ class CampaignMap:
         im = self._hpil
         if im.size != (2 * self.w + 1, 2 * self.h + 1):
             return im.resize((2 * self.w, 2 * self.h), Image.BILINEAR)
-        return im.resize((2 * im.width, 2 * im.height), Image.NEAREST).crop((1, 1, 4 * self.w + 1, 4 * self.h + 1))
+        got = getattr(self, "_hview", None)
+        if got is None or got[0] is not im:
+            view = im.resize((2 * im.width, 2 * im.height), Image.NEAREST).crop((1, 1, 4 * self.w + 1, 4 * self.h + 1))
+            got = self._hview = (im, view)
+            self.hver = getattr(self, "hver", 0) + 1
+        return got[1]
 
     def _height_picture(self, t):
         """height_look() of every pixel of map_heights.tga t, top-down - done by Pillow per channel (grey land
@@ -231,7 +237,16 @@ class CampaignMap:
         im = getattr(self, "_hpil", None)
         if im is not None and 0 <= px < im.width and 0 <= py < im.height:
             c = (value, value, value) if isinstance(value, int) else tuple(value)
-            im.putpixel((px, im.height - 1 - py), self.height_look(c))
+            look = self.height_look(c)
+            y = im.height - 1 - py
+            im.putpixel((px, y), look)
+            got = getattr(self, "_hview", None)
+            if got is not None and got[0] is im:            # its square in the blown-up picture (2 x 2, one off)
+                v = got[1]
+                box = (max(0, 2 * px - 1), max(0, 2 * y - 1), min(v.width, 2 * px + 1), min(v.height, 2 * y + 1))
+                if box[0] < box[2] and box[1] < box[3]:
+                    v.paste(look, box)
+            self.hver = getattr(self, "hver", 0) + 1
 
     def height_point(self, px, py):
         """map_heights pixel (px, py) (bottom-up, 2 per tile, 2W+1 x 2H+1) in plain words: land grey and metres, or

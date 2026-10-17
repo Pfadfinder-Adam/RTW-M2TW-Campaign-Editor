@@ -3719,6 +3719,26 @@ building smith
         write(os.path.join(d, "menu", "Rome.lnt"), lost)
         self.assertIn("the game stops when it opens that menu", " ".join(L.problems(mod)))
 
+    def test_heights_picture_kept_and_painted_in_place(self):
+        """The Coast & heights map: the blown-up heights picture is made once and the brush's points painted into it
+        (made again at every puff and every move of the map it lagged on a big map) - the same as made anew."""
+        try:
+            from PIL import Image
+        except ImportError:
+            self.skipTest("Pillow")
+        from types import SimpleNamespace
+        from campaign_editor.mapdata import CampaignMap as MapData
+        hp = Image.new("RGB", (7, 5), (40, 40, 40))
+        m = SimpleNamespace(w=3, h=2, _hpil=hp, height_look=MapData.height_look)
+        first = MapData.heights_view(m)
+        self.assertIs(MapData.heights_view(m), first)
+        ver = m.hver
+        for p, v in (((0, 0), 200), ((3, 2), 90), ((6, 4), (0, 0, 120))):
+            MapData.set_height(m, p[0], p[1], v)
+        self.assertGreater(m.hver, ver)
+        fresh = hp.resize((14, 10), Image.NEAREST).crop((1, 1, 13, 9))
+        self.assertEqual(MapData.heights_view(m).tobytes(), fresh.tobytes())
+
     def test_menu_page_squares_for_the_graphics_card(self):
         """Interface drawn by the graphics card (glmenu): each piece a square cut out of its sheet - the sheet's
         part as 0..1, the screen's pixels where it goes; two triangles, six corners."""
