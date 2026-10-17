@@ -149,6 +149,9 @@ def build(mod, campaign, template, new, opts):
     if opts.get("religion"):             # Medieval II: the clone's own religion (the template's is kept otherwise)
         from .religions import set_faction_religion
         set_faction_religion(plan, new, opts["religion"])
+    if opts.get("culture") and opts["culture"] != mod.culture(template):    # its own culture (the template's else)
+        from .culture import set_faction_culture
+        set_faction_culture(plan, new, opts["culture"])
     build_start(plan, campaign, opts["start"])
     if opts.get("places"):
         from .mapedit import apply_places

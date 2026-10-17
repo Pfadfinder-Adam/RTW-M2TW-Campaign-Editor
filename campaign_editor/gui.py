@@ -592,6 +592,16 @@ class App(tk.Tk):
         self.cb_religion = ttk.Combobox(lf, textvariable=self.v["religion"], state="readonly")
         field("Religion", self.cb_religion)
         self.m2_rows = [lf.grid_slaves(row=row - 1, column=c)[0] for c in (0, 1)]
+        # its culture (descr_sm_factions.txt, both games): towns' models, portraits, buildings and units follow it
+        # (culture.py; the user, 2026-10-17)
+        self.v["culture"] = tk.StringVar()
+        self.cb_culture = ttk.Combobox(lf, textvariable=self.v["culture"], state="readonly")
+        field("Culture", self.cb_culture)
+        from .gui_util import tip
+        tip(self.cb_culture, "The faction's culture. The game takes from it: its towns', forts' and ports' look on the "
+                             "map, the portraits and agents' pictures, the buildings and units open to the culture, "
+                             "the event pictures (Rome: the voices too). A new faction keeps its template's unless "
+                             "another is picked; what changes with it is said in Preview.")
         field("Starting denari", ttk.Entry(lf, textvariable=self.v["denari"]))
         # its towns: picked on the map (Maps opens for the pick, the faction's work kept); the capital is
         # one of them
@@ -1954,7 +1964,7 @@ class App(tk.Tk):
             return
         self.editing_now = now
         self.v["name"].set(faction)
-        for k in ("display_name", "short_name", "adjective", "ai", "religion", "leader_title", "heir_title"):
+        for k in ("display_name", "short_name", "adjective", "ai", "religion", "culture", "leader_title", "heir_title"):
             self.v[k].set(now.get(k) or "")
         for k, ws in self.extra_rows.items():
             self.v[k].set(now.get(k) or "")
@@ -4964,6 +4974,11 @@ class App(tk.Tk):
         if self.tab_name() in self.FACTION_TABS and self._family_open:     # the family tree open in the form's place
             self.family_editor.load()
         self.show_family_button()
+        if self.mod is not None:
+            from .culture import names as culture_names
+            self.cb_culture["values"] = culture_names(self.mod)
+            if not self.editing():                 # a new faction starts in its template's culture
+                self.v["culture"].set(self.mod.culture(t) or "")
         fb = self.strat.faction(t) if self.strat else None
         if fb:
             parts = fb.header.split(";")[0].split(",", 1)
@@ -6069,6 +6084,7 @@ class App(tk.Tk):
             "description": self.t_descr.get("1.0", "end").strip(),
             "long_description": self.t_long.get("1.0", "end").strip(),
             "religion": (v.get("religion") or None) if self._m2() else None,
+            "culture": v.get("culture") or None,
             "leader_title": v["leader_title"] or None, "heir_title": v["heir_title"] or None,
             "primary_colour": self.colours["primary"], "secondary_colour": self.colours["secondary"],
             "copy_triggers": self.v_triggers.get(), "copy_art": self.v_art.get(),
@@ -6115,6 +6131,7 @@ class App(tk.Tk):
             "description": self.t_descr.get("1.0", "end").strip(),
             "long_description": self.t_long.get("1.0", "end").strip(),
             "religion": (v.get("religion") or None) if self._m2() else None,
+            "culture": v.get("culture") or None,
             "primary_colour": self.colours["primary"], "secondary_colour": self.colours["secondary"],
             "ai": v["ai"], "denari": int(v["denari"]) if v["denari"].isdigit() else None,
             "playable": self.v_playable.get(),

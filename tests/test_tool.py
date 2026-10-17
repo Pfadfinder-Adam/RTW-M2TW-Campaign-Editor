@@ -76,6 +76,44 @@ class ToolTest(unittest.TestCase):
         after = {k: v for k, v in tree_hash(self.root).items() if not k.startswith("CampaignEditor_backups")}
         self.assertEqual(before, after)
 
+    def test_faction_culture_picked(self):
+        """New / Edit faction's Culture (the user, 2026-10-17): one line of descr_sm_factions.txt (REX's .json too) -
+        the game takes the rest from it; what changes with it said first: units owned by the culture won / lost, a
+        building in its towns the new culture may not build (it stays)."""
+        from campaign_editor import culture as C
+        from campaign_editor.edit import edit, read_faction
+        d = os.path.join(self.root, "data")
+        with open(os.path.join(d, "export_descr_unit.txt"), "a", encoding="latin-1") as fh:
+            fh.write("\ntype eastern archers\ndictionary e_arch\nownership eastern\n"
+                     "\ntype barbarian warband\ndictionary b_war\nownership barbarian\n")
+        write(os.path.join(d, "descr_sm_factions.json"),
+              '{\n  "factions": {\n    "alpha": {\n      "culture": "eastern",\n      "tags": []\n    }\n  }\n}\n')
+        mod = ModData(self.root)
+        self.assertEqual(C.names(mod), ["eastern", "barbarian"])
+        self.assertEqual(read_faction(mod, "test", "alpha")["culture"], "eastern")
+        fx = C.effects(mod, "alpha", "eastern", "barbarian")
+        self.assertTrue(any("no longer recruit 1" in w and "eastern archers" in w for w in fx), fx)
+        self.assertTrue(any("now recruit 1" in w and "barbarian warband" in w for w in fx), fx)
+        before = tree_hash(self.root)
+        plan = edit(mod, "test", "alpha", {"culture": "barbarian"})
+        self.assertTrue(any("barbarian warband" in w for _, w in plan.warnings))
+        plan.apply()
+        with open(os.path.join(d, "descr_sm_factions.txt"), encoding="latin-1") as fh:
+            self.assertIn("culture\t\tbarbarian\nprimary_colour", fh.read())
+        with open(os.path.join(d, "descr_sm_factions.json"), encoding="latin-1") as fh:
+            self.assertIn('"culture": "barbarian"', fh.read())
+        self.assertEqual(ModData(self.root).culture("alpha"), "barbarian")
+        with self.assertRaises(ValueError):                    # no culture of this mod
+            edit(ModData(self.root), "test", "alpha", {"culture": "martian"})
+        restore(ModData(self.root), backups(ModData(self.root))[0])
+        after = {k: v for k, v in tree_hash(self.root).items() if not k.startswith("CampaignEditor_backups")}
+        self.assertEqual(before, after)
+        plan = build(ModData(self.root), "test", "alpha", "beta", {"culture": "barbarian", "start": {
+            "regions": ["B_R"], "leader": {"name": "Boris"}}})
+        plan.apply()
+        self.assertEqual(ModData(self.root).culture("beta"), "barbarian")
+        self.assertEqual(ModData(self.root).culture("alpha"), "eastern")
+
     def test_round_trip_is_byte_exact(self):
         mod = ModData(self.root)
         for p in [mod.file("sm_factions"), mod.text_files()[0]]:

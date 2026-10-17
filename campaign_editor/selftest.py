@@ -882,6 +882,21 @@ def s_religion(c, mod):
     return plan
 
 
+@step("Culture: {new} takes another culture of the mod (descr_sm_factions.txt's culture line; what changes with it "
+      "said in the plan)",
+      "{new}'s towns look like the new culture's towns on the campaign map, its portraits and the buildings open to "
+      "it are that culture's")
+def s_culture(c, mod):
+    from . import culture as C
+    now = mod.culture(c.new)
+    other = [x for x in C.names(mod) if x != now and x not in ("roman", "mesoamerican")]
+    if not now or not other:
+        raise Skip("no other culture to give %s" % c.new)
+    plan = Plan(mod, None, "culture")
+    C.set_faction_culture(plan, c.new, other[0])
+    return plan
+
+
 def faith_temples(plan, faction):
     """The test religion's temples: a copy of the template religion's town temple chain (temple_catholic in
     Medieval II) under temple_ce_faith, its levels ce_faith_*, its 'religion' line naming ce_faith, no conversion to
@@ -2782,6 +2797,7 @@ COVERAGE = {
     "Character editor: traits and retinue of a character": ["s_character"],
     "Traits and retinue: a new trait": ["s_traits"],
     "Religions (Medieval II, Barbarian Invasion)": ["s_religion"],
+    "New / Edit faction: Culture": ["s_culture"],
     "Roster: give": ["s_roster", "s_roster_other"],
     "Roster: take away": ["s_roster_take"],
     "Campaign-map figures": ["s_figures"],

@@ -11,6 +11,7 @@
 - **Changed**: a slimmer Unit editor and Models tab; the support buttons in one drop-down.
 
 ### Added
+- New / Edit faction: a Culture pick - the faction's towns, portraits, buildings and units follow the culture in the game; Preview says which units it gains or loses and which buildings in its towns the new culture cannot build.
 - Maps > 3D is drawn by the graphics card the way the games draw their campaign map: the ground blended between grounds with the game's own masks, its light and its sea - it moves without lag and loads faster.
 - Maps > 3D: the coast has the game's beach and surf along it, the surf rolling in as in the game (not on rivers and cliffs, as the game); Layers shows or leaves out the sea (the sea floor seen) and the beach and surf.
 - Units, Show a faction: a mod's units anyone may hire (ownership all - HLR's regional units) came under every faction with the mercenaries' pictures -> a faction lists the units naming it; those have a Show of their own.

@@ -85,6 +85,9 @@ def read_faction(mod, campaign, faction):
             out["denari"] = int(t[1]) if t[1].isdigit() else t[1]
             break
     out["playable"] = bool(s.playable and faction in [n for _, n in s.playable["items"]])
+    culture = mod.culture(faction)
+    if culture:
+        out["culture"] = culture
     from .religions import faction_religion
     rel = faction_religion(mod, faction)
     if rel:
@@ -120,6 +123,9 @@ def edit(mod, campaign, faction, opts):
     if opts.get("religion") and opts["religion"] != now.get("religion"):   # after a new religion is written
         from .religions import set_faction_religion
         set_faction_religion(plan, faction, opts["religion"])
+    if opts.get("culture") and opts["culture"] != now.get("culture"):      # its towns, pictures, units follow
+        from .culture import set_faction_culture
+        set_faction_culture(plan, faction, opts["culture"])
     _strat(plan, campaign, now)
     if opts.get("places"):
         from .mapedit import apply_places
