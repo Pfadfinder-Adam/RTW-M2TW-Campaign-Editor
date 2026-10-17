@@ -3750,6 +3750,23 @@ building smith
         self.assertEqual(rows[2][:4], (110, 45, 0.5, 0.5))
         self.assertEqual(G.quad(0, 0, 1, 1, rgba=(1, 0, 0, 1))[5], (0, 1, 0.0, 1.0, 1, 0, 0, 1))
 
+    def test_menu_page_drawn_after_the_3d_map(self):
+        """#340: an Interface page went black after the 3D map - the map leaves the depth test on in the one shared
+        OpenGL context, so every piece after the page's backdrop (all at one depth) was thrown away. The page's
+        drawing sets the card's switches itself."""
+        from campaign_editor import glmap
+        from campaign_editor import glmenu as G
+        if not G.available():
+            self.skipTest("no OpenGL 3.3 here: %s" % glmap.available()[1])
+        ctx = glmap.context()
+        ctx.enable(ctx.DEPTH_TEST | ctx.CULL_FACE)               # as View in 3D leaves it
+        try:
+            arr = G.draw(20, 10, (0, 0, 0), [(None, G.quad(0, 0, 20, 10, rgba=(0.1, 0.1, 0.1, 1.0))),
+                                             (None, G.quad(5, 2, 15, 8, rgba=(1.0, 0.0, 0.0, 1.0)))])
+        finally:
+            ctx.disable(ctx.DEPTH_TEST | ctx.CULL_FACE)
+        self.assertEqual(tuple(arr[5, 10]), (255, 0, 0))
+
     def test_menu_layout_read_and_written_byte_exact(self):
         """The interface editor's ground (the user, 2026-10-15: 'a full interface editor', from Wholesome Queen's
         studio): a .lnt file read into pages, pieces, pictures; written back byte-exact; a move, a copy, a rename and

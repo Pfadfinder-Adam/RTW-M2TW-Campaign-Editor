@@ -120,7 +120,7 @@ def draw(W, H, background, ops):
     ctx.viewport = (0, 0, W, H)
     bg = [v / 255.0 for v in background[:3]]
     ctx.clear(bg[0], bg[1], bg[2], 1.0)
-    ctx.enable(ctx.BLEND)
+    ctx.enable_only(ctx.BLEND)                  # the 3D map leaves the depth test on in the shared context (#340)
     ctx.blend_func = ctx.SRC_ALPHA, ctx.ONE_MINUS_SRC_ALPHA
     prog = _gl["prog"]
     prog["size"].value = (float(W), float(H))
