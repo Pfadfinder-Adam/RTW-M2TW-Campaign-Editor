@@ -171,7 +171,7 @@
 
 ### Changed
 - Maps > 3D: the older 3D picture drawn without the graphics card is gone, and with it the towns and armies drawn as little pictures - the game's models come back on the graphics card later.
-- Maps > 3D: the game's own editor button and the heights slider taken away - the relief stands as high as in the game.
+- Maps > 3D: the game's own editor (it opened only in Medieval II with M2EX, and crashed there) and the heights slider taken away - the relief stands as high as in the game.
 - Recolour: no 'from the colours of' list - the colours each picture carries now are found by themselves; the 'now' swatches stay to correct them.
 - Recolour, Campaign rules, Events, Traits and retinue, Mercenaries and Rebels are works of the main window on the top row, not windows of their own (the map's right click still opens Mercenaries and Rebels in a window over the map); their changes are kept by themselves and written with Apply changes.
 - Add-ons: Sack Settlement and Recruitment Order are one row each - the row puts in the part for the loaded game (Rome's or Medieval II's); on Medieval II, Recruitment Order offers its two parts (the order of the cards, or one grid as in Rome with no engine).
@@ -231,7 +231,7 @@
 - After a new faction (or any change to the factions or their sounds) every faction could speak another's accent -> the game's compiled sounds are removed (backed up) and the game builds them again on its next start.
 - A new faction given the only town of a faction whose leader stood in it was refused (Check mod files' rehearsal said so for papal_states and portugal) -> the town is given and the leader steps out beside it, said in the warnings; the rehearsal says its lines are about the editor, not your files.
 - Units with REX's 'soldiers' line and a block of models (as in HLR) showed 0 men -> their real number of men.
-- Medieval II: a faction marked undiscovered made playable (by Edit faction or by the game's own editor) lost every faction after it, rebels' armies too -> its 'undiscovered' line goes, the game's editor no longer changes the faction lists, and Check mod files warns.
+- Medieval II: a faction marked undiscovered made playable lost every faction after it, rebels' armies too -> Edit faction's Playable takes its 'undiscovered' line out, and Check mod files warns.
 - Garrison / army right click offered armour 1-3 to every unit, though most units have fewer armour upgrades (the game drops the rest) -> it offers only the unit's own upgrades.
 - Coast & heights still drew the rivers, fords and cliffs over the heights -> only land, sea and heights are shown there.
 - The map's Layers / what... and the Tools / Support drop-downs opened again (a blink) on a second click instead of closing (Windows) -> a second click closes them.

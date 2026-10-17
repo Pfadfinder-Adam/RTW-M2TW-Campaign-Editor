@@ -1556,18 +1556,6 @@ def s_minimap(c, mod):
     return plan
 
 
-@step("The game's own campaign editor (no button since #322): the campaign copied to campaign/custom/ce_<campaign> for the game's own "
-      "campaign-map editor (Open in the game's editor without starting the game)",
-      "start the game in its campaign editor (Game's editor... > Open in the game's editor, or the start line it "
-      "shows): the map of ce_<campaign> loads with its towns and armies; Save there, close the game, Take the "
-      "changes back - the campaign keeps its script line")
-def s_game_editor(c, mod):
-    from . import gameeditor as GE
-    plan = Plan(mod, "game_editor", "game_editor", {})
-    GE.prepare(plan, c.campaign)
-    return plan
-
-
 @step("Interface: the main menu's first picture (the game's logo) moved 10 pixels to the right in the menu "
       "layout file (Rome.lnt / mtw2.lnt)",
       "the main menu: the game's logo stands a little to the right of where it stood; every button still works")
@@ -2814,7 +2802,6 @@ COVERAGE = {
     "Bring from another mod": ["s_bring"],
     "New faction > From another mod (a whole faction brought)": ["s_faction_bring"],
     "Maps > 3D > Make the minimap from it": ["s_minimap"],
-    "The game's own campaign-map editor (gameeditor - no button since report #322)": ["s_game_editor"],
     "Interface: the game's menu screens, their pieces moved, sized, copied": ["s_interface"],
     "Interface: the pictures of a button's states": ["s_interface_states"],
     "Load: locked factions opened to play": ["s_open_factions"],
