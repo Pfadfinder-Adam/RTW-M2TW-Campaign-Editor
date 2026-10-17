@@ -7,7 +7,10 @@ step and kept as a picture of its own). The words and the pieces the game draws 
 made once at the layout's own size. Drawn in the page's order, each over the one before (the pictures' alpha
 blended as the game blends them)."""
 
-import numpy as np
+try:
+    import numpy as np
+except ImportError:                             # the drawing on the canvas, as before
+    np = None
 
 VS = """
 #version 330
@@ -55,6 +58,8 @@ def _context():
 
 def available():
     """True when the graphics card gives OpenGL 3.3 (and NumPy is there)."""
+    if np is None:
+        return False
     from .glmap import available as gl_available
     return gl_available()[0]
 

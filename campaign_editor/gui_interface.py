@@ -756,8 +756,9 @@ class InterfacePanel(ttk.Frame):
         c.delete("all")
         if not self.doc or not self.page:
             return
-        if self._gpu is None:
+        if self._gpu is None:                           # the card's picture is shown through Pillow: both needed
             try:
+                from PIL import ImageTk  # noqa: F401
                 from . import glmenu
                 self._gpu = glmenu.available()
             except Exception:
