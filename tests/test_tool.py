@@ -8326,10 +8326,30 @@ building smith
         self.assertEqual(got.shape, (3, 9))
         town, port, ship = got
         self.assertTrue(np.allclose(town[[0, 1, 2, 8]], [0.5, 0.2, H - 0.5 - 0.5, 1]))
-        self.assertAlmostEqual(float(port[0]), 2.5 - 0.5)             # its south (open) side turned east, to the sea
+        self.assertAlmostEqual(float(port[0]), 3.5 - 0.5)             # on the dock east of it, its open side to the sea
         self.assertAlmostEqual(float(port[2]), H - 1 - 1 + 0.5)
         self.assertEqual((float(ship[1]), float(ship[8])), (0.0, 3))  # on the water, the armies' layer
         self.assertAlmostEqual(float(ship[2]), 0.5 - 0.25)            # scaled by half
+
+    def test_map_in_3d_port_dock_as_the_engine(self):
+        """Report #329: a port's land part on its tile, its sea part on the dock - the sea tile beside it with the most
+        sea around it (the engine's setup_orientation, its count not started again when it loses) - both turned so
+        their open side (the models' south) looks at the dock: north 180, east 270, south 0, west 90."""
+        try:
+            import numpy as np
+        except ImportError:
+            self.skipTest("NumPy not installed")
+        from campaign_editor import mapmodels as MM
+        sea = np.zeros((5, 5), bool)                                  # rows bottom-up, as descr_strat's y
+        sea[3, 2] = True                                              # north of (2, 2): one sea tile, no sea around
+        sea[2, 3] = sea[2, 4] = sea[1, 3] = sea[3, 3] = True          # east of it: sea all round
+        self.assertEqual(MM._port_dock(2, 2, sea), (270, (3, 2)))
+        lone = np.zeros((5, 5), bool)
+        lone[1, 2] = True                                             # only south: no sea around it, kept at 180
+        self.assertEqual(MM._port_dock(2, 2, lone), (180, (2, 1)))
+        west = np.zeros((5, 5), bool)
+        west[2, 1] = west[2, 0] = True
+        self.assertEqual(MM._port_dock(2, 2, west), (90, (1, 2)))
 
     def test_map_in_3d_figures_face_the_camera(self):
         """Report #330: Rome's figures on the 3D map stood with their backs to the camera; turned to look south (our

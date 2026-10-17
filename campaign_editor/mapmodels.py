@@ -8,9 +8,8 @@ for the graphics card (glmap).
   stand / idle animation, as the older view did), scaled by descr_model_strat.txt's 'scale' - tile units, as the
   engine (AERIAL_MAP_TILE_SIZE 1, model_db opens the model at that scale); in their faction's texture.
 - Each stands in its tile's middle on the ground (a fleet on the water); a character looks south, at the camera, as
-  the game shows them (_face_camera), on his lowest point; a port's model looks out to the
-  sea beside its tile (its -z side - the game's south, where its walls are open - toward the first sea tile north,
-  east, south or west).
+  the game shows them (_face_camera), on his lowest point; a port is two models turned
+  alike, its land part on its tile, its sea part on the dock - the sea tile beside it the engine picks (_port_dock).
 
 Our world: x east, y up, z SOUTH from the map's top; the models' z (the game's north) is turned round."""
 
@@ -166,17 +165,29 @@ def _face_camera(V, game):
         V[..., 2] *= -1
 
 
-def _port_turn(x, y, sea):
-    """Degrees (clockwise from the north) that turn a port's sea side toward the first sea tile beside (x, y). Its
-    sea side is the model's SOUTH (-z) in both games (report #329): Rome's port_sea is a U of walls open to the
-    south with two columns at its open ends, its port_land's boats on its south edge; Medieval II's port_land the
-    same U with its two columns further south, the houses (port_sea) north of it - the walls on land, the columns in
-    the water."""
+def _port_dock(x, y, sea):
+    """(degrees clockwise from the north, dock tile) of the port at (x, y), as the engine works them out
+    (PORT_BUILDING::setup_orientation): of the sea tiles north, east, south, west of it, the one with the most sea
+    around it - its count not started again when it loses, as the engine's - the port's sea side (the models' south,
+    -z: Rome's port_sea and Medieval II's port_land are a U of walls open there, report #329) turned toward it.
+    port_land stands on the port's own tile (land), port_sea on the dock, both turned alike - so the houses stand
+    inside the walls and the columns in the water."""
     H, W = sea.shape
-    for deg, (dx, dy) in ((180, (0, 1)), (270, (1, 0)), (0, (0, -1)), (90, (-1, 0))):
-        if 0 <= x + dx < W and 0 <= y + dy < H and sea[y + dy, x + dx]:
-            return deg
-    return 0
+    steps = ((0, 1), (1, 0), (0, -1), (-1, 0))
+
+    def wet(px, py):
+        return 0 <= px < W and 0 <= py < H and bool(sea[py, px])
+    deg, best, count, most = 180, None, 0, 0
+    for i, (dx, dy) in enumerate(steps):
+        nx, ny = x + dx, y + dy
+        if not wet(nx, ny):
+            continue
+        if most == 0:
+            best = (nx, ny)
+        count += sum(wet(nx + ex, ny + ey) for ex, ey in steps)
+        if count > most:
+            best, most, count, deg = (nx, ny), count, 0, (180 + 90 * i) % 360
+    return deg, best or (x, y)
 
 
 def build(objs, loader, heights, yscale):
@@ -193,9 +204,13 @@ def build(objs, loader, heights, yscale):
         parts = loader.parts(o["model"], o.get("skeleton") if o["kind"] == "character" else None, o.get("texture"))
         if not parts:
             continue
+        deg = 0
+        if o["kind"] in ("port", "port_sea"):
+            deg, dock = _port_dock(x, y, sea)
+            if o["kind"] == "port_sea":                  # the dock: the sea tile beside the port
+                x, y = dock
         top = H - 1 - y
         gy = max(float(TM._ground_h(heights, np.array([2.0 * top + 1]), np.array([2.0 * x + 1]))[0]) * yscale, 0.0)
-        deg = _port_turn(x, y, sea) if o["kind"] in ("port", "port_sea") else 0
         s = float(o.get("scale") or 1.0)
         for tex, v in parts:
             w = v.copy()
