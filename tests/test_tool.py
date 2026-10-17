@@ -8282,6 +8282,67 @@ building smith
         self.assertTrue(np.allclose(inst["a.cas"][:, 1], 0.1))       # on the ground: 100 m x 0.001
         self.assertTrue(np.allclose(MT.sheers(0.0)[[0, 19]], [0.1, -0.1]))
 
+    def test_map_in_3d_roads_and_borders_as_the_game_draws_them(self):
+        """The live 3D map's roads and region borders (engine source aerial_map_roads / region_border_manager): a
+        region's road level is its town's road building; a road runs town to town between neighbouring regions
+        over their own tiles, a river crossed only at a ford; each step a 0.2-wide ribbon in its level's texture, a
+        fork of 3 ways its T square; a border strip inward of each region's edge - 0.2 wide between owners, 0.05
+        within one owner's land, none along the coast; the line through the corners the same for both sides."""
+        try:
+            import numpy as np
+        except ImportError:
+            self.skipTest("NumPy not installed")
+        from campaign_editor import mapnet as N
+
+        class FB:
+            def __init__(self, name, sts):
+                self.name, self.settlements = name, sts
+
+        class ST:
+            def __init__(self, region, start, end):
+                self.region, self.start, self.end = region, start, end
+
+        class S:
+            lines = ["settlement", "\tbuilding", "\t{", "\t\ttype hinterland_roads paved_roads", "\t}",
+                     "settlement", "\tlevel town"]
+            factions = [FB("a", [ST("West", 0, 5), ST("East", 5, 7)])]
+        chains = {"hinterland_roads": ["roads", "paved_roads", "highways"]}
+        self.assertEqual(N.road_levels(S, chains), {"West": 2})
+        # 6 x 3 tiles: West the left half, East the right, the top row sea; a river column at x 3 with a ford at z 1
+        W, H = 6, 3
+        grid = np.full((H, W), -1, np.int32)
+        grid[:2, :3], grid[:2, 3:] = 0, 1
+        heights = np.full((2 * H + 1, 2 * W + 1), 100.0, np.float32)
+        heights[:2] = -10.0                                           # the top tile row is sea
+        feats = np.zeros((H, W, 3), np.uint8)                         # top row first
+        feats[H - 1 - 0, 3] = (0, 0, 255)
+        feats[H - 1 - 1, 3] = (0, 255, 255)
+        towns = {"West": (0, 0), "East": (5, 0)}
+        steps = N.roads(grid, ["West", "East"], towns, {"West": 2}, heights, feats)
+        tiles = {t for st in steps for t in st}
+        self.assertIn((3, 1), tiles)                                  # over the ford
+        self.assertNotIn((3, 0), tiles)                               # never through the river
+        self.assertEqual(set(steps.values()), {2})                    # East has no road: West's level
+        geo = N.road_geometry(steps, heights, 0.001)
+        rib = geo["terrain/aerial_map/roads/road_stone.tga"]
+        self.assertEqual(rib.shape[1], 6)
+        self.assertTrue(np.allclose(rib[:, 1], 0.1))                  # on the ground
+        fork = N.road_geometry({((1, 1), (2, 1)): 1, ((0, 1), (1, 1)): 1, ((1, 0), (1, 1)): 1}, heights, 0.001)
+        self.assertIn("terrain/aerial_map/roads/road_dirt_T.tga", fork)
+        self.assertEqual(N._loops(np.array([[1]])), {1: [[(0, 0), (1, 0), (1, 1), (0, 1)]]})
+        b = N.border_geometry(grid, ["West", "East"], {"West": "a", "East": "b"}, {}, {"a": ((255, 0, 0),
+                              (0, 0, 0)), "b": ((0, 0, 255), (0, 0, 0))}, heights, 0.001)
+        self.assertGreater(len(b), 0)
+        self.assertTrue(np.allclose(b[:, 5][b[:, 5] > 0].max(), 0.7))
+        self.assertTrue(((b[:, 6] == 1) | (b[:, 8] == 1)).all())      # red or blue: an owner's colour
+        same = N.border_geometry(grid, ["West", "East"], {"West": "a", "East": "a"}, {}, {}, heights, 0.001)
+        q = same.reshape(-1, 6, 12)                                   # each piece: its line point, its inner one
+        wide = np.hypot(q[:, 1, 0] - q[:, 0, 0], q[:, 1, 2] - q[:, 0, 2])
+        self.assertLess(float(wide.max()), 0.06)                      # 0.05 wide within one owner's land
+        q = b.reshape(-1, 6, 12)
+        self.assertAlmostEqual(float(np.hypot(q[:, 1, 0] - q[:, 0, 0], q[:, 1, 2] - q[:, 0, 2]).max()), 0.2,
+                               places=3)
+
     def test_map_in_3d_lays_the_towns_and_armies_on_the_ground(self):
         """The live 3D map's towns, ports, resources and characters (mapmodels.build): each in its tile's middle on
         the ground (a fleet on the water, never under it), scaled by its 'scale', a port's sea side turned toward the

@@ -30,7 +30,7 @@ HINT = ("The campaign map in 3D, drawn by the graphics card the way the games dr
         "dragged: turn and look up or down; the wheel turned: nearer / farther; the arrow keys or W A S D move too. "
         "Heights brush: the left button raises or lowers the land under the circle while held (Ctrl + wheel or [ ] "
         "for its size) - the brush of Coast & heights, its Undo and Apply shared. The relief stands as "
-        "high as in the game; the towns, ports, resources, armies, agents and fleets stand as descr_strat.txt will have them (what the Map moved or added before the write included).")
+        "high as in the game; the towns, ports, resources, armies, agents and fleets stand as descr_strat.txt will have them (what the Map moved or added before the write included), with the roads and region borders.")
 
 
 class Map3DView(ttk.Frame):

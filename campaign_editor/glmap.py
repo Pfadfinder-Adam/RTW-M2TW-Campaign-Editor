@@ -32,7 +32,8 @@ from . import terrain3d as T3
 SCALE = {"medieval2": 1.2, "rome": 0.6}         # the games' height scale (aerial_map.h)
 LAYERS = (("sea", "Sea"), ("coast", "Beach and surf"), ("mountains", "Mountains and volcanoes"),
           ("hills", "Hills"), ("rivers", "Rivers"), ("cliffs", "Cliffs"), ("trees", "Trees"),
-          ("towns", "Towns and ports"), ("resources", "Resources"),
+          ("roads", "Roads"), ("borders", "Region borders"), ("towns", "Towns and ports"),
+          ("resources", "Resources"),
           ("armies", "Armies, agents and fleets"))                        # what render(show=) can leave out
 MODEL_LAYERS = {"mountains": 1, "hills": 2, "rivers": 3, "cliffs": 4}     # tilemodels.KIND of each
 OBJECT_LAYERS = {"towns": 1, "resources": 2, "armies": 3}                 # mapmodels.KIND of each
@@ -314,6 +315,10 @@ class MapData:
             if strat is None:
                 strat = Strat(mod.load(mod.campaign_file(campaign, "descr_strat.txt")))
             self._objs = (O.objects(mod, campaign, strat), loader or MM.Loader(mod))
+            try:
+                self._net(mod, campaign, strat)
+            except Exception as e:                      # the roads and borders alone left out
+                self.notes.append("the roads and borders are not drawn: %s" % e)
             self.place_objects()
             loader = self._objs[1]
             for tex in self.objects:
@@ -329,14 +334,67 @@ class MapData:
         """descr_strat changed (an army added or moved on the Map, not written yet): what stands on the map laid
         again from it, the models already read kept. GLMap.models_placed() then gives it to the card."""
         loader = self._objs[1] if getattr(self, "_objs", None) else None
-        self.notes = [n for n in self.notes if not n.startswith(("model(s) or texture(s)", "the towns and armies"))]
+        self.notes = [n for n in self.notes if not n.startswith(("model(s) or texture(s)", "the towns and armies",
+                                                                "the roads and borders"))]
         self._objects(mod, campaign, strat, loader)
 
     def place_objects(self):
-        """The towns, armies... laid again on the heights as they are now."""
+        """The towns, armies, roads and borders laid again on the heights as they are now."""
         from . import mapmodels as MM
         if getattr(self, "_objs", None):
             self.objects = MM.build(self._objs[0], self._objs[1], self.heights, 0.0005 * self.scale)
+        self.place_net()
+
+    def _net(self, mod, campaign, strat):
+        """The roads and region borders (mapnet): the towns' road buildings and the regions' owners from strat."""
+        from . import mapnet as N
+        from . import tilemodels as TM
+        if getattr(self, "_net_src", None) is None:
+            self.roads, self.borders, self.net_pictures = {}, np.zeros((0, 12), np.float32), {}
+            grid, names = N.region_grid(mod, campaign)
+            src = getattr(self, "_model_src", None)
+            ground = src[0] if src else T3._picture(mod, campaign, "map_ground_types.tga")
+            feats = src[1] if src else T3._picture(mod, campaign, "map_features.tga")
+            H, W = grid.shape
+            mh = TM.tile_types(ground)[TM.MOUNTAINS_HIGH] if ground is not None and \
+                ground.shape[:2] == self.heights.shape else np.zeros((H, W), bool)
+            rivers = np.zeros((H, W), bool)
+            if feats is not None and feats.shape[:2] == (H, W):
+                f = feats[::-1].astype(np.int32)
+                rivers = np.isin((f[..., 0] << 16) | (f[..., 1] << 8) | f[..., 2], (0x0000ff, 0xffffff, 0x00ffff))
+            regs = mod.regions(campaign)
+            self._net_src = {"grid": grid, "names": names, "chains": N.road_chains(mod), "feats": feats,
+                             "mountains": mh, "rivers": rivers, "towns": mod.city_tiles(campaign),
+                             "creators": {k: v.get("creator") for k, v in regs.items()},
+                             "colours": N.faction_colours(mod),
+                             "skip": {k for k, v in regs.items() if v.get("wasteland")}}
+            for name in ("road_dirt", "road_stone", "road_highway"):
+                for tail in ("", "_T", "_X"):
+                    rel = "terrain/aerial_map/roads/%s%s.tga" % (name, tail)
+                    self.net_pictures[rel] = _image(mod, [rel], mode="RGBA")
+            for part in ("primary", "secondary"):
+                rel = "terrain/aerial_map/indicators/region_borders_%s.tga" % part
+                self.net_pictures[rel] = _image(mod, [rel], mode="RGBA")
+        src = self._net_src
+        src["levels"] = N.road_levels(strat, src["chains"])
+        src["owners"] = strat.owners()                  # laid by place_objects, which follows
+
+    def place_net(self):
+        """The roads (their tiles found again: the heights steer them) and borders laid on the heights."""
+        from . import mapnet as N
+        src = getattr(self, "_net_src", None)
+        if not src or "levels" not in src:
+            return
+        ys = 0.0005 * self.scale
+        try:
+            steps = N.roads(src["grid"], src["names"], src["towns"], src["levels"], self.heights, src["feats"],
+                            src["mountains"])
+            self.roads = N.road_geometry(steps, self.heights, ys, src["rivers"])
+            self.borders = N.border_geometry(src["grid"], src["names"], src["owners"], src["creators"],
+                                             src["colours"], self.heights, ys, src["mountains"], src["rivers"],
+                                             src["skip"])
+        except Exception as e:                          # said in the bar, the map still drawn
+            self.notes.append("the roads and borders are not drawn: %s" % e)
 
     def place_trees(self):
         """The trees placed again on the heights as they are now."""
@@ -729,6 +787,70 @@ void main() {
 }
 """
 
+ROAD_VS = """
+#version 330
+uniform mat4 mvp;
+in vec3 pos;
+in vec2 uv;
+in float alpha;
+out vec2 t;
+out float a;
+void main() { t = uv; a = alpha; gl_Position = mvp * vec4(pos, 1.0); }
+"""
+
+ROAD_FS = """
+#version 330
+""" + COLOUR_GLSL + """
+uniform vec3 to_light;
+uniform vec3 ambient;
+uniform vec3 diffuse;
+uniform sampler2D pic;
+in vec2 t;
+in float a;
+out vec4 colour;
+void main() {                           // the engine's ribbon: the picture under the sun, see-through as it is
+    vec4 p = texture(pic, t);
+    vec3 light = ambient + diffuse * max(to_light.y, 0.0);
+    colour = vec4(enc(dec(p.rgb) * (linear == 1 ? light : min(light, vec3(1.0)))), p.a * a);
+}
+"""
+
+BORDER_VS = """
+#version 330
+uniform mat4 mvp;
+in vec3 pos;
+in vec2 uv;
+in float alpha;
+in vec3 c1;
+in vec3 c2;
+out vec2 t;
+out float a;
+out vec3 k1;
+out vec3 k2;
+void main() { t = uv; a = alpha; k1 = c1; k2 = c2; gl_Position = mvp * vec4(pos, 1.0); }
+"""
+
+BORDER_FS = """
+#version 330
+""" + COLOUR_GLSL + """
+uniform sampler2D pri;
+uniform sampler2D sec;
+in vec2 t;
+in float a;
+in vec3 k1;
+in vec3 k2;
+out vec4 colour;
+void main() {                           // the engine's border: the owner's two colours, unlit, one over the other
+    vec4 p = texture(pri, t);
+    vec4 s = texture(sec, t);
+    float pa = p.a * a;
+    float sa = s.a * a * (1.0 - pa);
+    vec3 rgb = dec(p.rgb * k1) * pa + dec(s.rgb * k2) * sa;
+    float oa = pa + sa;
+    colour = vec4(oa > 0.0 ? enc(rgb / oa) * oa : vec3(0.0), oa);     // premultiplied
+}
+"""
+
 TREE_FS = """
 #version 330
 """ + COLOUR_GLSL + """
@@ -938,6 +1060,15 @@ class GLMap:
         self.obj_pics = {k: self._picture(v, 4, (150, 140, 120, 255), repeat=True)
                          for k, v in data.object_pictures.items()}
         self._obj_buffers, self.obj_vaos = [], []
+        self.road = self._keep(ctx.program(vertex_shader=ROAD_VS, fragment_shader=ROAD_FS))
+        self.border = self._keep(ctx.program(vertex_shader=BORDER_VS, fragment_shader=BORDER_FS))
+        self.net_pics = {}
+        for k, v in getattr(data, "net_pictures", {}).items():
+            if v is not None:
+                t = self._picture(v, 4, (0, 0, 0, 0), repeat=True)
+                t.repeat_y = False                             # across a ribbon: held at its edges
+                self.net_pics[k] = t
+        self._net_buffers, self.road_vaos, self.border_vao = [], [], None
         self.tree_pics = {k: self._picture(v, 4, (60, 90, 50, 255), repeat=True)
                           for k, v in data.tree_pictures.items()}
         self._tree_buffers, self.tree_vaos = [], []
@@ -979,10 +1110,11 @@ class GLMap:
         top = np.inf if lin else 1.0                # linear light is not cut at 1 (the shoulder bends it at the end)
         sea_l = np.minimum(np.asarray(L["ambient"]) + np.asarray(L["diffuse"]) * max(float(s[1]), 0.0), top)
         self.linear = lin
-        for prog in (self.terrain, self.under, self.over, self.sea, self.coast, self.river, self.tree, self.obj):
+        for prog in (self.terrain, self.under, self.over, self.sea, self.coast, self.river, self.tree, self.obj,
+                     self.road, self.border):
             prog["linear"].value = int(lin)
             prog["exposure"].value = float(L.get("exposure", 1.0))
-        for prog in (self.terrain, self.under, self.over, self.tree, self.obj):   # one light for all on the land
+        for prog in (self.terrain, self.under, self.over, self.tree, self.obj, self.road):   # one light on the land
             for name, value in (("to_light", tuple(to_light)), ("ambient", L["ambient"]), ("diffuse", L["diffuse"])):
                 prog[name].value = value
         for prog in (self.terrain, self.under):              # the tile models' plain parts wear the ground's pictures
@@ -996,10 +1128,13 @@ class GLMap:
         self.over["pic"].value, self.over["mask"].value = 9, 10
         self.tree["pic"].value = 9
         self.obj["pic"].value = 9
+        self.road["pic"].value = 9
+        self.border["pri"].value, self.border["sec"].value = 9, 10
         self.models_stale = False
         self._models()
         self._trees()
         self._objects()
+        self._net()
         for prog in (self.sea, self.river):             # the rivers' water looks like the open water
             prog["tiles"].value = (tc, tr_)
             prog["sea_light"].value = tuple(float(v) for v in sea_l)
@@ -1062,6 +1197,25 @@ class GLMap:
         self._models()
         self._trees()
         self._objects()
+        self._net()
+
+    def _net(self):
+        """The roads' and borders' buffers."""
+        for obj in self._net_buffers:
+            obj.release()
+        self._net_buffers, self.road_vaos, self.border_vao = [], [], None
+        for tex, arr in getattr(self.data, "roads", {}).items():
+            if len(arr):
+                vbo = self.ctx.buffer(np.ascontiguousarray(arr).tobytes())
+                vao = self.ctx.vertex_array(self.road, [(vbo, "3f 2f 1f", "pos", "uv", "alpha")])
+                self._net_buffers += [vao, vbo]
+                self.road_vaos.append((tex, vao))
+        b = getattr(self.data, "borders", None)
+        if b is not None and len(b):
+            vbo = self.ctx.buffer(np.ascontiguousarray(b).tobytes())
+            self.border_vao = self.ctx.vertex_array(self.border, [(vbo, "3f 2f 1f 3f 3f", "pos", "uv", "alpha",
+                                                                    "c1", "c2")])
+            self._net_buffers += [self.border_vao, vbo]
 
     def _objects(self):
         """The buffers of what stands on the map, one per texture."""
@@ -1273,19 +1427,43 @@ class GLMap:
             ctx.depth_func = "<"
             ctx.disable(ctx.BLEND)
             self.fbo.depth_mask = True
+        roads = self.road_vaos if show.get("roads", True) else []
+        border = self.border_vao if show.get("borders", True) else None
+        if roads or border is not None:                  # after the ground, see-through, lifted toward the eye
+            self.fbo.depth_mask = False
+            ctx.enable(ctx.BLEND)
+            ctx.depth_func = "<="
+            ctx.polygon_offset = (-2.0, -512.0)
+            if roads:
+                ctx.blend_func = ctx.SRC_ALPHA, ctx.ONE_MINUS_SRC_ALPHA
+                self.road["mvp"].write(mvp_bytes)
+                for tex, vao in roads:
+                    self.net_pics.get(tex, self._white).use(9)
+                    vao.render()
+            if border is not None:
+                ctx.blend_func = ctx.ONE, ctx.ONE_MINUS_SRC_ALPHA
+                self.border["mvp"].write(mvp_bytes)
+                self.net_pics.get("terrain/aerial_map/indicators/region_borders_primary.tga", self._white).use(9)
+                self.net_pics.get("terrain/aerial_map/indicators/region_borders_secondary.tga", self._white).use(10)
+                border.render()
+            ctx.polygon_offset = (0.0, 0.0)
+            ctx.depth_func = "<"
+            ctx.blend_func = ctx.SRC_ALPHA, ctx.ONE_MINUS_SRC_ALPHA
+            ctx.disable(ctx.BLEND)
+            self.fbo.depth_mask = True
         raw = self.fbo.read(components=3)
         return np.frombuffer(raw, np.uint8).reshape(h, w, 3)[::-1]
 
     def release(self):
         for obj in reversed(self._gone + self._coast_buffers + self._model_buffers + self._tree_buffers +
-                            self._obj_buffers +
+                            self._obj_buffers + self._net_buffers +
                             ([self.fbo] if self.fbo is not None else [])):
             try:
                 obj.release()
             except Exception:
                 pass
         self._gone, self._coast_buffers, self._model_buffers, self._tree_buffers, self.fbo = [], [], [], [], None
-        self._obj_buffers = []
+        self._obj_buffers, self._net_buffers = [], []
 
 
 __all__ = ["available", "context", "MapData", "GLMap", "Camera", "lighting", "LAYERS", "coast_line", "coast_strips"]
