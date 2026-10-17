@@ -191,7 +191,40 @@ def of_skeleton(mod, skeleton):
         if key(f) in names and (what, key(f)) not in seen:
             seen.add((what, key(f)))
             out.append((what, f))
+    if not out:
+        # a skeleton descr_skeleton.txt does not have (HLR keeps its own only in data/animations/skeletons.dat, the
+        # compiled set the game loads): its record names its animations by file, and the files say what they are
+        # ('LIS 01 Stand Idle') - the file's name is shown for each
+        for f in _set_record_anims(mod, skeleton):
+            if key(f) in names and key(f) not in seen:
+                seen.add(key(f))
+                out.append((os.path.splitext(os.path.basename(f))[0], f))
     return out
+
+
+_SETS = {}
+
+
+def _set_record_anims(mod, skeleton):
+    """The animations a skeleton's record in the animation set the game loads (skeletons.idx / .dat) names."""
+    from . import animpacks
+    for folder in mod.dirs("animations"):
+        idx = _ci(folder, "skeletons.idx")
+        if not idx:
+            continue
+        k = (os.path.normcase(os.path.abspath(folder)), os.path.getmtime(idx))
+        if k not in _SETS:
+            _SETS[k] = animpacks.AnimSet.at(folder)
+        s = _SETS[k]
+        if s is None:
+            continue
+        try:
+            rec = s.record(skeleton or "")
+        except (ValueError, KeyError):
+            rec = None
+        if rec:
+            return animpacks.anim_paths(rec)
+    return []
 
 
 def base_pose(mod, skeleton):

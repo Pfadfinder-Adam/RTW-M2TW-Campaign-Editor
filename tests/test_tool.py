@@ -7516,6 +7516,11 @@ building smith
         own_a, shared = "data/animations/Own_A.cas", "data/animations/shared.cas"
         make_set(os.path.join(d, "animations"), {"fs_swordsman": [shared], "fs_own": [own_a, shared]},
                  {shared: [(1.0, b"SHARED-SRC")], own_a: [(1.0, b"OWN-1.0"), (1.1, b"OWN-1.1")]})
+        # View in 3D: a skeleton no descr_skeleton.txt has (HLR's) takes its animations from the set's record, each
+        # named by its file - the play buttons were missing (a tester, 2026-10-17)
+        from campaign_editor import animations as AN
+        self.assertEqual(AN.of_skeleton(ModData(self.root), "fs_own"),
+                         [("own_a", "data/animations/own_a.cas"), ("shared", "data/animations/shared.cas")])
         with mock.patch.object(AP, "game_set", lambda mod: None):
             man, files = packs.collect(ModData(self.root), ["alpha general"])
         self.assertEqual(sorted(man["animations"]["skeletons"]), ["fs_own", "fs_swordsman"])

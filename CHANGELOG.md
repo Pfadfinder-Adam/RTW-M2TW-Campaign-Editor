@@ -13,6 +13,7 @@
 ### Added
 - Maps > 3D is drawn by the graphics card the way the games draw their campaign map: the ground blended between grounds with the game's own masks, its light and its sea - it moves without lag and loads faster.
 - Maps > 3D: the coast has the game's beach and surf along it, the surf rolling in as in the game (not on rivers and cliffs, as the game); Layers shows or leaves out the sea (the sea floor seen) and the beach and surf.
+- View in 3D had no animation buttons for a mod's own skeletons (HLR keeps them only in its compiled animation set) -> their animations are listed by name and play.
 - Rome models with a few odd normals (HLR: 33 of its Gaul models) lost their head, weapons or plume in View in 3D and the cards -> every part is read.
 - A big mod (HLR) took half a minute to load -> a few seconds: the names check read the names file once per character.
 - View in 3D (units, mounts, siege engines) is drawn by the graphics card when it gives OpenGL 3.3: the same picture, quicker, the full texture kept while the model turns.
