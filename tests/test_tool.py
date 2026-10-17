@@ -13458,6 +13458,49 @@ building smith
         self.assertFalse(TerrainEditor._shore_wanted(SimpleNamespace(group="heights",
                                                                      v_shore=SimpleNamespace(get=lambda: False))))
 
+    def test_widgets_keep_tkinter_stacking_and_geometry(self):
+        """Report #328: TerrainEditor.lift(px, py) (the heights brush) hid tkinter's lift(), so opening the Terrain
+        tab stopped with 'missing py'. No widget of the editor may take over lift / lower / tkraise / pack / grid /
+        place with other arguments."""
+        try:
+            import tkinter
+        except ImportError:                                # no tkinter here (the CI test job has it)
+            return
+        import importlib
+        import inspect
+        import pkgutil
+        import campaign_editor
+        names = ("lift", "lower", "tkraise", "pack", "grid", "place")
+        bad = []
+        for m in pkgutil.iter_modules(campaign_editor.__path__):
+            if not m.name.startswith("gui"):
+                continue
+            mod = importlib.import_module("campaign_editor." + m.name)
+            for cname, cls in inspect.getmembers(mod, inspect.isclass):
+                if cls.__module__ != mod.__name__ or not issubclass(cls, tkinter.Misc):
+                    continue
+                for n in names:
+                    own = cls.__dict__.get(n)
+                    if own is None:
+                        continue
+                    req = [p for p in inspect.signature(own).parameters.values()
+                           if p.default is p.empty and p.kind in (p.POSITIONAL_ONLY, p.POSITIONAL_OR_KEYWORD)]
+                    if len(req) > 1:                       # more than self: tkinter's calls break
+                        bad.append("%s.%s.%s" % (m.name, cname, n))
+        self.assertEqual(bad, [])
+
+    def test_name_pool_with_no_mod_loaded(self):
+        """Report #327: the faction form's name lists asked for the template's names before any mod was loaded -
+        'NoneType has no name_pool'; no mod = no names."""
+        try:
+            from campaign_editor.gui import App
+        except ImportError:                                # no tkinter here (the CI test job has it)
+            return
+        from types import SimpleNamespace
+        me = SimpleNamespace(editing=lambda: False, v={"template": SimpleNamespace(get=lambda: "gauls")},
+                             name_list={}, mod=None)
+        self.assertEqual(App.pool_for(me, "gauls"), {})
+
     def test_no_rivers_tick_on_coast_and_heights(self):
         """Report #289: the Rivers tick on the Coast & heights tab is not needed; #318: and the rivers, fords and
         cliffs are NOT drawn there at all (only land, sea and heights); the rivers brush always shows them, the

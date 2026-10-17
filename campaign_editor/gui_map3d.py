@@ -546,7 +546,7 @@ class Map3DView(ttk.Frame):
             return
         ed = self.app.editors.get("terrain")
         got = self._point(*self._mouse) if self._mouse else None
-        if ed is not None and got is not None and ed.lift(*got[1]):
+        if ed is not None and got is not None and ed.heights_puff(*got[1]):
             self._send_heights(ed, got[1])
             self.draw(half=True)
         self.after(50, self._puff)

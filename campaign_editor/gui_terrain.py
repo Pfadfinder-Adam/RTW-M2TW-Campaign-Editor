@@ -757,7 +757,7 @@ class TerrainEditor(ttk.Frame):
         self._coast_points(got)
         return bool(got["heights"] or turned)
 
-    def lift(self, px, py, tool=None):
+    def heights_puff(self, px, py, tool=None):
         """One puff of the heights brush on land and water alike (the 3D map's): the points under it raised,
         lowered, smoothed or levelled in metres, the sea's floor rising out of the water into land and land sinking
         under it as in the game (ShapeCoast.lift: the tiles, regions and ground follow, the heights kept exactly).
