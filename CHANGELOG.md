@@ -14,6 +14,7 @@
 - Bring units: after 'Make my own mod folder' the same window wrote into the game itself -> it now writes into the mod loaded now.
 - Maps (Map, Terrain, Coast and heights, 3D): the switches, brushes and zoom moved from above the map into a narrow column on its right, one under another, as the legend - the map has the whole height of the window; the zoom and Fit stand first in it on every tab.
 - Check and install a pack: Cancel in the file box opened a second box -> it asks first: a .zip, a folder or Cancel.
+- Maps > 3D: the heights brush left a square of other ground round each stroke (smooth inside, a step and water at its edges) -> the whole map takes the game's own heights, as the brush does.
 - Maps > 3D on Windows: the graphics card now shows the map straight in the window (the frame was copied back and handed over as a picture every time) - moving, turning and the brushes should no longer lag; where that cannot work it draws as before.
 - Maps > 3D: a line under its buttons says where a frame's time goes (drawn by the graphics card, copied back, put in the window) - send it with a report when the map lags.
 - Interface: a menu page went black after Maps > 3D had been open -> its pieces show again.

@@ -15,6 +15,7 @@ softened by a little jitter, lit by the slope (sun from the north-west), the wat
 2026-10-16.)"""
 
 import math
+import os
 
 import numpy as np
 
@@ -134,7 +135,31 @@ def heights_metres(mod, campaign):
     rgb = _picture(mod, campaign, "map_heights.tga")
     if rgb is None:
         return None
-    return metres_of(rgb, T.max_land_height(mod, campaign), T.min_sea_height(mod, campaign))
+    hgt = None
+    try:
+        path = mod.campaign_file(campaign, "map_heights.tga")
+        if path:
+            hgt = T.read_hgt(os.path.join(os.path.dirname(path), "map_heights.hgt"))
+    except Exception:                                   # a mod object without files: the picture alone
+        hgt = None
+    return game_metres(rgb, T.max_land_height(mod, campaign), T.min_sea_height(mod, campaign), hgt)
+
+
+def game_metres(rgb, top, low, hgt=None):
+    """The heights as the game reads them (#339: the 3D map took the picture's 29 m steps, the heights brush the
+    game's own map_heights.hgt - a square of other heights round every stroke): map_heights.hgt's value where it
+    still agrees with the picture (an unchanged point - terrain.ShapeCoast.metres, the same rule), else the
+    picture's; land never 0 (0 reads as water). hgt: read_hgt() (bottom-up rows) or None."""
+    rgb = np.asarray(rgb)
+    v = metres_of(rgb, top, low)
+    land = (rgb[..., 0] == rgb[..., 1]) & (rgb[..., 1] == rgb[..., 2])
+    out = np.where(land, np.maximum(v, 1.0), v).astype(np.float32)
+    if hgt is not None and (hgt[0], hgt[1]) == (rgb.shape[1], rgb.shape[0]):
+        f = np.asarray(hgt[2], np.float32).reshape(hgt[1], hgt[0])[::-1]
+        step = np.where(land, top / 255.0, -low / 255.0)
+        ok = ((f > 0) == land) & (np.abs(f - v) <= 1.5 * step)
+        out = np.where(ok, f, out).astype(np.float32)
+    return out
 
 
 def metres_of(rgb, top, low):
@@ -338,4 +363,4 @@ def colour_map(mod, campaign, winter=False, limit=2048, rng=None):
     return ColourMap(np.clip(rgb, 0, 255).astype(np.uint8), np.maximum(big_h, 0).astype(np.float32), k, top, notes)
 
 
-__all__ = ["colour_map", "ColourMap", "aerial_sets", "heights_metres"]
+__all__ = ["colour_map", "ColourMap", "aerial_sets", "heights_metres", "game_metres"]

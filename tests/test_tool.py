@@ -3750,6 +3750,31 @@ building smith
         self.assertEqual(rows[2][:4], (110, 45, 0.5, 0.5))
         self.assertEqual(G.quad(0, 0, 1, 1, rgba=(1, 0, 0, 1))[5], (0, 1, 0.0, 1.0, 1, 0, 0, 1))
 
+    def test_3d_map_heights_as_the_heights_brush_reads_them(self):
+        """#339: a square of other heights round every heights-brush stroke in 3D - the map was built from the
+        picture's grey steps, the brush sent the game's own map_heights.hgt values for the points round it. Both now
+        read the same: the .hgt's value where it agrees with the picture, the picture's elsewhere, land never 0."""
+        try:
+            import numpy as np
+            from campaign_editor import terrain3d as T3
+        except ImportError:
+            self.skipTest("no NumPy")
+        from types import SimpleNamespace
+        from campaign_editor import terrain as T
+        top, low = 2550.0, -255.0                                 # 10 m a grey step, 1 m a blue step
+        top_down = np.array([[(10, 10, 10), (20, 20, 20), (0, 0, 0)],
+                             [(0, 0, 200), (30, 30, 30), (40, 40, 40)]], np.uint8)
+        bottom_up = top_down[::-1]
+        hgt = (3, 2, [-56.0, 312.0, 370.0,                        # bottom row: agrees, agrees, 3 steps off
+                      104.0, 207.0, -3.0])                        # top row: agrees, agrees, sea under land
+        got = T3.game_metres(top_down, top, low, hgt)
+        self.assertEqual(got.tolist(), [[104.0, 207.0, 1.0], [-56.0, 312.0, 400.0]])
+        pic = SimpleNamespace(width=3, height=2, get=lambda px, py: tuple(int(v) for v in bottom_up[py][px]))
+        sc = T.ShapeCoast(pic, None, None, None, None, None, None, top, low, hgt)
+        for py in range(2):
+            for px in range(3):
+                self.assertAlmostEqual(sc.metres(px, py), float(got[1 - py][px]), places=4)
+
     def test_3d_frame_clock_says_where_the_time_goes(self):
         """Step 1 before drawing straight into the window: a frame's time by parts - drawn by the card, copied back,
         put in the window - the mean of the last 10 frames, in plain words with what each number means."""
