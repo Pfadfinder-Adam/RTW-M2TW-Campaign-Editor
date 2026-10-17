@@ -8084,6 +8084,94 @@ building smith
         self.assertLess(strips[1][4], 1.0)                               # wet sand is darker
         self.assertNotEqual(glmap.coast_strips(0.3)[3][2], glmap.coast_strips(0.6)[3][2])    # the surf moves
 
+    def test_map_in_3d_tile_models_as_the_game_places_them(self):
+        """The live 3D map's mountains, hills and volcanoes (engine source, strat_tile_models.md): the campaign
+        map's .cas read chunk by chunk (parts with or without a texture, their materials' names); the tile sets of
+        descr_aerial_map_tile_models.txt; the game's index of each model; high mountains fitted with the tetris
+        pieces (every one of them gets a model), a 2 x 2 hill where four hill tiles meet, a dormant volcano's 3 x 3
+        round a red feature pixel; a model's points ride the ground under it, its ground left out."""
+        try:
+            import numpy as np
+        except ImportError:
+            self.skipTest("NumPy not installed")
+        import struct
+        from campaign_editor import stratcas as SC, tilemodels as TM
+
+        def name(t):
+            raw = t.encode() + b"\0"
+            return struct.pack("<i", len(raw)) + raw
+        pos = (-0.5, 0.0, -0.5, 0.5, 0.0, -0.5, 0.0, 0.2, 0.5)
+        part = (name("peak_underlay") + name("") + name("") + struct.pack("<i", 0) + b"\0" * 28 +
+                struct.pack("<HHBB", 3, 1, 1, 1) + struct.pack("<9f", *pos) + struct.pack("<9f", *(0, 1, 0) * 3) +
+                struct.pack("<3H", 0, 1, 2) + struct.pack("<i", 0) + struct.pack("<6f", 0, 0, 1, 0, 0.5, 1) +
+                bytes([255, 0, 0, 255] * 3) + struct.pack("<i", 0))
+        rigid = struct.pack("<i", 1) + part
+        mat = struct.pack("<ii", 1, 1) + b"\0" + b"textures\\rock.tga\0" + b"\0" * 57
+        data = struct.pack("<f", 3.2) + struct.pack("<Ii", 12, 9) + b"\0" * 4 + \
+            struct.pack("<Ii", 8 + len(rigid), 1) + rigid + struct.pack("<Ii", 8 + len(mat), 5) + mat
+        got = SC.read(data)
+        self.assertEqual([(p.name, p.texture, len(p.positions) // 3) for p in got], [("peak_underlay", "rock.tga", 3)])
+        self.assertEqual(got[0].colours[:4], bytes([255, 0, 0, 255]))
+        with self.assertRaises(SC.CasError):
+            SC.read(b"\0" * 40)
+        sets, pages = TM.read_sets(
+            "alpha_page mountains { filename mask.tga cells_across 6 cells_up 6 }\n"
+            "tile_set hills { surpress_warnings model_files { Hill.cas } geom hill1 { peak_underlay true true true true }\n"
+            "geom_links { hill1 hill1 rotation_0  hill2 hill1 rotation_90, } overlay peak_underlay { peak_overlay "
+            "{ texture_uv_strips 4 alpha_page mountains 1 5 rotation_180 } } }\n")
+        self.assertEqual(pages, {"mountains": ("mask.tga", 6, 6)})
+        h = sets["hills"]
+        self.assertEqual((h["files"], h["geoms"]["hill1"], h["links"]["hill2"]),
+                         (["Hill.cas"], ("peak_underlay", (True, True, True, True)), ("hill1", 90)))
+        self.assertEqual(h["overlays"]["peak_underlay"][0][1]["alpha"], ("mountains", 1, 5, 180))
+        self.assertIn("surpress_warnings", h["flags"])
+        self.assertEqual([TM.link_of(i) for i in (181, 198, 296, 309, 148, 330)],
+                         [("mountains", "line0_0"), ("mountains", "l0_90"), ("mountains", "single_270"),
+                          ("hills", "hill13tl"), ("volcano_dormant", "left"), ("hills", "crag2")])
+        self.assertEqual(TM.turn(0.0, 0.5, 90), (0.5, -0.0))           # clockwise: the top edge ends on the right
+        # a 10 x 8 tile map: a block of high mountains, four hill tiles, a red feature pixel
+        W, H = 10, 8
+        heights = np.full((2 * H + 1, 2 * W + 1), 500.0, np.float32)
+        ground = np.zeros((2 * H + 1, 2 * W + 1, 3), np.uint8)
+        ground[:] = (0, 128, 128)                                    # fertile_low
+
+        def paint(x, z, colour):                                     # tile (x, z up) -> its centre point
+            ground[2 * (H - 1 - z) + 1, 2 * x + 1] = colour
+        for x in range(0, 4):
+            for z in range(3, 7):
+                paint(x, z, (196, 128, 128))                         # mountains_high
+        for x, z in ((7, 0), (8, 0), (7, 1), (8, 1)):
+            paint(x, z, (128, 128, 64))                              # hills
+        feats = np.zeros((H, W, 3), np.uint8)
+        feats[H - 1 - 4, 7] = (255, 0, 0)                            # a volcano at (7, 4)
+        idx, seed = TM.assign(heights, ground, feats)
+        mount = idx[3:7, 0:4]
+        self.assertTrue(((mount >= 181) & (mount <= 296)).all())      # every high mountain tile has its model
+        self.assertTrue((idx[0:2, 7:9] >= 309).all() and (idx[0:2, 7:9] <= 324).all())   # one 2 x 2 hill
+        self.assertEqual(int(idx[1, 7]) % 4, 1)                       # its top-left part at the top left (309 + 4k)
+        self.assertEqual(int(idx[4, 7]), 149)                         # the volcano's centre
+        self.assertTrue((idx[3:6, 6:9] >= 145).all() and (idx[3:6, 6:9] <= 153).all())
+        voids = TM.void_map(idx)
+        self.assertEqual(int(voids[H - 1 - 4, 2]), 1)                 # top row first: mountains' ground left out
+        self.assertEqual(int(voids[H - 1, 7]), 2)                     # the hill's
+        self.assertEqual(int(voids[0, 9]), 0)
+
+        class Lib:                                                   # one model: the triangle above, a rock on it
+            pages = {"mountains": ("mask.tga", 6, 6)}
+
+            def model(self, tile_set, link):
+                return (got[0], 0, [(got[0], {"water": False, "lava": False, "strips": 0,
+                                              "alpha": None}, np.arange(3))], set())
+        one = np.full((H, W), -1, np.int32)
+        one[0, 0] = 297                                              # a hill at the bottom-left tile
+        built = TM.build(Lib(), one, seed, heights, 0.001)
+        u = built["under"]
+        self.assertEqual(u.shape, (0, 7))                             # it has a texture of its own: no ground part
+        o = built["over"][("rock.tga", None)]
+        self.assertEqual(o.shape, (3, 15))
+        self.assertAlmostEqual(float(o[2, 1]), 0.2 + 0.5)             # its own 0.2 above the ground's 500 m x 0.001
+        self.assertAlmostEqual(float(o[2, 2]), H - 1)                 # the top edge (z = 0.5) at the tile's north side
+
     def test_map_in_3d_finds_the_game_models_of_what_stands_on_the_map(self):
         """Maps > 3D's models (the user, 2026-10-15: 'towns, resources, units...'): a town takes its level's model
         of its owner's culture - Rome's descr_sm_settlements.txt ('roman { town { normal ... } }') and Medieval II's

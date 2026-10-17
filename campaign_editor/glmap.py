@@ -29,7 +29,9 @@ import numpy as np
 from . import terrain3d as T3
 
 SCALE = {"medieval2": 1.2, "rome": 0.6}         # the games' height scale (aerial_map.h)
-LAYERS = (("sea", "Sea"), ("coast", "Beach and surf"))     # what render(show=...) can leave out, as the window names it
+LAYERS = (("sea", "Sea"), ("coast", "Beach and surf"), ("mountains", "Mountains and volcanoes"),
+          ("hills", "Hills"))                   # what render(show=...) can leave out, as the window names it
+MODEL_LAYERS = {"mountains": 1, "hills": 2}     # tilemodels.KIND of each
 SEGMENT_TEXELS = 64                             # a picture's pixels a tile covers at texture_density 1
 LAYER = 512                                     # every ground picture is made this size on the card
 SEA_LIGHT = (0.5, 1.0, 1.0)                     # the way to the sea's own light (the engine's (-0.5, -1, -1) reversed)
@@ -161,6 +163,7 @@ class MapData:
         self.beach = _image(mod, ["terrain/aerial_map/sea/beach_strip.tga"], mode="RGBA")
         self.surf = _image(mod, ["terrain/aerial_map/sea/surf2b.tga"], mode="RGBA")
         self.light = lighting(mod)
+        self._tile_models(mod, campaign, winter)
         feats = T3._picture(mod, campaign, "map_features.tga")
         self.coast_hidden = None                    # rivers (sources, fords) and cliffs: the game draws no strip there
         if feats is not None:
@@ -218,6 +221,39 @@ class MapData:
         if not any(choices.values()):
             self.notes.append("no descr_aerial_map_ground_types.txt - the grounds' plain colours shown")
         return table[ci, gi].astype(np.uint16), pictures, repeat
+
+    def _tile_models(self, mod, campaign, winter):
+        """The tile models (mountains, hills, volcanoes - tilemodels) placed on this map, their pictures."""
+        from . import tilemodels as TM
+        self.models = {"under": np.zeros((0, 7), np.float32), "over": {}}
+        self.voids = np.zeros(((self.rows - 1) // 2, (self.cols - 1) // 2), np.uint8)
+        self.model_pictures, self.model_masks = {}, {}
+        try:
+            self._lib = TM.Library(mod)
+            self._model_src = (T3._picture(mod, campaign, "map_ground_types.tga"),
+                               T3._picture(mod, campaign, "map_features.tga"))
+            self.place_models()
+        except Exception as e:                          # said in the bar, the map still drawn
+            self._lib = None
+            self.notes.append("the mountains and hills are not drawn: %s" % e)
+            return
+        for tex, page in self.models["over"]:
+            if tex not in self.model_pictures:
+                self.model_pictures[tex] = _image(mod, TM.texture_rel(tex, winter=winter), mode="RGBA")
+            if page and page not in self.model_masks:
+                f = self._lib.pages.get(page, ("",))[0]
+                self.model_masks[page] = _image(mod, ["terrain/aerial_map/tile_models/alpha_pages/" + f], mode="RGBA")
+        if self._lib.missing:
+            self.notes.append("tile model file(s) not found: %s" % ", ".join(sorted(self._lib.missing)[:4]))
+
+    def place_models(self):
+        """The tile models placed again on the heights as they are now (after a brush)."""
+        from . import tilemodels as TM
+        if getattr(self, "_lib", None) is None:
+            return
+        idx, seed = TM.assign(self.heights, *self._model_src)
+        self.models = TM.build(self._lib, idx, seed, self.heights, 0.0005 * self.scale)
+        self.voids = TM.void_map(idx)
 
     def _masks(self, mod):
         """The game's blend masks (template_weights/weights*.tga, their red), all made one size; a plain fade from
@@ -416,6 +452,7 @@ uniform ivec2 size;
 in vec2 grid;
 out vec2 g;
 out vec3 n;
+flat out float kind_v;
 float h(ivec2 p) { return texelFetch(heights, clamp(p, ivec2(0), size - 1), 0).r * yscale; }
 void main() {
     ivec2 p = ivec2(grid);
@@ -423,8 +460,21 @@ void main() {
     n = normalize(vec3(-(h(p + ivec2(1, 0)) - h(p - ivec2(1, 0))) * 0.5, 0.5,
                        -(h(p + ivec2(0, 1)) - h(p - ivec2(0, 1))) * 0.5));
     g = grid;
+    kind_v = 0.0;
     gl_Position = mvp * vec4(grid.x * 0.5, y, grid.y * 0.5, 1.0);
 }
+"""
+
+UNDER_VS = """
+#version 330
+uniform mat4 mvp;
+in vec3 pos;
+in vec3 nrm;
+in float kind;
+out vec2 g;
+out vec3 n;
+flat out float kind_v;
+void main() { g = pos.xz * 2.0; n = nrm; kind_v = kind; gl_Position = mvp * vec4(pos, 1.0); }
 """
 
 TERRAIN_FS = """
@@ -439,8 +489,12 @@ uniform sampler2DArray masks;
 uniform int nmasks;
 uniform ivec2 size;
 uniform float rep[64];
+uniform usampler2D voids;
+uniform int mode;                       // 0 the ground, 1 a tile model's ground-dressed part
+uniform int shown;                      // bit k: the models of kind k shown (their tiles' ground left out)
 in vec2 g;
 in vec3 n;
+flat in float kind_v;
 out vec4 colour;
 uint mix3(uint a, uint b, uint c) {
     uint x = a * 73856093u ^ b * 19349663u ^ c * 83492791u;
@@ -449,6 +503,13 @@ uint mix3(uint a, uint b, uint c) {
 }
 vec3 pic(uint l, vec2 t) { return dec(texture(ground, vec3(t * rep[l], float(l))).rgb); }
 void main() {
+    if (mode == 0) {
+        ivec2 vs = textureSize(voids, 0);
+        uint k = texelFetch(voids, clamp(ivec2(floor(g * 0.5)), ivec2(0), vs - 1), 0).r;
+        if (k > 0u && ((shown >> int(k)) & 1) == 1) discard;     // a tile model stands here: its ground instead
+    } else if (((shown >> int(kind_v + 0.5)) & 1) == 0) {
+        discard;
+    }
     ivec2 c = clamp(ivec2(floor(g)), ivec2(0), size - 2);
     vec2 f = clamp(g - vec2(c), 0.0, 1.0);
     uint l0 = texelFetch(layers, c, 0).r;
@@ -474,6 +535,48 @@ void main() {
     }
     vec3 light = ambient + diffuse * max(dot(normalize(n), to_light), 0.0);
     colour = vec4(enc(col * (linear == 1 ? light : min(light, vec3(1.0)))), 1.0);
+}
+"""
+
+OVER_VS = """
+#version 330
+uniform mat4 mvp;
+in vec3 pos;
+in vec3 nrm;
+in vec2 uv;
+in vec2 auv;
+in vec4 col;
+in float kind;
+out vec3 n;
+out vec2 t;
+out vec2 at;
+out vec4 c;
+flat out float kind_v;
+void main() { n = nrm; t = uv; at = auv; c = col; kind_v = kind; gl_Position = mvp * vec4(pos, 1.0); }
+"""
+
+OVER_FS = """
+#version 330
+""" + COLOUR_GLSL + """
+uniform vec3 to_light;
+uniform vec3 ambient;
+uniform vec3 diffuse;
+uniform sampler2D pic;
+uniform sampler2D mask;
+uniform int shown;
+in vec3 n;
+in vec2 t;
+in vec2 at;
+in vec4 c;
+flat in float kind_v;
+out vec4 colour;
+void main() {
+    if (((shown >> int(kind_v + 0.5)) & 1) == 0) discard;
+    vec4 p = texture(pic, t);
+    float a = c.a < 0.0 ? texture(mask, at).a : p.a * c.a;      // the mountains' alpha page, else the picture's
+    if (a < 0.02) discard;
+    vec3 light = ambient + diffuse * max(dot(normalize(n), to_light), 0.0);
+    colour = vec4(enc(dec(p.rgb) * c.rgb * (linear == 1 ? light : min(light, vec3(1.0)))), a);
 }
 """
 
@@ -628,7 +731,14 @@ class GLMap:
         self.waves = self._picture(data.waves, 4, (128, 128, 128, 255), repeat=True)
         self.sky = self._picture(data.sky, 3, (150, 170, 190), repeat=True)
         self.terrain = self._keep(ctx.program(vertex_shader=TERRAIN_VS, fragment_shader=TERRAIN_FS))
+        self.under = self._keep(ctx.program(vertex_shader=UNDER_VS, fragment_shader=TERRAIN_FS))
+        self.over = self._keep(ctx.program(vertex_shader=OVER_VS, fragment_shader=OVER_FS))
         self.sea = self._keep(ctx.program(vertex_shader=SEA_VS, fragment_shader=SEA_FS))
+        self._model_buffers, self.voids = [], None
+        self.model_pics = {k: self._picture(v, 4, (128, 120, 110, 255), repeat=True)
+                           for k, v in data.model_pictures.items()}
+        self.model_masks = {k: self._picture(v, 4, (255, 255, 255, 255)) for k, v in data.model_masks.items()}
+        self._white = self._picture(None, 4, (255, 255, 255, 255))
         # the grid: one point per heights pixel, two triangles a half-tile square along its SW -> NE diagonal
         gy, gx = np.mgrid[0:rows, 0:cols].astype(np.float32)
         pts = np.stack([gx.ravel(), gy.ravel()], 1)
@@ -659,17 +769,22 @@ class GLMap:
         top = np.inf if lin else 1.0                # linear light is not cut at 1 (the shoulder bends it at the end)
         sea_l = np.minimum(np.asarray(L["ambient"]) + np.asarray(L["diffuse"]) * max(float(s[1]), 0.0), top)
         self.linear = lin
-        for prog in (self.terrain, self.sea, self.coast):
+        for prog in (self.terrain, self.under, self.over, self.sea, self.coast):
             prog["linear"].value = int(lin)
             prog["exposure"].value = float(L.get("exposure", 1.0))
-        for name, value in (("to_light", tuple(to_light)), ("ambient", L["ambient"]), ("diffuse", L["diffuse"]),
-                            ("size", (cols, rows))):
-            self.terrain[name].value = value
-        self.terrain["rep"].value = tuple(data.repeat[:64]) + (1.0,) * (64 - min(64, len(data.repeat)))
-        self.terrain["nmasks"].value = len(data.masks)
-        for name, unit in (("heights", 0), ("layers", 1), ("ground", 2), ("masks", 3)):
-            if name in self.terrain:
-                self.terrain[name].value = unit
+        for prog in (self.terrain, self.under, self.over):   # the ground and the tile models: one light
+            for name, value in (("to_light", tuple(to_light)), ("ambient", L["ambient"]), ("diffuse", L["diffuse"])):
+                prog[name].value = value
+        for prog in (self.terrain, self.under):              # the tile models' plain parts wear the ground's pictures
+            prog["size"].value = (cols, rows)
+            prog["rep"].value = tuple(data.repeat[:64]) + (1.0,) * (64 - min(64, len(data.repeat)))
+            prog["nmasks"].value = len(data.masks)
+            for name, unit in (("heights", 0), ("layers", 1), ("ground", 2), ("masks", 3), ("voids", 8)):
+                if name in prog:
+                    prog[name].value = unit
+            prog["mode"].value = 0 if prog is self.terrain else 1
+        self.over["pic"].value, self.over["mask"].value = 9, 10
+        self._models()
         self.sea["tiles"].value = (tc, tr_)
         self.sea["sea_light"].value = tuple(float(v) for v in sea_l)
         self.sea["waves_mean"].value = float(data.waves[..., 0].mean()) / 255.0 if data.waves is not None else 0.5
@@ -682,6 +797,36 @@ class GLMap:
     def _keep(self, obj):
         self._gone.append(obj)
         return obj
+
+    def _models(self):
+        """The tile models' buffers (and the tiles whose ground gives way to them) from data.models."""
+        for obj in self._model_buffers:
+            obj.release()
+        self._model_buffers, self.model_vaos = [], []
+        ctx, d = self.ctx, self.data
+        v = np.ascontiguousarray(d.voids)
+        self.voids = ctx.texture((v.shape[1], v.shape[0]), 1, v.tobytes(), dtype="u1")
+        self.voids.filter = (ctx.NEAREST, ctx.NEAREST)
+        self._model_buffers.append(self.voids)
+        under = d.models["under"]
+        if len(under):
+            vbo = ctx.buffer(np.ascontiguousarray(under).tobytes())
+            vao = ctx.vertex_array(self.under, [(vbo, "3f 3f 1f", "pos", "nrm", "kind")])
+            self._model_buffers += [vbo, vao]
+            self.model_vaos.append(("under", None, None, vao))
+        for (tex, page), arr in d.models["over"].items():
+            vbo = ctx.buffer(np.ascontiguousarray(arr).tobytes())
+            vao = ctx.vertex_array(self.over, [(vbo, "3f 3f 2f 2f 4f 1f", "pos", "nrm", "uv", "auv", "col", "kind")])
+            self._model_buffers += [vbo, vao]
+            self.model_vaos.append(("over", tex, page, vao))
+        self.models_stale = False
+
+    def refresh_models(self):
+        """The tile models laid again on the heights as the brushes left them (after a stroke: placing them takes
+        a moment, so not at every puff)."""
+        if self.models_stale:
+            self.data.place_models()
+            self._models()
 
     def _picture(self, arr, comps, plain, repeat=False):
         if arr is None:
@@ -700,6 +845,7 @@ class GLMap:
         self.heights.write(np.ascontiguousarray(block).tobytes(),
                            viewport=(col, row, block.shape[1], block.shape[0]))
         self.coast_dirty = True                                  # the shore traced again at the next frame
+        self.models_stale = True                                 # the tile models laid again after the stroke
 
     def set_layers(self, row, col, block):
         """The ground picture (layer) of a block of points from (row, col) changed on the card."""
@@ -777,9 +923,34 @@ class GLMap:
         self.layers.use(1)
         self.ground.use(2)
         self.masks.use(3)
+        self.voids.use(8)
+        bits = sum(1 << k for name, k in MODEL_LAYERS.items() if show.get(name, True))
         self.terrain["mvp"].write(mvp_bytes)
         self.terrain["yscale"].value = 0.0005 * self.data.scale
+        self.terrain["shown"].value = bits
         self.vao.render()
+        # the tile models: their plain parts dressed in the ground's pictures, then the rock laid on them
+        for what, tex, page, vao in self.model_vaos:
+            if not bits:
+                break
+            if what == "under":
+                self.under["mvp"].write(mvp_bytes)
+                self.under["shown"].value = bits
+                vao.render()
+        if bits and any(w == "over" for w, _, _, _ in self.model_vaos):
+            ctx.enable(ctx.BLEND)
+            ctx.blend_func = ctx.SRC_ALPHA, ctx.ONE_MINUS_SRC_ALPHA
+            ctx.depth_func = "<="                                # laid on its part's own points
+            self.over["mvp"].write(mvp_bytes)
+            self.over["shown"].value = bits
+            for what, tex, page, vao in self.model_vaos:
+                if what != "over":
+                    continue
+                self.model_pics.get(tex, self._white).use(9)
+                self.model_masks.get(page, self._white).use(10)
+                vao.render()
+            ctx.depth_func = "<"
+            ctx.disable(ctx.BLEND)
         if self.coast_dirty:
             self._coast()
         if self.coast_vao is not None and show.get("coast", True):   # see-through strips over the ground, as the game
@@ -805,12 +976,13 @@ class GLMap:
         return np.frombuffer(raw, np.uint8).reshape(h, w, 3)[::-1]
 
     def release(self):
-        for obj in reversed(self._gone + self._coast_buffers + ([self.fbo] if self.fbo is not None else [])):
+        for obj in reversed(self._gone + self._coast_buffers + self._model_buffers +
+                            ([self.fbo] if self.fbo is not None else [])):
             try:
                 obj.release()
             except Exception:
                 pass
-        self._gone, self._coast_buffers, self.fbo = [], [], None
+        self._gone, self._coast_buffers, self._model_buffers, self.fbo = [], [], [], None
 
 
 __all__ = ["available", "context", "MapData", "GLMap", "Camera", "lighting", "LAYERS", "coast_line", "coast_strips"]
