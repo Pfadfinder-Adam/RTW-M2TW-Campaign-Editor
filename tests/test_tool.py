@@ -3750,6 +3750,21 @@ building smith
         self.assertEqual(rows[2][:4], (110, 45, 0.5, 0.5))
         self.assertEqual(G.quad(0, 0, 1, 1, rgba=(1, 0, 0, 1))[5], (0, 1, 0.0, 1.0, 1, 0, 0, 1))
 
+    def test_3d_frame_clock_says_where_the_time_goes(self):
+        """Step 1 before drawing straight into the window: a frame's time by parts - drawn by the card, copied back,
+        put in the window - the mean of the last 10 frames, in plain words with what each number means."""
+        try:
+            from campaign_editor.glmap import FrameClock
+        except ImportError:
+            self.skipTest("no NumPy")
+        clock = FrameClock()
+        self.assertEqual(clock.text(), "")
+        for _ in range(12):
+            clock.add(0.010, 0.005, 0.025, (1200, 700))
+        self.assertEqual(len(clock.frames), 10)
+        self.assertEqual(clock.text(), "a frame (1200 x 700): the graphics card draws it in 10 ms, copying it back "
+                                       "takes 5 ms, putting it in the window 25 ms = 40 ms (25 frames a second)")
+
     def test_menu_page_drawn_after_the_3d_map(self):
         """#340: an Interface page went black after the 3D map - the map leaves the depth test on in the one shared
         OpenGL context, so every piece after the page's backdrop (all at one depth) was thrown away. The page's

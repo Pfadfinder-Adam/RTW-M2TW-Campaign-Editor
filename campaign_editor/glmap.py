@@ -23,6 +23,7 @@ gives OpenGL 3.3, available() says why and Maps > 3D draws as before (terrain3d)
 
 import math
 import os
+import time
 
 import numpy as np
 
@@ -1341,6 +1342,7 @@ class GLMap:
         the trees' lean in the wind."""
         show = show or {}
         ctx = self.ctx
+        started = time.perf_counter()
         w, h = max(16, int(w)), max(16, int(h))
         if self.fbo_size != (w, h):
             if self.fbo is not None:
@@ -1477,7 +1479,10 @@ class GLMap:
             ctx.blend_func = ctx.SRC_ALPHA, ctx.ONE_MINUS_SRC_ALPHA
             ctx.disable(ctx.BLEND)
             self.fbo.depth_mask = True
+        ctx.finish()                                             # the card's own time ends here (step 1, measured)
+        took = time.perf_counter()
         raw = self.fbo.read(components=3)
+        self.took = (took - started, time.perf_counter() - took)  # (drawn by the card, copied back) in seconds
         return np.frombuffer(raw, np.uint8).reshape(h, w, 3)[::-1]
 
     def release(self):
@@ -1492,4 +1497,28 @@ class GLMap:
         self._obj_buffers, self._net_buffers = [], []
 
 
-__all__ = ["available", "context", "MapData", "GLMap", "Camera", "lighting", "LAYERS", "coast_line", "coast_strips"]
+class FrameClock:
+    """How long a 3D frame takes, by its parts (the user, 2026-10-17: step 1 before drawing straight into the window):
+    drawn by the card, copied back from it, put in the window - the mean of the last frames, said in plain words."""
+
+    KEEP = 10
+
+    def __init__(self):
+        self.frames = []
+
+    def add(self, card, back, window, size):
+        self.frames = (self.frames + [(card, back, window, size)])[-self.KEEP:]
+
+    def text(self):
+        if not self.frames:
+            return ""
+        n = len(self.frames)
+        card, back, window = (sum(f[i] for f in self.frames) / n * 1000 for i in range(3))
+        total = card + back + window
+        w, h = self.frames[-1][3]
+        return ("a frame (%d x %d): the graphics card draws it in %d ms, copying it back takes %d ms, putting it in "
+                "the window %d ms = %d ms (%d frames a second)" % (w, h, round(card), round(back), round(window),
+                                                                   round(total), 1000 / max(total, 1)))
+
+
+__all__ = ["available", "context", "MapData", "GLMap", "FrameClock", "Camera", "lighting", "LAYERS", "coast_line", "coast_strips"]

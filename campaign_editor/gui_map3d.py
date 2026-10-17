@@ -99,6 +99,11 @@ class Map3DView(ttk.Frame):
         hint(bar, HINT, width=460).pack(side="left", padx=(theme.BUTTON_GAP * 2, 0))
         self.lbl = ttk.Label(bar, foreground=theme.palette()["muted"], wraplength=SIDE_WIDTH - 20, justify="left")
         self.lbl.pack(side="left", padx=(theme.BUTTON_GAP * 2, 0))
+        self.lbl_frame = ttk.Label(bar, foreground=theme.palette()["muted"], wraplength=SIDE_WIDTH - 20, justify="left")
+        self.lbl_frame.pack(side="left", padx=(theme.BUTTON_GAP * 2, 0))
+        tip(self.lbl_frame, "Where a frame's time goes (the mean of the last 10 frames; half size while the map is "
+                            "moved). Send these numbers with a report when the map lags.")
+        self._clock, self._clock_said = None, 0.0
         # the bar in a column on the right, one switch a row, as the Map's (report #332: the map has the whole height)
         self.side = ttk.Frame(self, width=SIDE_WIDTH, padding=(6, 0, 0, 0))
         self.side.pack(side="right", fill="y")
@@ -333,6 +338,7 @@ class Map3DView(ttk.Frame):
             self.gl.release()
             self.gl, self._for = None, None
             return
+        shown = time.perf_counter()
         im = Image.fromarray(arr)
         if f > 1:
             im = im.resize((W, H), Image.BILINEAR)
@@ -340,6 +346,19 @@ class Map3DView(ttk.Frame):
         self.canvas.delete("all")
         self.canvas.create_image(0, 0, anchor="nw", image=self._photo)
         self._draw_ring()
+        self._clocked(time.perf_counter() - shown, (W // f, H // f))
+
+    def _clocked(self, window, size):
+        """The frame's parts into the line under the buttons, at most twice a second."""
+        from .glmap import FrameClock
+        if self._clock is None:
+            self._clock = FrameClock()
+        card, back = getattr(self.gl, "took", (0.0, 0.0))
+        self._clock.add(card, back, window, size)
+        now = time.monotonic()
+        if now - self._clock_said > 0.5:
+            self._clock_said = now
+            self.lbl_frame.configure(text=self._clock.text())
 
     def _layers_changed(self):
         self.draw()

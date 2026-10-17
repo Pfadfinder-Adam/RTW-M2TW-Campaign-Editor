@@ -14,6 +14,7 @@
 - Bring units: after 'Make my own mod folder' the same window wrote into the game itself -> it now writes into the mod loaded now.
 - Maps (Map, Terrain, Coast and heights, 3D): the switches, brushes and zoom moved from above the map into a narrow column on its right, one under another, as the legend - the map has the whole height of the window; the zoom and Fit stand first in it on every tab.
 - Check and install a pack: Cancel in the file box opened a second box -> it asks first: a .zip, a folder or Cancel.
+- Maps > 3D: a line under its buttons says where a frame's time goes (drawn by the graphics card, copied back, put in the window) - send it with a report when the map lags.
 - Interface: a menu page went black after Maps > 3D had been open -> its pieces show again.
 - Maps > 3D: the heights brush now works on the water too - the sea's floor raised out of it becomes land, land pushed under becomes water, as in the game; and a second way, the game's own: grab the land and move the mouse up or down.
 
