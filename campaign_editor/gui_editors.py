@@ -1115,10 +1115,11 @@ class RecordEditor(ttk.Frame):
             ttk.Label(head, text="Siege engine: %s" % engine.name, font=("", 9, "bold")).pack(side="left")
             hint(head, "Its models %s (descr_engines.txt)." % ", ".join(m.split("/")[-1] for m in engine.meshes[:2]),
                  width=420).pack(side="left")
-            # Medieval II: the engine plays its moves with its crew (the unit's soldiers) at their places
+            # the engine with its crew (the unit's soldiers) at their places: Medieval II plays its moves, Rome stands
+            # them at its engine_station places
             from . import engines as EN
             crew = cat.get(slots[0][2].lower()) if slots else None
-            eng = EN.read_engine(self.mod, engine.name) if MO.game_kind(self.mod) == "medieval2" else None
+            eng = EN.read_engine(self.mod, engine.name)
             ttk.Button(cell, text="View in 3D...", command=lambda i=engine, e=eng, c=crew: self.view_model(
                 i, engine=(e, c) if e is not None else None)).pack(anchor="w", pady=(2, 0))
 

@@ -25,12 +25,14 @@ from . import meshview as MV
 
 class Engine:
     """A siege engine's block: meshes / skeleton / bone_map of its 'normal' group, reference points file, and
-    crew {state (lower): [(place, [crew moves])]}."""
+    crew {state (lower): [(place, [crew moves])]}; Rome's crew places: stations [(role, x, forward)] (its
+    engine_station lines) and pushes [(x, forward)] (engine_push_point)."""
 
     def __init__(self, name):
         self.name = name
         self.meshes, self.skeleton, self.bone_map, self.points = [], None, None, None
         self.crew = {}
+        self.stations, self.pushes = [], []
 
 
 def read_engine(mod, kind):
@@ -65,14 +67,38 @@ def read_engine(mod, kind):
             eng.crew.setdefault(state.lower(), []).append((parts[0], parts[1:]))
         elif t[0] == "reference_points" and len(t) > 1:
             eng.points = t[1]
+        elif t[0] == "engine_station" and len(t) >= 4 and _num(t[2]) is not None and _num(t[3]) is not None:
+            eng.stations.append((t[1], _num(t[2]), _num(t[3])))
+        elif t[0] == "engine_push_point" and len(t) >= 3 and _num(t[1]) is not None and _num(t[2]) is not None:
+            eng.pushes.append((_num(t[1]), _num(t[2])))
         elif group in (None, "normal"):
-            if t[0] == "engine_mesh" and len(t) > 1:
+            if t[0] in ("engine_mesh", "engine_model") and len(t) > 1:
                 eng.meshes.append(t[1])
             elif t[0] == "engine_skeleton" and len(t) > 1:
                 eng.skeleton = t[1]
             elif t[0] == "engine_bone_map" and len(t) > 1:
                 eng.bone_map = t[1]
     return eng
+
+
+def _num(t):
+    try:
+        return float(t)
+    except ValueError:
+        return None
+
+
+def station_points(eng):
+    """Rome's crew places as reference points {(kind, name): (x, up, forward)}: the engine_station lines standing
+    (Engine StationPoint, 'crank 1', 'captain 1' ...) and the engine_push_point lines moving (Engine PushPoint) -
+    on the ground, the game's own numbers from descr_engines.txt."""
+    out, seen = {}, {}
+    for role, x, z in eng.stations:
+        seen[role] = seen.get(role, 0) + 1
+        out[("Engine StationPoint", "%s %d" % (role, seen[role]))] = (x, 0.0, z)
+    for k, (x, z) in enumerate(eng.pushes, 1):
+        out[("Engine PushPoint", "push %d" % k)] = (x, 0.0, z)
+    return out
 
 
 def read_points(data):
@@ -200,5 +226,5 @@ def scene(engine_mesh, engine_groups, men):
     return MV.assemble(pieces)
 
 
-__all__ = ["Engine", "read_engine", "read_points", "points_of", "moves", "anim", "rigged", "pose", "STATES",
+__all__ = ["Engine", "read_engine", "read_points", "station_points", "points_of", "moves", "anim", "rigged", "pose", "STATES",
            "crew_places", "crew_moves", "scene"]

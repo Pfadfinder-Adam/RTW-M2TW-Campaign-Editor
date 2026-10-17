@@ -63,6 +63,9 @@ class ModelViewer(tk.Toplevel):
         self.make = make                # a unit's: make(info picture?, RGBA picture) - the card / picture it gets
         self.mount_mesh = self.horse_mesh = None
         self.chariot = mount[2] if mount and len(mount) > 2 else None
+        # an elephant carries its whole crew: one man at each rider_offset place (descr_mount.txt)
+        self.crew_places = (MO.rider_offsets(mod, mount[1]) if mount and not self.chariot and
+                            MO.mount_classes(mod).get(mount[1].lower()) == "elephant" else [])
         self.title("%s - %s" % (title, info.name))
         self.yaw, self.pitch, self.zoom, self.look = 35.0, 8.0, 1.0, 0
         self._frame, self.pan = None, [0.0, 0.0]   # the view's middle + size kept while it plays; the right drag
@@ -124,7 +127,8 @@ class ModelViewer(tk.Toplevel):
             ttk.Checkbutton(side, text="Its crew (%s)" % self.engine["crew"].name, variable=self.v_crew,
                             command=self.reframe).pack(anchor="w")
         if mount:
-            ttk.Checkbutton(side, text=("On its chariot (%s)" if self.chariot else "Its mount (%s)")
+            ttk.Checkbutton(side, text=("On its chariot (%s)" if self.chariot else
+                                        "On its elephant, the whole crew (%s)" if self.crew_places else "Its mount (%s)")
                             % mount[1], variable=self.v_mount,
                             command=self.reframe).pack(anchor="w")
         self.b_look = ttk.Button(side, text="Another man", command=self.next_look)
@@ -331,7 +335,7 @@ class ModelViewer(tk.Toplevel):
             return None, None
         if self.engine:                                  # a siege engine on its own bones
             return (EN.pose(self.mesh, self.anim, self.engine["base"], self.frame)
-                    if self.anim is not None else None), None
+                    if self.anim is not None and self.engine["base"] is not None else None), None
         anim, frame = self.anim, self.frame
         if anim is None and self.mesh.parents:
             anim, frame = self._idle(self.v_skel.get()), 0
@@ -449,6 +453,9 @@ class ModelViewer(tk.Toplevel):
         if not engine or engine[0] is None:
             return None
         eng, crew = engine[0], engine[1] if len(engine) > 1 else None
+        if eng.stations and not eng.points:         # Rome: the crew stands at the engine_station places, no moves
+            return {"eng": eng, "crew": crew, "moves": {}, "base": None, "points": EN.station_points(eng),
+                    "crew_moves": {}, "crew_base": None, "crew_anims": {}}
         mv = EN.moves(mod, eng.skeleton)
         base = EN.anim(mod, mv.get("default")) if mv else None
         if base is None:
@@ -635,6 +642,21 @@ class ModelViewer(tk.Toplevel):
                     4: (self._texture(hi.textures) if hi is not None and hi.textures else
                         self._texture({"": self.horse_mesh.texture_ref})
                         if self.horse_mesh is not None and self.horse_mesh.texture_ref else None)}
+        elif riding and self.crew_places:               # an elephant: its WHOLE crew, one man at each place
+            mi = self.mount[0]
+            beast = self._mount_posed()
+            seats, turn = None, 0.0
+            if self.anim is not None and man.joints and beast.joints:
+                seats = [MV.seat_of(man, beast, off) for off in self.crew_places]
+                turn = MV.seat_turn(beast)
+            mesh = MV.crewed(man, groups, beast, beast.shown(0, True), self.crew_places,
+                             MO.root_node_height(self.mod, self.mount[1]), seats, turn,
+                             mount_one=True if not mi.attach else None)
+            groups = mesh.groups
+            more = {2: self._texture(mi.textures) if mi.textures else None,
+                    3: self._texture(mi.attach) if mi.attach else None}
+            if more[2] is None and self.mount_mesh.texture_ref:
+                more[2] = self._texture({"": self.mount_mesh.texture_ref})
         elif riding:
             mi = self.mount[0]
             horse = self._mount_posed()

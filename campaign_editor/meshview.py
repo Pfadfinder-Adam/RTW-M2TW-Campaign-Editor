@@ -1058,6 +1058,54 @@ def chariot(crew, crew_groups, car, horse, horses, riders):
     return assemble(pieces)
 
 
+def crewed(crew, crew_groups, mount, mount_groups, offsets, root_height=None, seats=None, turn=0.0, mount_one=None):
+    """A mount with its WHOLE crew on it (an elephant: one man at each of descr_mount's rider_offset places): the
+    mount (pictures 2 / 3) and a copy of the crew man (pictures 0 / 1) per place. seats [(x, y, z)]: the riders'
+    moves to their places when both are posed (seat_of per offset), each turned by `turn` round his pelvis; else
+    the mount stands on the ground and each man's pelvis goes to its root node + the offset: its file's nought when
+    the file is made round it (Medieval II's .mesh: the elephant's feet 2.8 below), else root_height above the ground
+    (descr_mount's root_node_height - Rome), else its root bone. A man's pelvis: his root bone, his
+    file's nought when made round it (Medieval II), else half way up. mount_one: the mount's uv over one picture."""
+    MP = [mount.positions[i] for g in mount_groups for i in g.tris] or mount.positions or [(0.0, 0.0, 0.0)]
+    one = mount.one_texture if mount_one is None else mount_one
+    pieces = []
+    if seats is None:
+        my = -min(p[1] for p in MP)
+        CP = [crew.positions[i] for g in crew_groups for i in g.tris] or crew.positions or [(0.0, 0.0, 0.0)]
+        lo, hi = min(p[1] for p in CP), max(p[1] for p in CP)
+        if crew.joints:
+            px, py, pz = crew.joints[_root(crew)]
+        elif lo < -0.3 < 0.3 < hi:              # made round his pelvis
+            px, py, pz = 0.0, 0.0, 0.0
+        else:                                   # no bones read: the pelvis about half way up the man
+            px, py, pz = 0.0, lo + 0.53 * (hi - lo), 0.0
+        if my > 0.5:                            # made round its root node (Medieval II)
+            rx, ry, rz = 0.0, my, 0.0
+        elif root_height is not None:           # Rome: the game holds the root node that high (heads over the tower)
+            rx, ry, rz = 0.0, root_height, 0.0
+        elif mount.joints and len(mount.joints) > 1:
+            rx, ry, rz = mount.joints[_root(mount)]
+            ry += my
+        else:
+            rx, ry, rz = 0.0, max(p[1] for p in MP) + my, 0.0
+        seats = [(rx + x - px, ry + y - py, rz + z - pz) for x, y, z in offsets]
+        pieces.append((mount, mount_groups, (0.0, my, 0.0), 2, one))
+    else:
+        pieces.append((mount, mount_groups, (0.0, 0.0, 0.0), 2, one))
+    man = crew
+    if turn and crew.joints:
+        c, s_ = math.cos(turn), math.sin(turn)
+        px, _, pz = crew.joints[_root(crew)]
+        man = Mesh(crew.groups, [((x - px) * c + (z - pz) * s_ + px, y, -(x - px) * s_ + (z - pz) * c + pz)
+                                 for x, y, z in crew.positions], crew.uvs)
+        man.one_texture = crew.one_texture
+    for at in seats:
+        pieces.append((man, crew_groups, at, 0, crew.one_texture))
+    out = assemble(pieces)
+    out.texture_ref = crew.texture_ref
+    return out
+
+
 def frame_of(mesh, groups):
     """(middle, radius) the view is sized and centred on for these groups - kept by the 3D window while an animation
     plays (the user, 2026-10-10: 'the camera jerks while the animation plays' - each frame was fitted anew)."""

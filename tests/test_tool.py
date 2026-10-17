@@ -13126,6 +13126,53 @@ building smith
         self.assertEqual([s[:2] for s in got.skin], [(2, 2), (1, 1)])
         self.assertEqual(got.parents, (-1, 0, 1))
 
+    def test_rome_engine_crew_at_its_stations_and_elephant_whole_crew(self):
+        """Rome's siege engine: its engine_model lines are its meshes, its crew stands at the engine_station places
+        (standing) and the engine_push_point places (moving) - the game's numbers. An elephant carries its WHOLE crew:
+        one man at each rider_offset place, from its root node (root_node_height above the ground)."""
+        from campaign_editor import engines as EN
+        from campaign_editor import meshview as MV
+        from campaign_editor import models as MO
+        data = os.path.join(self.root, "data")
+        write(os.path.join(data, "descr_engines.txt"),
+              "type ballista\nengine_model_group normal\nengine_skeleton ballista\n"
+              "engine_model data/models_engine/Ballista.cas, 20.0\nengine_model_group dying\n"
+              "engine_model data/models_engine/dead.CAS, max\n"
+              "engine_push_point -1.5 -1.4\nengine_push_point 0.0 -5.2\n"
+              "engine_station crank -0.92 -3.65\nengine_station crank 0.8 -4.6\nengine_station captain -0.0 -5.2\n")
+        write(os.path.join(data, "descr_mount.txt"),
+              "type elephant african\nclass elephant\nmodel elephant_african\nroot_node_height 2.52\nriders 3\n"
+              "rider_offset 0.0, 1.225, 1.306\nrider_offset 0.0, 1.1, 0.5\nrider_offset 0, 1.1, -.25 ;the back\n\n"
+              "type horse\nclass horse\nmodel horse\n")
+        mod = ModData(data)
+        eng = EN.read_engine(mod, "ballista")
+        self.assertEqual(eng.meshes, ["data/models_engine/Ballista.cas"])
+        self.assertEqual(eng.stations, [("crank", -0.92, -3.65), ("crank", 0.8, -4.6), ("captain", 0.0, -5.2)])
+        pts = EN.station_points(eng)
+        self.assertEqual(EN.crew_places(eng, pts, "Engine StationPoint"),
+                         [("crank 1", (-0.92, 0.0, -3.65)), ("crank 2", (0.8, 0.0, -4.6)), ("captain 1", (0.0, 0.0, -5.2))])
+        self.assertEqual([p for _, p in EN.crew_places(eng, pts, "Engine PushPoint")], [(-1.5, 0.0, -1.4), (0.0, 0.0, -5.2)])
+        self.assertEqual(MO.rider_offsets(mod, "Elephant African"), [(0.0, 1.225, 1.306), (0.0, 1.1, 0.5), (0.0, 1.1, -0.25)])
+        self.assertEqual(MO.rider_offset(mod, "elephant african"), (0.0, 1.225, 1.306))
+        self.assertEqual((MO.root_node_height(mod, "elephant african"), MO.root_node_height(mod, "horse")), (2.52, None))
+        self.assertEqual((MO.rider_offsets(mod, "horse"), MO.rider_offset(mod, "horse")), ([], (0.0, 0.0, 0.0)))
+        # the beast on the ground (its feet at 0), a man 2 high (pelvis 1.06 up), one copy per place
+        beast = MV.Mesh([MV.Group("b", "", (0, 1, 2), False)], [(0, 0.1, 0), (1, 2, 0), (0, 2, 1)], None)
+        man = MV.Mesh([MV.Group("m", "", (0, 1, 2), False)], [(0, 0, 0), (0, 2, 0), (0.1, 2, 0)], None)
+        got = MV.crewed(man, man.groups, beast, beast.groups, MO.rider_offsets(mod, "elephant african"), 2.52)
+        self.assertEqual(len(got.positions), 3 + 3 * 3)
+        self.assertEqual([g.pic for g in got.groups], [2, 0, 0, 0])
+        self.assertAlmostEqual(min(p[1] for p in got.positions[:3]), 0.0)
+        feet = [got.positions[3 + 3 * k] for k in range(3)]
+        for (x, y, z), (ox, oy, oz) in zip(feet, MO.rider_offsets(mod, "elephant african")):
+            self.assertAlmostEqual(y, 2.52 + oy - 1.06, places=5)           # pelvis at the root node + the offset
+            self.assertAlmostEqual(z, oz, places=5)
+        # Medieval II: the elephant made round its root node (feet 2.8 below), the man round his pelvis
+        beast = MV.Mesh([MV.Group("b", "", (0, 1, 2), False)], [(0, -2.8, 0), (1, 2.5, 0), (0, 2, 1)], None)
+        man = MV.Mesh([MV.Group("m", "", (0, 1, 2), False)], [(0, -1, 0), (0, 0.9, 0), (0.1, 0.9, 0)], None)
+        got = MV.crewed(man, man.groups, beast, beast.groups, [(0.05, 1.35, 1.37)], 2.84)
+        self.assertAlmostEqual(got.positions[3][1], 2.8 + 1.35 - 1, places=5)
+
     def test_special_places_written_read_back_and_taken_out(self):
         """Special places (specialplaces.py): a place written = its window's picture (the game's scroll, or a plain
         parchment without interface sheets, the place's picture across the whole width), its model copied into the

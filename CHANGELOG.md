@@ -17,6 +17,7 @@
 - Maps > 3D: the heights brush now works on the water too - the sea's floor raised out of it becomes land, land pushed under becomes water, as in the game; and a second way, the game's own: grab the land and move the mouse up or down.
 
 ### Added
+- View in 3D: Rome's siege engines show their crew at the engine's own places, and an elephant carries its whole crew (the driver on its neck, the rest in the tower) in both games.
 - Interface: Replace picture... gives a piece a picture of your own (a file or one from the new Picture library) and keeps what it does; Back to the game's picture undoes it; Check mod files says a menu picture that would stop the game and a page with too many pictures.
 - Maps > 3D: armies, agents and fleets carried to another tile with the left button, as on the Map - a white frame on the tile they go to, the Map's own check, Undo and Apply; an army in a town stands on its roofs, as in the game's own editor.
 - Maps > 3D: towns, ports, resources, forts and watchtowers are carried too, and what is carried goes with the mouse at once; the heights brush follows the mouse without catching up on old moves; Medieval II's figures face the camera as Rome's; another mod or campaign loaded is drawn at once (it waited for Draw it again).
