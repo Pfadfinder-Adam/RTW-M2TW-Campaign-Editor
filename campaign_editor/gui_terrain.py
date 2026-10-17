@@ -49,10 +49,12 @@ class TerrainEditor(ttk.Frame):
         self.cbase = {}                 # those pixels as the files have them: {(file, (x, y)): colour}
         self._undo, self._redo = [], []
         self._last_river = None         # the last river tile of the stroke: the next one joins it side to side
-        top = ttk.Frame(self)
-        top.pack(fill="x")
-        self._top = top                                  # in the map's side column (report #332), one thing a row
-        ttk.Label(top, text="Paint", font=("", 10, "bold")).pack(side="top", anchor="w")
+        # the brushes in the work notebook's tab row, after the map's zoom, one row (reports #337 / #338)
+        host = app.tab_tools(*app.TERRAIN_TABS) if hasattr(app, "tab_tools") else None
+        top = ttk.Frame(host if host is not None else self)
+        top.pack(side="left", fill="x")
+        self._top = top
+        ttk.Label(top, text="Paint", font=("", 10, "bold")).pack(side="left", padx=(theme.BUTTON_GAP * 2, 4))
         self.v_what = tk.StringVar(value="ground")
         self.group, self._last_of = "terrain", {}
         self._what_buttons = {}
@@ -60,9 +62,9 @@ class TerrainEditor(ttk.Frame):
                           ("climate", "Climates"), ("heights", "Heights"), ("coast", "Land and sea")):
             self._what_buttons[val] = ttk.Radiobutton(top, text=text, value=val, variable=self.v_what,
                                                       command=self.fill_palette)
-            self._what_buttons[val].pack(side="top", anchor="w", padx=4)
+            self._what_buttons[val].pack(side="left", padx=4)
         self._paint_end = ttk.Frame(top)                 # the Paint radios of the tab on show go before it
-        self._paint_end.pack(side="top", fill="x", pady=(4, 0))
+        self._paint_end.pack(side="left", padx=(8, 0))
         ttk.Label(self._paint_end, text="brush").pack(side="left")
         self.v_brush = tk.IntVar(value=1)
         self.v_brush.trace_add("write", lambda *_: self._brush_changed())     # typed too, not only the arrows
@@ -78,7 +80,7 @@ class TerrainEditor(ttk.Frame):
         self._rivers_tick = ttk.Checkbutton(self._paint_end, text="Rivers", variable=self.v_rivers_here,
                                             command=self._rivers_toggled)
         self._rivers_tick.pack(side="left", padx=(8, 0))
-        ttk.Button(top, text="Undo all changes here", command=self.reset).pack(side="top", anchor="w", pady=(4, 0))
+        ttk.Button(top, text="Undo all changes here", command=self.reset).pack(side="left", padx=(12, 0))
         self.v_shore = tk.BooleanVar(value=True)       # the shore as the game draws it (Land and sea's 2nd row)
         self.palette = ttk.Frame(self, padding=(0, 4))
         self.palette.pack(fill="x")
@@ -93,22 +95,28 @@ class TerrainEditor(ttk.Frame):
         self.hint = ShortHint(self)                      # one line; the whole explanation on its '?'
         self.hint.pack(fill="x")
         from .gui_map import MapView
-        self.view = MapView(self, status=None, on_layers=self.show)
+        self.view = MapView(self, status=None, on_layers=self.show, top=host)
         self.view.pack(fill="both", expand=True)
+        if host is not None:
+            self.view.bar.pack_configure(before=top)     # the zoom first, as on every Maps tab
         self.view.on_stroke = self._stroke
         # the campaign map's own switches (Layers, Edit regions, Select, Merge regions, Signs and tools, Find) do not
         # belong here - nothing of the map's towns, armies or regions is worked here (the user, 2026-10-09); the
         # zoom stays
         self.view.lbar.pack_forget()
         self.view.legend.pack_forget()
-        # the brushes, the palette and the hint in the map's side column, above its zoom (report #332: the bars on
-        # top went to the side, as the Map's legend - the map has the whole height)
-        after = self.view.bar                            # under the zoom: it stays first, as on every Maps tab
-        for w in (top, self.palette, self.hint):
+        # the palette and the hint in the map's side column (report #332: the map has the whole height); the
+        # brushes in the tab row (#337 / #338) - else above them in the column too
+        after = None if host is not None else self.view.bar
+        for w in ((self.palette, self.hint) if host is not None else (top, self.palette, self.hint)):
             w.pack_forget()
-            w.pack(in_=self.view.side, side="top", fill="x", after=after)
+            if after is None:
+                w.pack(in_=self.view.side, side="top", fill="x")
+            else:
+                w.pack(in_=self.view.side, side="top", fill="x", after=after)
             w.lift(self.view.side)
             after = w
+        self.view.side_fit()
         self.view.side.bind("<Configure>", self.hint._fit, add="+")    # the hint wraps at the column's width
         self.v_grid_here.set(self.view.v_grid.get())
         self.v_rivers_here.set(self.view.v_rivers.get())
@@ -128,7 +136,7 @@ class TerrainEditor(ttk.Frame):
         for val, b in self._what_buttons.items():
             b.pack_forget()
         for val in mine:
-            self._what_buttons[val].pack(side="top", anchor="w", padx=4, before=self._paint_end)
+            self._what_buttons[val].pack(side="left", padx=4, before=self._paint_end)
         if self.v_what.get() not in mine:
             self.v_what.set(self._last_of.get(group) or mine[0])
             self.fill_palette()
@@ -1012,19 +1020,21 @@ class TerrainEditor(ttk.Frame):
         swatches = []
         for label, colours, names in items:
             ttk.Label(self.palette, text=label + ":").pack(side="top", anchor="w", padx=(4, 2))
-            # in rows of two in the side column, so every one stays in it
+            # each as wide as its words, wrapping at the side column's width as words in a line (report #338: the
+            # buttons in a grid took the widest one's width and ran past the column)
             box = ttk.Frame(self.palette)
-            box.pack(side="top", anchor="w", padx=(4, 0))
-            per_row = 2 if len(colours) > 2 else len(colours) or 1
-            for i, c in enumerate(colours):
+            box.pack(side="top", fill="x", padx=(4, 0))
+            for c in colours:
                 look = GROUND_LOOK.get(c) if what == "ground" else c if what == "climate" else \
                     CampaignMap.FEATURE_LOOK.get(c, (20, 20, 20))
                 hexc = "#%02x%02x%02x" % look
                 b = ttk.Radiobutton(box, text=names[c], value="%d,%d,%d" % c, variable=self.v_colour,
                                     style=theme.colour_style(hexc, "Toolbutton"), cursor="hand2")
-                b.grid(row=i // per_row, column=i % per_row, padx=1, pady=1, sticky="ew")
+                b.pack(side="left", padx=1, pady=1)
                 swatches.append(b.cget("value"))
                 first = first or "%d,%d,%d" % c
+            from .gui_util import flow
+            flow(box)
         if first and self.v_colour.get() not in swatches:
             self.v_colour.set(first)
         self._spray_hook()

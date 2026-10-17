@@ -871,7 +871,7 @@ class App(tk.Tk):
         self.lbl_pick.pack(side="left", fill="x", expand=True)
         from .forts import KINDS as FORT_KINDS
         self.v_fort_type = tk.StringVar(value=FORT_KINDS[0])   # forts: no bar - the legend and the right click
-        self.map_view = MapView(tab, on_layers=lambda: self.show_map())
+        self.map_view = MapView(tab, on_layers=lambda: self.show_map(), top=self.tab_tools("Map"))
         self.map_view.on_menu = self.map_menu
         self.map_view.on_town = self.town_window          # a double click: the town's own window
         self.map_view.on_new_town = lambda name: self.new_region_dialog(edit=name)   # a new one: its names, data
@@ -938,6 +938,8 @@ class App(tk.Tk):
         self.family_editor = FamilyEditor(self._family_host, self)
         self.family_editor.pack(fill="both", expand=True)
         self.nb.bind("<<NotebookTabChanged>>", lambda e: self.tab_opened())
+        self.nb.bind("<<NotebookTabChanged>>", lambda e: self.after_idle(self._place_tab_tools), add="+")
+        self.nb.bind("<Configure>", lambda e: self.after_idle(self._place_tab_tools), add="+")
         self._keys()
 
         # --- actions
@@ -959,7 +961,7 @@ class App(tk.Tk):
         # waiting - without it the window looks broken; Windows even calls it 'not responding')
         self.busy_bar = ttk.Progressbar(srow, mode="indeterminate", length=120)
         # a long message wraps onto a second line instead of running off the window's edge
-        self.status_line.bind("<Configure>", lambda e: self.status_line.configure(wraplength=max(e.width - 4, 200)))
+        self.status_line.bind("<Configure>", lambda e: self._show_status(), add="+")
         self.bottom_bar = ttk.Frame(self)
         self.bottom_bar.pack(side="bottom", fill="x", before=self.nb, **pad)
         # the writing buttons on the left, the rest on the right; a window too narrow for one row wraps them button by
@@ -1046,7 +1048,13 @@ class App(tk.Tk):
                   "M2EX.exe --features.mod=mods/<name>). Apply your changes first - the game reads the files on disk.")
         self.status = tk.StringVar(value="Pick the Mod, or Browse... to its data folder (for example ...\\HLR\\data) "
                                          "and press Load.")
-        self.status_line.configure(textvariable=self.status)
+        # the message in the bottom bar's free middle when the bar is one row (report #337: its own line under the
+        # bar took the map's room); a long one cut with '...', the whole on the mouse - else on its own line again
+        self._status_row, self._status_in_bar = srow, False
+        tip(self.status_line, lambda: self.status.get() if self._status_in_bar else "")
+        self.status.trace_add("write", lambda *a: self._show_status())
+        self.bottom_bar.bind("<Configure>", lambda e: self.after_idle(self._fit_status), add="+")
+        self.after_idle(self._fit_status)
         self.status.trace_add("write", lambda *a: self._log_status())
         for k in ("name", "template"):
             self.v[k].trace_add("write", lambda *a: self.update_actions())
@@ -1056,6 +1064,51 @@ class App(tk.Tk):
         self.after(900, self.offer_own_folder)
         self.after(4000, self.check_report_answers)
         self.after(6000, self.check_new_version)
+
+    def _fit_status(self):
+        """The message's place: the widest gap of the bottom bar's one row, or its own line under the bar."""
+        bar, row = self.bottom_bar, self._status_row
+        kids = sorted((w for w in bar.place_slaves() if w.winfo_ismapped() and w is not row),
+                      key=lambda w: w.winfo_x())
+        if not kids:                                     # the bar's buttons not laid out yet (gui_util.flow)
+            self.after(200, self._fit_status)
+            return
+        seen = self.__dict__.setdefault("_status_kids", set())
+        for w in kids:                                   # a button moved or its words changed: the gap changes
+            if str(w) not in seen:
+                seen.add(str(w))
+                w.bind("<Configure>", lambda e: self.after_idle(self._fit_status), add="+")
+        gap = None
+        if kids and max(w.winfo_y() for w in kids) - min(w.winfo_y() for w in kids) < 4:     # one row
+            edges = [(a.winfo_x() + a.winfo_width(), b.winfo_x()) for a, b in zip(kids, kids[1:])]
+            if edges:
+                gap = max(edges, key=lambda e: e[1] - e[0])
+        if gap is not None and gap[1] - gap[0] >= 220:
+            if row.winfo_manager() != "place":
+                row.pack_forget()
+            row.place(in_=bar, x=gap[0] + 8, y=0, width=gap[1] - gap[0] - 16, relheight=1.0)
+            row.lift()
+            self._status_in_bar = True
+        else:
+            if row.winfo_manager() != "pack":
+                row.place_forget()
+                row.pack(side="bottom", fill="x", padx=6, pady=(0, 6), before=self.nb)
+            self._status_in_bar = False
+        self._show_status()
+
+    def _show_status(self):
+        lbl = self.status_line
+        text = self.status.get() if hasattr(self, "status") else ""
+        width = lbl.winfo_width()
+        if getattr(self, "_status_in_bar", False):
+            from tkinter import font as tkfont
+            from .gui_util import cut_to
+            f = tkfont.nametofont("TkDefaultFont")    # the label's own (the theme sets none of its own)
+            room = max(20, width - 6)
+            one = " ".join(text.split())
+            lbl.configure(wraplength=0, text=cut_to(one, lambda t: f.measure(t) <= room))
+        else:
+            lbl.configure(wraplength=max(width - 4, 200), text=text)
 
     def check_new_version(self):
         """A newer release of the editor on GitHub: its number on the GitHub button (newversion) - the one an earlier
@@ -1483,6 +1536,52 @@ class App(tk.Tk):
         level_now, pop_now = self._size_now
         self.lbl_size.configure(text="now: %s, %s people (the level and the governor's building follow each other)"
                                      % (level_now, pop_now))
+
+    def tab_tools(self, *names):
+        """A bar of a tab's own switches, laid in the work notebook's tab row right of the tabs and shown while one of
+        names is the tab on show (reports #337 / #338: the Maps tabs' switches in that empty row, the map the whole
+        window below it). Made once; its widgets are made inside it."""
+        tools = self.__dict__.setdefault("_tab_tools", {})
+        if names not in tools:
+            tools[names] = ttk.Frame(self)
+            self.after_idle(self._place_tab_tools)
+        return tools[names]
+
+    def _tabs_end(self, y):
+        """The x where the notebook's last tab ends (the empty part of the tab row starts)."""
+        nb = self.nb
+        for x in range(nb.winfo_width() - 1, 0, -3):
+            if nb.identify(x, y):
+                return x + 1
+        return 0
+
+    def _place_tab_tools(self):
+        tools = getattr(self, "_tab_tools", {})
+        if not tools:
+            return
+        nb, name = self.nb, self.tab_name()
+        try:
+            pane = nb.nametowidget(nb.select())
+            row = max(1, pane.winfo_rooty() - nb.winfo_rooty())
+        except (KeyError, tk.TclError):
+            row = 0
+        for names, f in tools.items():
+            if name in names and row > 1:
+                need = f.winfo_reqheight()
+                if need > row - 2:                      # the tabs grow to hold the bar's buttons
+                    st = ttk.Style(self)
+                    pad = st.configure("TNotebook.Tab", "padding") or (6, 2)
+                    pad = [int(v) for v in (pad if isinstance(pad, (list, tuple)) else str(pad).split())]
+                    pad = (pad + pad)[:2] if len(pad) < 2 else pad
+                    grow = (need - row + 3) // 2 + 1
+                    st.configure("TNotebook.Tab", padding=(pad[0], pad[1] + grow))
+                    self.after_idle(self._place_tab_tools)
+                    return
+                left = self._tabs_end(row // 2) + 12
+                f.place(in_=nb, x=left, y=max(0, (row - need) // 2), width=max(1, nb.winfo_width() - left))
+                f.lift()
+            else:
+                f.place_forget()
 
     def tab_name(self):
         """The name of the faction tab on show ('Faction', 'Settlements', 'Map' ...), '' when none."""

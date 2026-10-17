@@ -82,8 +82,11 @@ EDGE_GRAB = 8                                           # px from an edge that g
 
 
 class MapView(ttk.Frame):
-    def __init__(self, master, status=None, on_layers=None):
+    def __init__(self, master, status=None, on_layers=None, top=None):
+        """top: a frame in the work notebook's tab row (App.tab_tools) - the switches and the zoom go there in one row
+        (reports #337 / #338); without it they stand in the side column above the legend (report #332)."""
         super().__init__(master)
+        self._in_row = top is not None
         self.on_layers = on_layers                      # the window redraws when a layer that needs it changes
         self.cmap = None
         self.owners, self.colours, self.faction, self.chosen = {}, {}, None, set()
@@ -94,13 +97,13 @@ class MapView(ttk.Frame):
         self.labels = {}
         self.on_city = None
         self.status = status
-        bar = ttk.Frame(self, padding=(0, 0, 0, 4))
-        bar.pack(fill="x")
+        bar = ttk.Frame(top if top is not None else self, padding=(0, 0, 0, 0 if top is not None else 4))
+        bar.pack(side="left" if top is not None else "top", fill="x")
         self.bar = bar                                  # the map's own switches and zoom: the side column's top
         # the switches wrap onto more rows in the side column (report #332: the bars on top went to the side, as the
         # legend - the map has the whole height)
         lbar = ttk.Frame(bar)
-        lbar.pack(side="top", fill="x")
+        lbar.pack(side="left" if self._in_row else "top", fill="x")
         self.lbar = lbar                                # the map's own switches (the Terrain editor hides them)
         # the layers, in one menu: what is drawn on the map
         self.v_pol = tk.BooleanVar(value=True)
@@ -216,8 +219,8 @@ class MapView(ttk.Frame):
         self._layers_label()
         # the zoom: the first row of the side column on every Maps tab, always in the same place (a tester: 'the zoom
         # and Fit moved' - under the switches on the Map, under the brushes on Terrain)
-        zbar = ttk.Frame(bar, padding=(0, 0, 0, 4))
-        zbar.pack(side="top", fill="x", before=lbar)
+        zbar = ttk.Frame(bar, padding=(0, 0, 0, 0 if self._in_row else 4))
+        zbar.pack(side="left" if self._in_row else "top", fill="x", before=lbar)
         b = ttk.Button(zbar, text="-", command=lambda: self.zoom_by(-1, by=50))
         b.pack(side="left")
         # the zoom as a browser shows it: 100% = the whole map in the window (Fit) (report #127)
@@ -228,7 +231,8 @@ class MapView(ttk.Frame):
         fit.pack(side="left", padx=(4, 0))
         # the window that holds the map adds its own here (Bigger map), a row under the zoom, never inside it
         self.zoom_bar = ttk.Frame(bar)
-        self.zoom_bar.pack(side="top", fill="x", before=lbar)
+        self.zoom_bar.pack(side="left" if self._in_row else "top", fill="x", before=lbar,
+                           padx=(theme.BUTTON_GAP, theme.BUTTON_GAP) if self._in_row else 0)
         self.zoom_minus = b
         from .gui_util import hint
         hint(zbar, "Wheel: zoom (100% = the whole map in the window, as Fit).   Right drag: move the map.   Left drag: "
@@ -252,7 +256,7 @@ class MapView(ttk.Frame):
         self.find_entry.bind("<Escape>", lambda e: self._find_close())
         # the switches one under another (a tester: 'in a column, so the panel is not so wide'); a button and its
         # drop-down / a label and its box share a row
-        ws = lbar.pack_slaves()
+        ws = [] if self._in_row else lbar.pack_slaves()  # in the tab row: one row, as they are packed
         for w in ws:
             w.pack_forget()
         prev = None
@@ -269,7 +273,8 @@ class MapView(ttk.Frame):
             prev = w
         if prev is not None and prev.winfo_manager() == "":
             prev.pack(side="top", anchor="w", pady=1)
-        self.lbl_layers.configure(wraplength=SIDE_WIDTH - 20, justify="left")
+        if not self._in_row:
+            self.lbl_layers.configure(wraplength=SIDE_WIDTH - 20, justify="left")
         body = ttk.Frame(self)
         body.pack(fill="both", expand=True)
         self._body = body
@@ -277,9 +282,10 @@ class MapView(ttk.Frame):
         self.side = ttk.Frame(body, width=SIDE_WIDTH, padding=(6, 0, 0, 0))
         self.side.pack(side="right", fill="y")
         self.side.pack_propagate(False)
-        bar.pack_forget()
-        bar.pack(in_=self.side, side="top", fill="x")
-        bar.lift(self.side)                              # made before the column: raised above it, or it hides there
+        if not self._in_row:
+            bar.pack_forget()
+            bar.pack(in_=self.side, side="top", fill="x")
+            bar.lift(self.side)                          # made before the column: raised above it, or it hides there
         self.find_list = tk.Listbox(body, height=12, width=90, activestyle="dotbox", exportselection=False)
         self.find_list.bind("<Return>", lambda e: self._find_go(None))
         self.find_list.bind("<Double-Button-1>", lambda e: self._find_go(None))
@@ -303,6 +309,7 @@ class MapView(ttk.Frame):
         lc.tag_bind("tool", "<Leave>", lambda e: lc.configure(cursor=""))
         if self.v_legend.get():
             self.legend.pack(in_=self.side, side="top", fill="both", expand=True)
+        self.side_fit()
         row = ttk.Frame(self)                            # under the map: its size (fixed, left), then the tile read
         row.pack(fill="x")
         self.size_label = ttk.Label(row, text="", anchor="w", font=("", 9, "bold"))
@@ -923,13 +930,26 @@ class MapView(ttk.Frame):
         settings.put("map_legend", bool(self.v_legend.get()))
         if self.v_legend.get():
             self.legend.pack(in_=self.side, side="top", fill="both", expand=True)
+            self.side_fit()
             self._draw_legend()
         else:
             self.legend.pack_forget()
+            self.side_fit()
             if self.tool:                                # the legend hidden: its picked tool is put down too
                 self.set_tool(None)
                 if self.on_tool:
                     self.on_tool(None)
+
+    def side_fit(self):
+        """With the switches in the tab row the side column holds only the legend (or the Terrain editor's palette):
+        gone while it holds nothing, so the map takes the whole width."""
+        if not self._in_row:
+            return
+        if self.side.pack_slaves():
+            if not self.side.winfo_manager():
+                self.side.pack(side="right", fill="y", before=self.canvas)
+        elif self.side.winfo_manager():
+            self.side.pack_forget()
 
     LEGEND_RED = (190, 40, 40)
 
@@ -985,11 +1005,6 @@ class MapView(ttk.Frame):
                     self._draw_char({"id": "legend" if not mine else "legend_mine", "faction": "__legend__",
                                      "kind": kind, "army": army, "name": ""}, x, yy, 20)
                 return d
-            if self.tools:
-                lc.create_text(8, y[0], anchor="w", width=236, font=("", 8), fill=theme.palette()["muted"],
-                               text="Signs on a button (+) are tools: click one, then click the map to make one there; "
-                                    "click it again to stop")
-                y[0] += 22
             head("Towns and ports")
             red = "#%02x%02x%02x" % self.LEGEND_RED
             row("a town (its owner's colour)", town(red, "black", 1), "town")
