@@ -9,6 +9,7 @@
 - **Fixed**: faction logos can be replaced without REX / M2EX too; many fixes from testers' reports (units and
   buildings brought from other mods, the recruitment order, Medieval II's add-on words, crashes).
 - **Changed**: a slimmer Unit editor and Models tab; the support buttons in one drop-down.
+- Maps > 3D: the heights brush now works on the water too - the sea's floor raised out of it becomes land, land pushed under becomes water, as in the game; and a second way, the game's own: grab the land and move the mouse up or down.
 
 ### Added
 - New / Edit faction: a Culture pick - the faction's towns, portraits, buildings and units follow the culture in the game; Preview says which units it gains or loses and which buildings in its towns the new culture cannot build.

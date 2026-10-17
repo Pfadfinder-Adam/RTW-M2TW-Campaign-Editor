@@ -39,6 +39,7 @@ class TerrainEditor(ttk.Frame):
         self.ground, self.features, self.climate = {}, {}, {}     # painted tiles: {(x, y): colour}
         self.heights = {}               # sprayed map_heights pixels: {(px, py): grey}
         self._hvals = {}                # their running values with fractions (small puffs add up)
+        self._lift_vals, self._grabbed = {}, None   # the 3D brush on land and water: its running metres, its grab
         self.base = {}                  # what the files have there: {('ground'|'features'|'climate', xy): colour}
         self.hbase = {}                 # map_heights pixels as the file has them: {(px, py): grey}
         self._coast_why = None          # why the last land / sea tile could not turn
@@ -711,6 +712,11 @@ class TerrainEditor(ttk.Frame):
                 return False                            # the mouse held still: the same band again changes nothing
             got = sc.stroke(last or (px, py), (px, py), r, mode == "shape_land")
             self._shape_last = (px, py)
+        return self._lay_coast(got)
+
+    def _lay_coast(self, got):
+        """What a coast brush's tick changes (ShapeCoast: regions, heights, ground, the exact heights) laid into the
+        pictures and kept for Undo, Preview and Apply. True when anything changed."""
         reg = self.mod.region_map(self.app.v_campaign.get())
         for t, c in got["regions"].items():
             self.cbase.setdefault(("regions", t), reg.get(*t))
@@ -750,6 +756,79 @@ class TerrainEditor(ttk.Frame):
         got = T.pen_points(heights, self._img("map_ground_types.tga"), (px, py), r, to_land)
         self._coast_points(got)
         return bool(got["heights"] or turned)
+
+    def lift(self, px, py, tool=None):
+        """One puff of the heights brush on land and water alike (the 3D map's): the points under it raised,
+        lowered, smoothed or levelled in metres, the sea's floor rising out of the water into land and land sinking
+        under it as in the game (ShapeCoast.lift: the tiles, regions and ground follow, the heights kept exactly).
+        True when anything changed."""
+        import math
+        if not self._bound():
+            return None
+        sc = self._shape_coast()
+        if sc is None:
+            self.app.status.set("This campaign has no map_heights.tga.")
+            return False
+        tool = tool or self.v_tool.get()
+        c, radius, _ = T.spray_footprint((px, py), self.v_brush.get())
+        r = max(0.5, float(radius))
+        k = max(1, min(10, self.v_strength.get())) / 10.0
+        vals = self._lift_vals
+        new = {}
+        for y in range(int(c[1] - r) - 1, int(c[1] + r) + 2):
+            for x in range(int(c[0] - r) - 1, int(c[0] + r) + 2):
+                d = math.hypot(x - c[0], y - c[1])
+                if d > r:
+                    continue
+                m = vals.get((x, y))
+                if m is None:
+                    m = sc.metres(x, y)
+                if m is None:
+                    continue
+                w = 1.0 if r < 1 else 1 - (d / (r + 0.5)) ** 2
+                if tool == "raise":
+                    m += 4.0 * k * w * sc.grey
+                elif tool == "lower":
+                    m -= 4.0 * k * w * sc.grey
+                elif tool == "smooth":
+                    near = [vals.get((x + a, y + b), sc.metres(x + a, y + b)) for a in (-1, 0, 1) for b in (-1, 0, 1)]
+                    near = [v for v in near if v is not None]
+                    m += (sum(near) / len(near) - m) * 0.5 * k * w
+                else:                                   # level: toward the height picked (grey 0-255)
+                    m += (self.v_level.get() * sc.grey - m) * 0.5 * k * w
+                vals[(x, y)] = m
+                new[(x, y)] = m
+        return self._lay_coast(sc.lift(new)) if new else False
+
+    def grab(self, px, py):
+        """The game's own heights brush, begun: the points under it (and how much each takes - most in the middle)
+        held with their heights now; then pull(dy) moves them all up or down together."""
+        import math
+        sc = self._shape_coast() if self._bound() else None
+        if sc is None:
+            self._grabbed = None
+            return False
+        c, radius, _ = T.spray_footprint((px, py), self.v_brush.get())
+        r = max(0.5, float(radius))
+        held = {}
+        for y in range(int(c[1] - r) - 1, int(c[1] + r) + 2):
+            for x in range(int(c[0] - r) - 1, int(c[0] + r) + 2):
+                d = math.hypot(x - c[0], y - c[1])
+                m = sc.metres(x, y) if d <= r else None
+                if m is not None:
+                    w = 1.0 if r < 1 else 0.5 * (1 + math.cos(math.pi * d / (r + 0.5)))   # a soft hill
+                    held[(x, y)] = (m, w)
+        self._grabbed = held
+        return bool(held)
+
+    def pull(self, metres):
+        """The grabbed points moved up (metres > 0) or down from where they were when grabbed. True when anything
+        changed."""
+        held = getattr(self, "_grabbed", None)
+        sc = self._shape_coast() if held else None
+        if not held or sc is None:
+            return False
+        return self._lay_coast(sc.lift({p: m + w * metres for p, (m, w) in held.items()}))
 
     def spray(self, px, py):
         """One puff of the heights brush at map_heights pixel (px, py); True when a pixel changed."""
@@ -803,6 +882,7 @@ class TerrainEditor(ttk.Frame):
 
     def _stroke(self):
         self._last_river = None
+        self._lift_vals, self._grabbed = {}, None
         self._shape_last = self._push_land = None
         self._undo.append(self._state())
         del self._undo[:-100]

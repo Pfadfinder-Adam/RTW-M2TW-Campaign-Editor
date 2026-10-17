@@ -6767,6 +6767,26 @@ building smith
         self.assertTrue(got["kept"])
         self.assertTrue(T.is_land_height(heights.get(9, 17)))               # the town's middle
         self.assertEqual(regions.get(*town), red)
+        # the 3D heights brush on the water (ShapeCoast.lift, the game's way: the water a sheet at 0): the sea's floor
+        # raised out of it becomes land - its tile joins the region, the ground follows, the height kept exactly;
+        # lowered back under, water again
+        mid = (2 * 9 + 1, 2 * 5 + 1)                                        # tile (9, 5), far out at sea
+        self.assertLess(sc.metres(*mid), 0)
+        got = sc.lift({mid: 120.0})
+        lay(got)
+        self.assertEqual(got["tiles"], {(9, 5): "land"})
+        self.assertEqual(regions.get(9, 5), red)
+        self.assertTrue(T.is_land_height(heights.get(*mid)))
+        self.assertAlmostEqual(sc.metres(*mid), 120.0)                      # exact: no 29 m step
+        self.assertTrue(T.is_land_ground(ground.get(*mid)))
+        got = sc.lift({mid: -40.0})
+        lay(got)
+        self.assertEqual(got["tiles"], {(9, 5): "sea"})
+        self.assertEqual(regions.get(9, 5), sea)
+        self.assertEqual(ground.get(*mid), T.SHALLOW_SEA)
+        got = sc.lift({(9, 17): -50.0})                                     # the town's middle: kept land, said why
+        self.assertTrue(got["kept"])
+        self.assertGreater(sc.metres(9, 17), 0)
         # Smooth the coast: a stair of tiles (the old tile brush's look) gets shorter, no tile middle lost
         for x, y in ((5, 6), (5, 7), (6, 7)):
             for i in range(3):

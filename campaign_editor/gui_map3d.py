@@ -61,13 +61,16 @@ class Map3DView(ttk.Frame):
         # the heights brush right on the 3D map: the Terrain editor's own (its strokes, Undo and Apply shared), the
         # land changing under the circle while the button is held, not when the stroke ends
         self.v_brush_on = tk.BooleanVar(value=False)
-        self._paint, self._mouse, self._ring = False, None, None
+        self.v_how = tk.StringVar(value="grab")         # 'grab': the game's (hold and move up / down); 'spray'
+        self._paint, self._mouse, self._ring, self._grab = False, None, None, None
         from .gui_util import tip as _tip
         _tip(ttk.Checkbutton(bar, text="Heights brush", variable=self.v_brush_on, command=self._brush_toggled),
-             "The left button raises (or lowers, smooths, levels) the land under the circle, like the heights brush "
-             "of Coast & heights - the same brush: its strokes, Undo and Apply are shared. Held longer, it does "
-             "more; the map changes while you hold it. Ctrl + the wheel, or [ and ], make the circle smaller or "
-             "bigger; 'brush' beside it has the rest.").pack(side="left", padx=(theme.BUTTON_GAP * 2, 0))
+             "Grab and drag (the game's own): press the left button where the land should rise or sink and move "
+             "the mouse up or down while holding it - the land under the circle goes with it, most in the middle. "
+             "Spray: the left button raises (or lowers, smooths, levels) the land while held. Both work on the "
+             "water too: the sea's floor raised out of the water becomes land (its tile joins a region), land "
+             "lowered under it becomes water, as in the game. The same strokes, Undo and Apply as Coast & heights. "
+             "Ctrl + the wheel, or [ and ], make the circle smaller or bigger; 'brush' beside it has the rest.").pack(side="left", padx=(theme.BUTTON_GAP * 2, 0))
         bb = ttk.Button(bar, text="brush \u25be")
         bb.pack(side="left", padx=(2, 0))
         self._brush_panel = DropPanel(bb, self._build_brush)
@@ -98,7 +101,7 @@ class Map3DView(ttk.Frame):
         c.bind("<ButtonRelease-2>", self._release)
         c.bind("<Motion>", self._hover)
         c.bind("<ButtonPress-1>", self._paint_start)
-        c.bind("<B1-Motion>", self._hover)
+        c.bind("<B1-Motion>", self._drag_paint)
         c.bind("<ButtonRelease-1>", self._paint_end)
         c.bind("<Leave>", lambda e: self._hover(None))
         c.bind("<Control-MouseWheel>", lambda e: self._resize(1 if e.delta > 0 else -1))
@@ -368,6 +371,11 @@ class Map3DView(ttk.Frame):
         if ed is None:
             ttk.Label(f, text="load a mod first").pack(anchor="w")
             return
+        for val, text in (("grab", "Grab and drag (the game's): press, move the mouse up / down"),
+                          ("spray", "Spray: works while the button is held")):
+            ttk.Radiobutton(f, text=text, value=val, variable=self.v_how).pack(anchor="w")
+        ttk.Separator(f).pack(fill="x", pady=4)
+        ttk.Label(f, text="the spray:").pack(anchor="w")
         for val, text in (("raise", "Raise"), ("lower", "Lower"), ("smooth", "Smooth"), ("level", "Level to height")):
             ttk.Radiobutton(f, text=text, value=val, variable=ed.v_tool).pack(anchor="w")
         row = ttk.Frame(f)
@@ -457,14 +465,47 @@ class Map3DView(ttk.Frame):
             return
         ed._stroke()                                     # one Undo step a stroke, as on the 2D map
         self._paint, self._mouse = True, (e.x, e.y)
+        self._coast_was = self._coast_now(ed)
+        if self.v_how.get() == "grab":                   # the game's: the land under the circle held, then moved
+            got = self._point(e.x, e.y)
+            self._grab = (e.y, got[1]) if got is not None and ed.grab(*got[1]) else None
+            return
         self._puff()
+
+    def _drag_paint(self, e):
+        """The mouse moved with the left button held: the grabbed land goes up or down with it (the higher the mouse,
+        the higher the land - as smooth as the mouse), else the spray follows the mouse."""
+        if self._paint and self._grab is not None:
+            ed = self.app.editors.get("terrain")
+            sc = ed._shape_coast() if ed is not None else None
+            if sc is not None:
+                y0, at = self._grab
+                try:
+                    k = max(1, min(10, ed.v_strength.get())) / 5.0
+                except tk.TclError:
+                    k = 1.0
+                if ed.pull((y0 - e.y) * 0.3 * k * sc.grey):           # a third of a grey step a pixel at strength 5
+                    self._send_heights(ed, at)
+                    self.draw(half=True)
+            return
+        self._hover(e)
 
     def _paint_end(self, e):
         if self._paint:
-            self._paint = False
+            self._paint, self._grab = False, None
+            ed = self.app.editors.get("terrain")
+            if ed is not None and self._coast_now(ed) != getattr(self, "_coast_was", None):
+                self.rebuild()                           # land out of the water (or under it): its ground, its tile
+                return
             self._for = self._stamp()                    # the card already shows what was painted
             self._lay_models()                           # the mountains and hills laid again on the new relief
             self._sharp_later()
+
+    @staticmethod
+    def _coast_now(ed):
+        """What a stroke can change beyond the heights: the ground and region points the coast moved."""
+        cpx = getattr(ed, "cpx", {}) or {}
+        return (tuple(sorted((cpx.get("ground") or {}).items())), tuple(sorted((cpx.get("regions") or {}).items())))
 
     def _lay_models(self):
         """The tile models placed again in a thread (a big map takes seconds), taken by the card when done."""
@@ -505,7 +546,7 @@ class Map3DView(ttk.Frame):
             return
         ed = self.app.editors.get("terrain")
         got = self._point(*self._mouse) if self._mouse else None
-        if ed is not None and got is not None and ed.spray(*got[1]):
+        if ed is not None and got is not None and ed.lift(*got[1]):
             self._send_heights(ed, got[1])
             self.draw(half=True)
         self.after(50, self._puff)
@@ -522,11 +563,16 @@ class Map3DView(ttk.Frame):
         y0, y1 = max(0, int(at[1]) - k), min(d.rows - 1, int(at[1]) + k + 1)
         if img is None or x1 < x0 or y1 < y0:
             return
-        rgb = np.array([[img.get(x, y) for x in range(x0, x1 + 1)] for y in range(y1, y0 - 1, -1)], np.uint8)
-        camp = self.app.v_campaign.get()
-        if getattr(self, "_limits", None) is None or self._limits[0] != camp:
-            self._limits = (camp, T.max_land_height(ed.mod, camp), T.min_sea_height(ed.mod, camp))
-        metres = T3.metres_of(rgb, self._limits[1], self._limits[2])
+        sc = ed._shape_coast()
+        if sc is not None:                               # the heights as the game reads them: exact, no 29 m steps
+            metres = np.array([[sc.metres(x, y) or 0.0 for x in range(x0, x1 + 1)] for y in range(y1, y0 - 1, -1)],
+                              np.float32)
+        else:
+            rgb = np.array([[img.get(x, y) for x in range(x0, x1 + 1)] for y in range(y1, y0 - 1, -1)], np.uint8)
+            camp = self.app.v_campaign.get()
+            if getattr(self, "_limits", None) is None or self._limits[0] != camp:
+                self._limits = (camp, T.max_land_height(ed.mod, camp), T.min_sea_height(ed.mod, camp))
+            metres = T3.metres_of(rgb, self._limits[1], self._limits[2])
         self.gl.set_heights((d.rows - 1) - y1, x0, metres)
 
     # ---- the mouse and keys ----

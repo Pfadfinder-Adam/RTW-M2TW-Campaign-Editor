@@ -1014,11 +1014,49 @@ class ShapeCoast:
         m = SHAPE_SLOPE * s if s <= 0 else max(0.5, SHAPE_SLOPE * s)   # land never 0 (it reads as water)
         return self.tga_colour(m), m
 
-    def _settle(self, old, new):
-        import math
+    def lift(self, new):
+        """The heights brush on land and water alike ({(px, py): metres} - the sea's floor raised out of the water
+        becomes land, land lowered under it water, as in the game where the water is only a sheet at height 0): the
+        tiles whose middle crosses the waterline turn (their region pixel: the region new land joins, else the
+        nearest; refused in words where coast_problem says so - they keep their side), the ground follows as the
+        shape brush's does; the heights kept exactly (map_heights.hgt). Returns what to change, as stroke()."""
+        old = {p: self.metres(*p) for p in new}
+        old = {p: m for p, m in old.items() if m is not None}
+        new = {p: float(m) for p, m in new.items() if p in old}
         out = {"regions": {}, "heights": {}, "hgt": {}, "ground": {}, "tiles": {}, "kept": []}
+
+        def keep(p, d, to_land):                       # a refused tile: its middle's points stay on their side
+            if d < 1.6:
+                new[p] = min(new[p], -1.0) if to_land else max(new[p], 1.0)
+        self._turn_tiles(old, new, out, keep)
+        g = self.ground
+        for p, m in new.items():
+            if abs(m - old[p]) < 1e-6:
+                continue
+            m = m if m <= 0 else max(1.0, m)            # land never 0 (it reads as water)
+            c = self.tga_colour(m)
+            if c != self.heights.get(*p):
+                out["heights"][p] = c
+            out["hgt"][p] = m
+            self.exact[p] = m
+            if g is None or not (0 <= p[0] < g.width and 0 <= p[1] < g.height):
+                continue
+            now = g.get(*p)
+            if m > 0 and not is_land_ground(now):
+                near = Counter(g.get(p[0] + a, p[1] + b) for a in (-1, 0, 1) for b in (-1, 0, 1)
+                               if 0 <= p[0] + a < g.width and 0 <= p[1] + b < g.height)
+                out["ground"][p] = next((k for k, _ in near.most_common() if is_land_ground(k)), NEW_LAND_GROUND)
+            elif m <= 0 and is_land_ground(now):
+                out["ground"][p] = SHALLOW_SEA
+        return out
+
+    def _turn_tiles(self, old, new, out, keep):
+        """The tiles whose middle point changes side between old and new (signed: land +) turned in out, as the
+        map's files take it; a refused one calls keep(point, distance from its middle, to_land) for the points
+        around its middle."""
+        import math
         flips = {}
-        for (px, py), s in new.items():                 # tiles whose middle changes side
+        for (px, py), s in new.items():
             if px % 2 and py % 2 and (s > 0) != (old[(px, py)] > 0):
                 flips[((px - 1) // 2, (py - 1) // 2)] = s > 0
         for t, to_land in sorted(flips.items()):
@@ -1030,13 +1068,11 @@ class ShapeCoast:
                 region = self.region if self.region in self.cmap.info else nearest_region(self.cmap, t)
                 if not region:
                     why = "no region near enough to join - pick one in 'new land joins'"
-            if why:                                     # it keeps its side: a little land / water round its middle
+            if why:                                     # it keeps its side
                 out["kept"].append(why)
                 m = (2 * t[0] + 1, 2 * t[1] + 1)
                 for p in new:
-                    d = math.hypot(p[0] - m[0], p[1] - m[1])
-                    if d < 1.6:
-                        new[p] = min(new[p], d - 0.75) if to_land else max(new[p], 0.75 - d)
+                    keep(p, math.hypot(p[0] - m[0], p[1] - m[1]), to_land)
                 continue
             was = self.cmap.region_at(*t)
             out["regions"][t] = self.cmap.info[region]["colour"] if to_land else self.sea
@@ -1045,6 +1081,14 @@ class ShapeCoast:
                 self.counts[region] = self.counts.get(region, 0) + 1
             elif was:
                 self.counts[was] = self.counts.get(was, 0) - 1
+
+    def _settle(self, old, new):
+        out = {"regions": {}, "heights": {}, "hgt": {}, "ground": {}, "tiles": {}, "kept": []}
+
+        def keep(p, d, to_land):                       # a little land / water round a refused tile's middle
+            if d < 1.6:
+                new[p] = min(new[p], d - 0.75) if to_land else max(new[p], 0.75 - d)
+        self._turn_tiles(old, new, out, keep)
         g = self.ground
         for p, s in new.items():
             o = old[p]
