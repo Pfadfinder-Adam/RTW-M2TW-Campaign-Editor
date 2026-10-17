@@ -6724,8 +6724,11 @@ building smith
         tools = os.path.join(game, "tools", "unpacker")
         os.makedirs(tools)
         exe = os.path.join(tools, "unpacker.exe")
-        with open(exe, "w") as fh:                                  # a stand-in that 'unpacks'
-            fh.write("#!%s\nimport os\nopen(os.path.join('..', '..', 'data', 'descr_sm_factions.txt'), 'w')"
+        with open(exe, "w") as fh:                                  # a stand-in that 'unpacks' - as the real one
+            # only after THREE yes answers (the terms, 'are you sure', 'this will overwrite files'; a tester's screen
+            # 2026-10-18: two were given, the third read an empty line as no, exit 0 and nothing unpacked)
+            fh.write("#!%s\nimport os, sys\nfor q in range(3):\n    if sys.stdin.readline().strip().lower() != 'y':"
+                     "\n        sys.exit(0)\nopen(os.path.join('..', '..', 'data', 'descr_sm_factions.txt'), 'w')"
                      ".write('faction x')\n" % sys.executable)
         os.chmod(exe, os.stat(exe).st_mode | stat.S_IEXEC)
         for d in gamefix.UNPACK_DLLS:

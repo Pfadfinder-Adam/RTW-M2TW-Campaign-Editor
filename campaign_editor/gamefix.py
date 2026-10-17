@@ -597,9 +597,11 @@ def unpack(need, log=None):
         cmd = [need["unpacker"], "--source=%s" % need.get("source", "../../packs/*.pack"), "--destination=../../"]
         if need.get("base"):
             cmd.append("--base_pack_path=%s" % need["base"])
-    # the unpacker first asks 'Do you agree to these terms and conditions? (Y/N)' - 'y' answers it (a newline alone
-    # left it waiting and nothing was unpacked: a tester's Kingdoms campaign); the batch ends with 'pause': newlines
-    run = subprocess.run(cmd, cwd=folder, input=b"y\r\ny\r\n\r\n\r\n", stdout=subprocess.PIPE,
+    # the unpacker asks THREE times (Y/N): the terms, 'are you sure you would like to continue', 'this will overwrite
+    # files in the target folder - are you sure' - each wants 'y' (a newline alone reads as no: it ends with exit 0
+    # and nothing unpacked - a tester's Kingdoms campaign, then Steam's Medieval II with two answers given); more 'y'
+    # lines than questions do no harm, the batch's closing 'pause' takes one
+    run = subprocess.run(cmd, cwd=folder, input=b"y\r\n" * 8, stdout=subprocess.PIPE,
                          stderr=subprocess.STDOUT, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
     out = run.stdout.decode("latin-1", "replace")
     data = need.get("data") or os.path.join(need["game"], "data")
