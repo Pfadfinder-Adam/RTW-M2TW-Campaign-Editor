@@ -21,6 +21,8 @@ ADDED = "#d9f2d0"            # a line to be added
 SMALL = dict(cursor="hand2", width=0)        # a row's small x / undo: a button like every other one
 
 
+EVERYONES = "everyone's units (ownership all)"     # the units any faction may own - HLR hires them by region
+
 class RecordEditor(ttk.Frame):
     """kind 'unit' (export_descr_unit.txt) or 'building' (export_descr_buildings.txt)."""
 
@@ -268,6 +270,8 @@ class RecordEditor(ttk.Frame):
         cultures = sorted({c for _, c in facs if c})
         if self.kind == "unit":
             vals = ["all", "mercenaries only", "no mercenaries", "general's units"]
+            if any("all" in (x.get("owners") or []) for x in self.facets.values()):
+                vals.append(EVERYONES)                    # HLR: 212 units hired by region by anyone
             vals += ["faction: %s" % faction_label(n, shown.get(n)) for n, _ in facs]
             vals += ["culture: %s" % c for c in cultures]
             vals += ["category: %s" % c for c in sorted({x.get("category") for x in self.facets.values()} - {"", None})]
@@ -297,11 +301,15 @@ class RecordEditor(ttk.Frame):
             if want == "general's units":
                 return fc.get("general", False)
             owners = fc.get("owners", [])
+            if want == EVERYONES:
+                return "all" in owners
+            # a faction / culture: the units naming it - not the ones everyone may hire ('ownership all': HLR hires
+            # them by region; listed under a faction they showed the mercenaries' pictures - a tester, 2026-10-17)
             if kind == "faction":
                 c = self._cultures.get(what)
-                return what in owners or (c and c in owners) or "all" in owners
+                return what in owners or bool(c and c in owners)
             if kind == "culture":
-                return what in owners or "all" in owners
+                return what in owners
             return fc.get(kind) == what
         if want == "recruit units":
             return fc.get("recruits", False)

@@ -15811,6 +15811,27 @@ building smith
         finally:
             root.destroy()
 
+    def test_unit_list_by_faction_leaves_out_everyones_units(self):
+        """A tester (HLR, 2026-10-17): 'I picked a faction in Show and still see other pictures' - 212 of HLR's
+        units say 'ownership all' (hired by region by anyone) and came under every faction with the mercenaries'
+        pictures. A faction or culture now lists the units naming it; everyone's units have a Show of their own."""
+        try:
+            from campaign_editor import gui_editors as GE
+        except Exception as e:
+            self.skipTest("no tkinter: %s" % e)
+        import types
+        facets = {"own": {"owners": ["gauls"]}, "everyone": {"owners": ["all"]}, "culture": {"owners": ["barbarian"]},
+                  "other": {"owners": ["romans_julii"]}}
+
+        def shown(want):
+            fake = types.SimpleNamespace(v_show=types.SimpleNamespace(get=lambda: want), facets=facets, kind="unit",
+                                         _cultures={"gauls": "barbarian"})
+            return sorted(n for n in facets if GE.RecordEditor._passes(fake, (n, n)))
+        self.assertEqual(shown("faction: gauls - Arverni"), ["culture", "own"])
+        self.assertEqual(shown("culture: barbarian"), ["culture"])
+        self.assertEqual(shown(GE.EVERYONES), ["everyone"])
+        self.assertEqual(shown("all"), ["culture", "everyone", "other", "own"])
+
     def test_name_pool_read_once(self):
         """A tester (HLR, 2026-10-17): the first load took half a minute - the check for names missing from
         descr_names.txt read the whole names file again for each of 1638 characters. Now it is read once while it
