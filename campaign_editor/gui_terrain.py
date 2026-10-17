@@ -573,7 +573,7 @@ class TerrainEditor(ttk.Frame):
             self.cmap.__dict__.pop("_backgrounds", None)
             self.app.status.set("Terrain: %d point(s) of the coast changed - Preview, then Apply changes."
                                 % len(set(self.cpx["heights"]) | set(self.cpx["ground"])))
-            self.app._mark_work()
+            self.app.mark_work_soon()
 
     def _shore_dirty(self, points):
         """The heights points a brush tick changed, told to the map: only the shore line round them is drawn again
@@ -857,7 +857,7 @@ class TerrainEditor(ttk.Frame):
             self.cmap.__dict__.pop("_backgrounds", None)
             self.app.status.set("Terrain: %d pixel(s) of height changed - Preview, then Apply changes."
                                 % len(self.heights))
-            self.app._mark_work()
+            self.app.mark_work_soon()
         return bool(got)
 
     def pick(self, xy):

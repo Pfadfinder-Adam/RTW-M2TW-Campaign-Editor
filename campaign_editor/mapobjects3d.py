@@ -145,14 +145,17 @@ CHAR_TYPES = {"named character": "named character", "general": "general", "admir
               "princess": "princess", "heretic": "heretic", "witch": "witch", "inquisitor": "inquisitor"}
 
 
-def objects(mod, campaign, strat):
+def objects(mod, campaign, strat, moved=None):
     """[{'kind', 'model' (data-relative), 'texture' (data-relative or None), 'xy' (tile), 'scale', 'faction'}] of
-    what stands on the map now (descr_strat as read)."""
+    what stands on the map now (descr_strat as read); moved: {('city' | 'port', region): tile} - towns and ports the
+    Map moved and not written yet (map_regions.tga changes only at Apply)."""
+    moved = moved or {}
     from . import stratmodels as SM
     cultures = culture_models(mod)
     first = next(iter(cultures.values()), {"levels": {}})
     out = []
-    tiles = mod.city_tiles(campaign)
+    tiles = dict(mod.city_tiles(campaign))
+    tiles.update({r: tuple(xy) for (w, r), xy in moved.items() if w == "city"})
 
     def culture_of(faction):
         try:
@@ -184,6 +187,7 @@ def objects(mod, campaign, strat):
             try:
                 from .mapedit import ports as _ports     # the one reader of port pixels
                 ports = dict(_ports(mod, campaign))
+                ports.update({r: tuple(xy) for (w, r), xy in moved.items() if w == "port"})
             except Exception:
                 ports = {}
         for st in fb.settlements:                         # its port, on the coast beside the town

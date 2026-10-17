@@ -8119,7 +8119,7 @@ building smith
         from campaign_editor import mapmodels as MM
         from campaign_editor import mapobjects3d as O
         one = np.zeros((3, 8), np.float32)
-        with mock.patch.object(O, "objects", lambda m, c, st: [{"kind": "character", "model": "a", "scale": 1.0,
+        with mock.patch.object(O, "objects", lambda m, c, st, moved=None: [{"kind": "character", "model": "a", "scale": 1.0,
                                                                   "xy": st}]), \
                 mock.patch.object(MM.Loader, "parts", lambda self, *a: [(None, one)]):
             data.set_strat(mod, "test", (1, 2))
@@ -8128,6 +8128,10 @@ building smith
             data.set_strat(mod, "test", (3, 0))                           # moved
             self.assertTrue(np.allclose(data.objects[None][0, [0, 2]], [3.5, 3.5]))
             self.assertIs(data._objs[1], loader)
+            self.assertTrue(data.lift_out(lambda o: True))               # taken into the hand (3D carry)
+            self.assertEqual((data.objects, sorted(data.ghost)), ({}, [None]))
+            data.put_back()                                               # Esc: back where it stood
+            self.assertEqual((sorted(data.objects), data.ghost), ([None], {}))
         cam = glmap.Camera(data)
         self.assertEqual((cam.x, cam.z), (2.0, 2.0))
         cam.moved(1.0, 0.0)                            # forward = north = up the map
@@ -8510,11 +8514,27 @@ building smith
                               _map_moved=lambda cid, xy: done.append((cid, xy)),
                               status=SimpleNamespace(set=said.append))
         for to in ((5, 6), (9, 9), (1, 1)):
-            me = SimpleNamespace(app=app, _carry="rome:0", _tile=lambda x, y, t=to: t,
-                                 _carry_stop=lambda: None, load=lambda: done.append("laid"))
+            me = SimpleNamespace(app=app, _carry=("char", "rome:0", "Flavius", (1, 1)), _tile=lambda x, y, t=to: t,
+                                 _carry_stop=lambda back=True: None, load=lambda: done.append("laid"))
             Map3DView._carry_end(me, SimpleNamespace(x=0, y=0))
         self.assertEqual(done, [("rome:0", (5, 6)), "laid"])         # refused at sea, nothing on its own tile
         self.assertEqual(said, ["Flavius cannot stand at 9, 9: that is sea"])
+        # everything the Map moves goes the same way (report #331): a town by the Map's own check and move, a
+        # resource by the App's
+        mv = SimpleNamespace(check_place=lambda w, r, xy: None, on_place_move=lambda w, r, xy: done.append((w, r, xy)))
+        app.map_view, app.res_check = mv, lambda rid, xy: "taken" if xy == (2, 2) else None
+        app.res_moved = lambda rid, xy: done.append((rid, xy))
+        del done[:]
+        for carried, to in ((("place", ("city", "Latium"), "Latium town", (3, 3)), (4, 4)),
+                            (("res", "r7", "gold", (1, 1)), (2, 2)), (("res", "r7", "gold", (1, 1)), (6, 1))):
+            me = SimpleNamespace(app=app, _carry=carried, _tile=lambda x, y, t=to: t,
+                                 _carry_stop=lambda back=True: None, load=lambda: done.append("laid"))
+            Map3DView._carry_end(me, SimpleNamespace(x=0, y=0))
+        self.assertEqual(done, [("city", "Latium", (4, 4)), "laid", ("r7", (6, 1)), "laid"])
+        self.assertEqual(said[-1], "gold cannot stand at 2, 2: taken")
+        # what is carried: the 3D map's own objects of that thing on that tile
+        pick = Map3DView._picks("place", ("port", "Latium"), (3, 3))
+        self.assertTrue(pick({"kind": "port_sea", "xy": (3, 3)}) and not pick({"kind": "town", "xy": (3, 3)}))
 
     def test_map_in_3d_figures_face_the_camera(self):
         """Reports #330 / #331: the figures on the 3D map stood with their backs to the camera, in Rome and in

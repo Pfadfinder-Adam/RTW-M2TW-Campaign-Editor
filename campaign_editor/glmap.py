@@ -150,7 +150,7 @@ class MapData:
     heights (metres, top row first), the ground picture of each point (an index into pictures), the pictures, the
     masks, the sea's pictures, the light."""
 
-    def __init__(self, mod, campaign, winter=False, strat=None):
+    def __init__(self, mod, campaign, winter=False, strat=None, moved=None):
         h = T3.heights_metres(mod, campaign)
         if h is None:
             raise ValueError("this campaign has no map_heights.tga - nothing to raise in 3D")
@@ -170,7 +170,7 @@ class MapData:
         self.light = lighting(mod)
         self._tile_models(mod, campaign, winter)
         self._trees(mod, campaign, winter)
-        self._objects(mod, campaign, strat)
+        self._objects(mod, campaign, strat, moved=moved)
         feats = T3._picture(mod, campaign, "map_features.tga")
         self.coast_hidden = None                    # rivers (sources, fords) and cliffs: the game draws no strip there
         if feats is not None:
@@ -303,7 +303,7 @@ class MapData:
         except Exception as e:                          # said in the bar, the map still drawn
             self.notes.append("the trees are not drawn: %s" % e)
 
-    def _objects(self, mod, campaign, strat=None, loader=None):
+    def _objects(self, mod, campaign, strat=None, loader=None, moved=None):
         """What stands on the map (mapobjects3d.objects: towns, ports, forts, resources, characters) as the game's
         models (mapmodels), their textures. strat: descr_strat as read (a Strat) - the Map's changes not written yet
         included - else the file."""
@@ -314,7 +314,7 @@ class MapData:
         try:
             if strat is None:
                 strat = Strat(mod.load(mod.campaign_file(campaign, "descr_strat.txt")))
-            self._objs = (O.objects(mod, campaign, strat), loader or MM.Loader(mod))
+            self._objs = (O.objects(mod, campaign, strat, moved), loader or MM.Loader(mod))
             try:
                 self._net(mod, campaign, strat)
             except Exception as e:                      # the roads and borders alone left out
@@ -330,20 +330,42 @@ class MapData:
         except Exception as e:                          # said in the bar, the map still drawn
             self.notes.append("the towns and armies are not drawn: %s" % e)
 
-    def set_strat(self, mod, campaign, strat):
+    def set_strat(self, mod, campaign, strat, moved=None):
         """descr_strat changed (an army added or moved on the Map, not written yet): what stands on the map laid
         again from it, the models already read kept. GLMap.models_placed() then gives it to the card."""
         loader = self._objs[1] if getattr(self, "_objs", None) else None
         self.notes = [n for n in self.notes if not n.startswith(("model(s) or texture(s)", "the towns and armies",
                                                                 "the roads and borders"))]
-        self._objects(mod, campaign, strat, loader)
+        self._objects(mod, campaign, strat, loader, moved)
 
     def place_objects(self):
         """The towns, armies, roads and borders laid again on the heights as they are now."""
         from . import mapmodels as MM
+        self.ghost = {}
         if getattr(self, "_objs", None):
             self.objects = MM.build(self._objs[0], self._objs[1], self.heights, 0.0005 * self.scale)
         self.place_net()
+
+    def lift_out(self, pick):
+        """What pick(object) chooses (mapobjects3d.objects' dicts) taken out of the map into the hand: self.ghost
+        holds it as the card draws it, self.objects the rest - it then goes with the mouse (GLMap.ghost_shift) until
+        put down. True when anything was taken."""
+        from . import mapmodels as MM
+        if not getattr(self, "_objs", None):
+            return False
+        objs, loader = self._objs
+        held = [o for o in objs if pick(o)]
+        if not held:
+            return False
+        ys = 0.0005 * self.scale
+        self.objects = MM.build([o for o in objs if not pick(o)], loader, self.heights, ys)
+        self.ghost = MM.build(held, loader, self.heights, ys)
+        return True
+
+    def put_back(self):
+        """What is in the hand back where it stood (Esc, a tile the game would not take)."""
+        if getattr(self, "ghost", None):
+            self.place_objects()
 
     def _net(self, mod, campaign, strat):
         """The roads and region borders (mapnet): the towns' road buildings and the regions' owners from strat."""
@@ -756,6 +778,7 @@ void main() {
 OBJ_VS = """
 #version 330
 uniform mat4 mvp;
+uniform vec3 shift;                     // what is carried: where the mouse took it, from where it stood
 in vec3 pos;
 in vec3 nrm;
 in vec2 uv;
@@ -763,7 +786,7 @@ in float kind;
 out vec3 n;
 out vec2 t;
 flat out float kind_v;
-void main() { n = nrm; t = uv; kind_v = kind; gl_Position = mvp * vec4(pos, 1.0); }
+void main() { n = nrm; t = uv; kind_v = kind; gl_Position = mvp * vec4(pos + shift, 1.0); }
 """
 
 OBJ_FS = """
@@ -1059,7 +1082,7 @@ class GLMap:
         self.obj = self._keep(ctx.program(vertex_shader=OBJ_VS, fragment_shader=OBJ_FS))
         self.obj_pics = {k: self._picture(v, 4, (150, 140, 120, 255), repeat=True)
                          for k, v in data.object_pictures.items()}
-        self._obj_buffers, self.obj_vaos = [], []
+        self._obj_buffers, self.obj_vaos, self.ghost_vaos, self.ghost_shift = [], [], [], (0.0, 0.0, 0.0)
         self.road = self._keep(ctx.program(vertex_shader=ROAD_VS, fragment_shader=ROAD_FS))
         self.border = self._keep(ctx.program(vertex_shader=BORDER_VS, fragment_shader=BORDER_FS))
         self.net_pics = {}
@@ -1218,17 +1241,18 @@ class GLMap:
             self._net_buffers += [self.border_vao, vbo]
 
     def _objects(self):
-        """The buffers of what stands on the map, one per texture."""
+        """The buffers of what stands on the map, one per texture - and of what is carried (data.ghost)."""
         for obj in self._obj_buffers:
             obj.release()
-        self._obj_buffers, self.obj_vaos = [], []
-        for tex, arr in self.data.objects.items():
-            if not len(arr):
-                continue
-            vbo = self.ctx.buffer(np.ascontiguousarray(arr).tobytes())
-            vao = self.ctx.vertex_array(self.obj, [(vbo, "3f 3f 2f 1f", "pos", "nrm", "uv", "kind")])
-            self._obj_buffers += [vao, vbo]
-            self.obj_vaos.append((tex, vao))
+        self._obj_buffers, self.obj_vaos, self.ghost_vaos = [], [], []
+        for store, out in ((self.data.objects, self.obj_vaos), (getattr(self.data, "ghost", {}) or {}, self.ghost_vaos)):
+            for tex, arr in store.items():
+                if not len(arr):
+                    continue
+                vbo = self.ctx.buffer(np.ascontiguousarray(arr).tobytes())
+                vao = self.ctx.vertex_array(self.obj, [(vbo, "3f 3f 2f 1f", "pos", "nrm", "uv", "kind")])
+                self._obj_buffers += [vao, vbo]
+                out.append((tex, vao))
 
     def _trees(self):
         """The trees' buffers: each model once, drawn as many times as it stands (instances)."""
@@ -1383,12 +1407,14 @@ class GLMap:
             ctx.front_face = "ccw"
             ctx.disable(ctx.CULL_FACE)
         obits = sum(1 << k for name, k in OBJECT_LAYERS.items() if show.get(name, True))
-        if self.obj_vaos and obits:                               # the towns, ports, resources and armies
+        if (self.obj_vaos or self.ghost_vaos) and obits:          # the towns, ports, resources and armies
             self.obj["mvp"].write(mvp_bytes)
             self.obj["shown"].value = obits
-            for tex, vao in self.obj_vaos:
-                self.obj_pics.get(tex, self._white).use(9)
-                vao.render()
+            for vaos, shift in ((self.obj_vaos, (0.0, 0.0, 0.0)), (self.ghost_vaos, self.ghost_shift)):
+                self.obj["shift"].value = tuple(float(v) for v in shift)
+                for tex, vao in vaos:
+                    self.obj_pics.get(tex, self._white).use(9)
+                    vao.render()
         waters = [vao for w_, _, _, vao in self.model_vaos if w_ == "water"]
         if waters and bits & (1 << MODEL_LAYERS["rivers"]):      # the rivers' water over their beds
             ctx.enable(ctx.BLEND)
@@ -1406,7 +1432,7 @@ class GLMap:
             ctx.depth_func = "<"
             self.fbo.depth_mask = True
             ctx.disable(ctx.BLEND)
-        if self.coast_dirty:
+        if self.coast_dirty and not getattr(self, "coast_frozen", False):   # a brush held: traced when let go
             self._coast()
         if self.coast_vao is not None and show.get("coast", True):   # see-through strips over the ground, as the game
             self.coast["mvp"].write(mvp_bytes)

@@ -3499,6 +3499,61 @@ class App(tk.Tk):
         lbl.pack(fill="x", anchor="w", pady=(2, 0))
         parent.bind("<Configure>", lambda e: lbl.configure(wraplength=max(200, e.width - 8)), add="+")
 
+    def res_shown(self, res=True, forts=True):
+        """[{'id', 'kind', 'xy', ...}] of the campaign's resources (ids r<line> / n<i>) and forts, watchtowers and
+        wonders (f<line> / g<i>) where they stand now - the moves, additions and removals not written yet included."""
+        shown = []
+        if res:
+            shown += [{"id": "r%d" % r.index, "kind": r.kind, "xy": tuple(self.res_moves.get(r.index, r.xy))}
+                      for r in self._file_resources() if r.index not in self.res_removed]
+            shown += [{"id": "n%d" % i, "kind": a["type"], "xy": tuple(a["xy"])} for i, a in enumerate(self.res_added)]
+        if forts:
+            shown += [{"id": "f%d" % fo.line, "kind": fo.kind, "type": fo.type, "owner": fo.owner,
+                       "xy": tuple(self.fort_moves.get(fo.line, fo.xy))}
+                      for fo in (self.strat.forts if self.strat else []) if fo.line not in self.fort_removed]
+            shown += [{"id": "g%d" % i, "kind": a["kind"], "type": a.get("type", ""), "xy": tuple(a["xy"])}
+                      for i, a in enumerate(self.fort_added)]
+        return shown
+
+    def res_check(self, rid, xy):
+        """Why a resource / fort may not stand at xy (None: it may) - the Map's own check (Maps > 3D asks it too)."""
+        from . import forts as FT
+        from .resources import problem
+        camp = self.v_campaign.get()
+        fort = rid[:1] in ("f", "g")
+        shown = self.res_shown(not fort, fort)
+        taken = [r["xy"] for r in shown if r["id"] != rid]
+        if fort:
+            kind = next((r.get("kind") for r in shown if r["id"] == rid), None)
+            return FT.problem(self.mod, camp, xy, taken, kind)
+        return problem(self.mod, camp, xy, taken)
+
+    def res_moved(self, rid, xy):
+        """A resource / fort moved to xy (Undo, Preview, Apply) - from the Map or Maps > 3D."""
+        self.remember()
+        if rid.startswith("g"):
+            self.fort_added[int(rid[1:])]["xy"] = tuple(xy)
+        elif rid.startswith("f"):
+            i = int(rid[1:])
+            orig = next(fo.xy for fo in self.strat.forts if fo.line == i)
+            if tuple(xy) == tuple(orig):
+                self.fort_moves.pop(i, None)
+            else:
+                self.fort_moves[i] = tuple(xy)
+        elif rid.startswith("n"):
+            self.res_added[int(rid[1:])]["xy"] = tuple(xy)
+        else:
+            i = int(rid[1:])
+            orig = next(r.xy for r in self._file_resources() if r.index == i)
+            if tuple(xy) == tuple(orig):
+                self.res_moves.pop(i, None)
+            else:
+                self.res_moves[i] = tuple(xy)
+        self._res_sel = rid
+        self.status.set("%s moved to %d, %d - Preview, then Apply." % (
+            next((r["kind"] for r in self.res_shown() if r["id"] == rid), "Resource").capitalize(), xy[0], xy[1]))
+        self.show_map()
+
     def _resource_view(self):
         """The Map's resources, forts and watchtowers: shown with their layer, moved, added and removed here
         (ids: r<line> / n<i> resources, f<line> / g<i> forts)."""
@@ -3522,56 +3577,16 @@ class App(tk.Tk):
         if self._res_placing and not (forts_on if (self._res_placing in FT.KINDS or
                                                    self._res_placing.startswith(FT.LANDMARK)) else res_on):
             self._res_placing = None                    # its mode was switched off
-        shown = []
-        if res_on:
-            shown += [{"id": "r%d" % r.index, "kind": r.kind, "xy": tuple(self.res_moves.get(r.index, r.xy))}
-                      for r in self._file_resources() if r.index not in self.res_removed]
-            shown += [{"id": "n%d" % i, "kind": a["type"], "xy": tuple(a["xy"])} for i, a in enumerate(self.res_added)]
+        shown = self.res_shown(res_on, forts_on)
         camp = self.v_campaign.get()
         file_forts = self.strat.forts if self.strat else []
-        if forts_on:
-            shown += [{"id": "f%d" % fo.line, "kind": fo.kind, "type": fo.type, "owner": fo.owner,
-                       "xy": tuple(self.fort_moves.get(fo.line, fo.xy))}
-                      for fo in file_forts if fo.line not in self.fort_removed]
-            shown += [{"id": "g%d" % i, "kind": a["kind"], "type": a.get("type", ""), "xy": tuple(a["xy"])}
-                      for i, a in enumerate(self.fort_added)]
 
         def is_fort(rid):
             return rid[:1] in ("f", "g")
 
         def taken(but=None, forts=False):
             return [r["xy"] for r in shown if r["id"] != but and is_fort(r["id"]) == forts]
-
-        def check(rid, xy):
-            if is_fort(rid):
-                kind = next((r.get("kind") for r in shown if r["id"] == rid), None)
-                return FT.problem(self.mod, camp, xy, taken(rid, True), kind)
-            return problem(self.mod, camp, xy, taken(rid))
-
-        def moved(rid, xy):
-            self.remember()
-            if rid.startswith("g"):
-                self.fort_added[int(rid[1:])]["xy"] = tuple(xy)
-            elif rid.startswith("f"):
-                i = int(rid[1:])
-                orig = next(fo.xy for fo in file_forts if fo.line == i)
-                if tuple(xy) == tuple(orig):
-                    self.fort_moves.pop(i, None)
-                else:
-                    self.fort_moves[i] = tuple(xy)
-            elif rid.startswith("n"):
-                self.res_added[int(rid[1:])]["xy"] = tuple(xy)
-            else:
-                i = int(rid[1:])
-                orig = next(r.xy for r in self._file_resources() if r.index == i)
-                if tuple(xy) == tuple(orig):
-                    self.res_moves.pop(i, None)
-                else:
-                    self.res_moves[i] = tuple(xy)
-            self._res_sel = rid
-            self.status.set("%s moved to %d, %d - Preview, then Apply." % (
-                next((r["kind"] for r in shown if r["id"] == rid), "Resource").capitalize(), xy[0], xy[1]))
-            self.show_map()
+        check, moved = self.res_check, self.res_moved
 
         def clicked(rid):
             self._res_sel = rid
@@ -4267,6 +4282,7 @@ class App(tk.Tk):
             camps[self.mod.data] = self.v_campaign.get()
             settings.put("campaigns", camps)
         self.load_campaign()
+        self.map3d_follow()
 
     def shown_names(self):
         """{faction: the name players see} for this mod and campaign (read once per load / campaign)."""
@@ -4389,7 +4405,17 @@ class App(tk.Tk):
         if self.editors.get("terrain") is not None and self.tab_name() in self.TERRAIN_TABS:
             self.open_terrain()                 # written and loaded again: the tab on show reads the new files (a
             #                                     brush stroke after an Apply painted on nothing - report #141)
+        self.map3d_follow()
         self._mark_work()
+
+    def map3d_follow(self):
+        """The 3D tab on show draws the mod / campaign now loaded at once (report #331: another mod folder left the
+        old map there until 'Draw it again')."""
+        if getattr(self, "map3d", None) is not None and self.tab_name() == self.MAP3D_TAB:
+            try:
+                self.map3d.load()
+            except tk.TclError:
+                pass
 
     def _m2(self):
         from .limits import game_kind
@@ -6389,6 +6415,18 @@ class App(tk.Tk):
             from .plan import rebased
             return rebased(part["plan"])
         return self.editors[key].make_plan() if key in self.editors else self._faction_plan()
+
+    def mark_work_soon(self):
+        """_mark_work a moment after the last call - a brush ticking 20 times a second asks once, when it rests (the
+        whole list of waiting changes is counted for it)."""
+        job = getattr(self, "_mark_job", None)
+        if job is not None:
+            self.after_cancel(job)
+        self._mark_job = self.after(300, self._mark_soon_done)
+
+    def _mark_soon_done(self):
+        self._mark_job = None
+        self._mark_work()
 
     def _mark_work(self):
         """A * on the work buttons that hold changes not written yet."""

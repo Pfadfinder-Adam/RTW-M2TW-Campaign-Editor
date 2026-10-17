@@ -15,6 +15,7 @@
 ### Added
 - Interface: Replace picture... gives a piece a picture of your own (a file or one from the new Picture library) and keeps what it does; Back to the game's picture undoes it; Check mod files says a menu picture that would stop the game and a page with too many pictures.
 - Maps > 3D: armies, agents and fleets carried to another tile with the left button, as on the Map - a white frame on the tile they go to, the Map's own check, Undo and Apply; an army in a town stands on its roofs, as in the game's own editor.
+- Maps > 3D: towns, ports, resources, forts and watchtowers are carried too, and what is carried goes with the mouse at once; the heights brush follows the mouse without catching up on old moves; Medieval II's figures face the camera as Rome's; another mod or campaign loaded is drawn at once (it waited for Draw it again).
 - New / Edit faction: a Culture pick - the faction's towns, portraits, buildings and units follow the culture in the game; Preview says which units it gains or loses and which buildings in its towns the new culture cannot build.
 - Maps > 3D is drawn by the graphics card the way the games draw their campaign map: the ground blended between grounds with the game's own masks, its light and its sea - it moves without lag and loads faster.
 - Maps > 3D: the coast has the game's beach and surf along it, the surf rolling in as in the game (not on rivers and cliffs, as the game); Layers shows or leaves out the sea (the sea floor seen) and the beach and surf.

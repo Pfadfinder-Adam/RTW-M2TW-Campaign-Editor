@@ -194,6 +194,8 @@ class Map3DView(ttk.Frame):
         or taken away and the other windows' changes kept - as a Strat, a key telling it apart) or (None, None):
         the file as it is."""
         app = self.app
+        self._moved = dict(getattr(app, "place_moves", None) or {})     # towns / ports the Map moved, not written
+        moved = tuple(sorted(self._moved.items())) or None
         try:
             from .plan import kept_texts
             from .strat import Strat
@@ -203,10 +205,10 @@ class Map3DView(ttk.Frame):
             want = os.path.normcase(os.path.abspath(app.mod.campaign_file(app.v_campaign.get(), "descr_strat.txt")))
             f = next((f for p, f in kept_texts(plans).items() if os.path.normcase(os.path.abspath(p)) == want), None)
             if f is None:
-                return None, None
-            return Strat(f), hash(f.dump())
+                return None, moved
+            return Strat(f), (hash(f.dump()), moved)
         except Exception:                                # nothing to write yet, a half-made change: the file
-            return None, None
+            return None, moved
 
     def load(self):
         """The tab opened: the picture made again when anything it shows changed since; when only descr_strat did
@@ -220,7 +222,7 @@ class Map3DView(ttk.Frame):
             return
         if self.gl is not None and key != self._strat_for:
             try:
-                self.gl.data.set_strat(self._source(), self.app.v_campaign.get(), strat)
+                self.gl.data.set_strat(self._source(), self.app.v_campaign.get(), strat, self._moved)
                 self.gl.models_placed()
                 self._strat_for = key
             except Exception as e:                       # said in the bar, never a crash
@@ -244,6 +246,7 @@ class Map3DView(ttk.Frame):
             self.lbl.configure(text="the 3D map needs a graphics card with OpenGL 3.3: %s" % why)
             return
         stamp, mod, campaign, winter = self._stamp(), self._source(), self.app.v_campaign.get(), self.v_winter.get()
+        moved = dict(getattr(self, "_moved", None) or {})
         self._building = True
         self.lbl.configure(text="laying the game's textures on the map...")
         got = {}
@@ -251,7 +254,7 @@ class Map3DView(ttk.Frame):
         def work():                                      # the arrays the card needs (no OpenGL in this thread)
             t = time.time()
             try:
-                got["data"] = glmap.MapData(mod, campaign, winter=winter, strat=strat)
+                got["data"] = glmap.MapData(mod, campaign, winter=winter, strat=strat, moved=moved)
             except Exception as e:                       # said in the bar, never a crash
                 got["error"] = str(e)
             got["time"] = time.time() - t
@@ -461,39 +464,111 @@ class Map3DView(ttk.Frame):
         c.create_line(*flat, fill="#000000", width=4, tags="ring")
         c.create_line(*flat, fill="#ffffff", width=2, tags="ring")
 
+    def _things_at(self, tile):
+        """[(what, key, name)] standing on a tile, as the Map moves them: 'char' (an army before an agent), 'place'
+        (('city' | 'port', region): a town, a port), 'res' (a resource, fort, watchtower or wonder: the Map's id)."""
+        app = self.app
+        chars = [ch for ch in (getattr(app, "_map_chars", None) or {}).values() if tuple(ch["xy"]) == tile]
+        chars.sort(key=lambda ch: not ch.get("army"))
+        out = [("char", ch["id"], ch["name"]) for ch in chars]
+        mv = getattr(app, "map_view", None)
+        cm = getattr(mv, "cmap", None)
+        if cm is not None and getattr(mv, "on_place_move", None):
+            places = getattr(mv, "places", None) or {}
+            for what, table in (("city", cm.cities), ("port", cm.ports)):
+                for region, xy in table.items():
+                    if tuple(places.get((what, region), xy)) == tile:
+                        out.append(("place", (what, region), "%s %s" % (region, "town" if what == "city" else "port")))
+        if hasattr(app, "res_shown"):
+            out += [("res", r["id"], r["kind"]) for r in app.res_shown() if tuple(r["xy"]) == tile]
+        return out
+
+    @staticmethod
+    def _picks(what, key, tile):
+        """pick(object) -> True for the 3D map's objects (mapobjects3d.objects) of the thing carried."""
+        kinds = {"char": ("character",), "res": ("resource", "fort", "watchtower")}.get(what)
+        if what == "place":
+            kinds = ("town", "wall") if key[0] == "city" else ("port", "port_sea")
+        return lambda o: o["kind"] in kinds and tuple(o["xy"]) == tile
+
     def _carry_start(self, e):
-        """The left button on a figure (an army in a town: on the town): it goes with the mouse until let go."""
+        """The left button on anything the Map moves - an army, agent or fleet (an army in a town: on the town), a
+        town, a port, a resource, a fort: it is lifted and goes with the mouse, drawn where it would stand, until let
+        go (report #331: everything on the map, as on the Map; following the mouse, no wait)."""
         app, tile = self.app, self._tile(e.x, e.y)
         if tile is None:
             return
-        if getattr(app, "_map_moved", None) is None or not getattr(app, "_map_chars", None):
-            app.show_map()                               # the Map's list of characters and its move
-        here = [ch for ch in (getattr(app, "_map_chars", None) or {}).values() if tuple(ch["xy"]) == tile]
+        if getattr(app, "_map_moved", None) is None or getattr(getattr(app, "map_view", None), "cmap", None) is None:
+            app.show_map()                               # the Map's lists of what stands where and its moves
+        here = self._things_at(tile)
         if not here:
             return
-        here.sort(key=lambda ch: not ch.get("army"))     # an army before an agent on the same tile
-        self._carry, self._mouse = here[0]["id"], (e.x, e.y)
-        self.lbl.configure(text="%s: let go on the tile where he goes (Esc: he stays)" % here[0]["name"])
+        what, key, name = here[0]
+        self._carry, self._mouse = (what, key, name, tile), (e.x, e.y)
+        self.gl.ghost_shift = (0.0, 0.0, 0.0)
+        if self.gl.data.lift_out(self._picks(what, key, tile)):
+            self.gl._objects()                           # only what stands on the map: the ground stays as it is
+        self.lbl.configure(text="%s: let go on the tile where it goes (Esc: it stays)" % name)
         self._draw_ring()
 
-    def _carry_stop(self):
+    def _carry_follow(self, e):
+        """The carried thing drawn on the tile under the mouse, standing on its ground - at once, every move."""
+        self._mouse = (e.x, e.y)
+        t = self._tile(e.x, e.y)
+        if t is not None and self._carry is not None:
+            d = self.gl.data
+            fx, fy = self._carry[3]
+            H = (d.rows - 1) // 2
+            dy = d.ground_height(t[0] + 0.5, H - t[1] - 0.5) - d.ground_height(fx + 0.5, H - fy - 0.5)
+            self.gl.ghost_shift = (float(t[0] - fx), dy, float(fy - t[1]))
+        if getattr(self, "_follow_job", None) is None:  # drawn once the window is free: the newest place only
+            self._follow_job = self.after_idle(self._follow_draw)
+
+    def _follow_draw(self):
+        self._follow_job = None
+        if self._carry is not None:
+            self.draw(half=True)
+            self._draw_ring()
+
+    def _carry_stop(self, back=True):
         if self._carry is not None:
             self._carry = None
             self.lbl.configure(text="")
+            if back and self.gl is not None:
+                self.gl.ghost_shift = (0.0, 0.0, 0.0)
+                self.gl.data.put_back()
+                self.gl._objects()
+                self.draw()
             self._draw_ring()
 
     def _carry_end(self, e):
-        """Let go: the figure moved there as the Map moves it (its check, Undo, Apply), the 3D map laid again."""
-        app, cid, tile = self.app, self._carry, self._tile(e.x, e.y)
-        self._carry_stop()
-        ch = (getattr(app, "_map_chars", None) or {}).get(cid)
-        if tile is None or ch is None or tile == tuple(ch["xy"]):
+        """Let go: it moves there as the Map moves it (its check, Undo, Apply) and the 3D map lays it there; a tile the
+        game would not take is said and it goes back."""
+        app, carried, tile = self.app, self._carry, self._tile(e.x, e.y)
+        if carried is None:
             return
-        why = app._map_check(cid, tile)
+        what, key, name, start = carried
+        if tile is None or tile == start:
+            self._carry_stop()
+            return
+        mv = getattr(app, "map_view", None)
+        if what == "char":
+            why = app._map_check(key, tile)
+        elif what == "place":
+            why = mv.check_place(key[0], key[1], tile) if getattr(mv, "check_place", None) else None
+        else:
+            why = app.res_check(key, tile)
         if why:
-            app.status.set("%s cannot stand at %d, %d: %s" % (ch["name"], tile[0], tile[1], why))
+            self._carry_stop()
+            app.status.set("%s cannot stand at %d, %d: %s" % (name, tile[0], tile[1], why))
             return
-        app._map_moved(cid, tile)
+        self._carry_stop(back=False)
+        if what == "char":
+            app._map_moved(key, tile)
+        elif what == "place":
+            mv.on_place_move(key[0], key[1], tile)
+        else:
+            app.res_moved(key, tile)
         self.load()
 
     def _draw_ring(self):
@@ -540,6 +615,7 @@ class Map3DView(ttk.Frame):
             return
         ed._stroke()                                     # one Undo step a stroke, as on the 2D map
         self._paint, self._mouse = True, (e.x, e.y)
+        self.gl.coast_frozen = True                      # the whole shore is not traced at every tick, only at the end
         self._coast_was = self._coast_now(ed)
         if self.v_how.get() == "grab":                   # the game's: the land under the circle held, then moved
             got = self._point(e.x, e.y)
@@ -551,19 +627,33 @@ class Map3DView(ttk.Frame):
         """The mouse moved with the left button held: the grabbed land goes up or down with it (the higher the mouse,
         the higher the land - as smooth as the mouse), else the spray follows the mouse; a carried figure's frame too."""
         if self._paint and self._grab is not None:
-            ed = self.app.editors.get("terrain")
-            sc = ed._shape_coast() if ed is not None else None
-            if sc is not None:
-                y0, at = self._grab
-                try:
-                    k = max(1, min(10, ed.v_strength.get())) / 5.0
-                except tk.TclError:
-                    k = 1.0
-                if ed.pull((y0 - e.y) * 0.3 * k * sc.grey):           # a third of a grey step a pixel at strength 5
-                    self._send_heights(ed, at)
-                    self.draw(half=True)
+            self._grab_y = e.y                           # the newest place only: done when the window is free
+            if getattr(self, "_grab_job", None) is None:
+                self._grab_job = self.after_idle(self._grab_tick)
+            return
+        if self._carry is not None:
+            self._carry_follow(e)
             return
         self._hover(e)
+
+    def _grab_tick(self):
+        """The grabbed land moved to where the mouse is now (report #331: the land follows the mouse, no queue of
+        old moves to catch up on)."""
+        self._grab_job = None
+        if not (self._paint and self._grab is not None):
+            return
+        ed = self.app.editors.get("terrain")
+        sc = ed._shape_coast() if ed is not None else None
+        if sc is None:
+            return
+        y0, at = self._grab
+        try:
+            k = max(1, min(10, ed.v_strength.get())) / 5.0
+        except tk.TclError:
+            k = 1.0
+        if ed.pull((y0 - self._grab_y) * 0.3 * k * sc.grey):        # a third of a grey step a pixel at strength 5
+            self._send_heights(ed, at)
+            self.draw(half=True)
 
     def _paint_end(self, e):
         if self._carry is not None:
@@ -571,6 +661,8 @@ class Map3DView(ttk.Frame):
             return
         if self._paint:
             self._paint, self._grab = False, None
+            if self.gl is not None:
+                self.gl.coast_frozen = False             # the shore traced again at the next frame
             ed = self.app.editors.get("terrain")
             if ed is not None and self._coast_now(ed) != getattr(self, "_coast_was", None):
                 self.rebuild()                           # land out of the water (or under it): its ground, its tile
