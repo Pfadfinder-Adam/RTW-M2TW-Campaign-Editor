@@ -188,17 +188,16 @@ def lost_names(mod, campaign, f=None):
     descr_names.txt has - the game stops as the campaign loads ('Couldn't find name ... in the names database',
     report #292). Each is put under the list it belongs to: the character's sub_faction's, else his faction's (a
     faction with no list of its own is left to Check mod files' 'no name list')."""
-    from .moddata import name_sections, pool_in
+    from .moddata import all_pools
     from .strat import FEMALE_KINDS, Strat, strip_comment
     path = mod.file("names")
     if not path:
         return {}
-    texts = mod.load(path).texts()
+    pools_of = all_pools(mod.load(path).texts())       # one pass over the names file (HLR: was 1638)
     every = {p: set() for p in POOLS}
-    for _, owners in name_sections(texts):
-        for o in owners:
-            for p, keys in (pool_in(texts, o) or {}).items():
-                every.setdefault(p, set()).update(_same(k) for k in keys)
+    for pools in pools_of.values():
+        for p, keys in pools.items():
+            every.setdefault(p, set()).update(_same(k) for k in keys)
     f = f if f is not None else mod.load(mod.campaign_file(campaign, "descr_strat.txt"))
     s = Strat(f)
     out = {}
@@ -221,8 +220,8 @@ def lost_names(mod, campaign, f=None):
                 parts[1:1] = [words.pop()]
             woman = "female" in parts[1:3] or (head == ["character"] and parts[1:2] and parts[1] in FEMALE_KINDS)
             first, rest = words[0], " ".join(words[1:])
-            owner = sub if sub and mod.name_pool(sub) else fb.name
-            if not mod.name_pool(owner):
+            owner = sub if sub and pools_of.get(sub) else fb.name
+            if not pools_of.get(owner):
                 continue
             pool = "women" if woman else "characters"
             for p, key in ((pool, first), ("surnames", rest)):

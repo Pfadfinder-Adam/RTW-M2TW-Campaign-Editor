@@ -432,7 +432,12 @@ class ModData:
         A section may serve several factions (BI: 'faction: empire_east, empire_east_rebels');
         when a faction has more than one section (BI's alemanni), the first one counts."""
         path = self.file("names")
-        return pool_in(self.load(path).texts() if path else [], faction)
+        if not path:
+            return {}
+        from .textio import parsed_once
+        got = parsed_once(_pools_of_file, self.load(path)).get(faction, {})
+        return {k: list(v) for k, v in got.items()}       # read once while the file stays the same (HLR: 1638 calls
+                                                           # at every load read its names file 1638 times - 30 s)
 
     # ---- map ----
     def regions(self, campaign):
@@ -679,6 +684,33 @@ def town_colours(get, w, h, points, lands):
             out[xy] = c
             taken.add(c)
     return out
+
+
+def all_pools(texts):
+    """{faction: its pools} of descr_names.txt lines in one pass (the first section of a faction counts)."""
+    heads = name_sections(texts)
+    out = {}
+    for k, (start, owners) in enumerate(heads):
+        if all(o in out for o in owners):
+            continue
+        end = heads[k + 1][0] if k + 1 < len(heads) else len(texts)
+        pools, section = {}, None
+        for line in texts[start + 1:end]:
+            s = strip_comment(line).strip()
+            if not s:
+                continue
+            if s in ("characters", "surnames", "women"):
+                section = s
+                pools.setdefault(section, [])
+            elif section:
+                pools[section].append(s)
+        for o in owners:
+            out.setdefault(o, pools)
+    return out
+
+
+def _pools_of_file(f):
+    return all_pools(f.texts())
 
 
 def pool_in(texts, faction):

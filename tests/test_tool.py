@@ -15800,6 +15800,30 @@ building smith
         finally:
             root.destroy()
 
+    def test_name_pool_read_once(self):
+        """A tester (HLR, 2026-10-17): the first load took half a minute - the check for names missing from
+        descr_names.txt read the whole names file again for each of 1638 characters. Now it is read once while it
+        stays the same; each caller gets its own copy to change; a change to the file is seen."""
+        import time
+        from campaign_editor import textio
+        p = os.path.join(self.root, "data", "descr_names.txt")
+        body = "".join("faction: f%d\n\tcharacters\n%s\tsurnames\n\t\tof F%d\n" % (
+            i, "".join("\t\tName%d_%d\n" % (i, k) for k in range(200)), i) for i in range(60))
+        write(p, body)
+        mod = ModData(self.root)
+        t = time.time()
+        for _ in range(2000):
+            pool = mod.name_pool("f59")
+        self.assertLess(time.time() - t, 2.0)
+        self.assertEqual(pool["characters"][0], "Name59_0")
+        pool["characters"].clear()                         # a caller changing its copy
+        self.assertEqual(len(mod.name_pool("f59")["characters"]), 200)
+        f = mod.load(p)
+        f.set(len(f.raw) - 2, "\t\tof Somewhere")             # the file changed in memory
+        self.assertEqual(mod.name_pool("f59")["surnames"], ["of Somewhere"])
+        self.assertEqual(mod.name_pool("nobody"), {})
+        textio._PARSED.clear()
+
     def test_name_pool_with_no_mod_loaded(self):
         """Report R-20261012-981F4B: 'NoneType' object has no attribute 'name_pool' when a tab opened before a mod
         was loaded - no mod, no names (an empty pool), never an error."""

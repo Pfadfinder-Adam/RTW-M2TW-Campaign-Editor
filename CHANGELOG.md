@@ -13,6 +13,7 @@
 ### Added
 - Maps > 3D is drawn by the graphics card the way the games draw their campaign map: the ground blended between grounds with the game's own masks, its light and its sea - it moves without lag and loads faster.
 - Maps > 3D: the coast has the game's beach and surf along it, the surf rolling in as in the game (not on rivers and cliffs, as the game); Layers shows or leaves out the sea (the sea floor seen) and the beach and surf.
+- A big mod (HLR) took half a minute to load -> a few seconds: the names check read the names file once per character.
 - View in 3D (units, mounts, siege engines) is drawn by the graphics card when it gives OpenGL 3.3: the same picture, quicker, the full texture kept while the model turns.
 - Maps > 3D: a heights brush right on the 3D map - a circle under the mouse (Ctrl + wheel or [ ] for its size), the land rising or sinking while the button is held; the same brush as Coast & heights (Undo, Apply shared).
 - Maps > 3D with REX / M2EX: the sea looked purple and too light -> the light is the engine's own (its descr_strategy_lighting_ex.txt, added up in linear light), the sea blue as in the game.
