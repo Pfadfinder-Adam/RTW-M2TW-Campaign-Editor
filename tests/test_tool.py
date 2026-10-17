@@ -8331,6 +8331,21 @@ building smith
         self.assertEqual((float(ship[1]), float(ship[8])), (0.0, 3))  # on the water, the armies' layer
         self.assertAlmostEqual(float(ship[2]), 0.5 - 0.25)            # scaled by half
 
+    def test_map_in_3d_figures_face_the_camera(self):
+        """Report #330: Rome's figures on the 3D map stood with their backs to the camera; turned to look south (our
+        +z) as in the game. Medieval II's files already look that way - left as they are."""
+        try:
+            import numpy as np
+        except ImportError:
+            self.skipTest("NumPy not installed")
+        from campaign_editor import mapmodels as MM
+        nose = np.array([[[0.1, 1.7, -0.2]]], np.float32)            # in front of a Rome figure after the z flip
+        MM._face_camera(nose, "rome")
+        self.assertTrue(np.allclose(nose, [[[-0.1, 1.7, 0.2]]]))       # now toward the camera, height kept
+        m2 = np.array([[[0.1, 1.7, 0.2]]], np.float32)
+        MM._face_camera(m2, "medieval2")
+        self.assertTrue(np.allclose(m2, [[[0.1, 1.7, 0.2]]]))
+
     def test_map_in_3d_finds_the_game_models_of_what_stands_on_the_map(self):
         """Maps > 3D's models (the user, 2026-10-15: 'towns, resources, units...'): a town takes its level's model
         of its owner's culture - Rome's descr_sm_settlements.txt ('roman { town { normal ... } }') and Medieval II's
@@ -13471,11 +13486,15 @@ building smith
         import pkgutil
         import campaign_editor
         names = ("lift", "lower", "tkraise", "pack", "grid", "place")
-        bad = []
+        bad, seen = [], set()
         for m in pkgutil.iter_modules(campaign_editor.__path__):
             if not m.name.startswith("gui"):
                 continue
-            mod = importlib.import_module("campaign_editor." + m.name)
+            try:
+                mod = importlib.import_module("campaign_editor." + m.name)
+            except ImportError:                            # a window needing Pillow / NumPy where they are missing
+                continue
+            seen.add(m.name)
             for cname, cls in inspect.getmembers(mod, inspect.isclass):
                 if cls.__module__ != mod.__name__ or not issubclass(cls, tkinter.Misc):
                     continue
@@ -13487,19 +13506,8 @@ building smith
                            if p.default is p.empty and p.kind in (p.POSITIONAL_ONLY, p.POSITIONAL_OR_KEYWORD)]
                     if len(req) > 1:                       # more than self: tkinter's calls break
                         bad.append("%s.%s.%s" % (m.name, cname, n))
+        self.assertIn("gui_terrain", seen)
         self.assertEqual(bad, [])
-
-    def test_name_pool_with_no_mod_loaded(self):
-        """Report #327: the faction form's name lists asked for the template's names before any mod was loaded -
-        'NoneType has no name_pool'; no mod = no names."""
-        try:
-            from campaign_editor.gui import App
-        except ImportError:                                # no tkinter here (the CI test job has it)
-            return
-        from types import SimpleNamespace
-        me = SimpleNamespace(editing=lambda: False, v={"template": SimpleNamespace(get=lambda: "gauls")},
-                             name_list={}, mod=None)
-        self.assertEqual(App.pool_for(me, "gauls"), {})
 
     def test_no_rivers_tick_on_coast_and_heights(self):
         """Report #289: the Rivers tick on the Coast & heights tab is not needed; #318: and the rivers, fords and

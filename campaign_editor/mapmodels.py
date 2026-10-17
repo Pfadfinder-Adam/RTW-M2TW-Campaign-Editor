@@ -7,8 +7,8 @@ for the graphics card (glmap).
 - Characters are figures with a skeleton: posed in their skeleton's standing move (the first frame of its
   stand / idle animation, as the older view did), scaled by descr_model_strat.txt's 'scale' - tile units, as the
   engine (AERIAL_MAP_TILE_SIZE 1, model_db opens the model at that scale); in their faction's texture.
-- Each stands in its tile's middle on the ground (a fleet on the water), not turned (a character looks north, as the
-  engine draws one with its turn 0; a figure stands on its lowest point); a port's model looks out to the
+- Each stands in its tile's middle on the ground (a fleet on the water); a character looks south, at the camera, as
+  the game shows them (_face_camera), on his lowest point; a port's model looks out to the
   sea beside its tile (its +z side - the game's north - toward the first sea tile north, east, south or west).
 
 Our world: x east, y up, z SOUTH from the map's top; the models' z (the game's north) is turned round."""
@@ -117,6 +117,13 @@ class Loader:
             self.missing.add(texture)
         return [(tex, v)]
 
+    def _game(self):
+        try:
+            from .models import game_kind
+            return game_kind(self.mod)
+        except Exception:
+            return None
+
     def _posed(self, model, skeleton):
         """The figure's triangles (n, 8) in its standing pose, our frame - or None."""
         from . import fastmesh as F
@@ -139,8 +146,8 @@ class Loader:
         half = np.where(one, 0, (U[:, :, 0].mean(1) >= 0.5).astype(np.int64))
         U[:, :, 0] = np.where(one[:, None], U[:, :, 0], U[:, :, 0] * 2 - half[:, None])
         V = P[T].copy()                                                  # (m, 3, 3)
-        V[..., 2] *= -1                                  # the game's z runs north, ours south (as every model here):
-        # the engine draws a character unturned (its strat_rot 0), so he looks north, his back to the camera
+        V[..., 2] *= -1                                  # the game's z runs north, ours south (as every model here)
+        _face_camera(V, self._game())
         V[..., 1] -= min(0.0, float(V[..., 1].min()))    # his feet on the ground: a pose's lowest point, not its root
         n = np.cross(V[:, 1] - V[:, 0], V[:, 2] - V[:, 0])
         n /= np.maximum(np.linalg.norm(n, axis=1, keepdims=True), 1e-9)
@@ -148,6 +155,14 @@ class Loader:
         pic = (base + half)
         keep = np.repeat(pic == 0, 3) if (pic == 0).any() else np.ones(len(v), bool)    # the man (attachments: later)
         return v[keep]
+
+
+def _face_camera(V, game):
+    """A figure turned to look south, at the camera, as the game shows them (report #330: Rome's stood with their
+    backs to it); Medieval II's files already look that way."""
+    if game != "medieval2":
+        V[..., 0] *= -1
+        V[..., 2] *= -1
 
 
 def _port_turn(x, y, sea):
