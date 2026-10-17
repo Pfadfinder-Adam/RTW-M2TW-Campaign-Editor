@@ -820,6 +820,41 @@ def add_slots(lnt, page, stem, total):
     return max(0, total - have)
 
 
+def keep_up(plan):
+    """Every write that changes a campaign's descr_strat: the faction-select screen gets a slot for every playable
+    (and unlockable) faction - the game shows a faction only in a CFP_symbol48_N piece the menu layout has (21 in
+    REX's Rome.lnt), so slots are added on the grid continued (add_slots) in the layout the game reads, written with
+    the plan (backed up, Restore) - as max_factions follows the factions (limits.keep_up). Never stops a write."""
+    try:
+        from .strat import Strat
+        want = 0
+        for path, f in plan.files.items():
+            if os.path.basename(path).lower() == "descr_strat.txt":
+                st = Strat(f)
+                want = max(want, sum(len(x["items"]) for x in (st.playable, st.unlockable) if x))
+        if not want:
+            return 0
+        path = find(plan.mod)
+        if not path:
+            return 0
+        data = plan.binaries.get(path)
+        if data is None:
+            with open(path, "rb") as fh:
+                data = fh.read()
+        lnt = Lnt(data, path)
+        added = 0
+        for (page, stem), rows in slot_rows(lnt).items():
+            if page in CAMPAIGN_PICK and stem.lower() == "cfp_symbol48_" and len(rows) < want:
+                added += add_slots(lnt, page, stem, want)
+        if added:
+            plan.binary(path, lnt.dump())
+            plan.note(None, "%s: %d faction-select slot(s) added - %d playable faction(s), each needs its own slot "
+                            "on the faction-select screen" % (os.path.basename(path), added, want))
+        return added
+    except Exception:
+        return 0                                    # never stops a write
+
+
 def texture_file(mod, lnt_path, page, folder=""):
     """The picture file of a texture page under data/menu/ - Rome names it with its folder ('textures\\FE_texture1.tga'),
     Medieval II alone ('M2_Border.tga') with the folder in the texture's <path> - the mod's own first, then the game's;

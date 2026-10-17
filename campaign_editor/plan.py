@@ -360,6 +360,8 @@ class Plan:
         for fn in list(BEFORE):              # may stop the write before anything is done (WriteError)
             fn(self)
         keep_up(self)                       # REX / M2EX: max_factions follows the factions, silently (limits.py)
+        from . import lnt
+        lnt.keep_up(self)                   # the faction-select screen: a slot for every playable faction (lnt.py)
         self._no_empty_army()
         self.stale_bins()
         self.stale_sounds()

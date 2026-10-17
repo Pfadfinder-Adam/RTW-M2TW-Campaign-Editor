@@ -9,6 +9,7 @@
 - **Fixed**: faction logos can be replaced without REX / M2EX too; many fixes from testers' reports (units and
   buildings brought from other mods, the recruitment order, Medieval II's add-on words, crashes).
 - **Changed**: a slimmer Unit editor and Models tab; the support buttons in one drop-down.
+- A new playable faction gets its own slot on the faction-select screen by itself (the menu layout had 21, the 22nd faction could not be picked); Steam's Medieval II unpacks again (the unpacker asked three times and stopped after two answers).
 - Maps > 3D: the heights brush now works on the water too - the sea's floor raised out of it becomes land, land pushed under becomes water, as in the game; and a second way, the game's own: grab the land and move the mouse up or down.
 
 ### Added

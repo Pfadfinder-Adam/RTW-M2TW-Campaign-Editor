@@ -3577,6 +3577,22 @@ building smith
                                    ("CFP_symbol48_6", 886, 212), ("CFP_symbol48_7", 780, 266)])
         self.assertEqual(L.slots_short(lnt, 6), [])
         self.assertEqual(L.Lnt(lnt.dump()).dump(), lnt.dump())
+        # every write that changes descr_strat gives each playable faction its slot by itself (the user, 2026-10-18:
+        # 'the editor adds a slot for each new faction, right?'), backed up with the write like any file
+        from campaign_editor.plan import Plan
+        mod = ModData(self.root)
+        menu = os.path.join(mod.data, "menu")
+        os.makedirs(menu, exist_ok=True)
+        one = page % (1, 780, 158)
+        write(os.path.join(menu, "Rome.lnt"), raw.replace(body, one))
+        camp = mod.campaign_file("test", "descr_strat.txt")
+        plan = Plan(mod, "x", "x", {})
+        f = plan.edit(camp)
+        i = next(k for k, line in enumerate(f.texts()) if line.strip() == "alpha")
+        f.insert(i + 1, ["\tslave"])                                 # two playable now, one slot
+        plan.apply()
+        got = L.Lnt.load(os.path.join(menu, "Rome.lnt"))
+        self.assertEqual(len(L.slot_rows(got)[("ImpCam_choose_faction", "CFP_symbol48_")]), 2)
 
     def test_missing_texture_inside_a_campaign_map_model(self):
         """Check mod files: a texture named INSIDE a campaign-map model (.cas) that is not there stops the game ('Failed
