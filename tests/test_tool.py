@@ -3765,14 +3765,42 @@ building smith
         self.assertEqual(clock.text(), "a frame (1200 x 700): the graphics card draws it in 10 ms, copying it back "
                                        "takes 5 ms, putting it in the window 25 ms = 40 ms (25 frames a second)")
 
+    def test_3d_map_shown_by_the_card_itself(self):
+        """Step 2: the map's frame is copied into the window by the card (nothing read back), the brush's ring drawn
+        over it on the card as wide lines (the card draws lines one pixel wide only); Windows only, else as before."""
+        try:
+            from campaign_editor import glmap, glwindow as GW
+        except ImportError:
+            self.skipTest("no NumPy")
+        import numpy as np
+        rows = GW.thick_line([(0, 0), (10, 0)], 4, (1, 1, 1, 1))
+        self.assertEqual(len(rows), 6)
+        self.assertEqual(sorted({r[1] for r in rows}), [-2.0, 2.0])         # 4 pixels wide, round the line
+        self.assertEqual(sorted({r[0] for r in rows}), [-2.0, 12.0])        # a little past each end
+        self.assertEqual(GW.thick_line([(3, 3), (3, 3)], 2, (1, 1, 1, 1)), [])
+        if sys.platform != "win32":
+            self.assertFalse(GW.WindowGL(None).attach(0))                   # elsewhere: drawn as before
+        if not glmap.available()[0]:
+            self.skipTest("no OpenGL 3.3 here")
+        ctx = glmap.context()
+        frame, screen = ctx.simple_framebuffer((20, 10)), ctx.simple_framebuffer((20, 10))
+        frame.use()
+        ctx.clear(0.0, 0.0, 1.0, 1.0)
+        GW.show(ctx, frame, screen, 20, 10, [([(0, 5), (20, 5)], 2, (1.0, 0.0, 0.0, 1.0))], GW.Overlay(ctx))
+        arr = np.frombuffer(screen.read(components=3), np.uint8).reshape(10, 20, 3)[::-1]
+        self.assertEqual(tuple(arr[1, 10]), (0, 0, 255))                    # the map's frame, copied
+        self.assertEqual(tuple(arr[5, 10]), (255, 0, 0))                    # the line over it
+        frame.release()
+        screen.release()
+
     def test_menu_page_drawn_after_the_3d_map(self):
         """#340: an Interface page went black after the 3D map - the map leaves the depth test on in the one shared
         OpenGL context, so every piece after the page's backdrop (all at one depth) was thrown away. The page's
         drawing sets the card's switches itself."""
-        from campaign_editor import glmap
         from campaign_editor import glmenu as G
         if not G.available():
-            self.skipTest("no OpenGL 3.3 here: %s" % glmap.available()[1])
+            self.skipTest("no NumPy or no OpenGL 3.3 here")
+        from campaign_editor import glmap
         ctx = glmap.context()
         ctx.enable(ctx.DEPTH_TEST | ctx.CULL_FACE)               # as View in 3D leaves it
         try:

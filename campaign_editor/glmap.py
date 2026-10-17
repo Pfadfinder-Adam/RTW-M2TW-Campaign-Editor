@@ -1336,10 +1336,10 @@ class GLMap:
             return None
         return np.c_[(p[:, 0] / p[:, 3] + 1) / 2, 1 - (p[:, 1] / p[:, 3] + 1) / 2]
 
-    def render(self, cam, w, h, t=0.3, show=None, clock=0.0):
+    def render(self, cam, w, h, t=0.3, show=None, clock=0.0, read=True):
         """The map seen from cam as a (h, w, 3) uint8 picture, top row first; t: the moment of the surf's wave
         (0..1); show: {layer: False} leaves a layer out (LAYERS - the sea off shows the sea floor); clock: seconds,
-        the trees' lean in the wind."""
+        the trees' lean in the wind. read=False: left on the card in self.fbo (glwindow shows it), None returned."""
         show = show or {}
         ctx = self.ctx
         started = time.perf_counter()
@@ -1481,6 +1481,9 @@ class GLMap:
             self.fbo.depth_mask = True
         ctx.finish()                                             # the card's own time ends here (step 1, measured)
         took = time.perf_counter()
+        if not read:
+            self.took = (took - started, 0.0)
+            return None
         raw = self.fbo.read(components=3)
         self.took = (took - started, time.perf_counter() - took)  # (drawn by the card, copied back) in seconds
         return np.frombuffer(raw, np.uint8).reshape(h, w, 3)[::-1]

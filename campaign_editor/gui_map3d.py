@@ -116,6 +116,10 @@ class Map3DView(ttk.Frame):
         self.canvas = tk.Canvas(self, background="#9db8cf", highlightthickness=0, takefocus=1)
         self.canvas.pack(fill="both", expand=True)
         c = self.canvas
+        # the card draws straight into this frame when it can (glwindow, Windows): laid over the canvas, the
+        # canvas's own mouse and keys bound to it too; no background of its own, so Tk never paints over the map
+        self.glframe = tk.Frame(self, background="", takefocus=1)
+        self._win, self._lines = None, []
         c.bind("<Configure>", lambda e: self.draw())
         c.bind("<ButtonPress-3>", lambda e: self._press(e, "move"))
         c.bind("<ButtonPress-2>", lambda e: self._press(e, "turn"))
@@ -323,13 +327,62 @@ class Map3DView(ttk.Frame):
     def _on(self):
         return self.gl is not None and self.gcam is not None
 
+    def _window(self):
+        """The card drawing straight into the window (glwindow), made once; None where it cannot (drawn as before)."""
+        if self._win is None:
+            self._win = False
+            try:
+                from . import glmap, glwindow
+                win = glwindow.WindowGL(glmap.context())
+                self.glframe.update_idletasks()
+                if win.attach(self.glframe.winfo_id()):
+                    c = self.canvas
+                    for seq in c.bind():                    # the canvas's mouse and keys, the same handlers
+                        self.glframe.bind(seq, c.bind(seq))
+                    self.glframe.bind("<Expose>", lambda e: self._present(), add="+")    # shown again: the frame
+                    self.glframe.place(in_=c, x=0, y=0, relwidth=1, relheight=1)
+                    self._win = win
+            except Exception:
+                self._win = False
+        return self._win or None
+
+    def _window_failed(self):
+        self._win = False
+        self.glframe.place_forget()
+
+    def _present(self):
+        """The frame on the card shown in the window again, with the ring / tile frame over it (no new drawing)."""
+        win = self._win
+        if not win or self.gl is None or self.gl.fbo is None:
+            return 0.0
+        W, H = self.gl.fbo_size
+        t = time.perf_counter()
+        try:
+            win.present(self.gl.fbo, W, H, self._lines)
+        except Exception:                                # drawn as before from the next frame
+            self._window_failed()
+            self.draw()
+        return time.perf_counter() - t
+
     def draw(self, half=False):
         if not self._on():
             return
-        from PIL import Image, ImageTk
         W, H = max(50, self.canvas.winfo_width()), max(50, self.canvas.winfo_height())
+        t = (time.monotonic() * 0.2) % 1.0 if self.v_moving.get() else 0.3
+        if self._window():                               # straight into the window: always the whole size
+            try:
+                self.gl.render(self.gcam, W, H, t, {k: v.get() for k, v in self.v_show.items()},
+                               clock=time.monotonic() if self.v_moving.get() else 0.0, read=False)
+            except Exception as e:                       # the card failed now: said in the bar, never a crash
+                self.lbl.configure(text="the graphics card stopped drawing: %s" % e)
+                self.gl.release()
+                self.gl, self._for = None, None
+                return
+            self._lines = self._ring_lines()
+            self._clocked(self._present(), (W, H))
+            return
+        from PIL import Image, ImageTk
         f = 2 if half else 1
-        t = (time.monotonic() * 0.2) % 1.0 if self.v_moving.get() else 0.3    # a wave every 5 s, as the game
         try:
             arr = self.gl.render(self.gcam, W // f, H // f, t, {k: v.get() for k, v in self.v_show.items()},
                                  clock=time.monotonic() if self.v_moving.get() else 0.0)
@@ -487,11 +540,7 @@ class Map3DView(ttk.Frame):
         s = self.gl.to_screen([(px, d.ground_height(px, pz), pz) for px, pz in edge])
         if s is None:
             return
-        c = self.canvas
-        W, H = c.winfo_width(), c.winfo_height()
-        flat = [v for a, b in s for v in (a * W, b * H)]
-        c.create_line(*flat, fill="#000000", width=4, tags="ring")
-        c.create_line(*flat, fill="#ffffff", width=2, tags="ring")
+        return self._outline(s, 4, 2)
 
     def _things_at(self, tile):
         """[(what, key, name)] standing on a tile, as the Map moves them: 'char' (an army before an agent), 'place'
@@ -600,37 +649,48 @@ class Map3DView(ttk.Frame):
             app.res_moved(key, tile)
         self.load()
 
+    def _outline(self, s, wide, thin):
+        """Screen fractions -> a white line with a black edge: [(points in pixels, width, rgba)]."""
+        c = self.canvas
+        W, H = c.winfo_width(), c.winfo_height()
+        pts = [(a * W, b * H) for a, b in s]
+        return [(pts, wide, (0.0, 0.0, 0.0, 1.0)), (pts, thin, (1.0, 1.0, 1.0, 1.0))]
+
     def _draw_ring(self):
         """The brush's circle on the ground under the mouse (its size as it works); the tile frame while a figure is
-        carried."""
+        carried - on the card when it draws straight into the window, else on the canvas."""
+        lines = self._ring_lines()
+        if self._win:
+            self._lines = lines
+            self._present()
+            return
         c = self.canvas
         c.delete("ring")
+        for pts, width, rgba in lines:
+            c.create_line(*[v for p in pts for v in p], width=width, tags="ring",
+                          fill="#%02x%02x%02x" % tuple(int(v * 255) for v in rgba[:3]))
+
+    def _ring_lines(self):
         if self._carry is not None and self._mouse and self._on():
-            self._draw_frame()
-            return
+            return self._draw_frame() or []
         if not (self.v_brush_on.get() and self._mouse and self._on()):
-            return
+            return []
         got = self._point(*self._mouse)
         ed = self.app.editors.get("terrain")
         if got is None or ed is None:
-            return
+            return []
         import math
         import numpy as np
         try:
             n = max(1, int(ed.v_brush.get()))
         except (tk.TclError, ValueError):
-            return
+            return []
         (x, _, z), r = got[0], n / 4.0                   # n points across, a point half a tile
         d = self.gl.data
         ring = [(x + r * math.cos(a), 0.0, z + r * math.sin(a)) for a in np.linspace(0, 2 * math.pi, 49)]
         ring = [(px, d.ground_height(px, pz), pz) for px, _, pz in ring]
         s = self.gl.to_screen(ring)
-        if s is None:
-            return
-        W, H = c.winfo_width(), c.winfo_height()
-        flat = [v for a, b in s for v in (a * W, b * H)]
-        c.create_line(*flat, fill="#000000", width=3, tags="ring")
-        c.create_line(*flat, fill="#ffffff", width=1, tags="ring")
+        return [] if s is None else self._outline(s, 3, 1)
 
     def _paint_start(self, e):
         self.canvas.focus_set()
