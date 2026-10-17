@@ -39,7 +39,7 @@ whose it is):
 - **Ruthron** - 18 reports
 - **Espartan** - 7 reports
 - **Wholesome Queen** - 6 reports
-- **bodkinarrow** - 5 reports
+- **bodkinarrow** - 6 reports
 - **Mekkermann** - 4 reports
 - **Melchon** - 4 reports
 - **moderman1** - 4 reports

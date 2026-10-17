@@ -227,6 +227,7 @@
   line of the block** in both editors; the editor remembers whether it was open.
 
 ### Fixed
+- After a new faction (or any change to the factions or their sounds) every faction could speak another's accent -> the game's compiled sounds are removed (backed up) and the game builds them again on its next start.
 - A new faction given the only town of a faction whose leader stood in it was refused (Check mod files' rehearsal said so for papal_states and portugal) -> the town is given and the leader steps out beside it, said in the warnings; the rehearsal says its lines are about the editor, not your files.
 - Units with REX's 'soldiers' line and a block of models (as in HLR) showed 0 men -> their real number of men.
 - Medieval II: a faction marked undiscovered made playable (by Edit faction or by the game's own editor) lost every faction after it, rebels' armies too -> its 'undiscovered' line goes, the game's editor no longer changes the faction lists, and Check mod files warns.

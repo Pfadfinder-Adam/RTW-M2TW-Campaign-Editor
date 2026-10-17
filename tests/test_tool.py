@@ -54,6 +54,28 @@ class ToolTest(unittest.TestCase):
         self.assertLessEqual(max(abs(aaron.xy[0] - 1), abs(aaron.xy[1] - 1)), 2)
         self.assertTrue(any("Aaron Alphid" in w and "next to it" in w for _, w in plan.warnings))
 
+    def test_new_faction_drops_the_compiled_sounds(self):
+        """Discord (Bodkin_Arrow, 2026-10-17): after new factions every faction spoke another's accent until
+        data/sounds/events.dat / events.idx were deleted - the game's compiled sounds name the factions by their place.
+        A plan that changes the factions or a sound text removes them (backed up, Restore puts them back); one that
+        does not, leaves them."""
+        d = os.path.join(self.root, "data")
+        for n in ("events.dat", "events.idx"):
+            write(os.path.join(d, "sounds", n), "compiled")
+        before = tree_hash(self.root)
+        plan = Plan(ModData(self.root), "nothing", "nothing", {})
+        plan.edit(ModData(self.root).campaign_file("test", "descr_strat.txt"))
+        plan.stale_sounds()
+        self.assertEqual(plan.deletions, [])
+        plan = build(ModData(self.root), "test", "alpha", "beta", {"start": {"regions": ["B_R"],
+                                                                             "leader": {"name": "Boris"}}})
+        plan.apply()
+        for n in ("events.dat", "events.idx"):
+            self.assertFalse(os.path.exists(os.path.join(d, "sounds", n)))
+        restore(ModData(self.root), backups(ModData(self.root))[0])
+        after = {k: v for k, v in tree_hash(self.root).items() if not k.startswith("CampaignEditor_backups")}
+        self.assertEqual(before, after)
+
     def test_round_trip_is_byte_exact(self):
         mod = ModData(self.root)
         for p in [mod.file("sm_factions"), mod.text_files()[0]]:

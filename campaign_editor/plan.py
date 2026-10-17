@@ -5,6 +5,7 @@ import datetime
 import json
 import time
 import os
+import re
 import shutil
 
 from .textio import TextFile, WriteError, make_writable, plain, readonly, refused, remove_file, replace_file
@@ -161,6 +162,30 @@ class Plan:
             self.deletions.append(path)
             self.notes.append((self.mod.rel(path), "removed - %s" % why))
 
+    # the texts the game compiles into data/sounds/events.dat + events.idx (descr_sounds_db.xml and the accents name the
+    # factions by their place in descr_sm_factions.txt, so a new faction moves the others' voices too)
+    SOUND_TEXTS = re.compile(r"^(descr_sounds.*\.(txt|xml)|export_descr_sounds.*\.txt|descr_sm_factions\.txt)$", re.I)
+
+    def stale_sounds(self):
+        """The game's compiled sounds (data/sounds/events.dat + events.idx) go (backed up) when a sound text or the
+        factions' list changed - the game builds them again on its next start. Kept, they gave every faction the
+        voices of another after a new faction (Discord, 2026-10-17: Denmark speaking Arabic, Turks German - fixed by
+        deleting those two files, an old twcenter tip)."""
+        changed = [p for p, f in self.files.items() if f.dump() != self.originals.get(p)]
+        if not any(self.SOUND_TEXTS.match(os.path.basename(p)) for p in changed):
+            return
+        folder = self.mod.find("sounds")
+        if not folder:
+            return
+        try:
+            names = os.listdir(folder)
+        except OSError:
+            return
+        for n in names:
+            if n.lower() in ("events.dat", "events.idx"):
+                self.delete(os.path.join(folder, n), "the game's compiled sounds - kept, the factions' voices would "
+                                                    "be mixed up; the game builds them again on its next start")
+
     def stale_bins(self):
         """Medieval II reads a string table's compiled <name>.txt.strings.bin when one lies beside the .txt, so a
         changed .txt was never seen (the event, temple and hall names of a tester's run, 2026-10-05): the .bin
@@ -217,6 +242,7 @@ class Plan:
     # ---- report ----
     def report(self):
         self.stale_bins()
+        self.stale_sounds()
         lines = []
         bad = self.crash_problems()
         if bad:                                     # said in Preview, not only when Apply is pressed (a report)
@@ -336,6 +362,7 @@ class Plan:
         keep_up(self)                       # REX / M2EX: max_factions follows the factions, silently (limits.py)
         self._no_empty_army()
         self.stale_bins()
+        self.stale_sounds()
         self._whole_map_folders()
         sm = self.mod.file("sm_factions")
         if sm and sm in self.files:         # Rome: a 'faction destroyed' picture for every faction (eventimages.py)
