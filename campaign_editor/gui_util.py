@@ -1446,7 +1446,8 @@ class ShortHint(ttk.Frame):
         """Wrap the shown sentence at the room the parent gives it (none when it fits on one line)."""
         try:
             from tkinter import font as tkfont
-            avail = self.master.winfo_width() - (self.q.winfo_reqwidth() if self.q.winfo_manager() else 0) - 28
+            host = self.pack_info().get("in", self.master) if self.winfo_manager() == "pack" else self.master
+            avail = host.winfo_width() - (self.q.winfo_reqwidth() if self.q.winfo_manager() else 0) - 28
             if avail < 80:
                 return
             f = tkfont.Font(font=self.lbl.cget("font") or "TkDefaultFont")

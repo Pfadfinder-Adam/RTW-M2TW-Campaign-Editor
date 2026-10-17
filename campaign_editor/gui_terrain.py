@@ -103,10 +103,13 @@ class TerrainEditor(ttk.Frame):
         self.view.legend.pack_forget()
         # the brushes, the palette and the hint in the map's side column, above its zoom (report #332: the bars on
         # top went to the side, as the Map's legend - the map has the whole height)
+        after = self.view.bar                            # under the zoom: it stays first, as on every Maps tab
         for w in (top, self.palette, self.hint):
             w.pack_forget()
-            w.pack(in_=self.view.side, side="top", fill="x", before=self.view.bar)
+            w.pack(in_=self.view.side, side="top", fill="x", after=after)
             w.lift(self.view.side)
+            after = w
+        self.view.side.bind("<Configure>", self.hint._fit, add="+")    # the hint wraps at the column's width
         self.v_grid_here.set(self.view.v_grid.get())
         self.v_rivers_here.set(self.view.v_rivers.get())
         self.fill_palette()
@@ -1009,10 +1012,10 @@ class TerrainEditor(ttk.Frame):
         swatches = []
         for label, colours, names in items:
             ttk.Label(self.palette, text=label + ":").pack(side="top", anchor="w", padx=(4, 2))
-            # in rows of three in the side column, so every one stays in it
+            # in rows of two in the side column, so every one stays in it
             box = ttk.Frame(self.palette)
             box.pack(side="top", anchor="w", padx=(4, 0))
-            per_row = 3 if len(colours) > 3 else len(colours) or 1
+            per_row = 2 if len(colours) > 2 else len(colours) or 1
             for i, c in enumerate(colours):
                 look = GROUND_LOOK.get(c) if what == "ground" else c if what == "climate" else \
                     CampaignMap.FEATURE_LOOK.get(c, (20, 20, 20))
@@ -1058,7 +1061,9 @@ class TerrainEditor(ttk.Frame):
         flow(box)                                        # wrapping in the side column
         more = ttk.Frame(rows)
         more.pack(side="top", fill="x", pady=(4, 0))
-        ttk.Label(more, text="shape brush (a smooth coast where you draw):").pack(side="left", padx=(8, 2))
+        from .gui_util import tip
+        tip(ttk.Label(more, text="shape brush:"), "The shape brush: a smooth coast where you draw (land or water), "
+            "or the coast pulled / pushed.").pack(side="left", padx=(8, 2))
         ttk.Radiobutton(more, text="land", value="shape_land", variable=self.v_coast).pack(side="left", padx=3)
         ttk.Radiobutton(more, text="water", value="shape_sea", variable=self.v_coast).pack(side="left", padx=3)
         from .gui_util import tip
@@ -1070,7 +1075,8 @@ class TerrainEditor(ttk.Frame):
             "Push the coast: press on the land beside the coast and the land grows into the water; press on the "
             "water and the water eats into the land - the longer you hold, the further; most in the brush's "
             "middle. Evens a ragged line.").pack(side="left", padx=3)
-        ttk.Button(more, text="Find ground on the wrong side of the coast", command=self.ground_check).pack(
+        tip(ttk.Button(more, text="Find ground on the wrong side", command=self.ground_check),
+            "Find ground on the wrong side of the coast: land ground in the water, sea ground on the land.").pack(
             side="left", padx=(16, 0))
         tip(ttk.Checkbutton(more, text="Shore line", variable=self.v_shore, command=self._shore_toggled),
             "Close up, a light line shows the shore exactly as the game will draw it (in every mode of this tab): "
@@ -1102,7 +1108,7 @@ class TerrainEditor(ttk.Frame):
             "borders later on the Map (Regions). Refused: "
             "drowning a town, port, character, fort or resource, a region's last land, a river (rub it out first) "
             "or a port's last land. On Apply: those files written, map.rwm deleted (the game builds its map again). "
-            "'Find ground on the wrong side of the coast' rings every point where map_ground_types and map_heights "
+            "'Find ground on the wrong side' rings every point where map_ground_types and map_heights "
             "disagree - a land ground on the water (the land's texture lies on the water in the game) or a sea "
             "ground in the land (holes of sea) - and, on a yes, gives each the ground round it on its own side: "
             "the heights lead, they are not changed. The games' own maps have next to none (Rome 0, Medieval II "

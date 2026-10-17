@@ -12036,6 +12036,24 @@ building smith
         restore(ModData(self.root), restore_dir)
         self.assertEqual({k: v for k, v in tree_hash(self.root).items() if "_backups" not in k}, before)
 
+    def test_check_a_pack_cancelled_opens_nothing_more(self):
+        """A tester: Check and install a pack -> Cancel in the file box -> a second box opened (the folder one). Now
+        asked first (a .zip / a folder / Cancel): Cancel opens nothing, Cancel in either box ends it."""
+        try:
+            from unittest import mock
+            from campaign_editor import gui_modpack
+        except ImportError as e:
+            self.skipTest("no tkinter: %s" % e)
+        from types import SimpleNamespace
+        app = SimpleNamespace(mod=object())
+        for pick in (2, 0, 1):
+            with mock.patch("campaign_editor.gui_util.ask_choice", return_value=pick), \
+                    mock.patch.object(gui_modpack.filedialog, "askopenfilename", return_value="") as f, \
+                    mock.patch.object(gui_modpack.filedialog, "askdirectory", return_value="") as d, \
+                    mock.patch.object(gui_modpack, "PackWindow") as w:
+                gui_modpack.open_pack(app)
+            self.assertEqual((f.call_count, d.call_count, w.call_count), {2: (0, 0, 0), 0: (1, 0, 0), 1: (0, 1, 0)}[pick])
+
     def test_a_window_on_the_old_mod_never_writes_into_the_clean_one(self):
         """A tester: Bring units into the game -> 'Make my own mod folder' -> made and loaded -> Write again in the
         bring window still open: it went into the game itself, not the new folder. A plan on a root the modder chose

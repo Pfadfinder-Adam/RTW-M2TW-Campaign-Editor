@@ -29,10 +29,18 @@ def open_pack(app):
     if not app.mod:
         messagebox.showinfo("Check a pack", "Load a mod first - the pack is checked against it.", parent=app)
         return
-    path = filedialog.askopenfilename(parent=app, title="The pack (.zip) - Cancel to pick a folder instead",
-                                      filetypes=[("Mod pack", "*.zip"), ("All files", "*.*")])
-    if not path:
+    # asked first which one: Cancel in the file box used to open the folder box (a tester: 'I cancelled and it
+    # opened again')
+    from .gui_util import ask_choice
+    pick = ask_choice(app, "Check a pack", "Is the pack a .zip file or an unpacked folder (the one holding data/)?",
+                      ["A .zip file", "A folder", "Cancel"], default=0, cancel=2)
+    if pick == 0:
+        path = filedialog.askopenfilename(parent=app, title="The pack (.zip)",
+                                          filetypes=[("Mod pack", "*.zip"), ("All files", "*.*")])
+    elif pick == 1:
         path = filedialog.askdirectory(parent=app, title="The pack's folder (the one holding data/)")
+    else:
+        path = ""
     if not path:
         return
     try:

@@ -11,7 +11,7 @@ from PIL import Image, ImageTk
 from . import theme
 from .mapdata import REBELS
 
-SIDE_WIDTH = 360       # the side column beside the map: its switches, zoom and legend (report #332)
+SIDE_WIDTH = 260       # the side column beside the map: its switches, zoom and legend (report #332)
 FORT_W = 0.45          # a fort's / watchtower's half size, of a tile: the sign stays inside its tile
 ZOOMS = (1, 1.5, 2, 3, 4, 6, 8, 12, 16, 24, 32, 48, 64)       # screen pixels per tile
 # the map's zoom settings (Tools > Settings > Campaign map): the wheel's step and Ctrl + wheel's in per cent of the
@@ -214,24 +214,26 @@ class MapView(ttk.Frame):
                   self.v_regions, self.v_mode):
             v.trace_add("write", lambda *a: self._layers_label())
         self._layers_label()
-        zbar = ttk.Frame(bar, padding=(0, 4, 0, 0))     # the zoom: a row of its own under the switches
-        zbar.pack(side="top", fill="x")
-        fit = ttk.Button(zbar, text="Fit", command=self.fit)
-        fit.pack(side="right")
-        ttk.Button(zbar, text="+", command=lambda: self.zoom_by(1, by=50)).pack(side="right", padx=2)
+        # the zoom: the first row of the side column on every Maps tab, always in the same place (a tester: 'the zoom
+        # and Fit moved' - under the switches on the Map, under the brushes on Terrain)
+        zbar = ttk.Frame(bar, padding=(0, 0, 0, 4))
+        zbar.pack(side="top", fill="x", before=lbar)
         b = ttk.Button(zbar, text="-", command=lambda: self.zoom_by(-1, by=50))
-        b.pack(side="right")
+        b.pack(side="left")
         # the zoom as a browser shows it: 100% = the whole map in the window (Fit) (report #127)
-        self.lbl_zoom = ttk.Label(zbar, text="", width=6, anchor="e")
-        self.lbl_zoom.pack(side="right", padx=(0, 4))
-        self.zoom_bar = zbar                             # the window that holds the map adds its own (Bigger map)
-        self.zoom_minus = b                              # ... to the left of the zoom, never inside it
-        from .gui_util import first
-        first(b, self.lbl_zoom, *zbar.pack_slaves()[-4:-2][::-1])  # the zoom buttons keep their room
+        self.lbl_zoom = ttk.Label(zbar, text="", width=6, anchor="center")
+        self.lbl_zoom.pack(side="left", padx=2)
+        ttk.Button(zbar, text="+", command=lambda: self.zoom_by(1, by=50)).pack(side="left")
+        fit = ttk.Button(zbar, text="Fit", command=self.fit)
+        fit.pack(side="left", padx=(4, 0))
+        # the window that holds the map adds its own here (Bigger map), a row under the zoom, never inside it
+        self.zoom_bar = ttk.Frame(bar)
+        self.zoom_bar.pack(side="top", fill="x", before=lbar)
+        self.zoom_minus = b
         from .gui_util import hint
         hint(zbar, "Wheel: zoom (100% = the whole map in the window, as Fit).   Right drag: move the map.   Left drag: "
                   "move markers (characters, towns, ports).   Click a town: take / give it.   Right click: what can "
-                  "be done there.").pack(side="right", padx=(4, 0), before=fit)   # the zoom's '?' right of Fit
+                  "be done there.").pack(side="left", padx=(4, 0))   # the zoom's '?' right of Fit
         # (a tester: it stood left of Bigger map, as if it were that button's)
         from . import settings
         self.v_legend = tk.BooleanVar(value=bool(settings.get("map_legend", True)))
@@ -242,14 +244,32 @@ class MapView(ttk.Frame):
         # Find: a town, port, army, agent, fleet, unit, fort or resource by any part of its name
         self.v_find = tk.StringVar()
         ttk.Label(lbar, text="Find:").pack(side="left", padx=(12, 2), before=self.lbl_layers)
-        self.find_entry = ttk.Entry(lbar, textvariable=self.v_find, width=22)
+        self.find_entry = ttk.Entry(lbar, textvariable=self.v_find, width=20)
         self.find_entry.pack(side="left", before=self.lbl_layers)
         self.find_entry.bind("<KeyRelease>", self._find_typed)
         self.find_entry.bind("<Return>", lambda e: self._find_go(0))
         self.find_entry.bind("<Down>", lambda e: self._find_focus())
         self.find_entry.bind("<Escape>", lambda e: self._find_close())
-        from .gui_util import flow
-        flow(lbar)
+        # the switches one under another (a tester: 'in a column, so the panel is not so wide'); a button and its
+        # drop-down / a label and its box share a row
+        ws = lbar.pack_slaves()
+        for w in ws:
+            w.pack_forget()
+        prev = None
+        for w in ws:
+            if w in (mb, self.find_entry):               # beside the one before it, in a row of their own
+                row = ttk.Frame(lbar)
+                row.pack(side="top", anchor="w", fill="x", pady=1)
+                for x in (prev, w):
+                    x.pack(in_=row, side="left", padx=(0, 4))
+                    x.lift(row)                          # made before the row: raised above it, or it hides there
+                continue
+            if prev is not None and prev.winfo_manager() == "":
+                prev.pack(side="top", anchor="w", pady=1)
+            prev = w
+        if prev is not None and prev.winfo_manager() == "":
+            prev.pack(side="top", anchor="w", pady=1)
+        self.lbl_layers.configure(wraplength=SIDE_WIDTH - 20, justify="left")
         body = ttk.Frame(self)
         body.pack(fill="both", expand=True)
         self._body = body
@@ -260,7 +280,6 @@ class MapView(ttk.Frame):
         bar.pack_forget()
         bar.pack(in_=self.side, side="top", fill="x")
         bar.lift(self.side)                              # made before the column: raised above it, or it hides there
-        self.after_idle(lambda: flow(zbar))              # after the window's own buttons are in (Bigger map)
         self.find_list = tk.Listbox(body, height=12, width=90, activestyle="dotbox", exportselection=False)
         self.find_list.bind("<Return>", lambda e: self._find_go(None))
         self.find_list.bind("<Double-Button-1>", lambda e: self._find_go(None))

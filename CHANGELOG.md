@@ -12,7 +12,8 @@
 - A new playable faction gets its own slot on the faction-select screen by itself (the menu layout had 21, the 22nd faction could not be picked); Steam's Medieval II unpacks again (the unpacker asked three times and stopped after two answers).
 - Bring units: units shared by several factions came out in the first owner's colours (blue officers and cards on Gallic units) -> they take the look of the faction picked in step 2, else of their own owners; the men and each officer can be seen in 3D there before writing.
 - Bring units: after 'Make my own mod folder' the same window wrote into the game itself -> it now writes into the mod loaded now.
-- Maps (Map, Terrain, Coast and heights, 3D): the switches, brushes and zoom moved from above the map into a column on its right, as the legend - the map has the whole height of the window.
+- Maps (Map, Terrain, Coast and heights, 3D): the switches, brushes and zoom moved from above the map into a narrow column on its right, one under another, as the legend - the map has the whole height of the window; the zoom and Fit stand first in it on every tab.
+- Check and install a pack: Cancel in the file box opened a second box -> it asks first: a .zip, a folder or Cancel.
 - Maps > 3D: the heights brush now works on the water too - the sea's floor raised out of it becomes land, land pushed under becomes water, as in the game; and a second way, the game's own: grab the land and move the mouse up or down.
 
 ### Added

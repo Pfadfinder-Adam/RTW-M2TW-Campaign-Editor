@@ -890,9 +890,9 @@ class App(tk.Tk):
         # its '?' BEFORE it, a gap, then - 100% + Fit and the zoom's '?' (a tester, R-20261014-7D5272)
         up = _tip(ttk.Button(self.map_view.zoom_bar, text="Bigger map (x3)...", command=self.once(
             "upscale_map", lambda: self.upscale_map())), "make the campaign map 3 x bigger (beta)")
-        up.pack(side="right", padx=(0, 16), after=self.map_view.zoom_minus)
         q = _hint(self.map_view.zoom_bar, WHAT_HAPPENS, width=520)
-        q.pack(side="right", padx=(12, 2), after=up)
+        q.pack(side="left", padx=(0, 2))
+        up.pack(side="left")
         self.map_view.on_tool = self.map_tool
         self.map_view.on_resize = self.map_size_window    # Change size... beside the map's size
         self.v_borders = self.map_view.v_borders
