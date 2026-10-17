@@ -3750,6 +3750,17 @@ building smith
         self.assertEqual(rows[2][:4], (110, 45, 0.5, 0.5))
         self.assertEqual(G.quad(0, 0, 1, 1, rgba=(1, 0, 0, 1))[5], (0, 1, 0.0, 1.0, 1, 0, 0, 1))
 
+    def test_3d_map_port_model_with_its_base_after_it(self):
+        """#335: Barbarian Invasion's descr_cultures names the aerial base after a port's model ('port_land
+        <model>   port_roman_level_2'); the model was looked for with the base's name in it - no port in 3D."""
+        from campaign_editor.mapobjects3d import _rel
+        self.assertEqual(_rel("data/models_strat/residences/roman_port_01_land.CAS\t\t\tport_roman_level_2"),
+                         "models_strat/residences/roman_port_01_land.CAS")
+        self.assertEqual(_rel("data/models_strat/residences/barb_port_01_land.CAS,\t\tport_barbarian_level_2"),
+                         "models_strat/residences/barb_port_01_land.CAS")
+        self.assertEqual(_rel("data\\models_strat\\x.cas"), "models_strat/x.cas")
+        self.assertEqual(_rel(""), "")
+
     def test_3d_map_heights_as_the_heights_brush_reads_them(self):
         """#339: a square of other heights round every heights-brush stroke in 3D - the map was built from the
         picture's grey steps, the brush sent the game's own map_heights.hgt values for the points round it. Both now

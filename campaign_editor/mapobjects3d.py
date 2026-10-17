@@ -19,7 +19,10 @@ from .textio import strip_comment
 
 
 def _rel(path):
-    path = (path or "").split(",")[0].strip().replace("\\", "/")
+    """The model of a line's value: its first word (#335: Barbarian Invasion's descr_cultures names the aerial base
+    after the model - 'roman_port_01_land.CAS   port_roman_level_2' - taken as one file name, the port not found)."""
+    words = (path or "").split(",")[0].split()
+    path = (words[0] if words else "").replace("\\", "/")
     return path[5:] if path.lower().startswith("data/") else path
 
 

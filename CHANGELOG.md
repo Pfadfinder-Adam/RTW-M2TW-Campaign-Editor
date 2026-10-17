@@ -14,6 +14,7 @@
 - Bring units: after 'Make my own mod folder' the same window wrote into the game itself -> it now writes into the mod loaded now.
 - Maps (Map, Terrain, Coast and heights, 3D): the switches, brushes and zoom stand in the empty part of the tabs' own row, the zoom first on every tab; the column on the right holds only the legend or the brush colours (each as wide as its words) and is gone when there is nothing in it; the message line sits in the bottom bar's free middle - the map has the window's whole height.
 - Check and install a pack: Cancel in the file box opened a second box -> it asks first: a .zip, a folder or Cancel.
+- Maps > 3D: Roman and Eastern ports stood without their houses (only the stone posts in the water) in Barbarian Invasion and Rome -> the game's port models show.
 - Maps > 3D: the heights brush left a square of other ground round each stroke (smooth inside, a step and water at its edges) -> the whole map takes the game's own heights, as the brush does.
 - Maps > 3D on Windows: the graphics card now shows the map straight in the window (the frame was copied back and handed over as a picture every time) - moving, turning and the brushes should no longer lag; where that cannot work it draws as before.
 - Maps > 3D: a line under its buttons says where a frame's time goes (drawn by the graphics card, copied back, put in the window) - send it with a report when the map lags.
