@@ -381,10 +381,14 @@ def _cas_body(d, r, nbones):
             if max(vb) >= nbones:
                 continue
             q += 4 * nv
-        extra = next((e for e in (0, 4 * nv)            # a rigid part may keep 4 more bytes a vertex before normals
-                      if q + 24 * nv + e + 6 * nt + 8 * nv <= len(d) and sum(
-                          abs(x * x + y * y + z * z - 1) < 0.05 for x, y, z in struct.iter_unpack(
-                              "<3f", d[q + 12 * nv + e:q + 24 * nv + e])) >= 0.9 * nv), None)
+        # a rigid part may keep 4 more bytes a vertex before its normals: the layout whose normals are unit long
+        # the most wins, at least 0.8 of them (HLR's heads keep a few that are not - barb_body: 62 of 69; at 0.9
+        # the whole head was dropped and the men stood faceless - a tester, 2026-10-17)
+        score = {e: sum(abs(x * x + y * y + z * z - 1) < 0.05 for x, y, z in struct.iter_unpack(
+            "<3f", d[q + 12 * nv + e:q + 24 * nv + e])) for e in (0, 4 * nv) if q + 24 * nv + e + 6 * nt + 8 * nv <= len(d)}
+        extra = max(score, key=lambda e: (score[e], -e)) if score else None
+        if extra is not None and score[extra] < 0.8 * nv:
+            extra = None
         if extra is None:
             continue
         pos = list(struct.iter_unpack("<3f", d[q:q + 12 * nv]))

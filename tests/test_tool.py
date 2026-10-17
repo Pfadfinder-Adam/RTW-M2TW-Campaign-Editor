@@ -12845,13 +12845,14 @@ building smith
         faces = [(0, 1, 3), (0, 3, 2), (4, 6, 7), (4, 7, 5), (0, 4, 5), (0, 5, 1),
                  (2, 3, 7), (2, 7, 6), (0, 2, 6), (0, 6, 4), (1, 5, 7), (1, 7, 3)]
 
-        def vertices(skinned):
+        def vertices(skinned, bad=0):
             n = len(cube)
             out = struct.pack("<2H2B", n, len(faces), 1, 1 if skinned else 0)
             if skinned:
                 out += struct.pack("<%dI" % n, *([1] * n))
             out += b"".join(struct.pack("<3f", *v) for v in cube)
-            out += b"".join(struct.pack("<3f", *[c / math.sqrt(0.03) for c in v]) for v in cube)
+            out += b"".join(struct.pack("<3f", *([0, 0, 0] if i < bad else [c / math.sqrt(0.03) for c in v]))
+                            for i, v in enumerate(cube))
             out += b"".join(struct.pack("<3H", *f) for f in faces) + b"\x00" * 4
             return out + b"".join(struct.pack("<2f", 0.1 * i, 0.9 - 0.1 * i) for i in range(n)) + b"\x00"
         head = struct.pack("<f", 3.05) + b"\x00" * 46 + struct.pack("<H", 2) + struct.pack("<2I", 0, 0)
@@ -12869,6 +12870,11 @@ building smith
                          [("shield", True, 12), ("Body_400", False, 12)])
         self.assertTrue(m.one_texture)
         self.assertEqual(m.texture_ref, "data/models_unit/textures/unit_x.tga")
+        # a head keeping a few normals that are not unit long (HLR's barb_body: 62 of 69) is still read - the men
+        # stood faceless (a tester, 2026-10-17)
+        odd = data.replace(body, text("Body_400") + b"\x01\x00\x00\x00\x00" + struct.pack("<I6f", 0, *([0] * 6)) +
+                           vertices(True, bad=1))
+        self.assertEqual([g.name for g in MV.read_cas(odd).groups], ["shield", "Body_400"])
         for got, want in zip(m.positions[7], (0.1, 1.1, 0.1)):              # the shield from the bone it hangs on
             self.assertAlmostEqual(got, want, places=5)                     # (its 7 floats are no place: a report)
         for got, want in zip(m.positions[15], (0.1, 1.1, 0.1)):             # the body on the pelvis, 1 up
