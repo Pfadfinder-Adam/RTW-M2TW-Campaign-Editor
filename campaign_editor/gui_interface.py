@@ -43,6 +43,8 @@ class InterfacePanel(ttk.Frame):
         self.zoom, self.pan = 1.0, [0.0, 0.0]   # the wheel zooms (1 = the whole screen fits), the held wheel moves it
         self._panning, self._draw_due = None, False
         self._pics, self._tex, self._fonts = {}, {}, {}
+        self._pil = {}                       # Pillow pictures at the layout's size: words, pieces the game draws
+        self._gpu = None                     # the graphics card draws the page (glmenu): None = not asked yet
         self._drag = None
         self._build()
         self.load()
@@ -62,7 +64,7 @@ class InterfacePanel(ttk.Frame):
         self.words = L.menu_texts(mod) if self.doc else {}
         self.undo, self.redo = [], []
         self.page, self.picked = None, None
-        self._pics, self._tex, self._fonts = {}, {}, {}
+        self._pics, self._tex, self._fonts, self._pil = {}, {}, {}, {}
         self.own_files = {}                             # own pictures made here {file: TGA bytes}, written by Apply
         self.lb_pages.delete(0, "end")
         self.tv.delete(*self.tv.get_children())
@@ -642,11 +644,30 @@ class InterfacePanel(ttk.Frame):
         if key in self._pics:
             return self._pics[key]
         self._pics[key] = None
+        col = self._words_pil(words, font_id, box_w / s, colour, shadow)
+        if col is None:
+            return None
+        try:
+            from PIL import Image, ImageTk
+            W, H = col.size
+            col = col.resize((max(1, int(W * s)), max(1, int(H * s))), Image.LANCZOS)
+            self._pics[key] = ImageTk.PhotoImage(col)
+        except Exception:
+            self._pics[key] = None
+        return self._pics[key]
+
+    def _words_pil(self, words, font_id, box_w, colour=(232, 220, 176), shadow=False):
+        """The words as an RGBA picture at the layout's own size (box_w: the piece's width there), cached; None
+        without Pillow / a font."""
+        key = ("words", words, font_id, int(box_w), colour, shadow)
+        if key in self._pil:
+            return self._pil[key]
+        self._pil[key] = None
         f = self._font(font_id)
         if f is None:
             return None
         try:
-            from PIL import Image, ImageDraw, ImageTk
+            from PIL import Image, ImageDraw
             from . import cuf
 
             def line_img(text):
@@ -656,7 +677,7 @@ class InterfacePanel(ttk.Frame):
                 im = Image.new("L", (max(1, r), max(1, b)), 0)
                 ImageDraw.Draw(im).text((0, 0), text, font=f[1], fill=255)
                 return im
-            limit = max(8, box_w / s - 4)
+            limit = max(8, box_w - 4)
             lines, cur = [], ""
             for w in words.split():
                 trial = (cur + " " + w).strip()
@@ -681,12 +702,10 @@ class InterfacePanel(ttk.Frame):
             front = Image.new("RGBA", mask.size, tuple(colour) + (255,))
             front.putalpha(mask)
             col.alpha_composite(front, (1, 0))
-            W, H = col.size
-            col = col.resize((max(1, int(W * s)), max(1, int(H * s))), Image.LANCZOS)
-            self._pics[key] = ImageTk.PhotoImage(col)
+            self._pil[key] = col
         except Exception:
-            self._pics[key] = None
-        return self._pics[key]
+            self._pil[key] = None
+        return self._pil[key]
 
     def _state(self, x):
         """The state a piece is drawn in: 'mouse over' under the mouse, else the one picked under the screen."""
@@ -737,6 +756,20 @@ class InterfacePanel(ttk.Frame):
         c.delete("all")
         if not self.doc or not self.page:
             return
+        if self._gpu is None:
+            try:
+                from . import glmenu
+                self._gpu = glmenu.available()
+            except Exception:
+                self._gpu = False
+        if self._gpu:
+            try:
+                self._draw_gpu()
+                self._status()
+                return
+            except Exception:                           # the card failed: the drawing below, never a crash
+                self._gpu = False
+                c.delete("all")
         s, ox, oy = self._scale()
         lw, lh = self.doc.size()
         c.create_rectangle(ox, oy, ox + lw * s, oy + lh * s, fill="#101010", outline="#606060")
@@ -786,11 +819,117 @@ class InterfacePanel(ttk.Frame):
             if x["index"] == self.picked:
                 c.create_rectangle(x0, y0, x1, y1, outline=pal_sel, width=2)
                 c.create_rectangle(x1 - HANDLE, y1 - HANDLE, x1, y1, fill=pal_sel, outline="")
+        self._status()
+
+    def _status(self):
         arts = [self.doc.art(x) for x in self.doc.pieces(self.page)]
         unseen = [a for a in arts if a and self._texture(a[0], a[2]) is None]
         self.lbl_status.configure(text="%s - page %s - %d pieces%s" % (
             self.mod.rel(self._path), self.page, len(self.doc.pieces(self.page)), ("  - %d picture(s) not found as files (Medieval II keeps them in its .pack files until the game "
                       "is unpacked): shown as frames" % len(unseen)) if unseen else ""))
+
+    def _drawn_pil(self, k, w, h):
+        """(RGBA picture, offset) of a piece the game draws itself at the layout's size (w, h), cached."""
+        key = ("drawn", k, int(w), int(h))
+        if key not in self._pil:
+            self._pil[key] = (None, 0)
+            try:
+                from . import menudraw as MD
+                self._pil[key] = MD.piece_image(self._part, k, w, h)
+            except Exception:
+                pass
+        return self._pil[key]
+
+    def _draw_gpu(self):
+        """The page drawn by the graphics card as one picture (glmenu): the sheets go onto the card once, each piece
+        is a square cut out of its sheet - nothing is resized again while a piece is dragged or the page zoomed. The
+        frames, the picked piece and the video's words are drawn over it on the canvas."""
+        from PIL import Image, ImageTk
+        from . import glmenu as G
+        from . import menudraw as MD
+        c = self.canvas
+        cw, ch = max(1, c.winfo_width()), max(1, c.winfo_height())
+        s, ox, oy = self._scale()
+        lw, lh = self.doc.size()
+        ops = [(None, G.quad(ox, oy, ox + lw * s, oy + lh * s, rgba=(16 / 255, 16 / 255, 16 / 255, 1.0)))]
+        over = []                                       # canvas items over the picture: (kind, what)
+
+        def film(x):
+            x0, y0, x1, y1 = self._rect(x)
+            ops.append((None, G.quad(x0, y0, x1, y1, rgba=(12 / 255, 12 / 255, 20 / 255, 1.0))))
+            over.append(("film", x))
+
+        def art(x, state=None):
+            a = self.doc.art(x, state)
+            if not a:
+                return False
+            page, box, folder = a
+            tex = self._texture(page, folder)
+            if tex is None:
+                return False
+            x0, y0, _, _ = self._rect(x)
+            w = (x["width"] or box[2] - box[0]) * s
+            h = (x["height"] or box[3] - box[1]) * s
+            ops.append((tex, G.picture_quad(tex, box, (x0, y0, x0 + w, y0 + h))))
+            return True
+        # the game draws its 'background' page (the backdrop) under every menu page
+        if self.v_back.get() and self.page != "background" and "background" in self.doc.pages():
+            back = self.doc.pieces("background")
+            films = [i for i, x in enumerate(back) if self._film(x)]
+            for x in back[films[-1]:] if films else back:     # what lies under the video is never seen
+                if self._film(x):
+                    film(x)
+                else:
+                    art(x)
+        for x in self.doc.pieces(self.page):
+            x0, y0, x1, y1 = self._rect(x)
+            if self.v_back.get() and self._film(x):
+                film(x)
+            state = self._state(x)
+            k = MD.kind(x["identifier"], x["object"], self.doc.art(x) is not None)
+            if not (self.v_back.get() and art(x, state)):
+                img, off = self._drawn_pil(k, (x1 - x0) / s, (y1 - y0) / s) if self.v_back.get() else (None, 0)
+                if img is not None:                     # what the game draws itself, from its own parts
+                    left, top = x0 - off * s, y0 - off * s
+                    ops.append((img, G.quad(left, top, left + img.width * s, top + img.height * s)))
+                if self.v_frames.get() or x["index"] == self.picked:
+                    over.append(("frame", (x0, y0, x1, y1)))
+            words = self.words.get((x["text"] or "").upper())
+            if words:
+                anchor = {"left": "w", "right": "e"}.get(x["align"] or "", "center")
+                tx = {"w": x0 + 3, "e": x1 - 3}.get(anchor, (x0 + x1) / 2)
+                colour, shadow = MD.text_colour(k)
+                if state in ("highlighted", "selected") and k in ("art", "button"):
+                    colour = (255, 255, 255)              # the game's words on a button under the mouse / pressed
+                img = self._words_pil(words, x["font"], (x1 - x0) / s, colour, shadow)
+                if img is not None:                     # in the game's own letters
+                    w, h = img.width * s, img.height * s
+                    left = {"w": tx, "e": tx - w}.get(anchor, tx - w / 2)
+                    top = (y0 + y1) / 2 - h / 2
+                    ops.append((img, G.quad(left, top, left + w, top + h)))
+                else:
+                    over.append(("words", (tx, (y0 + y1) / 2, words, anchor, max(10, x1 - x0 - 4), s)))
+            if x["index"] == self.picked:
+                over.append(("picked", (x0, y0, x1, y1)))
+        arr = G.draw(cw, ch, (0x20, 0x20, 0x20), ops)
+        self._photo = ImageTk.PhotoImage(Image.fromarray(arr))
+        c.create_image(0, 0, image=self._photo, anchor="nw")
+        c.create_rectangle(ox, oy, ox + lw * s, oy + lh * s, outline="#606060")
+        for kind, a in over:
+            if kind == "film":
+                fx0, _, _, fy1 = self._rect(a)
+                c.create_text(fx0 + 8, fy1 - 8, anchor="sw", fill="#8a8fa0", font=("", 9),
+                              text="▶ the game's video plays here: %s" % self._film(a))
+            elif kind == "frame":
+                c.create_rectangle(*a, outline="#5a7fa8")
+            elif kind == "words":
+                tx, ty, words, anchor, width, sc = a
+                c.create_text(tx, ty, text=words, fill=WORDS, anchor=anchor, width=width,
+                              font=("", max(7, int(10 * sc))))
+            else:
+                x0, y0, x1, y1 = a
+                c.create_rectangle(x0, y0, x1, y1, outline="#ffd400", width=2)
+                c.create_rectangle(x1 - HANDLE, y1 - HANDLE, x1, y1, fill="#ffd400", outline="")
 
     # ---- the mouse and the keys ----
     def _film(self, x):

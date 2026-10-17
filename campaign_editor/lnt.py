@@ -74,6 +74,7 @@ class Lnt:
 
     # ---- reading ----
     def parse(self):
+        self._cache = {}                     # textures / objects / pieces read from the tree, made again on a parse
         self.root = Node("", "", -1)
         stack = [self.root]
         comment = False
@@ -110,8 +111,11 @@ class Lnt:
         self.root.end = len(self.lines)
 
     def textures(self):
-        """{page as the objects name it (textures\\FE_texture1.tga): {'path', 'regions': {name: (l, t, r, b)}}}."""
-        out = {}
+        """{page as the objects name it (textures\\FE_texture1.tga): {'path', 'regions': {name: (l, t, r, b)}}} -
+        read once a parse (a piece's picture asks for it at every drawing: a drag re-read it hundreds of times)."""
+        if "textures" in self._cache:
+            return self._cache["textures"]
+        out = self._cache["textures"] = {}
         for t in self.root.all("texture"):
             regions = {}
             for r in t.all("region"):
@@ -133,8 +137,10 @@ class Lnt:
         return {f.get("identifier", f.value): f.value for f in self.root.all("fmv")}
 
     def objects(self):
-        """{object name: {'type', 'regions': {state: (page, region)}}}."""
-        out = {}
+        """{object name: {'type', 'regions': {state: (page, region)}}}, read once a parse."""
+        if "objects" in self._cache:
+            return self._cache["objects"]
+        out = self._cache["objects"] = {}
         for o in self.root.all("UI object"):
             out[o.value] = {"type": o.get("type", ""),
                             "regions": {r.value: (r.get("page", ""), r.get("region", "")) for r in o.all("UI region")}}
@@ -237,8 +243,10 @@ class Lnt:
         if params is None:
             raise LntError("piece %s has no <Parameters>" % name)
         leaf = params.find(key)
-        if leaf is not None:
-            self._set_leaf(leaf, value)
+        if leaf is not None:                    # the one line changed: no line moves, so no reading again (a drag
+            self._set_leaf(leaf, value)         # read the whole file twice a mouse move - it lagged)
+            leaf.value = str(value).strip()
+            return
         else:
             ind = self._indent_of(params.end - 1) if params.end - 1 > params.start else \
                 self._indent_of(params.start) + "  "

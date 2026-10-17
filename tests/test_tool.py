@@ -3719,6 +3719,17 @@ building smith
         write(os.path.join(d, "menu", "Rome.lnt"), lost)
         self.assertIn("the game stops when it opens that menu", " ".join(L.problems(mod)))
 
+    def test_menu_page_squares_for_the_graphics_card(self):
+        """Interface drawn by the graphics card (glmenu): each piece a square cut out of its sheet - the sheet's
+        part as 0..1, the screen's pixels where it goes; two triangles, six corners."""
+        from types import SimpleNamespace
+        from campaign_editor import glmenu as G
+        rows = G.picture_quad(SimpleNamespace(size=(512, 256)), (0, 64, 256, 128), (10, 20, 110, 45))
+        self.assertEqual(len(rows), 6)
+        self.assertEqual(rows[0][:4], (10, 20, 0.0, 0.25))
+        self.assertEqual(rows[2][:4], (110, 45, 0.5, 0.5))
+        self.assertEqual(G.quad(0, 0, 1, 1, rgba=(1, 0, 0, 1))[5], (0, 1, 0.0, 1.0, 1, 0, 0, 1))
+
     def test_menu_layout_read_and_written_byte_exact(self):
         """The interface editor's ground (the user, 2026-10-15: 'a full interface editor', from Wholesome Queen's
         studio): a .lnt file read into pages, pieces, pictures; written back byte-exact; a move, a copy, a rename and
@@ -3748,8 +3759,14 @@ building smith
         # Medieval II names the picture alone, its folder in the texture's <path>; unpacked as .tga.dds
         self.assertTrue(texture_file(mod, None, "M2_Border.tga", "textures").endswith("M2_Border.tga.dds"))
         self.assertIsNone(texture_file(mod, None, "none.tga", "textures"))
+        tree = lnt.root
         lnt.move("main_menu", "main_single", x=300, y=200)
+        # a drag: the lines meant change, the file is not read again (it was, twice a mouse move - it lagged)
+        self.assertIs(lnt.root, tree)
+        self.assertEqual(Lnt(lnt.dump()).piece("main_menu", "main_single")["x"], 300)
+        self.assertIs(lnt.textures(), lnt.textures())                 # read once a parse
         lnt.move("main_menu", "main_logo", height=168)                # a missing height goes after width
+        self.assertIsNot(lnt.root, tree)                              # a line put in: read again
         out = lnt.dump().decode("latin-1")
         self.assertIn("        <x>300</x>\r\n        <y>200</y>\r\n", out)
         self.assertIn("        <width>489</width>\r\n        <height>168</height>\r\n      </Parameters>", out)

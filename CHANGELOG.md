@@ -239,6 +239,7 @@
   line of the block** in both editors; the editor remembers whether it was open.
 
 ### Fixed
+- Interface: dragging a piece lagged (the whole layout file was read again twice a mouse move) -> it follows the mouse; the page is drawn by the graphics card where it gives OpenGL 3.3, so zooming and moving the page are quick too.
 - Maps > Terrain or Coast & heights would not open after the 3D map's heights brush came -> they open again.
 - Maps > 3D: Rome's armies and agents stood with their backs to the camera -> they face it, as in the game.
 - Maps > 3D: ports were turned with their walls toward the sea and their two parts on one tile -> the land part on the port's tile, the sea part on the sea tile the game picks, both turned as the game turns them: the walls on land around the houses, open to the sea, the two columns in the water.
