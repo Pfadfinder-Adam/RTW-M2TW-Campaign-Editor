@@ -8224,6 +8224,49 @@ building smith
         self.assertTrue(len(land) and np.allclose(land[:, 1], 0.5))   # on the ground, not 0.1 above it
         self.assertGreater(len(u), 12)                                # the 4 faces and the skirts beside the top
 
+    def test_map_in_3d_trees_as_the_game_places_them(self):
+        """The live 3D map's forests (engine source aerial_map_trees): descr_climates.txt's 'strategy' lines per
+        climate and season; a sparse forest tile gets 3 trees, a lone dense one 6 lattice trees and 5 canopies, a
+        dense tile with dense forest left, right and below none on the lattice but the canopy joining them; winter
+        takes summer's models where a climate has no winter ones; every tree stands on the ground."""
+        try:
+            import numpy as np
+        except ImportError:
+            self.skipTest("NumPy not installed")
+        from campaign_editor import maptrees as MT
+        got = MT.read_climates("climate temperate ; a comment\n{\n\tstrategy\tsummer\tsparse_tree\ta.cas\t3\n"
+                               "\tstrategy summer dense_tree b.cas 4\n\tstrategy summer canopy c.cas 5\n"
+                               "\tstrategy winter canopy cw.cas 6\n}\nclimate desert\n")
+        self.assertEqual([n for n, _ in got], ["temperate", "desert"])
+        self.assertEqual(got[0][1]["summer"]["sparse_tree"], [("a.cas", 3)])
+        self.assertEqual(got[0][1]["winter"]["canopy"], [("cw.cas", 6)])
+        W, H = 6, 4
+        heights = np.full((2 * H + 1, 2 * W + 1), 100.0, np.float32)
+        ground = np.zeros((2 * H + 1, 2 * W + 1, 3), np.uint8)
+
+        def paint(x, z, colour):                                      # tile (x, z up) -> its centre point
+            ground[2 * (H - 1 - z) + 1, 2 * x + 1] = colour
+        paint(0, 0, MT.FOREST_SPARSE)
+        paint(5, 3, MT.FOREST_DENSE)                                  # a lone dense tile
+        for x, z in ((2, 1), (1, 1), (3, 1), (2, 0)):                 # (2, 1) with dense left, right and below
+            paint(x, z, MT.FOREST_DENSE)
+        levels = MT.forest_levels(heights, ground)
+        self.assertEqual((int(levels[0, 0]), int(levels[3, 5]), int(levels[1, 2]), int(levels[2, 2])), (1, 3, 3, 0))
+        placed = MT.place(levels, np.zeros((H, W), np.int32), got)
+        self.assertEqual(len([p for p in placed if p[0] == "sparse_tree" and p[2] < 1 and p[3] < 1]), 3)
+        lone = [p[0] for p in placed if 5 <= p[2] < 6.1 and 3 <= p[3] < 4.1]
+        self.assertEqual((lone.count("dense_tree"), lone.count("canopy")), (6, 5))
+        self.assertEqual(len([p for p in placed if p[0] == "dense_tree" and 2 <= p[2] < 3 and 1 <= p[3] < 2]), 0)
+        self.assertTrue(all(0.0 <= p[2] - int(p[2]) <= 1.0 and 0 <= p[5] < MT.SHEERS for p in placed))
+        self.assertEqual(placed, MT.place(levels, np.zeros((H, W), np.int32), got))     # the same every time
+        winter = MT.place(levels, np.zeros((H, W), np.int32), got, winter=True)
+        self.assertEqual({p[1] for p in winter if p[0] == "canopy"}, {"cw.cas"})
+        self.assertEqual({p[1] for p in winter if p[0] == "sparse_tree"}, {"a.cas"})
+        inst = MT.instances(placed, heights, 0.001)
+        self.assertEqual(inst["a.cas"].shape, (3, 4))
+        self.assertTrue(np.allclose(inst["a.cas"][:, 1], 0.1))       # on the ground: 100 m x 0.001
+        self.assertTrue(np.allclose(MT.sheers(0.0)[[0, 19]], [0.1, -0.1]))
+
     def test_map_in_3d_finds_the_game_models_of_what_stands_on_the_map(self):
         """Maps > 3D's models (the user, 2026-10-15: 'towns, resources, units...'): a town takes its level's model
         of its owner's culture - Rome's descr_sm_settlements.txt ('roman { town { normal ... } }') and Medieval II's

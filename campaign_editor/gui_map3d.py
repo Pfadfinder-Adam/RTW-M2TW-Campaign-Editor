@@ -30,7 +30,7 @@ HINT = ("The campaign map in 3D, drawn by the graphics card the way the games dr
         "dragged: turn and look up or down; the wheel turned: nearer / farther; the arrow keys or W A S D move too. "
         "Heights brush: the left button raises or lowers the land under the circle while held (Ctrl + wheel or [ ] "
         "for its size) - the brush of Coast & heights, its Undo and Apply shared. The relief stands as "
-        "high as in the game. The trees, towns and armies come in later versions.")
+        "high as in the game. The towns and armies come in later versions.")
 
 
 class Map3DView(ttk.Frame):
@@ -53,7 +53,7 @@ class Map3DView(ttk.Frame):
         def build_layers(f):
             for key, label in LAYERS:
                 ttk.Checkbutton(f, text=label, variable=self.v_show[key], command=self._layers_changed).pack(anchor="w")
-            ttk.Checkbutton(f, text="The surf moves", variable=self.v_moving,
+            ttk.Checkbutton(f, text="The surf and the trees move", variable=self.v_moving,
                             command=self._layers_changed).pack(anchor="w")
         lb = ttk.Button(bar, text="Layers \u25be")
         lb.pack(side="left", padx=(theme.BUTTON_GAP * 2, 0))
@@ -269,7 +269,8 @@ class Map3DView(ttk.Frame):
         f = 2 if half else 1
         t = (time.monotonic() * 0.2) % 1.0 if self.v_moving.get() else 0.3    # a wave every 5 s, as the game
         try:
-            arr = self.gl.render(self.gcam, W // f, H // f, t, {k: v.get() for k, v in self.v_show.items()})
+            arr = self.gl.render(self.gcam, W // f, H // f, t, {k: v.get() for k, v in self.v_show.items()},
+                                 clock=time.monotonic() if self.v_moving.get() else 0.0)
         except Exception as e:                           # the card failed now: said in the bar, never a crash
             self.lbl.configure(text="the graphics card stopped drawing: %s" % e)
             self.gl.release()
@@ -293,7 +294,7 @@ class Map3DView(ttk.Frame):
         if self._anim_job is not None:
             self.after_cancel(self._anim_job)
             self._anim_job = None
-        if not (self._on() and self.v_moving.get() and self.v_show["coast"].get()):
+        if not (self._on() and self.v_moving.get() and (self.v_show["coast"].get() or self.v_show["trees"].get())):
             return
         try:
             seen = self.winfo_viewable()

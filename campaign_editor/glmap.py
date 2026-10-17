@@ -26,11 +26,12 @@ import os
 
 import numpy as np
 
+from . import maptrees as MT
 from . import terrain3d as T3
 
 SCALE = {"medieval2": 1.2, "rome": 0.6}         # the games' height scale (aerial_map.h)
 LAYERS = (("sea", "Sea"), ("coast", "Beach and surf"), ("mountains", "Mountains and volcanoes"),
-          ("hills", "Hills"), ("rivers", "Rivers"), ("cliffs", "Cliffs"))     # what render(show=...) can leave out
+          ("hills", "Hills"), ("rivers", "Rivers"), ("cliffs", "Cliffs"), ("trees", "Trees"))   # render(show=) leaves out
 MODEL_LAYERS = {"mountains": 1, "hills": 2, "rivers": 3, "cliffs": 4}     # tilemodels.KIND of each
 SEGMENT_TEXELS = 64                             # a picture's pixels a tile covers at texture_density 1
 LAYER = 512                                     # every ground picture is made this size on the card
@@ -164,6 +165,7 @@ class MapData:
         self.surf = _image(mod, ["terrain/aerial_map/sea/surf2b.tga"], mode="RGBA")
         self.light = lighting(mod)
         self._tile_models(mod, campaign, winter)
+        self._trees(mod, campaign, winter)
         feats = T3._picture(mod, campaign, "map_features.tga")
         self.coast_hidden = None                    # rivers (sources, fords) and cliffs: the game draws no strip there
         if feats is not None:
@@ -254,13 +256,57 @@ class MapData:
             self.notes.append("tile model file(s) not found: %s" % ", ".join(sorted(self._lib.missing)[:4]))
 
     def place_models(self):
-        """The tile models placed again on the heights as they are now (after a brush)."""
+        """The tile models (and the trees) placed again on the heights as they are now (after a brush)."""
         from . import tilemodels as TM
+        self.place_trees()
         if getattr(self, "_lib", None) is None:
             return
         idx, seed = TM.assign(self.heights, *self._model_src)
         self.models = TM.build(self._lib, idx, seed, self.heights, 0.0005 * self.scale)
         self.voids = TM.void_map(idx)
+
+    def _trees(self, mod, campaign, winter):
+        """The forests' trees (maptrees): each forest tile's models from descr_climates.txt, their pictures."""
+        from . import maptrees as MT
+        self.trees, self.tree_models, self.tree_pictures, self._tree_src = {}, {}, {}, None
+        try:
+            path = mod.find("descr_climates.txt")
+            climates = MT.read_climates("\n".join(mod.load(path).texts())) if path else []
+            ground = self._model_src[0] if getattr(self, "_model_src", None) else \
+                T3._picture(mod, campaign, "map_ground_types.tga")
+            cpic = T3._picture(mod, campaign, "map_climates.tga")
+            names = [n for n, _ in climates]
+            ci = T3._climate_index(mod, cpic, names) if cpic is not None and cpic.shape[:2] == self.heights.shape \
+                else np.zeros(self.heights.shape, np.int32)
+            H, W = (self.rows - 1) // 2, (self.cols - 1) // 2
+            self._tree_src = (ground, ci[1::2, 1::2][:H, :W][::-1], climates, winter)
+            lib = MT.Models(mod)
+            for _, seasons in climates:
+                for kinds in seasons.values():
+                    for files in kinds.values():
+                        for f, _cell in files:
+                            m = lib.model(f)
+                            if m is not None and f.lower() not in self.tree_models:
+                                self.tree_models[f.lower()] = m
+                                if m[2] and m[2] not in self.tree_pictures:
+                                    self.tree_pictures[m[2]] = _image(mod, [m[2]], mode="RGBA")
+            if lib.missing:
+                self.notes.append("tree model file(s) not found (the game leaves them out too): %s" %
+                                  ", ".join(sorted(lib.missing)[:4]))
+            self.place_trees()
+        except Exception as e:                          # said in the bar, the map still drawn
+            self.notes.append("the trees are not drawn: %s" % e)
+
+    def place_trees(self):
+        """The trees placed again on the heights as they are now."""
+        from . import maptrees as MT
+        if not getattr(self, "_tree_src", None):
+            return
+        ground, climate, climates, winter = self._tree_src
+        levels = MT.forest_levels(self.heights, ground)
+        placed = MT.place(levels, climate, climates, winter)
+        self.trees = {f: a for f, a in MT.instances(placed, self.heights, 0.0005 * self.scale).items()
+                      if f in self.tree_models}
 
     def _masks(self, mod):
         """The game's blend masks (template_weights/weights*.tga, their red), all made one size; a plain fade from
@@ -588,6 +634,44 @@ void main() {
 }
 """
 
+TREE_VS = """
+#version 330
+uniform mat4 mvp;
+uniform float sheers[20];
+in vec3 pos;
+in vec3 nrm;
+in vec2 uv;
+in vec4 inst;                           // where the tree stands (x y z) and its sheer slot
+out vec3 n;
+out vec2 t;
+void main() {
+    float s = sheers[int(inst.w + 0.5)];
+    vec3 p = pos + inst.xyz;
+    p.x += pos.y * s;                   // the engine's lean in the wind: the higher, the farther
+    n = vec3(nrm.x + nrm.y * s, nrm.yz);
+    t = uv;
+    gl_Position = mvp * vec4(p, 1.0);
+}
+"""
+
+TREE_FS = """
+#version 330
+""" + COLOUR_GLSL + """
+uniform vec3 to_light;
+uniform vec3 ambient;
+uniform vec3 diffuse;
+uniform sampler2D pic;
+in vec3 n;
+in vec2 t;
+out vec4 colour;
+void main() {
+    vec4 p = texture(pic, t);
+    if (p.a < 0.5) discard;             // the leaves cut out of their squares
+    vec3 light = ambient + diffuse * max(dot(n, to_light), 0.0);
+    colour = vec4(enc(dec(p.rgb) * (linear == 1 ? light : min(light, vec3(1.0)))), 1.0);
+}
+"""
+
 SEA_VS = """
 #version 330
 uniform mat4 mvp;
@@ -774,6 +858,10 @@ class GLMap:
         self.terrain = self._keep(ctx.program(vertex_shader=TERRAIN_VS, fragment_shader=TERRAIN_FS))
         self.under = self._keep(ctx.program(vertex_shader=UNDER_VS, fragment_shader=TERRAIN_FS))
         self.over = self._keep(ctx.program(vertex_shader=OVER_VS, fragment_shader=OVER_FS))
+        self.tree = self._keep(ctx.program(vertex_shader=TREE_VS, fragment_shader=TREE_FS))
+        self.tree_pics = {k: self._picture(v, 4, (60, 90, 50, 255), repeat=True)
+                          for k, v in data.tree_pictures.items()}
+        self._tree_buffers, self.tree_vaos = [], []
         self.river = self._keep(ctx.program(vertex_shader=RIVER_VS, fragment_shader=RIVER_FS))
         self.flow = self._picture(data.river_flow, 3, (60, 90, 120), repeat=True)
         self.sea = self._keep(ctx.program(vertex_shader=SEA_VS, fragment_shader=SEA_FS))
@@ -812,10 +900,10 @@ class GLMap:
         top = np.inf if lin else 1.0                # linear light is not cut at 1 (the shoulder bends it at the end)
         sea_l = np.minimum(np.asarray(L["ambient"]) + np.asarray(L["diffuse"]) * max(float(s[1]), 0.0), top)
         self.linear = lin
-        for prog in (self.terrain, self.under, self.over, self.sea, self.coast, self.river):
+        for prog in (self.terrain, self.under, self.over, self.sea, self.coast, self.river, self.tree):
             prog["linear"].value = int(lin)
             prog["exposure"].value = float(L.get("exposure", 1.0))
-        for prog in (self.terrain, self.under, self.over):   # the ground and the tile models: one light
+        for prog in (self.terrain, self.under, self.over, self.tree):   # the ground, models and trees: one light
             for name, value in (("to_light", tuple(to_light)), ("ambient", L["ambient"]), ("diffuse", L["diffuse"])):
                 prog[name].value = value
         for prog in (self.terrain, self.under):              # the tile models' plain parts wear the ground's pictures
@@ -827,8 +915,10 @@ class GLMap:
                     prog[name].value = unit
             prog["mode"].value = 0 if prog is self.terrain else 1
         self.over["pic"].value, self.over["mask"].value = 9, 10
+        self.tree["pic"].value = 9
         self.models_stale = False
         self._models()
+        self._trees()
         for prog in (self.sea, self.river):             # the rivers' water looks like the open water
             prog["tiles"].value = (tc, tr_)
             prog["sea_light"].value = tuple(float(v) for v in sea_l)
@@ -889,6 +979,24 @@ class GLMap:
     def models_placed(self):
         """data.models changed (placed again): the card takes them."""
         self._models()
+        self._trees()
+
+    def _trees(self):
+        """The trees' buffers: each model once, drawn as many times as it stands (instances)."""
+        for obj in self._tree_buffers:
+            obj.release()
+        self._tree_buffers, self.tree_vaos = [], []
+        ctx, d = self.ctx, self.data
+        for f, inst in d.trees.items():
+            v, idx, tex = d.tree_models[f]
+            if not len(inst) or not len(idx):
+                continue
+            vbo, ibo = ctx.buffer(np.ascontiguousarray(v).tobytes()), ctx.buffer(np.ascontiguousarray(idx).tobytes())
+            ins = ctx.buffer(np.ascontiguousarray(inst).tobytes())
+            vao = ctx.vertex_array(self.tree, [(vbo, "3f 3f 2f", "pos", "nrm", "uv"), (ins, "4f/i", "inst")], ibo,
+                                   index_element_size=4)
+            self._tree_buffers += [vao, vbo, ibo, ins]
+            self.tree_vaos.append((tex, vao, len(inst)))
 
     def _picture(self, arr, comps, plain, repeat=False):
         if arr is None:
@@ -954,9 +1062,10 @@ class GLMap:
             return None
         return np.c_[(p[:, 0] / p[:, 3] + 1) / 2, 1 - (p[:, 1] / p[:, 3] + 1) / 2]
 
-    def render(self, cam, w, h, t=0.3, show=None):
+    def render(self, cam, w, h, t=0.3, show=None, clock=0.0):
         """The map seen from cam as a (h, w, 3) uint8 picture, top row first; t: the moment of the surf's wave
-        (0..1); show: {layer: False} leaves a layer out (LAYERS - the sea off shows the sea floor)."""
+        (0..1); show: {layer: False} leaves a layer out (LAYERS - the sea off shows the sea floor); clock: seconds,
+        the trees' lean in the wind."""
         show = show or {}
         ctx = self.ctx
         w, h = max(16, int(w)), max(16, int(h))
@@ -1014,6 +1123,16 @@ class GLMap:
                 vao.render()
             ctx.depth_func = "<"
             ctx.disable(ctx.BLEND)
+        if self.tree_vaos and show.get("trees", True):            # the forests, leaning with the wind
+            self.tree["mvp"].write(mvp_bytes)
+            self.tree["sheers"].write(MT.sheers(clock).astype("f4").tobytes())
+            ctx.enable(ctx.CULL_FACE)
+            ctx.front_face = "cw"                                # the models' z turned round to run south
+            for tex, vao, n in self.tree_vaos:
+                self.tree_pics.get(tex, self._white).use(9)
+                vao.render(instances=n)
+            ctx.front_face = "ccw"
+            ctx.disable(ctx.CULL_FACE)
         waters = [vao for w_, _, _, vao in self.model_vaos if w_ == "water"]
         if waters and bits & (1 << MODEL_LAYERS["rivers"]):      # the rivers' water over their beds
             ctx.enable(ctx.BLEND)
@@ -1056,13 +1175,13 @@ class GLMap:
         return np.frombuffer(raw, np.uint8).reshape(h, w, 3)[::-1]
 
     def release(self):
-        for obj in reversed(self._gone + self._coast_buffers + self._model_buffers +
+        for obj in reversed(self._gone + self._coast_buffers + self._model_buffers + self._tree_buffers +
                             ([self.fbo] if self.fbo is not None else [])):
             try:
                 obj.release()
             except Exception:
                 pass
-        self._gone, self._coast_buffers, self._model_buffers, self.fbo = [], [], [], None
+        self._gone, self._coast_buffers, self._model_buffers, self._tree_buffers, self.fbo = [], [], [], [], None
 
 
 __all__ = ["available", "context", "MapData", "GLMap", "Camera", "lighting", "LAYERS", "coast_line", "coast_strips"]
