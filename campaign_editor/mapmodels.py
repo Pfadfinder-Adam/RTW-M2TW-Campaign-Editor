@@ -9,7 +9,8 @@ for the graphics card (glmap).
   engine (AERIAL_MAP_TILE_SIZE 1, model_db opens the model at that scale); in their faction's texture.
 - Each stands in its tile's middle on the ground (a fleet on the water); a character looks south, at the camera, as
   the game shows them (_face_camera), on his lowest point; a port's model looks out to the
-  sea beside its tile (its +z side - the game's north - toward the first sea tile north, east, south or west).
+  sea beside its tile (its -z side - the game's south, where its walls are open - toward the first sea tile north,
+  east, south or west).
 
 Our world: x east, y up, z SOUTH from the map's top; the models' z (the game's north) is turned round."""
 
@@ -166,9 +167,13 @@ def _face_camera(V, game):
 
 
 def _port_turn(x, y, sea):
-    """Degrees (clockwise from the north) that turn a port's sea side toward the first sea tile beside (x, y)."""
+    """Degrees (clockwise from the north) that turn a port's sea side toward the first sea tile beside (x, y). Its
+    sea side is the model's SOUTH (-z) in both games (report #329): Rome's port_sea is a U of walls open to the
+    south with two columns at its open ends, its port_land's boats on its south edge; Medieval II's port_land the
+    same U with its two columns further south, the houses (port_sea) north of it - the walls on land, the columns in
+    the water."""
     H, W = sea.shape
-    for deg, (dx, dy) in ((0, (0, 1)), (90, (1, 0)), (180, (0, -1)), (270, (-1, 0))):
+    for deg, (dx, dy) in ((180, (0, 1)), (270, (1, 0)), (0, (0, -1)), (90, (-1, 0))):
         if 0 <= x + dx < W and 0 <= y + dy < H and sea[y + dy, x + dx]:
             return deg
     return 0

@@ -8304,8 +8304,8 @@ building smith
 
     def test_map_in_3d_lays_the_towns_and_armies_on_the_ground(self):
         """The live 3D map's towns, ports, resources and characters (mapmodels.build): each in its tile's middle on
-        the ground (a fleet on the water, never under it), scaled by its 'scale', a port's sea side turned toward the
-        sea beside it; the layer of each kind kept with its points."""
+        the ground (a fleet on the water, never under it), scaled by its 'scale', a port's sea side (the model's
+        south, #329) turned toward the sea beside it; the layer of each kind kept with its points."""
         try:
             import numpy as np
         except ImportError:
@@ -8326,7 +8326,7 @@ building smith
         self.assertEqual(got.shape, (3, 9))
         town, port, ship = got
         self.assertTrue(np.allclose(town[[0, 1, 2, 8]], [0.5, 0.2, H - 0.5 - 0.5, 1]))
-        self.assertAlmostEqual(float(port[0]), 2.5 + 0.5)             # its north side turned east, to the sea
+        self.assertAlmostEqual(float(port[0]), 2.5 - 0.5)             # its south (open) side turned east, to the sea
         self.assertAlmostEqual(float(port[2]), H - 1 - 1 + 0.5)
         self.assertEqual((float(ship[1]), float(ship[8])), (0.0, 3))  # on the water, the armies' layer
         self.assertAlmostEqual(float(ship[2]), 0.5 - 0.25)            # scaled by half
