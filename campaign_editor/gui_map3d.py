@@ -431,11 +431,40 @@ class Map3DView(ttk.Frame):
         if self._paint:
             self._paint = False
             self._for = self._stamp()                    # the card already shows what was painted
-            try:
-                self.gl.refresh_models()                 # the mountains and hills laid again on the new relief
-            except Exception as e:
-                self.lbl.configure(text="the mountains and hills could not be laid again: %s" % e)
+            self._lay_models()                           # the mountains and hills laid again on the new relief
             self._sharp_later()
+
+    def _lay_models(self):
+        """The tile models placed again in a thread (a big map takes seconds), taken by the card when done."""
+        gl = self.gl
+        if gl is None or not gl.models_stale or getattr(self, "_laying", False):
+            return
+        self._laying, got = True, {}
+
+        def work():
+            try:
+                gl.data.place_models()
+            except Exception as e:                       # said in the bar, never a crash
+                got["error"] = str(e)
+
+        def done():
+            if th.is_alive():
+                self.after(200, done)
+                return
+            self._laying = False
+            if self.gl is not gl or not self.winfo_exists():
+                return
+            if "error" in got:
+                self.lbl.configure(text="the mountains and hills could not be laid again: %s" % got["error"])
+                return
+            gl.models_placed()
+            self.draw()
+            if gl.models_stale:                          # painted again meanwhile
+                self._lay_models()
+        gl.models_stale = False
+        th = threading.Thread(target=work, daemon=True)
+        th.start()
+        self.after(200, done)
 
     def _puff(self):
         """One puff of the brush where the mouse is (every 0.05 s while held): the Terrain editor paints its copy

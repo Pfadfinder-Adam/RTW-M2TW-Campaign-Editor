@@ -784,6 +784,7 @@ class GLMap:
                     prog[name].value = unit
             prog["mode"].value = 0 if prog is self.terrain else 1
         self.over["pic"].value, self.over["mask"].value = 9, 10
+        self.models_stale = False
         self._models()
         self.sea["tiles"].value = (tc, tr_)
         self.sea["sea_light"].value = tuple(float(v) for v in sea_l)
@@ -819,14 +820,19 @@ class GLMap:
             vao = ctx.vertex_array(self.over, [(vbo, "3f 3f 2f 2f 4f 1f", "pos", "nrm", "uv", "auv", "col", "kind")])
             self._model_buffers += [vbo, vao]
             self.model_vaos.append(("over", tex, page, vao))
-        self.models_stale = False
 
     def refresh_models(self):
         """The tile models laid again on the heights as the brushes left them (after a stroke: placing them takes
-        a moment, so not at every puff)."""
+        a moment, so not at every puff). gui_map3d places them in a thread (data.place_models) and calls
+        models_placed() on the main thread; this does both at once."""
         if self.models_stale:
+            self.models_stale = False
             self.data.place_models()
-            self._models()
+            self.models_placed()
+
+    def models_placed(self):
+        """data.models changed (placed again): the card takes them."""
+        self._models()
 
     def _picture(self, arr, comps, plain, repeat=False):
         if arr is None:
