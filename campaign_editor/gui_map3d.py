@@ -19,6 +19,7 @@ import tkinter as tk
 from tkinter import ttk
 
 from . import theme
+from .gui_map import SIDE_WIDTH
 from .gui_util import hint
 
 HINT = ("The campaign map in 3D, drawn by the graphics card the way the games draw it: the game's own ground textures "
@@ -96,8 +97,17 @@ class Map3DView(ttk.Frame):
         tip(b_own, "A picture of your own (any size, .tga / .png / .jpg...) as the campaign's minimap: fitted into "
                    "each minimap picture, its size and border kept. Kept for Apply; Restore takes it back.")
         hint(bar, HINT, width=460).pack(side="left", padx=(theme.BUTTON_GAP * 2, 0))
-        self.lbl = ttk.Label(bar, foreground=theme.palette()["muted"])
+        self.lbl = ttk.Label(bar, foreground=theme.palette()["muted"], wraplength=SIDE_WIDTH - 20, justify="left")
         self.lbl.pack(side="left", padx=(theme.BUTTON_GAP * 2, 0))
+        # the bar in a column on the right, one switch a row, as the Map's (report #332: the map has the whole height)
+        self.side = ttk.Frame(self, width=SIDE_WIDTH, padding=(6, 0, 0, 0))
+        self.side.pack(side="right", fill="y")
+        self.side.pack_propagate(False)
+        bar.pack_forget()
+        bar.pack(in_=self.side, side="top", fill="x")
+        bar.lift(self.side)
+        for w in bar.pack_slaves():
+            w.pack_configure(side="top", anchor="w", padx=0, pady=2)
         self.canvas = tk.Canvas(self, background="#9db8cf", highlightthickness=0, takefocus=1)
         self.canvas.pack(fill="both", expand=True)
         c = self.canvas

@@ -11,6 +11,7 @@ from PIL import Image, ImageTk
 from . import theme
 from .mapdata import REBELS
 
+SIDE_WIDTH = 360       # the side column beside the map: its switches, zoom and legend (report #332)
 FORT_W = 0.45          # a fort's / watchtower's half size, of a tile: the sign stays inside its tile
 ZOOMS = (1, 1.5, 2, 3, 4, 6, 8, 12, 16, 24, 32, 48, 64)       # screen pixels per tile
 # the map's zoom settings (Tools > Settings > Campaign map): the wheel's step and Ctrl + wheel's in per cent of the
@@ -95,9 +96,11 @@ class MapView(ttk.Frame):
         self.status = status
         bar = ttk.Frame(self, padding=(0, 0, 0, 4))
         bar.pack(fill="x")
-        # the switches wrap onto a second row when the window is narrow (the zoom buttons stay on the right)
+        self.bar = bar                                  # the map's own switches and zoom: the side column's top
+        # the switches wrap onto more rows in the side column (report #332: the bars on top went to the side, as the
+        # legend - the map has the whole height)
         lbar = ttk.Frame(bar)
-        lbar.pack(side="left", fill="x", expand=True)
+        lbar.pack(side="top", fill="x")
         self.lbar = lbar                                # the map's own switches (the Terrain editor hides them)
         # the layers, in one menu: what is drawn on the map
         self.v_pol = tk.BooleanVar(value=True)
@@ -211,20 +214,22 @@ class MapView(ttk.Frame):
                   self.v_regions, self.v_mode):
             v.trace_add("write", lambda *a: self._layers_label())
         self._layers_label()
-        fit = ttk.Button(bar, text="Fit", command=self.fit)
+        zbar = ttk.Frame(bar, padding=(0, 4, 0, 0))     # the zoom: a row of its own under the switches
+        zbar.pack(side="top", fill="x")
+        fit = ttk.Button(zbar, text="Fit", command=self.fit)
         fit.pack(side="right")
-        ttk.Button(bar, text="+", command=lambda: self.zoom_by(1, by=50)).pack(side="right", padx=2)
-        b = ttk.Button(bar, text="-", command=lambda: self.zoom_by(-1, by=50))
+        ttk.Button(zbar, text="+", command=lambda: self.zoom_by(1, by=50)).pack(side="right", padx=2)
+        b = ttk.Button(zbar, text="-", command=lambda: self.zoom_by(-1, by=50))
         b.pack(side="right")
         # the zoom as a browser shows it: 100% = the whole map in the window (Fit) (report #127)
-        self.lbl_zoom = ttk.Label(bar, text="", width=6, anchor="e")
+        self.lbl_zoom = ttk.Label(zbar, text="", width=6, anchor="e")
         self.lbl_zoom.pack(side="right", padx=(0, 4))
-        self.zoom_bar = bar                              # the window that holds the map adds its own (Bigger map)
+        self.zoom_bar = zbar                             # the window that holds the map adds its own (Bigger map)
         self.zoom_minus = b                              # ... to the left of the zoom, never inside it
         from .gui_util import first
-        first(b, self.lbl_zoom, *bar.pack_slaves()[-4:-2][::-1])  # the zoom buttons keep their room
+        first(b, self.lbl_zoom, *zbar.pack_slaves()[-4:-2][::-1])  # the zoom buttons keep their room
         from .gui_util import hint
-        hint(bar, "Wheel: zoom (100% = the whole map in the window, as Fit).   Right drag: move the map.   Left drag: "
+        hint(zbar, "Wheel: zoom (100% = the whole map in the window, as Fit).   Right drag: move the map.   Left drag: "
                   "move markers (characters, towns, ports).   Click a town: take / give it.   Right click: what can "
                   "be done there.").pack(side="right", padx=(4, 0), before=fit)   # the zoom's '?' right of Fit
         # (a tester: it stood left of Bigger map, as if it were that button's)
@@ -248,6 +253,14 @@ class MapView(ttk.Frame):
         body = ttk.Frame(self)
         body.pack(fill="both", expand=True)
         self._body = body
+        # the side column on the right: the switches and the zoom on top, the legend under them (report #332)
+        self.side = ttk.Frame(body, width=SIDE_WIDTH, padding=(6, 0, 0, 0))
+        self.side.pack(side="right", fill="y")
+        self.side.pack_propagate(False)
+        bar.pack_forget()
+        bar.pack(in_=self.side, side="top", fill="x")
+        bar.lift(self.side)                              # made before the column: raised above it, or it hides there
+        self.after_idle(lambda: flow(zbar))              # after the window's own buttons are in (Bigger map)
         self.find_list = tk.Listbox(body, height=12, width=90, activestyle="dotbox", exportselection=False)
         self.find_list.bind("<Return>", lambda e: self._find_go(None))
         self.find_list.bind("<Double-Button-1>", lambda e: self._find_go(None))
@@ -257,8 +270,8 @@ class MapView(ttk.Frame):
         self.canvas = tk.Canvas(body, background="#1d2b3a", highlightthickness=0, cursor="crosshair")
         self.canvas.pack(side="left", fill="both", expand=True)
         # the legend: what every sign means, on the right; shown or hidden as last time
-        self.legend = ttk.Frame(body, padding=(6, 0, 0, 0))
-        self.legend_canvas = tk.Canvas(self.legend, width=250, background="#f4f1ea", highlightthickness=1,
+        self.legend = ttk.Frame(body)
+        self.legend_canvas = tk.Canvas(self.legend, width=SIDE_WIDTH - 20, background="#f4f1ea", highlightthickness=1,
                                        highlightbackground="#bbb")
         self.legend_canvas.pack(side="left", fill="y", expand=True)
         # no scrollbar: the wheel, a left drag and the middle button scroll it as every list (a wheel bound on the
@@ -270,7 +283,7 @@ class MapView(ttk.Frame):
         lc.tag_bind("tool", "<Enter>", lambda e: lc.configure(cursor="hand2"))
         lc.tag_bind("tool", "<Leave>", lambda e: lc.configure(cursor=""))
         if self.v_legend.get():
-            self.legend.pack(side="right", fill="y")
+            self.legend.pack(in_=self.side, side="top", fill="both", expand=True)
         row = ttk.Frame(self)                            # under the map: its size (fixed, left), then the tile read
         row.pack(fill="x")
         self.size_label = ttk.Label(row, text="", anchor="w", font=("", 9, "bold"))
@@ -890,7 +903,7 @@ class MapView(ttk.Frame):
         from . import settings
         settings.put("map_legend", bool(self.v_legend.get()))
         if self.v_legend.get():
-            self.legend.pack(side="right", fill="y")
+            self.legend.pack(in_=self.side, side="top", fill="both", expand=True)
             self._draw_legend()
         else:
             self.legend.pack_forget()

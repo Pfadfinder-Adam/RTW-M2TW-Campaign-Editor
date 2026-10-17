@@ -51,7 +51,8 @@ class TerrainEditor(ttk.Frame):
         self._last_river = None         # the last river tile of the stroke: the next one joins it side to side
         top = ttk.Frame(self)
         top.pack(fill="x")
-        ttk.Label(top, text="Paint", font=("", 10, "bold")).pack(side="left")
+        self._top = top                                  # in the map's side column (report #332), one thing a row
+        ttk.Label(top, text="Paint", font=("", 10, "bold")).pack(side="top", anchor="w")
         self.v_what = tk.StringVar(value="ground")
         self.group, self._last_of = "terrain", {}
         self._what_buttons = {}
@@ -59,31 +60,26 @@ class TerrainEditor(ttk.Frame):
                           ("climate", "Climates"), ("heights", "Heights"), ("coast", "Land and sea")):
             self._what_buttons[val] = ttk.Radiobutton(top, text=text, value=val, variable=self.v_what,
                                                       command=self.fill_palette)
-            self._what_buttons[val].pack(side="left", padx=4)
-        self._paint_end = ttk.Label(top, text="   brush")       # the Paint radios of the tab on show go before it
-        self._paint_end.pack(side="left")
+            self._what_buttons[val].pack(side="top", anchor="w", padx=4)
+        self._paint_end = ttk.Frame(top)                 # the Paint radios of the tab on show go before it
+        self._paint_end.pack(side="top", fill="x", pady=(4, 0))
+        ttk.Label(self._paint_end, text="brush").pack(side="left")
         self.v_brush = tk.IntVar(value=1)
         self.v_brush.trace_add("write", lambda *_: self._brush_changed())     # typed too, not only the arrows
-        self._brush_box = ttk.Spinbox(top, from_=1, to=24, width=3, textvariable=self.v_brush,
+        self._brush_box = ttk.Spinbox(self._paint_end, from_=1, to=24, width=3, textvariable=self.v_brush,
                                       command=lambda: setattr(self.view, "brush", self.v_brush.get()))
         self._brush_box.pack(side="left", padx=2)
-        ttk.Button(top, text="Undo all changes here", command=self.reset).pack(side="right")
         self.v_grid_here = tk.BooleanVar(value=True)
-        ttk.Checkbutton(top, text="Grid", variable=self.v_grid_here, command=self._grid_toggled).pack(
-            side="left", padx=(16, 0))
+        ttk.Checkbutton(self._paint_end, text="Grid", variable=self.v_grid_here, command=self._grid_toggled).pack(
+            side="left", padx=(12, 0))
         # the rivers, fords and cliffs (map_features) drawn over the ground: the map's Layers panel is hidden here,
         # so its tick was out of reach once turned off on the Map (a tester: 'no rivers in Terrain')
         self.v_rivers_here = tk.BooleanVar(value=True)
-        self._rivers_tick = ttk.Checkbutton(top, text="Rivers", variable=self.v_rivers_here,
+        self._rivers_tick = ttk.Checkbutton(self._paint_end, text="Rivers", variable=self.v_rivers_here,
                                             command=self._rivers_toggled)
         self._rivers_tick.pack(side="left", padx=(8, 0))
+        ttk.Button(top, text="Undo all changes here", command=self.reset).pack(side="top", anchor="w", pady=(4, 0))
         self.v_shore = tk.BooleanVar(value=True)       # the shore as the game draws it (Land and sea's 2nd row)
-        from .gui_util import first
-        first(*[w for w in top.pack_slaves() if w.pack_info().get("side") == "right"][::-1])
-        rights = [w for w in top.pack_slaves() if w.pack_info().get("side") == "right"]
-        grid = [w for w in top.pack_slaves() if str(w.cget("text") if w.winfo_class() == "TCheckbutton" else "") == "Grid"]
-        if grid:                                   # Grid beside the undo buttons, not after the brush controls
-            grid[0].pack_configure(side="right", after=rights[-1], padx=(0, 12))
         self.palette = ttk.Frame(self, padding=(0, 4))
         self.palette.pack(fill="x")
         self.v_colour = tk.StringVar()
@@ -105,6 +101,12 @@ class TerrainEditor(ttk.Frame):
         # zoom stays
         self.view.lbar.pack_forget()
         self.view.legend.pack_forget()
+        # the brushes, the palette and the hint in the map's side column, above its zoom (report #332: the bars on
+        # top went to the side, as the Map's legend - the map has the whole height)
+        for w in (top, self.palette, self.hint):
+            w.pack_forget()
+            w.pack(in_=self.view.side, side="top", fill="x", before=self.view.bar)
+            w.lift(self.view.side)
         self.v_grid_here.set(self.view.v_grid.get())
         self.v_rivers_here.set(self.view.v_rivers.get())
         self.fill_palette()
@@ -123,7 +125,7 @@ class TerrainEditor(ttk.Frame):
         for val, b in self._what_buttons.items():
             b.pack_forget()
         for val in mine:
-            self._what_buttons[val].pack(side="left", padx=4, before=self._paint_end)
+            self._what_buttons[val].pack(side="top", anchor="w", padx=4, before=self._paint_end)
         if self.v_what.get() not in mine:
             self.v_what.set(self._last_of.get(group) or mine[0])
             self.fill_palette()
@@ -1006,11 +1008,11 @@ class TerrainEditor(ttk.Frame):
         first = None
         swatches = []
         for label, colours, names in items:
-            ttk.Label(self.palette, text=label + ":").pack(side="left", padx=(8, 2), anchor="n")
-            # a long list (a mod's climates) goes in rows, so every one stays in the window
+            ttk.Label(self.palette, text=label + ":").pack(side="top", anchor="w", padx=(4, 2))
+            # in rows of three in the side column, so every one stays in it
             box = ttk.Frame(self.palette)
-            box.pack(side="left")
-            per_row = 6 if len(colours) > 8 else len(colours) or 1
+            box.pack(side="top", anchor="w", padx=(4, 0))
+            per_row = 3 if len(colours) > 3 else len(colours) or 1
             for i, c in enumerate(colours):
                 look = GROUND_LOOK.get(c) if what == "ground" else c if what == "climate" else \
                     CampaignMap.FEATURE_LOOK.get(c, (20, 20, 20))
@@ -1031,9 +1033,9 @@ class TerrainEditor(ttk.Frame):
         """The land / sea brush: which one, and the region new land joins; under it the check of the ground along the
         coast."""
         rows = ttk.Frame(self.palette)
-        rows.pack(side="left", fill="x")
+        rows.pack(side="top", fill="x")
         box = ttk.Frame(rows)
-        box.pack(side="top", anchor="w")
+        box.pack(side="top", fill="x")
         ttk.Label(box, text="brush:").pack(side="left", padx=(8, 2))
         ttk.Radiobutton(box, text="Land", value="land", variable=self.v_coast).pack(side="left", padx=3)
         ttk.Radiobutton(box, text="Sea", value="sea", variable=self.v_coast).pack(side="left", padx=3)
@@ -1052,6 +1054,8 @@ class TerrainEditor(ttk.Frame):
             "Which region the land you paint joins. (nobody - the wasteland): with REX / M2EX - the land stays "
             "nobody's: no town, no owner; all of it goes into ONE wasteland region, made on Apply when the map has "
             "none. (the nearest region): the region of the nearest land grows. Or pick a region.").pack(side="left")
+        from .gui_util import flow
+        flow(box)                                        # wrapping in the side column
         more = ttk.Frame(rows)
         more.pack(side="top", fill="x", pady=(4, 0))
         ttk.Label(more, text="shape brush (a smooth coast where you draw):").pack(side="left", padx=(8, 2))
@@ -1075,6 +1079,7 @@ class TerrainEditor(ttk.Frame):
         from .gui_util import one_line
         self.lbl_off = one_line(ttk.Label(more, width=1), getattr(self, "_off_said", ""), side="left", expand=True,
                                 padx=8)
+        flow(more)
         self.hint.configure(text=(
             "The SHAPE BRUSH draws the coast where the brush's edge goes, smooth like the games' own coasts: the "
             "game cuts every square of four heights points into two triangles and lays the water at height 0, so "
@@ -1106,7 +1111,7 @@ class TerrainEditor(ttk.Frame):
     def _heights_palette(self):
         """The heights brush: what it does, how strong, and the height 'Level' brings the land to."""
         box = ttk.Frame(self.palette)
-        box.pack(side="left")
+        box.pack(side="top", fill="x")
         ttk.Label(box, text="brush:").pack(side="left", padx=(8, 2))
         for val, text in (("raise", "Raise"), ("lower", "Lower"), ("smooth", "Smooth"),
                           ("level", "Level to height")):
@@ -1116,6 +1121,8 @@ class TerrainEditor(ttk.Frame):
         ttk.Scale(box, from_=1, to=10, orient="horizontal", length=140,
                   command=lambda v: self.v_strength.set(int(float(v)))).pack(side="left")
         box.winfo_children()[-1].set(self.v_strength.get())
+        from .gui_util import flow
+        flow(box)                                        # wrapping in the side column
         self.hint.configure(text=(
             "Like a spray can: hold the left button and the land under the brush rises (or sinks) more the "
             "longer you hold; the middle of the brush does the most, the edge fades out. Smooth evens out bumps, "
