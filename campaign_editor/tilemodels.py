@@ -36,7 +36,25 @@ SLOTS = {"line": ((0, 2), (1, 2), (2, 2), (3, 2)), "l": ((0, 2), (1, 2), (2, 2),
          "square": ((1, 2), (2, 2), (1, 1), (2, 1))}
 VOLCANO_PARTS = ("top_left", "top", "top_right", "left", "centre", "right", "bottom_left", "bottom", "bottom_right")
 MOUNTAINS_HIGH, HILLS = "mountains_high", "hills"
-KIND = {"mountains": 1, "hills": 2, "volcano": 1, "volcano_dormant": 1, "river_a": 3}   # the Layers switch of a set
+KIND = {"mountains": 1, "hills": 2, "volcano": 1, "volcano_dormant": 1, "river_a": 3, "cliffs": 4}   # its Layers switch
+NONE, CLIFF, NEAR_COAST, BEACH, END_CW, END_ACW, END_DBL, NOT_CLIFF, NOT_NEAR_COAST = range(9)   # a tile's cliff state
+# the engine's cliff templates (world_map m_cliff_templates): (centre, top, bottom, left, right), the model index at
+# 0 / 90 / 180 / 270 degrees - the first that fits (turned) wins
+CLIFF_TEMPLATES = (
+    ((CLIFF, NEAR_COAST, NOT_NEAR_COAST, NOT_NEAR_COAST, NOT_NEAR_COAST), (154, 157, 155, 156)),     # wall
+    ((CLIFF, NEAR_COAST, NOT_NEAR_COAST, NEAR_COAST, NOT_NEAR_COAST), (158, 159, 161, 160)),         # corner
+    ((CLIFF, NEAR_COAST, NOT_NEAR_COAST, NEAR_COAST, NEAR_COAST), (162, 165, 163, 164)),             # outcrop
+    ((CLIFF, NEAR_COAST, NEAR_COAST, NEAR_COAST, NEAR_COAST), (166, 166, 166, 166)),                 # pillar
+    ((CLIFF, NEAR_COAST, NEAR_COAST, NOT_NEAR_COAST, NOT_NEAR_COAST), (167, 168, 167, 168)),         # bridge
+    ((END_CW, NOT_CLIFF, NOT_CLIFF, CLIFF, NOT_CLIFF), (172, 170, 171, 169)),
+    ((END_ACW, NOT_CLIFF, NOT_CLIFF, NOT_CLIFF, CLIFF), (175, 173, 176, 174)),
+    ((END_DBL, NOT_CLIFF, NOT_CLIFF, NOT_CLIFF, CLIFF), (179, 177, 180, 178)))
+CLIFF_LINKS = ("wall_1_top", "wall_1_bottom", "wall_1_left", "wall_1_right", "corner_1_tl", "corner_1_tr",
+               "corner_1_bl", "corner_1_br", "outcrop_1_top", "outcrop_1_bottom", "outcrop_1_left",
+               "outcrop_1_right", "pillar_1", "bridge_1_horizontal", "bridge_1_vertical", "end_cw_1_top",
+               "end_cw_1_bottom", "end_cw_1_left", "end_cw_1_right", "end_acw_1_top", "end_acw_1_bottom",
+               "end_acw_1_left", "end_acw_1_right", "end_dbl_1_top", "end_dbl_1_bottom", "end_dbl_1_left",
+               "end_dbl_1_right")
 SIDES = ("top", "bottom", "left", "right")
 LINE_KINDS = ("", "b_", "c_", "bg_", "bi_", "ag_", "ah_", "ai_", "cg_", "ch_", "ci_")
 SPLITS = ("t_out_lr", "t_out_lb", "t_out_rb", "b_out_lr", "b_out_lt", "b_out_rt", "l_out_tb", "l_out_tr",
@@ -64,6 +82,8 @@ def link_of(index):
         return "river_a", "%s_%s" % (("source", "end", "ford")[(index - 100) // 4], SIDES[(index - 100) % 4])
     if 136 <= index <= 153:
         return ("volcano" if index < 145 else "volcano_dormant"), VOLCANO_PARTS[(index - 136) % 9]
+    if 154 <= index <= 180:
+        return "cliffs", CLIFF_LINKS[index - 154]
     if 181 <= index <= 292:
         k = index - 181
         return "mountains", "%s%d_%d" % (MOUNTAIN_PIECES[k // 16], (k % 16) // 4, (k % 4) * 90)
@@ -132,7 +152,7 @@ def read_sets(text):
 
 
 def _tile_set(body):
-    s = {"flags": set(), "files": [], "geoms": {}, "links": {}, "overlays": {}}
+    s = {"flags": set(), "files": [], "geoms": {}, "links": {}, "overlays": {}, "knit": {}}
     j = 0
 
     def sub(j):
@@ -154,8 +174,18 @@ def _tile_set(body):
         elif t == "geom" and j + 1 < len(body):
             name = body[j + 1]
             b, j = sub(j + 2)
-            if len(b) >= 5:
-                s["geoms"][name] = (b[0], tuple(x.lower() == "true" for x in b[1:5]))
+            corners, k = (True,) * 4, 0                 # a 'corners tl tr bl br' line; the model's line: t b l r
+            while k + 4 < len(b):
+                flags = tuple(x.lower() == "true" for x in b[k + 1:k + 5])
+                if b[k].lower() == "corners":
+                    corners = flags
+                elif name not in s["geoms"]:
+                    s["geoms"][name] = (b[k], flags)
+                k += 5
+            if name in s["geoms"]:                      # the points of its rim that meet the ground (the knit)
+                t, bo, le, ri = s["geoms"][name][1]
+                s["knit"][name] = {n for n, on in zip(("t", "b", "l", "r", "tl", "tr", "bl", "br"),
+                                                     (t, bo, le, ri) + corners) if on}
         elif t == "geom_links":
             b, j = sub(j + 1)
             for k in range(0, len(b) - 2, 3):
@@ -223,9 +253,10 @@ def tile_types(ground_rgb, keys=(MOUNTAINS_HIGH, HILLS)):
     return {k: centre == n for n, k in enumerate(keys)}
 
 
-def assign(heights, ground_rgb, features_rgb=None):
+def assign(heights, ground_rgb, features_rgb=None, towns=()):
     """(H, W) int32 tile model index of every tile (-1: none), rows bottom first (z up), and the seed of each tile
-    (its piece's), the way the engine's map building places them (volcanoes, mountains, hills)."""
+    (its piece's), the way the engine's map building places them (volcanoes, rivers, mountains, hills, cliffs).
+    towns: (x, z up) of the towns and ports (no cliffs within 2 tiles of them)."""
     rows, cols = heights.shape
     H, W = (rows - 1) // 2, (cols - 1) // 2
     idx = np.full((H, W), -1, np.int32)
@@ -253,7 +284,96 @@ def assign(heights, ground_rgb, features_rgb=None):
         rivers(idx, features_rgb[::-1])
     _mountains(idx, seed, types[MOUNTAINS_HIGH])
     _hills(idx, seed, types[HILLS] & dry)
+    if features_rgb is not None and features_rgb.shape[:2] == (H, W):
+        f = features_rgb[::-1]
+        code = (f[..., 0].astype(np.int32) << 16) | (f[..., 1].astype(np.int32) << 8) | f[..., 2]
+        sea = heights[::-1][1::2, 1::2][:H, :W] <= 0           # a tile's centre point at or below the sea's level
+        cliffs(idx, sea, code == 0xffff00, np.isin(code, (0x0000ff, 0x00ffff, 0xffffff)), towns)
     return idx, seed
+
+
+def cliff_states(sea, painted, rivers, towns=()):
+    """(H, W) cliff state of every tile (world_map calculate_cliffs with the cliffs as painted): the yellow tiles
+    cliffs; sea tiles beside a coastal land tile 'near the coast'; cliffs within 2 tiles of a river or a town /
+    port a beach, then (again and again) cliffs within 1 of a beach touching two cliffs; a coastal land tile beside
+    one cliff its end (clockwise, anticlockwise or both by the sea tiles beyond)."""
+    H, W = sea.shape
+    st = np.where(painted & ~sea, CLIFF, NONE).astype(np.int8)
+    pad = np.pad(sea, 1)
+    near = np.zeros_like(sea)                                 # a land tile with sea among its 8 neighbours
+    for dz in (-1, 0, 1):
+        for dx in (-1, 0, 1):
+            if dz or dx:
+                near |= pad[1 + dz:1 + dz + H, 1 + dx:1 + dx + W]
+    coastal = near & ~sea
+    padc = np.pad(coastal, 1)
+    around = np.zeros_like(sea)
+    for dz in (-1, 0, 1):
+        for dx in (-1, 0, 1):
+            if dz or dx:
+                around |= padc[1 + dz:1 + dz + H, 1 + dx:1 + dx + W]
+    st[sea & around] = NEAR_COAST
+
+    def remove(x, z, r):
+        z0, z1, x0, x1 = max(0, z - r), min(H, z + r + 1), max(0, x - r), min(W, x + r + 1)
+        box = st[z0:z1, x0:x1]
+        box[box == CLIFF] = BEACH
+    for z, x in zip(*np.nonzero(rivers)):
+        remove(x, z, 2)
+    for x, z in towns:
+        if 0 <= x < W and 0 <= z < H:
+            remove(x, z, 2)
+
+    def state(x, z):
+        return int(st[z, x]) if 0 <= x < W and 0 <= z < H else NONE
+    changed = True
+    while changed:                                            # cliff_sanity_pass
+        changed = False
+        for z, x in zip(*np.nonzero(st == BEACH)):
+            if sum(state(x + dx, z + dz) == CLIFF for dx, dz in ((0, 1), (0, -1), (-1, 0), (1, 0))) > 1:
+                before = int((st == CLIFF).sum())
+                remove(x, z, 1)
+                changed = changed or int((st == CLIFF).sum()) != before
+    for z, x in zip(*np.nonzero(coastal & (st != CLIFF))):    # place_cliff_ends
+        hits = [(dx, dz) for dx, dz in ((0, 0), (0, 1), (0, -1), (-1, 0), (1, 0)) if state(x + dx, z + dz) == CLIFF]
+        if len(hits) != 1:
+            continue
+        dx, dz = hits[0]
+        beyond = {(0, 1): ((1, 1), (-1, 1)), (0, -1): ((-1, -1), (1, -1)), (-1, 0): ((-1, 1), (-1, -1)),
+                  (1, 0): ((1, -1), (1, 1))}.get((dx, dz))
+        if beyond is None:
+            continue
+        a, b = (state(x + ox, z + oz) == NEAR_COAST for ox, oz in beyond)
+        if a or b:
+            st[z, x] = END_DBL if a and b else END_CW if a else END_ACW
+    return st
+
+
+def _matches(a, b):
+    return a == b or (a == NOT_CLIFF and b != CLIFF) or (b == NOT_CLIFF and a != CLIFF) or \
+        (a == NOT_NEAR_COAST and b != NEAR_COAST) or (b == NOT_NEAR_COAST and a != NEAR_COAST)
+
+
+def cliffs(idx, sea, painted, rivers, towns=()):
+    """The cliff models of the tiles still without a model (world_map calculate_cliff_models): each tile's state
+    and its four neighbours' against the engine's templates, each turned four ways; the first that fits."""
+    H, W = idx.shape
+    st = cliff_states(sea, painted, rivers, towns)
+
+    def state(x, z):
+        return int(st[z, x]) if 0 <= x < W and 0 <= z < H else NONE
+    for z, x in zip(*np.nonzero((st != NONE) & (st != NEAR_COAST) & (st != BEACH) & (idx < 0))):
+        here = (state(x, z), state(x, z + 1), state(x, z - 1), state(x - 1, z), state(x + 1, z))
+        for (c, t, b, l, r), indices in CLIFF_TEMPLATES:
+            hit = None
+            for rot in range(4):
+                if all(_matches(u, v) for u, v in zip(here, (c, t, b, l, r))):
+                    hit = indices[rot]
+                    break
+                t, b, l, r = l, r, b, t                         # the template turned 90 degrees on
+            if hit is not None:
+                idx[z, x] = hit
+                break
 
 
 def _river_index(f, t, x, z):
@@ -509,7 +629,7 @@ class Library:
 
     def model(self, tile_set, link):
         """(underlay Part, degrees, [(overlay Part, options, which underlay point each of its points is)], set's
-        flags) for a link, or None."""
+        flags + 'knit_<point>' for each rim point (t b l r tl tr bl br) that meets the ground) for a link, or None."""
         key = (tile_set, link)
         if key in self._models:
             return self._models[key]
@@ -532,7 +652,7 @@ class Library:
                     # an overlay point takes its underlay point's place (the engine matches within 0.005); one
                     # with none so near (a river's water a little above its bed) is laid on the ground itself
                     ovs.append((o, opts, d.argmin(1), d.min(1) < 0.006 ** 2))
-                out = (under, deg, ovs, s["flags"])
+                out = (under, deg, ovs, set(s["flags"]) | {"knit_" + n for n in s["knit"].get(geom, ())})
         self._models[key] = out
         return out
 
@@ -559,13 +679,46 @@ def _ground_h(heights, prow, pcol):
             h[r0 + 1, c0 + 1] * fr * fc)
 
 
+def _edge_points(P, flags):
+    """[(indices of the model's points standing there, (x, z))] for the tile's 4 corners and 4 edge middles its geom
+    knits to the ground ('knit_t' ... in flags) that have points (the engine's tolerance 0.005), in the model's own
+    unturned frame (+z the top)."""
+    out = []
+    for px in (-0.5, 0.0, 0.5):
+        for pz in (-0.5, 0.0, 0.5):
+            name = {0.5: "t", -0.5: "b", 0.0: ""}[pz] + {-0.5: "l", 0.5: "r", 0.0: ""}[px]
+            if not name or "knit_" + name not in flags:
+                continue
+            sel = np.nonzero((np.abs(P[:, 0] - px) < 0.005) & (np.abs(P[:, 2] - pz) < 0.005))[0]
+            if len(sel):
+                out.append((sel, (px, pz)))
+    return out
+
+
+def _rim(P, F):
+    """(k, 2) the model's open edges (used by one face) lying along one side of the tile."""
+    e = np.sort(np.concatenate([F[:, [0, 1]], F[:, [1, 2]], F[:, [2, 0]]]), 1)
+    u, n = np.unique(e, axis=0, return_counts=True)
+    u = u[n == 1]
+    if not len(u):
+        return u
+    out = np.zeros(len(u), bool)
+    for ax in (0, 2):
+        for side in (-0.5, 0.5):
+            on = np.abs(P[:, ax] - side) < 0.005
+            out |= on[u[:, 0]] & on[u[:, 1]]
+    return u[out]
+
+
 def build(lib, idx, seed, heights, yscale):
     """The tile models laid on the map, as arrays for the card: {'under': (vertices (n, 7): x y z, normal, kind),
     'over': {(texture file, alpha page): (vertices (n, 15): x y z, normal, u v, alpha u v, r g b a, kind)},
-    'water': (vertices (n, 6): x y z, u v, kind) - the rivers' water} - triangles as vertex triples (no index
-    lists); our world: x east, y up, z SOUTH from the map's top (tiles)."""
+    'water': (vertices (n, 6): x y z, u v, kind) - the rivers' water, 'lift': (rows, cols) world units the ground's
+    points rise to meet the models' edges} - triangles as vertex triples (no index lists); our world: x east, y up,
+    z SOUTH from the map's top (tiles)."""
     H, W = idx.shape
     under, over, water = [], {}, []
+    lift = np.zeros(heights.shape, np.float32)       # how far the ground's points are raised to meet the models' edges
 
     def place(P, deg, T, top):                    # a model's points on the tiles T, each riding the ground
         tx, tz = turn(P[:, 0], P[:, 2], deg)
@@ -577,6 +730,28 @@ def build(lib, idx, seed, heights, yscale):
     groups = {}
     for z, x in zip(*np.nonzero(idx >= 0)):
         groups.setdefault(int(idx[z, x]), []).append((int(x), int(z)))
+    # the engine's height_adjustment: a ground corner beside a model whose corner stands HIGH there (two points at
+    # one place, a cliff's top over its foot) rises to that top - not where any of the 4 tiles round it is sea
+    # (lifting it would drag the shore up); the slit that leaves is closed by the models' skirts below
+    sea = heights[::-1][1::2, 1::2][:H, :W] <= 0
+    for index, tiles in groups.items():
+        got = link_of(index)
+        m = lib.model(*got) if got else None
+        if m is None:
+            continue
+        P = np.asarray(m[0].positions, np.float64).reshape(-1, 3)
+        for sel, (px, pz) in _edge_points(P, m[3]):
+            if abs(px) < 0.4 or abs(pz) < 0.4 or not (P[sel, 1] - P[sel, 1].min() > 0.005).any():
+                continue
+            tx, tz = turn(np.array([px]), np.array([pz]), m[1])
+            for x, z in tiles:
+                cx, cz = x + int(round(tx[0] + 0.5)), z + int(round(tz[0] + 0.5))    # the corner, z up
+                if any(sea[min(max(b, 0), H - 1), min(max(a, 0), W - 1)]
+                       for a in (cx - 1, cx) for b in (cz - 1, cz)):
+                    continue
+                r, c = 2 * (H - cz), 2 * cx
+                if 0 <= r < lift.shape[0] and 0 <= c < lift.shape[1]:
+                    lift[r, c] = max(lift[r, c], float(P[sel, 1].max() - P[sel, 1].min()))
     for index, tiles in groups.items():
         got = link_of(index)
         m = lib.model(*got) if got else None
@@ -589,6 +764,14 @@ def build(lib, idx, seed, heights, yscale):
         T = np.asarray(tiles, np.float64)                        # (n, 2): x, z (z up)
         top = (H - 1 - T[:, 1])                                   # the tile's row from the map's top
         V, prow, pcol = place(P, deg, T, top)                     # (n, v, 3)
+        # the engine's snap: on the tile's corners and edge middles the lowest point of the model IS the ground's
+        # point (plus its height_adjustment) - a cliff's raised top comes down to the ground at the tile's edges,
+        # so the plain ground beside it meets it with no crack
+        for sel, _ in _edge_points(P, flags):
+            low = sel[np.argmin(P[sel, 1])]
+            r = np.clip(np.round(prow[:, low]).astype(np.int64), 0, heights.shape[0] - 1)
+            c = np.clip(np.round(pcol[:, low]).astype(np.int64), 0, heights.shape[1] - 1)
+            V[:, low, 1] = heights[r, c] * yscale + (0.0 if (P[sel, 1] - P[low, 1] > 0.005).any() else lift[r, c])
         A, B, C = V[:, F[:, 0]], V[:, F[:, 1]], V[:, F[:, 2]]
         fn = np.cross(B - A, C - A)
         fn *= np.where(fn[..., 1:2] < 0, -1.0, 1.0)              # the faces look up (our z runs south)
@@ -609,6 +792,20 @@ def build(lib, idx, seed, heights, yscale):
             tri = np.concatenate([V[:, F].reshape(len(T), -1, 3), vn[:, F].reshape(len(T), -1, 3),
                                   np.full((len(T), F.size, 1), float(kind))], -1)
             under.append(tri.reshape(-1, 7))
+            # the skirt: where the model's rim on the tile's edge stands above the ground beside it (a cliff's high
+            # corner the ground may not rise to), a strip of ground from the rim down to the ground - no slit
+            rim = _rim(P, F)
+            if len(rim):
+                g = _ground_h(heights, prow, pcol) * yscale + _ground_h(lift, prow, pcol)
+                a_, b_ = rim[:, 0], rim[:, 1]
+                up = np.maximum(V[:, a_, 1] - g[:, a_], V[:, b_, 1] - g[:, b_]) > 0.002     # (n tiles, rims)
+                if up.any():
+                    G = V.copy()
+                    G[..., 1] = g
+                    q = np.stack([V[:, a_], V[:, b_], G[:, b_], V[:, a_], G[:, b_], G[:, a_]], 2)[up]
+                    qn = np.stack([gn[:, a_], gn[:, b_], gn[:, b_], gn[:, a_], gn[:, b_], gn[:, a_]], 2)[up]
+                    under.append(np.concatenate([q, qn, np.full(q.shape[:2] + (1,), float(kind))], -1)
+                                 .reshape(-1, 7))
         for o, opts, which, close in ovs:
             OF = np.asarray(o.faces, np.int64).reshape(-1, 3)
             own = place(np.asarray(o.positions, np.float64).reshape(-1, 3), deg, T, top)[0]
@@ -652,7 +849,8 @@ def build(lib, idx, seed, heights, yscale):
             over.setdefault((o.texture, opts["alpha"][0] if opts["alpha"] else None), []).append(tri.reshape(-1, 15))
     return {"under": np.concatenate(under).astype(np.float32) if under else np.zeros((0, 7), np.float32),
             "over": {k: np.concatenate(v).astype(np.float32) for k, v in over.items()},
-            "water": np.concatenate(water).astype(np.float32) if water else np.zeros((0, 6), np.float32)}
+            "water": np.concatenate(water).astype(np.float32) if water else np.zeros((0, 6), np.float32),
+            "lift": lift}
 
 
 def void_map(idx):

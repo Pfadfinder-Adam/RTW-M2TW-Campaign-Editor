@@ -30,8 +30,8 @@ from . import terrain3d as T3
 
 SCALE = {"medieval2": 1.2, "rome": 0.6}         # the games' height scale (aerial_map.h)
 LAYERS = (("sea", "Sea"), ("coast", "Beach and surf"), ("mountains", "Mountains and volcanoes"),
-          ("hills", "Hills"), ("rivers", "Rivers"))     # what render(show=...) can leave out, as the window names it
-MODEL_LAYERS = {"mountains": 1, "hills": 2, "rivers": 3}     # tilemodels.KIND of each
+          ("hills", "Hills"), ("rivers", "Rivers"), ("cliffs", "Cliffs"))     # what render(show=...) can leave out
+MODEL_LAYERS = {"mountains": 1, "hills": 2, "rivers": 3, "cliffs": 4}     # tilemodels.KIND of each
 SEGMENT_TEXELS = 64                             # a picture's pixels a tile covers at texture_density 1
 LAYER = 512                                     # every ground picture is made this size on the card
 SEA_LIGHT = (0.5, 1.0, 1.0)                     # the way to the sea's own light (the engine's (-0.5, -1, -1) reversed)
@@ -231,8 +231,14 @@ class MapData:
         self.model_pictures, self.model_masks = {}, {}
         try:
             self._lib = TM.Library(mod)
+            towns = []
+            try:                                         # towns and ports: no cliffs within 2 tiles of them
+                img = mod.region_map(campaign)
+                towns = list(mod.city_tiles(campaign).values()) + list(img.find((255, 255, 255)))
+            except Exception:
+                pass
             self._model_src = (T3._picture(mod, campaign, "map_ground_types.tga"),
-                               T3._picture(mod, campaign, "map_features.tga"))
+                               T3._picture(mod, campaign, "map_features.tga"), towns)
             self.place_models()
         except Exception as e:                          # said in the bar, the map still drawn
             self._lib = None
@@ -447,6 +453,7 @@ vec3 enc(vec3 c) {
 TERRAIN_VS = """
 #version 330
 uniform sampler2D heights;
+uniform sampler2D lift;                 // the ground raised to meet a tile model's edge (a cliff's top)
 uniform mat4 mvp;
 uniform float yscale;
 uniform ivec2 size;
@@ -457,7 +464,7 @@ flat out float kind_v;
 float h(ivec2 p) { return texelFetch(heights, clamp(p, ivec2(0), size - 1), 0).r * yscale; }
 void main() {
     ivec2 p = ivec2(grid);
-    float y = h(p);
+    float y = h(p) + texelFetch(lift, p, 0).r;
     n = normalize(vec3(-(h(p + ivec2(1, 0)) - h(p - ivec2(1, 0))) * 0.5, 0.5,
                        -(h(p + ivec2(0, 1)) - h(p - ivec2(0, 1))) * 0.5));
     g = grid;
@@ -815,7 +822,7 @@ class GLMap:
             prog["size"].value = (cols, rows)
             prog["rep"].value = tuple(data.repeat[:64]) + (1.0,) * (64 - min(64, len(data.repeat)))
             prog["nmasks"].value = len(data.masks)
-            for name, unit in (("heights", 0), ("layers", 1), ("ground", 2), ("masks", 3), ("voids", 8)):
+            for name, unit in (("heights", 0), ("layers", 1), ("ground", 2), ("masks", 3), ("voids", 8), ("lift", 12)):
                 if name in prog:
                     prog[name].value = unit
             prog["mode"].value = 0 if prog is self.terrain else 1
@@ -846,7 +853,12 @@ class GLMap:
         v = np.ascontiguousarray(d.voids)
         self.voids = ctx.texture((v.shape[1], v.shape[0]), 1, v.tobytes(), dtype="u1")
         self.voids.filter = (ctx.NEAREST, ctx.NEAREST)
-        self._model_buffers.append(self.voids)
+        lift = d.models.get("lift")
+        if lift is None or lift.shape != (d.rows, d.cols):
+            lift = np.zeros((d.rows, d.cols), np.float32)
+        self.lift = ctx.texture((d.cols, d.rows), 1, np.ascontiguousarray(lift, np.float32).tobytes(), dtype="f4")
+        self.lift.filter = (ctx.NEAREST, ctx.NEAREST)
+        self._model_buffers += [self.voids, self.lift]
         under = d.models["under"]
         if len(under):
             vbo = ctx.buffer(np.ascontiguousarray(under).tobytes())
@@ -974,6 +986,7 @@ class GLMap:
         self.ground.use(2)
         self.masks.use(3)
         self.voids.use(8)
+        self.lift.use(12)
         bits = sum(1 << k for name, k in MODEL_LAYERS.items() if show.get(name, True))
         self.terrain["mvp"].write(mvp_bytes)
         self.terrain["yscale"].value = 0.0005 * self.data.scale

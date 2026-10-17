@@ -8117,6 +8117,7 @@ building smith
         sets, pages = TM.read_sets(
             "alpha_page mountains { filename mask.tga cells_across 6 cells_up 6 }\n"
             "tile_set hills { surpress_warnings model_files { Hill.cas } geom hill1 { peak_underlay true true true true }\n"
+            "geom hill2 { corners true false true true peak_underlay false true true true }\n"
             "geom_links { hill1 hill1 rotation_0  hill2 hill1 rotation_90, } overlay peak_underlay { peak_overlay "
             "{ texture_uv_strips 4 alpha_page mountains 1 5 rotation_180 } } }\n")
         self.assertEqual(pages, {"mountains": ("mask.tga", 6, 6)})
@@ -8125,6 +8126,7 @@ building smith
                          (["Hill.cas"], ("peak_underlay", (True, True, True, True)), ("hill1", 90)))
         self.assertEqual(h["overlays"]["peak_underlay"][0][1]["alpha"], ("mountains", 1, 5, 180))
         self.assertIn("surpress_warnings", h["flags"])
+        self.assertEqual(h["knit"]["hill2"], {"b", "l", "r", "tl", "bl", "br"})   # the rim points meeting the ground
         self.assertEqual([TM.link_of(i) for i in (181, 198, 296, 309, 148, 330)],
                          [("mountains", "line0_0"), ("mountains", "l0_90"), ("mountains", "single_270"),
                           ("hills", "hill13tl"), ("volcano_dormant", "left"), ("hills", "crag2")])
@@ -8196,6 +8198,31 @@ building smith
             self.assertTrue(TM.link_of(int(idx2[1, x]))[1].endswith("_top"))           # all flowing right
         self.assertEqual(TM.link_of(44), ("river_a", "bend_cw_tl"))
         self.assertEqual(TM.link_of(99), ("river_a", "join_out_r_in_bl"))
+        # cliffs (world_map calculate_cliffs): yellow pixels on land under the sea - a wall facing the sea, an end
+        # piece on the coast beside each of its ends; the model's land-side rim comes down to the ground (the
+        # engine's snap), and a skirt of ground fills what stands above the ground beside it (no slit)
+        W3, H3 = 6, 3
+        h3 = np.full((2 * H3 + 1, 2 * W3 + 1), 500.0, np.float32)
+        h3[0:2] = -10.0                                               # the top tile row is sea
+        f3 = np.zeros((H3, W3, 3), np.uint8)
+        f3[1, 2:4] = (255, 255, 0)
+        idx3, seed3 = TM.assign(h3, np.zeros((2 * H3 + 1, 2 * W3 + 1, 3), np.uint8), f3)
+        self.assertEqual([int(v) for v in idx3[1, 2:4]], [154, 154])  # wall, the sea above it
+        self.assertTrue(169 <= int(idx3[1, 1]) <= 180 and 169 <= int(idx3[1, 4]) <= 180)
+        cp = (-0.5, 0.1, -0.5, 0.5, 0.1, -0.5, 0.5, 0.1, 0.5, -0.5, 0.1, 0.5, -0.5, 0.0, 0.5, 0.5, 0.0, 0.5)
+        cliff = SC.Part("cliff_underlay", cp, (0.0, 1.0, 0.0) * 6, (0, 1, 2, 0, 2, 3, 3, 2, 5, 3, 5, 4), None, None, 0)
+
+        class CliffLib:
+            pages = {}
+
+            def model(self, tile_set, link):
+                return (cliff, 0, [], {"knit_" + n for n in ("t", "b", "l", "r", "tl", "tr", "bl", "br")})
+        wall = np.full((H3, W3), -1, np.int32)
+        wall[1, 2] = 154
+        u = TM.build(CliffLib(), wall, seed3, h3, 0.001)["under"]
+        land = u[np.abs(u[:, 2] - 2.0) < 1e-6]                       # the rim on the land side (z = -0.5)
+        self.assertTrue(len(land) and np.allclose(land[:, 1], 0.5))   # on the ground, not 0.1 above it
+        self.assertGreater(len(u), 12)                                # the 4 faces and the skirts beside the top
 
     def test_map_in_3d_finds_the_game_models_of_what_stands_on_the_map(self):
         """Maps > 3D's models (the user, 2026-10-15: 'towns, resources, units...'): a town takes its level's model
