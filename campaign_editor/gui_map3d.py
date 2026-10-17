@@ -4,7 +4,8 @@ painted and not written yet included: the map is made again whenever the tab ope
 
 Right drag: move over the map (the land follows the mouse); the wheel held down and dragged: turn left / right and
 look up / down; the wheel turned: nearer / farther; the arrow keys (or W A S D) move too (the user's own scheme,
-2026-10-15 - the left button stays free for picking things later). While the mouse moves the view is drawn at half size,
+2026-10-15); the left button carries an army, agent or fleet to another tile as on the Map (a white tile frame under the
+mouse; an army in a town stands on its roofs, as in the game's own editor). While the mouse moves the view is drawn at half size,
 then sharp again a moment after it stops.
 
 The older picture drawn without the card (terrain3d.render, the models as small pictures on it) was taken out at the
@@ -30,7 +31,15 @@ HINT = ("The campaign map in 3D, drawn by the graphics card the way the games dr
         "dragged: turn and look up or down; the wheel turned: nearer / farther; the arrow keys or W A S D move too. "
         "Heights brush: the left button raises or lowers the land under the circle while held (Ctrl + wheel or [ ] "
         "for its size) - the brush of Coast & heights, its Undo and Apply shared. The relief stands as "
-        "high as in the game; the towns, ports, resources, armies, agents and fleets stand as descr_strat.txt will have them (what the Map moved or added before the write included), with the roads and region borders.")
+        "high as in the game; the towns, ports, resources, armies, agents and fleets stand as descr_strat.txt will have them (what the Map moved or added before the write included), with the roads and region borders. "
+        "The left button carries an army, agent or fleet (one in a town stands on its roofs) to another tile: a white "
+        "frame shows the tile it goes to; the same move as on the Map (Undo, Preview, Apply), refused where the game "
+        "would not take it; Esc puts it back.")
+
+
+def tile_of(hx, hy):
+    """The tile (x, y bottom-up, as descr_strat) of a map_heights point (px, py bottom-up): its middle is 2x+1, 2y+1."""
+    return int(hx // 2), int(hy // 2)
 
 
 class Map3DView(ttk.Frame):
@@ -62,7 +71,7 @@ class Map3DView(ttk.Frame):
         # land changing under the circle while the button is held, not when the stroke ends
         self.v_brush_on = tk.BooleanVar(value=False)
         self.v_how = tk.StringVar(value="grab")         # 'grab': the game's (hold and move up / down); 'spray'
-        self._paint, self._mouse, self._ring, self._grab = False, None, None, None
+        self._paint, self._mouse, self._ring, self._grab, self._carry = False, None, None, None, None
         from .gui_util import tip as _tip
         _tip(ttk.Checkbutton(bar, text="Heights brush", variable=self.v_brush_on, command=self._brush_toggled),
              "Grab and drag (the game's own): press the left button where the land should rise or sink and move "
@@ -104,6 +113,7 @@ class Map3DView(ttk.Frame):
         c.bind("<B1-Motion>", self._drag_paint)
         c.bind("<ButtonRelease-1>", self._paint_end)
         c.bind("<Leave>", lambda e: self._hover(None))
+        c.bind("<Escape>", lambda e: self._carry_stop())
         c.bind("<Control-MouseWheel>", lambda e: self._resize(1 if e.delta > 0 else -1))
         c.bind("<Control-Button-4>", lambda e: self._resize(1))
         c.bind("<Control-Button-5>", lambda e: self._resize(-1))
@@ -428,10 +438,72 @@ class Map3DView(ttk.Frame):
         self._mouse = None if e is None else (e.x, e.y)
         self._draw_ring()
 
+    def _tile(self, x, y):
+        got = self._point(x, y)
+        return None if got is None else tile_of(*got[1])
+
+    def _draw_frame(self):
+        """The white frame of the tile under the mouse while a figure is carried, lying on the ground."""
+        t = self._tile(*self._mouse) if self._mouse else None
+        if t is None:
+            return
+        d = self.gl.data
+        x0, z0 = t[0], (d.rows - 1) // 2 - 1 - t[1]
+        steps = [i / 8.0 for i in range(9)]
+        edge = ([(x0 + a, z0) for a in steps] + [(x0 + 1, z0 + a) for a in steps[1:]] +
+                [(x0 + 1 - a, z0 + 1) for a in steps[1:]] + [(x0, z0 + 1 - a) for a in steps[1:]])
+        s = self.gl.to_screen([(px, d.ground_height(px, pz), pz) for px, pz in edge])
+        if s is None:
+            return
+        c = self.canvas
+        W, H = c.winfo_width(), c.winfo_height()
+        flat = [v for a, b in s for v in (a * W, b * H)]
+        c.create_line(*flat, fill="#000000", width=4, tags="ring")
+        c.create_line(*flat, fill="#ffffff", width=2, tags="ring")
+
+    def _carry_start(self, e):
+        """The left button on a figure (an army in a town: on the town): it goes with the mouse until let go."""
+        app, tile = self.app, self._tile(e.x, e.y)
+        if tile is None:
+            return
+        if getattr(app, "_map_moved", None) is None or not getattr(app, "_map_chars", None):
+            app.show_map()                               # the Map's list of characters and its move
+        here = [ch for ch in (getattr(app, "_map_chars", None) or {}).values() if tuple(ch["xy"]) == tile]
+        if not here:
+            return
+        here.sort(key=lambda ch: not ch.get("army"))     # an army before an agent on the same tile
+        self._carry, self._mouse = here[0]["id"], (e.x, e.y)
+        self.lbl.configure(text="%s: let go on the tile where he goes (Esc: he stays)" % here[0]["name"])
+        self._draw_ring()
+
+    def _carry_stop(self):
+        if self._carry is not None:
+            self._carry = None
+            self.lbl.configure(text="")
+            self._draw_ring()
+
+    def _carry_end(self, e):
+        """Let go: the figure moved there as the Map moves it (its check, Undo, Apply), the 3D map laid again."""
+        app, cid, tile = self.app, self._carry, self._tile(e.x, e.y)
+        self._carry_stop()
+        ch = (getattr(app, "_map_chars", None) or {}).get(cid)
+        if tile is None or ch is None or tile == tuple(ch["xy"]):
+            return
+        why = app._map_check(cid, tile)
+        if why:
+            app.status.set("%s cannot stand at %d, %d: %s" % (ch["name"], tile[0], tile[1], why))
+            return
+        app._map_moved(cid, tile)
+        self.load()
+
     def _draw_ring(self):
-        """The brush's circle on the ground under the mouse (its size as it works)."""
+        """The brush's circle on the ground under the mouse (its size as it works); the tile frame while a figure is
+        carried."""
         c = self.canvas
         c.delete("ring")
+        if self._carry is not None and self._mouse and self._on():
+            self._draw_frame()
+            return
         if not (self.v_brush_on.get() and self._mouse and self._on()):
             return
         got = self._point(*self._mouse)
@@ -458,7 +530,10 @@ class Map3DView(ttk.Frame):
 
     def _paint_start(self, e):
         self.canvas.focus_set()
-        if not self.v_brush_on.get() or not self._on():
+        if not self._on():
+            return
+        if not self.v_brush_on.get():
+            self._carry_start(e)
             return
         ed = self._terrain()
         if ed is None:
@@ -474,7 +549,7 @@ class Map3DView(ttk.Frame):
 
     def _drag_paint(self, e):
         """The mouse moved with the left button held: the grabbed land goes up or down with it (the higher the mouse,
-        the higher the land - as smooth as the mouse), else the spray follows the mouse."""
+        the higher the land - as smooth as the mouse), else the spray follows the mouse; a carried figure's frame too."""
         if self._paint and self._grab is not None:
             ed = self.app.editors.get("terrain")
             sc = ed._shape_coast() if ed is not None else None
@@ -491,6 +566,9 @@ class Map3DView(ttk.Frame):
         self._hover(e)
 
     def _paint_end(self, e):
+        if self._carry is not None:
+            self._carry_end(e)
+            return
         if self._paint:
             self._paint, self._grab = False, None
             ed = self.app.editors.get("terrain")

@@ -12,6 +12,7 @@
 - Maps > 3D: the heights brush now works on the water too - the sea's floor raised out of it becomes land, land pushed under becomes water, as in the game; and a second way, the game's own: grab the land and move the mouse up or down.
 
 ### Added
+- Maps > 3D: armies, agents and fleets carried to another tile with the left button, as on the Map - a white frame on the tile they go to, the Map's own check, Undo and Apply; an army in a town stands on its roofs, as in the game's own editor.
 - New / Edit faction: a Culture pick - the faction's towns, portraits, buildings and units follow the culture in the game; Preview says which units it gains or loses and which buildings in its towns the new culture cannot build.
 - Maps > 3D is drawn by the graphics card the way the games draw their campaign map: the ground blended between grounds with the game's own masks, its light and its sea - it moves without lag and loads faster.
 - Maps > 3D: the coast has the game's beach and surf along it, the surf rolling in as in the game (not on rivers and cliffs, as the game); Layers shows or leaves out the sea (the sea floor seen) and the beach and surf.

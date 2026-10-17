@@ -8351,6 +8351,29 @@ building smith
         west[2, 1] = west[2, 0] = True
         self.assertEqual(MM._port_dock(2, 2, west), (90, (1, 2)))
 
+    def test_map_in_3d_carries_a_figure_as_the_map(self):
+        """The user, 2026-10-17: figures moved on the 3D map as on the Map - the left button on one (an army in a
+        town: on the town), let go on another tile: the Map's own check and move (Undo, Apply), the 3D map laid again;
+        a tile the game would not take is said and nothing moves."""
+        try:
+            from campaign_editor.gui_map3d import Map3DView, tile_of
+        except ImportError:                                # no tkinter here (the CI test job has it)
+            return
+        from types import SimpleNamespace
+        self.assertEqual(tile_of(7.0, 3.0), (3, 1))                   # the middle of tile (3, 1) is 7, 3
+        self.assertEqual(tile_of(8.9, 4.0), (4, 2))
+        done, said = [], []
+        app = SimpleNamespace(_map_chars={"rome:0": {"id": "rome:0", "xy": (1, 1), "name": "Flavius"}},
+                              _map_check=lambda cid, xy: "that is sea" if xy == (9, 9) else None,
+                              _map_moved=lambda cid, xy: done.append((cid, xy)),
+                              status=SimpleNamespace(set=said.append))
+        for to in ((5, 6), (9, 9), (1, 1)):
+            me = SimpleNamespace(app=app, _carry="rome:0", _tile=lambda x, y, t=to: t,
+                                 _carry_stop=lambda: None, load=lambda: done.append("laid"))
+            Map3DView._carry_end(me, SimpleNamespace(x=0, y=0))
+        self.assertEqual(done, [("rome:0", (5, 6)), "laid"])         # refused at sea, nothing on its own tile
+        self.assertEqual(said, ["Flavius cannot stand at 9, 9: that is sea"])
+
     def test_map_in_3d_figures_face_the_camera(self):
         """Report #330: Rome's figures on the 3D map stood with their backs to the camera; turned to look south (our
         +z) as in the game. Medieval II's files already look that way - left as they are."""
@@ -8404,6 +8427,19 @@ building smith
         self.assertEqual(town[0]["xy"], tuple(mod.city_tiles("test")["A_R"]))
         self.assertIn({"kind": "resource", "model": "models_strat/gold.CAS", "texture": None, "xy": (3, 2),
                        "scale": 1.0, "faction": None}, objs)
+        # an army in a town stands on its roofs, as in the game's own editor - one figure a tile
+        from types import SimpleNamespace
+        from unittest import mock
+        from campaign_editor import stratmodels as SM
+        info = SimpleNamespace(meshes=["m.cas"], textures={"": "t.tga"})
+        kinds = [{"type": k, "models": ["m"]} for k in ("named character", "general", "admiral", "spy", "diplomat")]
+        with mock.patch.object(SM, "figures", lambda mod, f: kinds), mock.patch.object(SM, "mesh_info",
+                                                                                      lambda mod, n: info):
+            figs = [o for o in O.objects(mod, "test", strat) if o["kind"] == "character"]
+        towns = {tuple(xy) for xy in mod.city_tiles("test").values()}
+        stand = [o["xy"] for o in figs]
+        self.assertEqual(len(stand), len(set(stand)))
+        self.assertTrue([o for o in figs if o["in_town"] and o["xy"] in towns])
         # Medieval II's form: everything in descr_cultures.txt, a second word after the model
         write(os.path.join(d, "descr_cultures.txt"),
               "symbol\tdata/models_strat/residences/symbol.CAS\n\nculture\t\tnorthern\nportrait_mapping\tx\n{\n"

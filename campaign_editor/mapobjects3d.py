@@ -208,13 +208,14 @@ def objects(mod, campaign, strat):
                         "xy": (int(m.group(2)), int(m.group(3))), "scale": 1.0, "faction": None})
     # characters: the faction's figure of their type, in its texture
     scales = _strat_scales(mod)
+    stood = set()                                         # one figure a tile: an army in a town stands on its roofs
     for fb in strat.factions:
         try:
             figs = {f["type"]: f["models"] for f in SM.figures(mod, fb.name)}
         except Exception:
             figs = {}
         for c in fb.characters:
-            if not c.xy or tuple(c.xy) in towns:
+            if not c.xy or tuple(c.xy) in stood:
                 continue
             lines = strat.lines[c.start:c.end]
             kind = "named character" if c.kind == "named character" else (c.kind or "general")
@@ -226,8 +227,10 @@ def objects(mod, campaign, strat):
                 continue
             tex = info.textures.get(fb.name) or info.textures.get("") or next(iter(info.textures.values()), None)
             sc, skel = scales.get(names[0], (1.0, None))
+            stood.add(tuple(c.xy))
             out.append({"kind": "character", "model": info.meshes[0], "texture": tex, "xy": tuple(c.xy),
-                        "scale": sc, "skeleton": skel, "faction": fb.name, "faces": True})
+                        "scale": sc, "skeleton": skel, "faction": fb.name, "faces": True,
+                        "in_town": tuple(c.xy) in towns})
     return out
 
 

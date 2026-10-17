@@ -3884,6 +3884,7 @@ class App(tk.Tk):
             self.status.set("%s (%s) to %d, %d - %d character(s) moved; Preview, then Apply changes." % (
                 ch["name"], ch["faction"], xy[0], xy[1], len(self.map_moves)))
             self.show_map()
+        self._map_check, self._map_moved = check, moved    # Maps > 3D moves the same characters the same way
         symbols = {}
         for n, path in self.mod.listing("menu/symbols/FE_buttons_24"):      # the mod's and the game's under it
             low = n.lower()
