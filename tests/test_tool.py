@@ -8068,14 +8068,14 @@ building smith
             cam.dist = 3.0
             pic = gl.render(cam, 64, 40)
             self.assertEqual(pic.shape, (40, 64, 3))
-            mid = pic[20, 32].astype(int)
+            mid = pic[20, 12].astype(int)                  # beside the middle: the two regions' border runs there
             self.assertGreater(mid[1], mid[0] + 40)                                       # the green ground, lit
             got = gl.ground_at(0.5, 0.5)                   # the 3D brush: the map point under the mouse, from depth
             self.assertIsNotNone(got)
             self.assertAlmostEqual(float(gl.to_screen([got])[0][0]), 0.5, delta=0.03)   # and back to the screen
             self.assertIsNone(gl.ground_at(0.5, 0.0))      # the black above the map's far edge is no point
             gl.set_layers(0, 0, np.full((9, 9), sea, np.uint16))                         # a brush: all sand
-            mid = gl.render(cam, 64, 40)[20, 32].astype(int)
+            mid = gl.render(cam, 64, 40)[20, 12].astype(int)
             self.assertGreater(mid[0], mid[2] + 40)
         finally:
             gl.release()
