@@ -31,8 +31,11 @@ from . import terrain3d as T3
 
 SCALE = {"medieval2": 1.2, "rome": 0.6}         # the games' height scale (aerial_map.h)
 LAYERS = (("sea", "Sea"), ("coast", "Beach and surf"), ("mountains", "Mountains and volcanoes"),
-          ("hills", "Hills"), ("rivers", "Rivers"), ("cliffs", "Cliffs"), ("trees", "Trees"))   # render(show=) leaves out
+          ("hills", "Hills"), ("rivers", "Rivers"), ("cliffs", "Cliffs"), ("trees", "Trees"),
+          ("towns", "Towns and ports"), ("resources", "Resources"),
+          ("armies", "Armies, agents and fleets"))                        # what render(show=) can leave out
 MODEL_LAYERS = {"mountains": 1, "hills": 2, "rivers": 3, "cliffs": 4}     # tilemodels.KIND of each
+OBJECT_LAYERS = {"towns": 1, "resources": 2, "armies": 3}                 # mapmodels.KIND of each
 SEGMENT_TEXELS = 64                             # a picture's pixels a tile covers at texture_density 1
 LAYER = 512                                     # every ground picture is made this size on the card
 SEA_LIGHT = (0.5, 1.0, 1.0)                     # the way to the sea's own light (the engine's (-0.5, -1, -1) reversed)
@@ -166,6 +169,7 @@ class MapData:
         self.light = lighting(mod)
         self._tile_models(mod, campaign, winter)
         self._trees(mod, campaign, winter)
+        self._objects(mod, campaign)
         feats = T3._picture(mod, campaign, "map_features.tga")
         self.coast_hidden = None                    # rivers (sources, fords) and cliffs: the game draws no strip there
         if feats is not None:
@@ -259,6 +263,7 @@ class MapData:
         """The tile models (and the trees) placed again on the heights as they are now (after a brush)."""
         from . import tilemodels as TM
         self.place_trees()
+        self.place_objects()
         if getattr(self, "_lib", None) is None:
             return
         idx, seed = TM.assign(self.heights, *self._model_src)
@@ -296,6 +301,33 @@ class MapData:
             self.place_trees()
         except Exception as e:                          # said in the bar, the map still drawn
             self.notes.append("the trees are not drawn: %s" % e)
+
+    def _objects(self, mod, campaign):
+        """What stands on the map (mapobjects3d.objects: towns, ports, forts, resources, characters) as the game's
+        models (mapmodels), their textures."""
+        from . import mapmodels as MM
+        from . import mapobjects3d as O
+        from .strat import Strat
+        self.objects, self.object_pictures, self._objs = {}, {}, None
+        try:
+            strat = Strat(mod.load(mod.campaign_file(campaign, "descr_strat.txt")))
+            self._objs = (O.objects(mod, campaign, strat), MM.Loader(mod))
+            self.place_objects()
+            loader = self._objs[1]
+            for tex in self.objects:
+                if tex is not None:
+                    self.object_pictures[tex] = loader.picture(tex)
+            if loader.missing:
+                self.notes.append("model(s) or texture(s) of what stands on the map not found: %s" %
+                                  ", ".join(sorted(loader.missing)[:4]))
+        except Exception as e:                          # said in the bar, the map still drawn
+            self.notes.append("the towns and armies are not drawn: %s" % e)
+
+    def place_objects(self):
+        """The towns, armies... laid again on the heights as they are now."""
+        from . import mapmodels as MM
+        if getattr(self, "_objs", None):
+            self.objects = MM.build(self._objs[0], self._objs[1], self.heights, 0.0005 * self.scale)
 
     def place_trees(self):
         """The trees placed again on the heights as they are now."""
@@ -654,6 +686,40 @@ void main() {
 }
 """
 
+OBJ_VS = """
+#version 330
+uniform mat4 mvp;
+in vec3 pos;
+in vec3 nrm;
+in vec2 uv;
+in float kind;
+out vec3 n;
+out vec2 t;
+flat out float kind_v;
+void main() { n = nrm; t = uv; kind_v = kind; gl_Position = mvp * vec4(pos, 1.0); }
+"""
+
+OBJ_FS = """
+#version 330
+""" + COLOUR_GLSL + """
+uniform vec3 to_light;
+uniform vec3 ambient;
+uniform vec3 diffuse;
+uniform sampler2D pic;
+uniform int shown;
+in vec3 n;
+in vec2 t;
+flat in float kind_v;
+out vec4 colour;
+void main() {
+    if (((shown >> int(kind_v + 0.5)) & 1) == 0) discard;
+    vec4 p = texture(pic, t);
+    if (p.a < 0.5) discard;
+    vec3 light = ambient + diffuse * abs(dot(normalize(n), to_light));
+    colour = vec4(enc(dec(p.rgb) * (linear == 1 ? light : min(light, vec3(1.0)))), 1.0);
+}
+"""
+
 TREE_FS = """
 #version 330
 """ + COLOUR_GLSL + """
@@ -859,6 +925,10 @@ class GLMap:
         self.under = self._keep(ctx.program(vertex_shader=UNDER_VS, fragment_shader=TERRAIN_FS))
         self.over = self._keep(ctx.program(vertex_shader=OVER_VS, fragment_shader=OVER_FS))
         self.tree = self._keep(ctx.program(vertex_shader=TREE_VS, fragment_shader=TREE_FS))
+        self.obj = self._keep(ctx.program(vertex_shader=OBJ_VS, fragment_shader=OBJ_FS))
+        self.obj_pics = {k: self._picture(v, 4, (150, 140, 120, 255), repeat=True)
+                         for k, v in data.object_pictures.items()}
+        self._obj_buffers, self.obj_vaos = [], []
         self.tree_pics = {k: self._picture(v, 4, (60, 90, 50, 255), repeat=True)
                           for k, v in data.tree_pictures.items()}
         self._tree_buffers, self.tree_vaos = [], []
@@ -900,10 +970,10 @@ class GLMap:
         top = np.inf if lin else 1.0                # linear light is not cut at 1 (the shoulder bends it at the end)
         sea_l = np.minimum(np.asarray(L["ambient"]) + np.asarray(L["diffuse"]) * max(float(s[1]), 0.0), top)
         self.linear = lin
-        for prog in (self.terrain, self.under, self.over, self.sea, self.coast, self.river, self.tree):
+        for prog in (self.terrain, self.under, self.over, self.sea, self.coast, self.river, self.tree, self.obj):
             prog["linear"].value = int(lin)
             prog["exposure"].value = float(L.get("exposure", 1.0))
-        for prog in (self.terrain, self.under, self.over, self.tree):   # the ground, models and trees: one light
+        for prog in (self.terrain, self.under, self.over, self.tree, self.obj):   # one light for all on the land
             for name, value in (("to_light", tuple(to_light)), ("ambient", L["ambient"]), ("diffuse", L["diffuse"])):
                 prog[name].value = value
         for prog in (self.terrain, self.under):              # the tile models' plain parts wear the ground's pictures
@@ -916,9 +986,11 @@ class GLMap:
             prog["mode"].value = 0 if prog is self.terrain else 1
         self.over["pic"].value, self.over["mask"].value = 9, 10
         self.tree["pic"].value = 9
+        self.obj["pic"].value = 9
         self.models_stale = False
         self._models()
         self._trees()
+        self._objects()
         for prog in (self.sea, self.river):             # the rivers' water looks like the open water
             prog["tiles"].value = (tc, tr_)
             prog["sea_light"].value = tuple(float(v) for v in sea_l)
@@ -980,6 +1052,20 @@ class GLMap:
         """data.models changed (placed again): the card takes them."""
         self._models()
         self._trees()
+        self._objects()
+
+    def _objects(self):
+        """The buffers of what stands on the map, one per texture."""
+        for obj in self._obj_buffers:
+            obj.release()
+        self._obj_buffers, self.obj_vaos = [], []
+        for tex, arr in self.data.objects.items():
+            if not len(arr):
+                continue
+            vbo = self.ctx.buffer(np.ascontiguousarray(arr).tobytes())
+            vao = self.ctx.vertex_array(self.obj, [(vbo, "3f 3f 2f 1f", "pos", "nrm", "uv", "kind")])
+            self._obj_buffers += [vao, vbo]
+            self.obj_vaos.append((tex, vao))
 
     def _trees(self):
         """The trees' buffers: each model once, drawn as many times as it stands (instances)."""
@@ -1133,6 +1219,13 @@ class GLMap:
                 vao.render(instances=n)
             ctx.front_face = "ccw"
             ctx.disable(ctx.CULL_FACE)
+        obits = sum(1 << k for name, k in OBJECT_LAYERS.items() if show.get(name, True))
+        if self.obj_vaos and obits:                               # the towns, ports, resources and armies
+            self.obj["mvp"].write(mvp_bytes)
+            self.obj["shown"].value = obits
+            for tex, vao in self.obj_vaos:
+                self.obj_pics.get(tex, self._white).use(9)
+                vao.render()
         waters = [vao for w_, _, _, vao in self.model_vaos if w_ == "water"]
         if waters and bits & (1 << MODEL_LAYERS["rivers"]):      # the rivers' water over their beds
             ctx.enable(ctx.BLEND)
@@ -1176,12 +1269,14 @@ class GLMap:
 
     def release(self):
         for obj in reversed(self._gone + self._coast_buffers + self._model_buffers + self._tree_buffers +
+                            self._obj_buffers +
                             ([self.fbo] if self.fbo is not None else [])):
             try:
                 obj.release()
             except Exception:
                 pass
         self._gone, self._coast_buffers, self._model_buffers, self._tree_buffers, self.fbo = [], [], [], [], None
+        self._obj_buffers = []
 
 
 __all__ = ["available", "context", "MapData", "GLMap", "Camera", "lighting", "LAYERS", "coast_line", "coast_strips"]

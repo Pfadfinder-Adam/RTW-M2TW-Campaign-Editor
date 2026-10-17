@@ -8267,6 +8267,35 @@ building smith
         self.assertTrue(np.allclose(inst["a.cas"][:, 1], 0.1))       # on the ground: 100 m x 0.001
         self.assertTrue(np.allclose(MT.sheers(0.0)[[0, 19]], [0.1, -0.1]))
 
+    def test_map_in_3d_lays_the_towns_and_armies_on_the_ground(self):
+        """The live 3D map's towns, ports, resources and characters (mapmodels.build): each in its tile's middle on
+        the ground (a fleet on the water, never under it), scaled by its 'scale', a port's sea side turned toward the
+        sea beside it; the layer of each kind kept with its points."""
+        try:
+            import numpy as np
+        except ImportError:
+            self.skipTest("NumPy not installed")
+        from campaign_editor import mapmodels as MM
+        W, H = 4, 3
+        heights = np.full((2 * H + 1, 2 * W + 1), 200.0, np.float32)
+        heights[:, 2 * 3:] = -50.0                                    # the right column of tiles is sea
+
+        class Loader:                                                 # one point north of the model's middle
+            def parts(self, model, skeleton=None, texture=None):
+                return [("pic.tga", np.array([[0, 0, -0.5, 0, 1, 0, 0, 0]], np.float32))]
+        objs = [{"kind": "town", "model": "t", "xy": (0, 0), "scale": 1.0},
+                {"kind": "port_sea", "model": "p", "xy": (2, 1), "scale": 1.0},
+                {"kind": "character", "model": "c", "xy": (3, 2), "scale": 0.5, "skeleton": "s"},
+                {"kind": "resource", "model": "r", "xy": (9, 9), "scale": 1.0}]       # off the map: left out
+        got = MM.build(objs, Loader(), heights, 0.001)["pic.tga"]
+        self.assertEqual(got.shape, (3, 9))
+        town, port, ship = got
+        self.assertTrue(np.allclose(town[[0, 1, 2, 8]], [0.5, 0.2, H - 0.5 - 0.5, 1]))
+        self.assertAlmostEqual(float(port[0]), 2.5 + 0.5)             # its north side turned east, to the sea
+        self.assertAlmostEqual(float(port[2]), H - 1 - 1 + 0.5)
+        self.assertEqual((float(ship[1]), float(ship[8])), (0.0, 3))  # on the water, the armies' layer
+        self.assertAlmostEqual(float(ship[2]), 0.5 - 0.25)            # scaled by half
+
     def test_map_in_3d_finds_the_game_models_of_what_stands_on_the_map(self):
         """Maps > 3D's models (the user, 2026-10-15: 'towns, resources, units...'): a town takes its level's model
         of its owner's culture - Rome's descr_sm_settlements.txt ('roman { town { normal ... } }') and Medieval II's
