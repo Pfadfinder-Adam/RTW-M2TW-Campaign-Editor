@@ -11,6 +11,7 @@ game's video (Rome, Alexander, Medieval II), a picture only in Barbarian Invasio
 The idea and the first map of the format: Wholesome Queen's RTW Sprite & HUD Studio, given to make this editor
 better for everyone (CREDITS)."""
 
+import os
 import tkinter as tk
 from tkinter import messagebox, simpledialog, ttk
 
@@ -62,6 +63,7 @@ class InterfacePanel(ttk.Frame):
         self.undo, self.redo = [], []
         self.page, self.picked = None, None
         self._pics, self._tex, self._fonts = {}, {}, {}
+        self.own_files = {}                             # own pictures made here {file: TGA bytes}, written by Apply
         self.lb_pages.delete(0, "end")
         self.tv.delete(*self.tv.get_children())
         if self.doc:
@@ -116,6 +118,16 @@ class InterfacePanel(ttk.Frame):
         from .plan import Plan
         plan = Plan(self.mod, "interface", "interface", {})
         L.plan_write(plan, self._path, self.doc)
+        used = {os.path.normcase(self.own_path(t)) for t in self.doc.textures()}
+        for path, data in self.own_files.items():          # the own pictures the layout names now
+            if os.path.normcase(path) in used:
+                plan.binary(path, data)
+        folder = os.path.join(os.path.dirname(self._path), L.OWN_FOLDER)
+        if os.path.isdir(folder):                           # own pictures written before and no longer named
+            for n in os.listdir(folder):
+                p = os.path.join(folder, n)
+                if os.path.normcase(p) not in used and n.lower().endswith(".tga"):
+                    plan.delete(p, "an own menu picture no piece shows any more")
         return plan
 
     def undo_step(self):
@@ -161,7 +173,9 @@ class InterfacePanel(ttk.Frame):
             "their numbers (more faction buttons: copy the last one). Pieces with no picture of their own (empty_...) "
             "are drawn by the game itself; here they show as frames with their words. A button under the mouse shows its "
             "'mouse over' picture as in the game; Buttons shown draws every button pressed, ticked...; a piece's right "
-            "click > Pictures of its states sets the picture of each. The menu backdrop is the game's video "
+            "click > Pictures of its states sets the picture of each; Replace picture... gives a piece a picture of "
+            "your own (a file, or one from the Picture library - the game's own pieces and your own pictures) and "
+            "keeps what it does (the page it opens, its words); Back to the game's picture undoes it. The menu backdrop is the game's video "
             "(Rome, Alexander, Medieval II; a picture only in Barbarian Invasion) - shown as a dark screen with its "
             "file's name. Undo / Redo, Preview changes and Apply changes are the main window's (a backup first).")
         body = ttk.Panedwindow(screens, orient="horizontal")
@@ -359,6 +373,11 @@ class InterfacePanel(ttk.Frame):
                       command=lambda: self.ask_value("tooltip", "The text key of its tooltip:"))
         if x["object"] in self.doc.objects():
             m.add_command(label="Pictures of its states (normal, mouse over, pressed)...", command=self.ask_states)
+        from . import gui_interface_own as OWN
+        m.add_command(label="Replace picture... (what it does stays)", command=lambda: OWN.ask_picture(self))
+        if self.doc.game_object(x["object"]) is not None:
+            m.add_command(label="Back to the game's picture", command=lambda: OWN.back_to_game(self))
+        m.add_command(label="Picture library...", command=lambda: OWN.Library(self))
         m.add_separator()
         m.add_command(label="Copy (the next number)", command=self.copy_piece)
         slot = L.RE_SLOT.match(x["name"] or "")
@@ -545,9 +564,22 @@ class InterfacePanel(ttk.Frame):
         self.zoom, self.pan = 1.0, [0.0, 0.0]
         self.draw()
 
+    def own_path(self, rel):
+        """The file of a picture named under data/menu/ as the layout file names it, beside the layout file."""
+        return os.path.join(os.path.dirname(self._path), *rel.replace("/", "\\").split("\\"))
+
     def _texture(self, page, folder=""):
         if page not in self._tex:
             self._tex[page] = None
+            mine = self.own_files.get(self.own_path(page)) if self._path else None
+            if mine is not None:                        # an own picture not written yet
+                try:
+                    import io
+                    from PIL import Image
+                    self._tex[page] = Image.open(io.BytesIO(mine)).convert("RGBA")
+                except Exception:
+                    pass
+                return self._tex[page]
             p = L.texture_file(self.mod, self._path, page, folder)
             if p:
                 try:

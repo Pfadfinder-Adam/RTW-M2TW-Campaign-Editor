@@ -1596,6 +1596,54 @@ def s_interface_states(c, mod):
     raise Skip("no button picture with a 'mouse over' and a 'pressed' state")
 
 
+@step("Interface: a button given pictures of its own - the first button whose picture has a 'mouse over' state (in "
+      "vanilla the back arrow of the new-game page) drawn with its own pictures tinted red, a new TGA under "
+      "data/menu/ce_ui; what it does kept",
+      "the new-game page: the back arrow is red (normal, mouse over, pressed) and still takes you back")
+def s_interface_own(c, mod):
+    from . import lnt as L
+    path = L.find(mod)
+    if not path:
+        raise Skip("no menu layout file (data/menu/Rome.lnt or mtw2.lnt)")
+    try:
+        from PIL import Image, ImageOps
+    except ImportError:
+        raise Skip("drawing pictures needs Pillow")
+    doc = L.Lnt.load(path)
+    textures, objects = doc.textures(), doc.objects()
+    for page in ["main_menu"] + doc.pages():
+        for x in doc.pieces(page):
+            regs = objects.get(x["object"] or "", {}).get("regions", {})
+            if "highlighted" not in regs:
+                continue
+            pics = []
+            for st in regs:
+                tex = textures.get(regs[st][0])
+                box = tex and tex["regions"].get(regs[st][1])
+                f = box and L.texture_file(mod, path, regs[st][0], tex["path"])
+                if not f:
+                    break
+                im = Image.open(f).convert("RGBA").crop((box[0], box[1], box[2] + 1, box[3] + 1))
+                red = ImageOps.colorize(im.convert("L"), (40, 0, 0), (255, 90, 90)).convert("RGBA")
+                red.putalpha(im.getchannel("A"))
+                pics.append(red)
+            else:
+                stem = doc.own_stem(page, x["index"])
+                w, h = pics[0].size
+                rel = "%s\\%s.tga" % (L.OWN_FOLDER, stem)
+                names = {st: "%s_%s" % (stem, st) for st in regs}
+                boxes = {names[st]: (0, i * h, w - 1, (i + 1) * h - 1) for i, st in enumerate(regs)}
+                doc.own_picture(page, x["index"], {st: (rel, names[st]) for st in regs}, texture=(rel, boxes),
+                                stem=stem)
+                plan = Plan(mod, "interface", "interface", {})
+                L.plan_write(plan, path, doc)
+                plan.binary(os.path.join(os.path.dirname(path), L.OWN_FOLDER, stem + ".tga"),
+                            L.own_picture_file(pics, (w, h)))
+                return plan
+    raise Skip("no button picture with a 'mouse over' state whose picture file is found (Medieval II keeps them "
+               "in its .pack files until the game is unpacked)")
+
+
 @step("Load: the campaign's locked factions (unlockable / nonplayable, each with a town at the start) opened to play - "
       "the Senate, the Pope and the rebels stay locked",
       "the faction-select screen offers the opened factions (Egypt, the Gauls... in Rome; the Aztecs in Medieval II) "
@@ -2804,6 +2852,7 @@ COVERAGE = {
     "Maps > 3D > Make the minimap from it": ["s_minimap"],
     "Interface: the game's menu screens, their pieces moved, sized, copied": ["s_interface"],
     "Interface: the pictures of a button's states": ["s_interface_states"],
+    "Interface: a piece's own picture (Replace picture..., the Picture library)": ["s_interface_own"],
     "Load: locked factions opened to play": ["s_open_factions"],
     "Unit packs export / import": ["s_unit_pack"],
     "Check and install a pack": ["s_modpack"],

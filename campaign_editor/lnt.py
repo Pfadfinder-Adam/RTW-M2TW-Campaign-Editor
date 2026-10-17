@@ -357,6 +357,206 @@ class Lnt:
         self.parse()
 
 
+    # ---- own pictures (the user, 2026-10-17: a piece's picture replaced by one's own, what it does kept) ----
+    def names_taken(self):
+        """Every texture region and UI object name, upper-cased - the engine finds both by name in ONE list each,
+        without case (menu_resource.cpp find_art_piece; parse.cpp upper-cases every word)."""
+        out = {o.value.upper() for o in self.root.all("UI object")}
+        for t in self.root.all("texture"):
+            out.update(r.value.upper() for r in t.all("region"))
+        return out
+
+    def free_object_name(self, stem):
+        """A UI object / region stem not used yet, 32 letters at most with room for '_highlighted' (the engine keeps
+        names in 32 characters)."""
+        taken = self.names_taken()
+        stem = re.sub(r"[^A-Za-z0-9_]", "_", stem)[:NAME_MAX - 12 - 3] or "own"
+        for n in range(1, 1000):
+            name = stem if n == 1 else "%s%d" % (stem, n)
+            if not any(k.startswith(name.upper()) for k in taken):
+                return name
+        raise LntError("no free name for %s" % stem)
+
+    def _insert_after(self, tag, block):
+        """Lines put after the last block of this tag at the top of the file (else before the layout)."""
+        last = self.root.all(tag)
+        at = last[-1].end + 1 if last else (self.layout().start if self.layout() is not None else len(self.lines))
+        self.lines[at:at] = block
+        self.parse()
+
+    def add_texture(self, rel, regions):
+        """A <texture> block for a picture under data/menu/ (rel as the game names it, 'ce_ui\\x.tga') with its
+        regions {name: (left, top, right, bottom)} - the edges inclusive, as the engine counts them."""
+        e = self._eol()
+        folder = rel.replace("/", "\\").rsplit("\\", 1)[0] if "\\" in rel.replace("/", "\\") else ""
+        block = ["<texture>%s%s" % (rel, e)]
+        if folder:
+            block.append("  <path>%s</path>%s" % (folder, e))
+        for name, box in regions.items():
+            block.append("  <region>%s%s" % (name, e))
+            for k, v in zip(("left", "top", "right", "bottom"), box):
+                block.append("    <%s>%d</%s>%s" % (k, v, k, e))
+            block.append("  </region>%s" % e)
+        block.append("</texture>%s" % e)
+        self._insert_after("texture", block)
+
+    def add_object(self, name, kind, regions):
+        """A <UI object> of its type with a picture per state {state: (texture page, region)}."""
+        e = self._eol()
+        block = ["<UI object>%s%s" % (name, e), "  <type>%s</type>%s" % (kind or "art", e)]
+        for state, (page, region) in regions.items():
+            block += ["  <UI region>%s%s" % (state, e), "    <page>%s</page>%s" % (page, e),
+                      "    <region>%s</region>%s" % (region, e), "  </UI region>%s" % e]
+        block.append("</UI object>%s" % e)
+        self._insert_after("UI object", block)
+
+    def set_object(self, page, key, obj):
+        """The UI object a piece is drawn with (its <object_id>) - only its pictures change, what it does stays
+        (menu_layout.cpp parse_piece: the identifier and the parameters make the behaviour)."""
+        x = self.piece(page, key)
+        if x is None:
+            raise LntError("no piece %s on page %s" % (key, page))
+        leaf = x["node"].find("object_id")
+        if leaf is not None:
+            self._set_leaf(leaf, obj)
+        else:
+            after = x["node"].find("identifier")
+            at = (after.end if after is not None else x["node"].start) + 1
+            ind = self._indent_of(at - 1) if after is not None else self._indent_of(x["node"].start) + "  "
+            self.lines.insert(at, "%s<object_id>%s</object_id>%s" % (ind, obj, self._eol()))
+        self.parse()
+
+    def states_of(self, piece):
+        """The states a piece's picture has (its UI object's, in its order; 'art' for a picture with no object)."""
+        o = self.objects().get(piece.get("object") or "")
+        return list(o["regions"]) if o and o["regions"] else ["art"]
+
+    def own_stem(self, page, key):
+        """The name an own copy of the piece's UI object takes (<game object>_own[n], free)."""
+        x = self.piece(page, key)
+        base = self.game_object(x["object"]) or x["object"] or x["name"]
+        return self.free_object_name(base + OWN)
+
+    def own_picture(self, page, key, pics, shared=False, texture=None, stem=None):
+        """A piece drawn with pictures of one's own, what it does kept: pics {state: (texture page, region)} - a
+        region of the game's sheets (the library) or of texture = (rel under data/menu/, {region: box}), a new
+        picture file the caller writes (a TGA). The piece gets its OWN copy of its UI object (own_stem) so no other
+        piece changes - or, shared, its UI object itself is pointed at them (every piece drawn with it changes). A
+        piece drawn with an own picture before: that one is taken out once nothing shows it any more.
+        stem: the own object's name the caller named the new regions after (own_stem). Returns (the object used, the
+        picture file no longer used or None)."""
+        x = self.piece(page, key)
+        if x is None:
+            raise LntError("no piece %s on page %s" % (key, page))
+        stem = stem or self.own_stem(page, key)          # named before the new regions take its letters
+        was = x["object"]
+        base = self.game_object(was) or was or x["name"]
+        o = self.objects().get(was or "") or self.objects().get(base)
+        if texture is not None:
+            self.add_texture(*texture)
+        if shared and self.objects().get(base) is not None:
+            for st, (pg, rg) in pics.items():
+                self.set_state(base, st, pg, rg)
+            if was != base:
+                self.set_object(page, key, base)
+            return base, self._tidy(was) if was != base else None
+        self.add_object(stem, o["type"] if o else "art", pics)
+        self.set_object(page, key, stem)
+        return stem, self._tidy(was)
+
+    def game_object(self, obj):
+        """The UI object an own copy stands for ('x_own2' -> 'x'), or None when obj is not an own copy."""
+        m = re.match(r"^(.+?)%s\d*$" % OWN, obj or "", re.I)
+        return m.group(1) if m else None
+
+    def back_to_game(self, page, key):
+        """The opposite of own_picture: the piece drawn with the game's object again; the own object and its picture
+        taken out once nothing else is drawn with them. Returns the picture file no longer used, or None."""
+        x = self.piece(page, key)
+        own = x and x["object"]
+        back = self.game_object(own)
+        if back is None:
+            raise LntError("%s has no picture of its own" % (x["name"] if x else key))
+        self.set_object(page, key, back)
+        return self._tidy(own)
+
+    def _tidy(self, own):
+        """An own UI object no piece is drawn with any more taken out, then an own picture (data/menu/ce_ui/) no
+        object or piece names any more - never the game's. Returns that picture's name, or None."""
+        if self.game_object(own) is None or self.users(own):
+            return None
+        node = self.object_node(own)
+        if node is not None:
+            del self.lines[node.start:node.end + 1]
+            self.parse()
+        used = {rg.upper() for o in self.objects().values() for _, rg in o["regions"].values() if rg}
+        used |= {x["object"].upper() for pg in self.pages() for x in self.pieces(pg) if x["object"]}
+        for t in self.root.all("texture"):
+            names = {r.value.upper() for r in t.all("region")}
+            own_file = t.value.replace("/", "\\").lower().startswith(OWN_FOLDER + "\\")
+            if own_file and names and not names & used:
+                del self.lines[t.start:t.end + 1]
+                self.parse()
+                return t.value
+        return None
+
+    def missing_regions(self):
+        """[(object, state, region)] of the UI objects pieces are drawn with whose picture names a region no texture
+        has - the engine stops there (menu_layout.cpp: 'failed to find art piece'); names compared without case."""
+        have = set()
+        for t in self.root.all("texture"):
+            have.update(r.value.upper() for r in t.all("region"))
+        have.update(v.upper() for v in self.videos())          # the moving backdrop: a video, not a region
+        used = {x["object"] for pg in self.pages() for x in self.pieces(pg) if x["object"]}
+        return [(name, st, rg) for name, o in self.objects().items() if name in used and not name.startswith(SELF_DRAWN)
+                for st, (_, rg) in o["regions"].items() if rg and rg.upper() not in have]
+
+    def page_area(self, page):
+        """Pixels the page's pictures take in the engine's one sheet a page (each region rounded up to 8 pixels, the
+        engine's step; the backdrop page drawn under it counted too)."""
+        regions = {}
+        for t in self.textures().values():
+            for name, box in t["regions"].items():
+                regions[name.upper()] = box
+        names = set()
+        for pg in {page, "background"} & set(self.pages()):
+            for x in self.pieces(pg):
+                o = self.objects().get(x["object"] or "")
+                if o:
+                    names.update(rg.upper() for _, rg in o["regions"].values() if rg)
+                elif x["object"]:
+                    names.add(x["object"].upper())
+
+        def up(v):
+            return (v + 7) // 8 * 8
+        return sum(up(b[2] - b[0] + 1) * up(b[3] - b[1] + 1) for n, b in regions.items() if n in names)
+
+
+NAME_MAX = 32                                         # the engine's names: char[32 + 1] (ui_menu_resource.h)
+SHEETS = {"mtw2.lnt": (4096, 2048)}                   # the engine's one sheet a page: Medieval II, else Rome's
+
+
+def sheet_size(path):
+    """(w, h) of the sheet the engine packs a page's pictures into (menu_handler.cpp: Medieval II 4096 x 2048, Rome
+    2048 x 2048)."""
+    return SHEETS.get(os.path.basename(path or "").lower(), (2048, 2048))
+OWN = "_own"                                          # an own copy of a UI object: <game object>_own[n]
+OWN_FOLDER = "ce_ui"                                  # own pictures: data/menu/ce_ui/<object>.tga
+
+
+def own_picture_file(states_pictures, size):
+    """The TGA bytes of an own picture: each state's picture (a Pillow image) fitted into size, stacked top-down."""
+    import io
+    from PIL import Image
+    w, h = size
+    sheet = Image.new("RGBA", (w, h * len(states_pictures)), (0, 0, 0, 0))
+    for i, im in enumerate(states_pictures):
+        sheet.paste(im.convert("RGBA").resize((w, h), Image.LANCZOS), (0, i * h))
+    out = io.BytesIO()
+    sheet.save(out, format="TGA", rle=False, orientation=-1)     # the engine reads TGA only, bottom-up as the game's
+    return out.getvalue()
+
+
 def _int(v):
     try:
         return int(float(v))
@@ -423,15 +623,17 @@ def problems(mod):
         lnt = Lnt.load(path)
     except (OSError, LntError) as e:
         return ["menu %s cannot be read: %s - the game's menus may not open" % (name, e)]
-    known_ids, known_objs = set(ENGINE_PAGES), set()
+    known_ids, known_objs, known_missing = set(ENGINE_PAGES), set(), set()
     try:
         from .campaignrules import game_data
         gd = game_data(mod)
         own = os.path.join(gd, "menu", name) if gd else None
         if own and os.path.isfile(own) and os.path.normcase(os.path.abspath(own)) != \
                 os.path.normcase(os.path.abspath(path)):
-            ids, known_objs = _loose(Lnt.load(own))
+            game = Lnt.load(own)
+            ids, known_objs = _loose(game)
             known_ids |= ids
+            known_missing = set(game.missing_regions())
     except (OSError, LntError, ValueError):
         pass
     out = []
@@ -451,6 +653,14 @@ def problems(mod):
                 said.add(obj)
                 out.append("menu %s, page %s: the piece %s shows '%s', a picture no texture region of the file "
                            "has - it shows nothing" % (name, page, x["name"], obj))
+    for obj, state, region in [m for m in lnt.missing_regions() if m not in known_missing]:
+        out.append("menu %s: the picture '%s' (%s) is drawn from the region '%s', which no texture of the file has - "
+                   "the game stops when it opens that menu" % (name, obj, STATES.get(state, state), region))
+    sw, sh = sheet_size(path)
+    for page in lnt.pages():
+        if lnt.page_area(page) > sw * sh:
+            out.append("menu %s, page %s: its pictures take more than the %d x %d sheet the game packs a page into - "
+                       "some of them will not show (smaller pictures help)" % (name, page, sw, sh))
     if name.lower() == "rome.lnt":                 # Medieval II's menu pictures lie in its packs: not looked for
         for page_name in lnt.textures():
             if not texture_file(mod, path, page_name):
@@ -649,4 +859,4 @@ def _diff_count(a, b):
     return sum(1 for op in difflib.ndiff(a.splitlines(), b.splitlines()) if op[:1] in "+-")
 
 
-__all__ = ["Lnt", "LntError", "Node", "find", "menu_texts", "piece_info", "font_db", "font_source", "free_name", "texture_file", "plan_write", "FILES", "PARAMS"]
+__all__ = ["Lnt", "LntError", "Node", "find", "own_picture_file", "OWN", "OWN_FOLDER", "NAME_MAX", "menu_texts", "piece_info", "font_db", "font_source", "free_name", "texture_file", "plan_write", "FILES", "PARAMS"]

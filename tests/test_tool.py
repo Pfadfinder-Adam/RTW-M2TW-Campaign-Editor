@@ -3439,6 +3439,61 @@ building smith
         with self.assertRaises(LntError):
             lnt.set_state("no_such", "art", "p", "r")
 
+    def test_own_picture_for_a_piece_keeps_what_it_does(self):
+        """The user, 2026-10-17: a piece's picture replaced by one's own - 'pull a knot and the web follows': it keeps
+        what it does (identifier, the page it opens, its words) and gets its OWN copy of its UI object, so no other
+        piece changes; a new texture with a region per state (the engine finds regions by name, without case); a
+        library picture (a region of the game's sheets) the same way; shared = its object itself changed; Back to
+        the game's picture takes the own blocks out again - the file byte for byte; a missing region (the game stops)
+        and a page too big for the engine's sheet are said."""
+        from campaign_editor.lnt import Lnt, LntError, own_picture_file, sheet_size
+        raw = self.LNT.encode("latin-1")
+        lnt = Lnt(raw)
+        logo = lnt.piece("main_menu", "main_logo")
+        stem = lnt.own_stem("main_menu", logo["index"])
+        self.assertEqual(stem, "logo_obj_own")
+        regs = {stem + "_art": (0, 0, 99, 49)}
+        obj, gone = lnt.own_picture("main_menu", logo["index"], {"art": ("ce_ui\\logo_obj_own.tga", stem + "_art")},
+                                    texture=("ce_ui\\logo_obj_own.tga", regs))
+        self.assertEqual((obj, gone), ("logo_obj_own", None))
+        now = lnt.piece("main_menu", "main_logo")
+        self.assertEqual((now["identifier"], now["x"], now["width"]), ("UIP_EMPTY_ART", 266, 489))
+        self.assertEqual(lnt.art(now), ("ce_ui\\logo_obj_own.tga", (0, 0, 99, 49), "ce_ui"))
+        self.assertIn("logo_obj", lnt.objects())                       # the game's object stays for the others
+        out = lnt.dump().decode("latin-1")
+        self.assertIn("</texture>\r\n<texture>ce_ui\\logo_obj_own.tga\r\n  <path>ce_ui</path>\r\n  <region>"
+                      "logo_obj_own_art\r\n    <left>0</left>\r\n", out)
+        self.assertEqual(lnt.missing_regions(), [])
+        self.assertIn("LOGO_OBJ_OWN_ART", lnt.names_taken())
+        # replaced again keeping the own picture for a state: the old object goes, its picture stays (still named)
+        again = lnt.dump()
+        obj, gone = lnt.own_picture("main_menu", logo["index"], {"art": ("ce_ui\\logo_obj_own.tga", stem + "_art")})
+        self.assertEqual((obj, gone), ("logo_obj_own2", None))
+        self.assertEqual(lnt.missing_regions(), [])
+        self.assertNotIn("logo_obj_own", lnt.objects())
+        lnt = Lnt(again)
+        # a library picture instead: the old own picture goes, its file said to be no longer used
+        obj, gone = lnt.own_picture("main_menu", logo["index"], {"art": ("textures\\FE_texture1.tga", "logo")})
+        self.assertEqual((obj, gone), ("logo_obj_own2", "ce_ui\\logo_obj_own.tga"))
+        self.assertEqual(lnt.back_to_game("main_menu", logo["index"]), None)
+        self.assertEqual(lnt.dump(), raw)
+        with self.assertRaises(LntError):
+            lnt.back_to_game("main_menu", logo["index"])               # the game's own: nothing to go back to
+        # shared: the game's object itself changed, no copy
+        obj, _ = lnt.own_picture("main_menu", logo["index"], {"art": ("textures\\FE_texture1.tga", "gone_one")},
+                                 shared=True)
+        self.assertEqual(obj, "logo_obj")
+        self.assertEqual(lnt.missing_regions(), [("logo_obj", "art", "gone_one")])
+        self.assertEqual(sheet_size("x/mtw2.lnt"), (4096, 2048))
+        self.assertEqual(sheet_size("x/Rome.lnt"), (2048, 2048))
+        self.assertEqual(Lnt(raw).page_area("main_menu"), 496 * 176)  # 490 x 169 rounded up to 8 pixels
+        try:
+            from PIL import Image
+        except ImportError:
+            return
+        data = own_picture_file([Image.new("RGB", (10, 10), (255, 0, 0)), Image.new("RGB", (5, 5))], (20, 8))
+        self.assertEqual(Image.open(__import__("io").BytesIO(data)).size, (20, 16))
+
     def test_building_lines_explained(self):
         """Report #316: the Building editor's lines had no '?' (the units' had): each line of a chain says what it
         does and what each value is - recruit / recruit_pool / agent split into their numbers, the condition named,
@@ -3639,6 +3694,9 @@ building smith
         self.assertIn("'lost_logo'", got[0])                       # in the page's order: the logo first
         self.assertIn("leads to the page 'gone_page'", got[1])
         self.assertIn("FE_texture1.tga is not found", got[2])
+        lost = good.replace("<region>logo</region>", "<region>lost_region</region>")
+        write(os.path.join(d, "menu", "Rome.lnt"), lost)
+        self.assertIn("the game stops when it opens that menu", " ".join(L.problems(mod)))
 
     def test_menu_layout_read_and_written_byte_exact(self):
         """The interface editor's ground (the user, 2026-10-15: 'a full interface editor', from Wholesome Queen's
@@ -3815,6 +3873,71 @@ building smith
         shutil.copytree(os.path.join(self.root, "data"), bi)
         self.assertTrue(InterfacePanel._video_shown(ModData(self.root)))
         self.assertFalse(InterfacePanel._video_shown(ModData(bi)))
+
+    def test_interface_own_picture_window_library_and_apply(self):
+        """Replace picture... in the window (the user, 2026-10-17): a picture file made the piece's own (drawn at
+        once, before the write), the library shows the game's pieces and my own pictures, a click there gives the
+        piece that picture; Apply writes the layout and the own TGA under data/menu/ce_ui; Back to the game's picture
+        and Undo take it back."""
+        try:
+            import tkinter as tk
+            root = tk.Tk()
+            from PIL import Image
+        except Exception as e:                        # no tkinter / no display / no Pillow
+            self.skipTest("no window: %s" % e)
+        from unittest import mock
+        from campaign_editor import gui_interface as GI
+        from campaign_editor import gui_interface_own as OWN
+        menu = os.path.join(self.root, "data", "menu")
+        os.makedirs(os.path.join(menu, "textures"), exist_ok=True)
+        with open(os.path.join(menu, "Rome.lnt"), "wb") as fh:
+            fh.write(self.LNT.encode("latin-1"))
+        Image.new("RGBA", (512, 256), (9, 9, 9, 255)).save(os.path.join(menu, "textures", "FE_texture1.tga"))
+        lib = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, lib)
+        mine = os.path.join(lib, "src.png")
+        Image.new("RGB", (30, 20), (200, 10, 10)).save(mine)
+        try:
+            root.mod = ModData(self.root)
+            root.show_text = lambda *a: None
+            w = GI.InterfacePanel(root, root)
+            w.pack(fill="both", expand=True)
+            root.update()
+            w.picked = w.doc.piece("main_menu", "main_logo")["index"]
+            x = w.current()
+            obj = OWN.make_own(w, x, {"art": ("file", mine)}, (40, 10))
+            self.assertEqual(obj, "logo_obj_own")
+            self.assertEqual(w._texture("ce_ui\\logo_obj_own.tga").getpixel((5, 5))[:3], (200, 10, 10))
+            plan = w.make_plan()
+            own = os.path.join(menu, "ce_ui", "logo_obj_own.tga")
+            self.assertIn(own, plan.binaries)
+            self.assertEqual(Image.open(__import__("io").BytesIO(plan.binaries[own])).size, (40, 10))
+            with mock.patch.object(OWN, "library_dir", lambda: lib):
+                got = []
+                lw = OWN.Library(w, on_pick=got.append)
+                root.update()
+                self.assertIn("ce_ui\\logo_obj_own.tga", lw.sheets)       # my own pictures of this mod too
+                lw.v_sheet.set("textures\\FE_texture1.tga")
+                self.assertIn(("region", "textures\\FE_texture1.tga", "logo"), [i[2] for i in lw.items()])
+                lw.v_sheet.set(lw.sheets[0])
+                self.assertEqual([i[2] for i in lw.items()], [("file", mine)])
+                lw.pick(("region", "textures\\FE_texture1.tga", "logo"))
+                self.assertEqual(got, [("region", "textures\\FE_texture1.tga", "logo")])
+                lw = OWN.Library(w)                                     # picked for the piece itself
+                lw.pick(("region", "textures\\FE_texture1.tga", "logo"))
+                lw.destroy()
+            self.assertEqual(w.current()["object"], "logo_obj_own2")
+            self.assertNotIn(own, w.make_plan().binaries)              # the first own picture no longer named
+            OWN.back_to_game(w)
+            self.assertEqual(w.current()["object"], "logo_obj")
+            self.assertFalse(w.dirty())
+            w.do_undo()
+            self.assertEqual(w.current()["object"], "logo_obj_own2")
+            d = OWN.ask_picture(w)
+            root.update()
+            d.destroy()
+        finally:
+            root.destroy()
 
     def test_interface_window_moves_copies_and_undoes(self):
         """Interface... (the user, 2026-10-15: 'a full interface editor'): the mod's menu layout drawn page by page; a
