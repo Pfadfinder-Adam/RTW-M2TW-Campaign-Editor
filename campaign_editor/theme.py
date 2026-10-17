@@ -24,13 +24,14 @@ BUTTON_PADX = 4     # px from a button's words to its edge, each side (no wider 
 BUTTON_PADY = 0     # px above and below the words: the button about 1.5 x lower than before (21 / 29 px)
 BUTTON_GAP = 4      # px between two buttons side by side
 # buttons with a colour of their own (the same size and frame): style name -> (background, when pressed / hovered);
-# white words in either look - the links (Ko-fi, GitHub Sponsors, Discord, YouTube, GitHub) in their own sites' colours
+# white words in either look (a third colour: the words' own - black on the yellow) - the links (Ko-fi, GitHub Sponsors, Discord, YouTube, GitHub) in their own sites' colours
 # (the bright ones muted 20 % - saturation and brightness x 0.8 - the author, 2026-10-09: they glowed too much)
 COLOURED = {"Play.TButton": ("#316434", "#28522a"), "PlayNoMod.TButton": ("#82571a", "#6b4715"), "Kofi.TButton": ("#cc6563", "#b45452"),
             "Discord.TButton": ("#5f67c2", "#4d549d"), "YouTube.TButton": ("#b32424", "#931d1d"),
             "GitHub.TButton": ("#1b1f24", "#0d1117"), "Sponsor.TButton": ("#99306e", "#7d2759"),   # GitHub Sponsors pink
             "Support.TMenubutton": ("#ad2a5c", "#8e2249"),   # 'Support me on...': a raspberry heart (white words)
-            "GitHubNew.TButton": ("#1f883d", "#1a7f37")}       # GitHub's own green: a newer release is out
+            "GitHubNew.TButton": ("#1f883d", "#1a7f37"),       # GitHub's own green: a newer release is out
+            "Report.TButton": ("#f5b800", "#d9a300", "#000000")}  # Report a bug / Suggest: the author's yellow, black words
 NAMED = {"#cfe3ff": "accent"}
 
 BG_KEYS = ("field", "bg", "tab", "button", "trough", "accent", "active", "select")
@@ -307,9 +308,11 @@ def _style(root):
         st.map(kind, bordercolor=[("focus", p["select"])], relief=[("pressed", "sunken"), ("selected", "sunken")])
     st.map("TButton", background=[("pressed", p["accent"]), ("active", p["active"])])
     st.map("Toolbutton", background=[("selected", p["accent"]), ("pressed", p["accent"]), ("active", p["active"])])
-    for name, (colour, deep) in COLOURED.items():
-        st.configure(name, background=colour, foreground="#ffffff")
-        st.map(name, background=[("pressed", deep), ("active", deep)], foreground=[("disabled", "#dddddd")])
+    for name, (colour, deep, *words) in COLOURED.items():
+        ink = words[0] if words else "#ffffff"
+        st.configure(name, background=colour, foreground=ink)
+        st.map(name, background=[("pressed", deep), ("active", deep)],
+               foreground=[("disabled", "#555555" if words else "#dddddd")])
     st.configure("TEntry", fieldbackground=p["field"], foreground=p["fg"])
     st.configure("TSpinbox", fieldbackground=p["field"], foreground=p["fg"], arrowcolor=p["fg"])
     st.configure("TCombobox", fieldbackground=p["field"], foreground=p["fg"], arrowcolor=p["fg"],

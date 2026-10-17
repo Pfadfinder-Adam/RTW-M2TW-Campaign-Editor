@@ -999,7 +999,8 @@ class App(tk.Tk):
             b.pack(side="right", padx=(theme.BUTTON_GAP, 0))
             links.append((b, say))
         self.b_github = links[-1][0]
-        self.b_report = ttk.Button(bar, text="Report a bug / Suggest", command=self.once("report", self.send_report))
+        self.b_report = ttk.Button(bar, text="Report a bug / Suggest", style="Report.TButton",
+                                   command=self.once("report", self.send_report))
         self.b_report.pack(side="right", padx=(theme.BUTTON_GAP, 0))
         tools = ttk.Menubutton(bar, text="Tools")
         menu = tk.Menu(tools, tearoff=False)
