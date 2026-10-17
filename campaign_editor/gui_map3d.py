@@ -30,14 +30,14 @@ HINT = ("The campaign map in 3D, drawn by the graphics card the way the games dr
         "dragged: turn and look up or down; the wheel turned: nearer / farther; the arrow keys or W A S D move too. "
         "Heights brush: the left button raises or lowers the land under the circle while held (Ctrl + wheel or [ ] "
         "for its size) - the brush of Coast & heights, its Undo and Apply shared. The relief stands as "
-        "high as in the game; the towns, ports, resources, armies, agents and fleets stand as descr_strat.txt has them.")
+        "high as in the game; the towns, ports, resources, armies, agents and fleets stand as descr_strat.txt will have them (what the Map moved or added before the write included).")
 
 
 class Map3DView(ttk.Frame):
     def __init__(self, master, app):
         super().__init__(master)
         self.app = app
-        self._for, self._building = None, False
+        self._for, self._building, self._strat_for = None, False, None
         self._drag, self._sharp_job, self._photo = None, None, None
         bar = ttk.Frame(self, padding=(4, 4))
         bar.pack(fill="x")
@@ -176,19 +176,49 @@ class Map3DView(ttk.Frame):
                     tuple(len(v) for v in (getattr(ed, "cpx", {}) or {}).values()), id(getattr(ed, "mod", None)))
         return (getattr(mod, "data", None), self.app.v_campaign.get(), work, self.v_winter.get())
 
+    def _strat(self):
+        """(descr_strat as Apply will leave it - the Map's armies, agents, fleets, towns and resources added, moved
+        or taken away and the other windows' changes kept - as a Strat, a key telling it apart) or (None, None):
+        the file as it is."""
+        app = self.app
+        try:
+            from .plan import kept_texts
+            from .strat import Strat
+            plans = [p["plan"] for p in app.session_parts().values() if p.get("plan") is not None]
+            if app.faction_pending():
+                plans.append(app._faction_plan())
+            want = os.path.normcase(os.path.abspath(app.mod.campaign_file(app.v_campaign.get(), "descr_strat.txt")))
+            f = next((f for p, f in kept_texts(plans).items() if os.path.normcase(os.path.abspath(p)) == want), None)
+            if f is None:
+                return None, None
+            return Strat(f), hash(f.dump())
+        except Exception:                                # nothing to write yet, a half-made change: the file
+            return None, None
+
     def load(self):
-        """The tab opened: the picture made again when anything it shows changed since."""
+        """The tab opened: the picture made again when anything it shows changed since; when only descr_strat did
+        (the Map's armies moved), only what stands on the map is laid again."""
         if self.app.mod is None:
             self.lbl.configure(text="load a mod first")
             return
+        strat, key = self._strat()
         if self._stamp() != self._for:
-            self.rebuild()
-        else:
-            self.draw()
+            self.rebuild(strat, key)
+            return
+        if self.gl is not None and key != self._strat_for:
+            try:
+                self.gl.data.set_strat(self._source(), self.app.v_campaign.get(), strat)
+                self.gl.models_placed()
+                self._strat_for = key
+            except Exception as e:                       # said in the bar, never a crash
+                self.lbl.configure(text="the towns and armies could not be laid again: %s" % e)
+        self.draw()
 
-    def rebuild(self):
+    def rebuild(self, strat=None, key=None):
         if self.app.mod is None or self._building:
             return
+        if strat is None and key is None:
+            strat, key = self._strat()
         try:
             import numpy  # noqa: F401
             from PIL import Image  # noqa: F401
@@ -208,7 +238,7 @@ class Map3DView(ttk.Frame):
         def work():                                      # the arrays the card needs (no OpenGL in this thread)
             t = time.time()
             try:
-                got["data"] = glmap.MapData(mod, campaign, winter=winter)
+                got["data"] = glmap.MapData(mod, campaign, winter=winter, strat=strat)
             except Exception as e:                       # said in the bar, never a crash
                 got["error"] = str(e)
             got["time"] = time.time() - t
@@ -223,7 +253,8 @@ class Map3DView(ttk.Frame):
             if "error" in got:
                 self.lbl.configure(text="cannot draw it: %s" % got["error"])
                 return
-            self._gpu_ready(got["data"], stamp, got["time"])
+            if self._gpu_ready(got["data"], stamp, got["time"]):
+                self._strat_for = key
         th = threading.Thread(target=work, daemon=True)
         th.start()
         self.after(250, done)

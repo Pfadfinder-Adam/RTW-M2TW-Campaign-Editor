@@ -8012,6 +8012,21 @@ building smith
         self.assertTrue(any("template_weights" in n for n in data.notes))             # no masks: a plain fade
         winter = glmap.MapData(mod, "test", winter=True)
         self.assertGreater(int(winter.pictures[int(winter.layers[4, 4])][0, 0, 0]), 200)  # the snow
+        # what stands on the map follows descr_strat as the Map leaves it before the write (an army moved there):
+        # laid again from the Strat given, the models already read kept
+        from unittest import mock
+        from campaign_editor import mapmodels as MM
+        from campaign_editor import mapobjects3d as O
+        one = np.zeros((3, 8), np.float32)
+        with mock.patch.object(O, "objects", lambda m, c, st: [{"kind": "character", "model": "a", "scale": 1.0,
+                                                                  "xy": st}]), \
+                mock.patch.object(MM.Loader, "parts", lambda self, *a: [(None, one)]):
+            data.set_strat(mod, "test", (1, 2))
+            loader = data._objs[1]
+            self.assertTrue(np.allclose(data.objects[None][0, [0, 2]], [1.5, 4 - 1 - 2 + 0.5]))
+            data.set_strat(mod, "test", (3, 0))                           # moved
+            self.assertTrue(np.allclose(data.objects[None][0, [0, 2]], [3.5, 3.5]))
+            self.assertIs(data._objs[1], loader)
         cam = glmap.Camera(data)
         self.assertEqual((cam.x, cam.z), (2.0, 2.0))
         cam.moved(1.0, 0.0)                            # forward = north = up the map

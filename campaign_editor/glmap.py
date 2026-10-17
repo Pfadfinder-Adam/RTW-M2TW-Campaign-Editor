@@ -149,7 +149,7 @@ class MapData:
     heights (metres, top row first), the ground picture of each point (an index into pictures), the pictures, the
     masks, the sea's pictures, the light."""
 
-    def __init__(self, mod, campaign, winter=False):
+    def __init__(self, mod, campaign, winter=False, strat=None):
         h = T3.heights_metres(mod, campaign)
         if h is None:
             raise ValueError("this campaign has no map_heights.tga - nothing to raise in 3D")
@@ -169,7 +169,7 @@ class MapData:
         self.light = lighting(mod)
         self._tile_models(mod, campaign, winter)
         self._trees(mod, campaign, winter)
-        self._objects(mod, campaign)
+        self._objects(mod, campaign, strat)
         feats = T3._picture(mod, campaign, "map_features.tga")
         self.coast_hidden = None                    # rivers (sources, fords) and cliffs: the game draws no strip there
         if feats is not None:
@@ -302,16 +302,18 @@ class MapData:
         except Exception as e:                          # said in the bar, the map still drawn
             self.notes.append("the trees are not drawn: %s" % e)
 
-    def _objects(self, mod, campaign):
+    def _objects(self, mod, campaign, strat=None, loader=None):
         """What stands on the map (mapobjects3d.objects: towns, ports, forts, resources, characters) as the game's
-        models (mapmodels), their textures."""
+        models (mapmodels), their textures. strat: descr_strat as read (a Strat) - the Map's changes not written yet
+        included - else the file."""
         from . import mapmodels as MM
         from . import mapobjects3d as O
         from .strat import Strat
         self.objects, self.object_pictures, self._objs = {}, {}, None
         try:
-            strat = Strat(mod.load(mod.campaign_file(campaign, "descr_strat.txt")))
-            self._objs = (O.objects(mod, campaign, strat), MM.Loader(mod))
+            if strat is None:
+                strat = Strat(mod.load(mod.campaign_file(campaign, "descr_strat.txt")))
+            self._objs = (O.objects(mod, campaign, strat), loader or MM.Loader(mod))
             self.place_objects()
             loader = self._objs[1]
             for tex in self.objects:
@@ -322,6 +324,13 @@ class MapData:
                                   ", ".join(sorted(loader.missing)[:4]))
         except Exception as e:                          # said in the bar, the map still drawn
             self.notes.append("the towns and armies are not drawn: %s" % e)
+
+    def set_strat(self, mod, campaign, strat):
+        """descr_strat changed (an army added or moved on the Map, not written yet): what stands on the map laid
+        again from it, the models already read kept. GLMap.models_placed() then gives it to the card."""
+        loader = self._objs[1] if getattr(self, "_objs", None) else None
+        self.notes = [n for n in self.notes if not n.startswith(("model(s) or texture(s)", "the towns and armies"))]
+        self._objects(mod, campaign, strat, loader)
 
     def place_objects(self):
         """The towns, armies... laid again on the heights as they are now."""
