@@ -179,6 +179,7 @@
   its own where others wear the same file. Keep for Apply, written with Apply (one backup).
 
 ### Changed
+- The editor moved to github.com/Pfadfinder-Adam: the new-version check, Credits, Sponsors and every link point there.
 - Maps > 3D: the older 3D picture drawn without the graphics card is gone, and with it the towns and armies drawn as little pictures - the game's models come back on the graphics card later.
 - Maps > 3D: the game's own editor (it opened only in Medieval II with M2EX, and crashed there) and the heights slider taken away - the relief stands as high as in the game.
 - Recolour: no 'from the colours of' list - the colours each picture carries now are found by themselves; the 'now' swatches stay to correct them.

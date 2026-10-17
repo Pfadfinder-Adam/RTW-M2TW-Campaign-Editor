@@ -4,10 +4,10 @@
 the campaign map, towns, armies, characters, units, buildings, diplomacy, texts and pictures, in a window, with a
 preview of every change and a backup you can always go back to. Version **0.34.0**.
 
-[![Download](https://img.shields.io/github/v/release/MasterOogwayHomebrew/RTW-M2TW-Campaign-Editor?label=Download&style=for-the-badge)](../../releases)
+[![Download](https://img.shields.io/github/v/release/Pfadfinder-Adam/RTW-M2TW-Campaign-Editor?label=Download&style=for-the-badge)](../../releases)
 [![Wiki](https://img.shields.io/badge/Guide-Wiki-2b6cb0?style=for-the-badge)](../../wiki)
 [![Support me on Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/pfadfinder)
-[![GitHub Sponsors](https://img.shields.io/badge/Sponsor-GitHub-bf3989?style=for-the-badge&logo=githubsponsors&logoColor=white)](https://github.com/sponsors/MasterOogwayHomebrew)
+[![GitHub Sponsors](https://img.shields.io/badge/Sponsor-GitHub-bf3989?style=for-the-badge&logo=githubsponsors&logoColor=white)](https://github.com/sponsors/Pfadfinder-Adam)
 [![YouTube - Pfadfinder](https://img.shields.io/badge/YouTube-Pfadfinder-FF0000?style=for-the-badge&logo=youtube&logoColor=white)](https://www.youtube.com/channel/UC8j5rv6mTmtvRR8u7NmaCvQ)
 [![Discord](https://img.shields.io/badge/Discord-join%20us-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/uqA9MEn4Z)
 
@@ -28,7 +28,7 @@ preview of every change and a backup you can always go back to. Version **0.34.0
 I'm building a tool that finally lets us improve the games of our childhood ourselves - without digging through files
 every time, without the fear of breaking something, and without everything falling apart because we forgot one step.
 The editor is free and stays free. It is built with the help of AI, which costs money every month; if the tool saves
-you time, a coffee on [Ko-fi](https://ko-fi.com/pfadfinder) or [GitHub Sponsors](https://github.com/sponsors/MasterOogwayHomebrew) keeps new features coming. I'm building this on my own on
+you time, a coffee on [Ko-fi](https://ko-fi.com/pfadfinder) or [GitHub Sponsors](https://github.com/sponsors/Pfadfinder-Adam) keeps new features coming. I'm building this on my own on
 an old laptop: a small contribution would also help me finally get a proper gaming PC, a childhood dream, and give the
 editor more time and faster testing (big mods and both games load slowly on the old machine). Thank you!
 
@@ -38,10 +38,10 @@ If the editor helped you build or change a mod, please say so where you share th
 thread) and link to the editor, so other modders can find it too. One line is enough - copy one of these:
 
 ```
-Made with the RTW & M2TW Campaign Editor: https://github.com/MasterOogwayHomebrew/RTW-M2TW-Campaign-Editor
+Made with the RTW & M2TW Campaign Editor: https://github.com/Pfadfinder-Adam/RTW-M2TW-Campaign-Editor
 ```
 ```
-Made with the [url=https://github.com/MasterOogwayHomebrew/RTW-M2TW-Campaign-Editor]RTW & M2TW Campaign Editor[/url]
+Made with the [url=https://github.com/Pfadfinder-Adam/RTW-M2TW-Campaign-Editor]RTW & M2TW Campaign Editor[/url]
 ```
 (the second one for forums such as TWC). It is a request, not a condition - thank you!
 
@@ -462,13 +462,13 @@ Windows release builds are to be signed through the SignPath Foundation (applica
 free code signing provided by [SignPath.io](https://about.signpath.io/), certificate by [SignPath Foundation](https://signpath.org/).
 
 - Only builds made by this repository's GitHub Actions release workflow from its own source are signed.
-- Committers and reviewers: [MasterOogwayHomebrew](https://github.com/MasterOogwayHomebrew). Approver (every signing request): [MasterOogwayHomebrew](https://github.com/MasterOogwayHomebrew).
+- Committers and reviewers: [Pfadfinder-Adam](https://github.com/Pfadfinder-Adam). Approver (every signing request): [Pfadfinder-Adam](https://github.com/Pfadfinder-Adam).
 
 Privacy: this program transfers nothing to other networked systems unless you press **Send** in *Report a bug / Suggest* (then only what that window shows); after that it asks, by the reports' numbers only, for the author's answers to them (on start every few hours - off in Tools > Settings > Reports), and asks GitHub for the number of the newest release (on every start and every 6 hours while it is open; nothing is sent - off in Tools > Settings > New versions). It reads and writes only the game or mod folder you load and its own files beside the exe (`CampaignEditor_settings.json`, `CampaignEditor_logs`, `CampaignEditor_addons`) (see [SECURITY.md](SECURITY.md)).
 
 ## License
 
-Copyright (C) 2026 Pfadfinder (Adam) - [MasterOogwayHomebrew](https://github.com/MasterOogwayHomebrew), the author of
+Copyright (C) 2026 Pfadfinder (Adam) - [Pfadfinder-Adam](https://github.com/Pfadfinder-Adam), the author of
 RTW & M2TW Campaign Editor.
 
 GNU General Public License v3.0 ([LICENSE](LICENSE)). You may use, study, change and share the editor. If you share
@@ -478,4 +478,4 @@ license.
 
 ## Support
 
-See [Why support it](#-why-support-it) - a coffee on [Ko-fi](https://ko-fi.com/pfadfinder) or [GitHub Sponsors](https://github.com/sponsors/MasterOogwayHomebrew). Thank you!
+See [Why support it](#-why-support-it) - a coffee on [Ko-fi](https://ko-fi.com/pfadfinder) or [GitHub Sponsors](https://github.com/sponsors/Pfadfinder-Adam). Thank you!

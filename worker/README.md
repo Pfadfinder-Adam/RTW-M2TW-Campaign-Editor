@@ -18,7 +18,7 @@ cookies.
    `rtw-m2tw-campaign-editor-reports` > Deploy. Then Edit code, replace everything with `report-relay.js` from this folder,
    Deploy.
 4. **Its settings**: the Worker > Settings > Variables and Secrets > Add:
-   - `REPORTS_REPO`, type Text: `MasterOogwayHomebrew/RTW-M2TW-Campaign-Editor-Reports`
+   - `REPORTS_REPO`, type Text: `Pfadfinder-Adam/RTW-M2TW-Campaign-Editor-Reports`
    - `GITHUB_TOKEN`, type **Secret**: the token from step 2
 5. **Its address**: the Worker's page shows it, like `https://rtw-m2tw-campaign-editor-reports.<account>.workers.dev`. It goes
    into `campaign_editor/report.py` (`REPORT_URL`), and the next release sends reports there.

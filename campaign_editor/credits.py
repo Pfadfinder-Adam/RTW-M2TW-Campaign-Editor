@@ -5,7 +5,7 @@ import os
 import re
 import sys
 
-PAGE = "https://github.com/MasterOogwayHomebrew/RTW-M2TW-Campaign-Editor/blob/main/CREDITS.md"
+PAGE = "https://github.com/Pfadfinder-Adam/RTW-M2TW-Campaign-Editor/blob/main/CREDITS.md"
 RE_LINK = re.compile(r"\[([^\]]+)\]\([^)]+\)")
 RE_MARK = re.compile(r"\*\*|__|(?<![\w*])[*_](?=\S)|(?<=\S)[*_](?![\w*])|`")
 

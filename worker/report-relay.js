@@ -8,7 +8,7 @@
 // Settings (Worker > Settings > Variables and Secrets):
 //   GITHUB_TOKEN  secret: a fine-grained token for the reports repo only - Contents: read and write,
 //                 Issues: read and write
-//   REPORTS_REPO  text: owner/name of the private reports repo, like MasterOogwayHomebrew/RTW-M2TW-Campaign-Editor-Reports
+//   REPORTS_REPO  text: owner/name of the private reports repo, like Pfadfinder-Adam/RTW-M2TW-Campaign-Editor-Reports
 // Optional: rate limit bindings (wrangler.toml) - REPORT_LIMIT: 3 reports / replies a minute from one address,
 // ANSWER_LIMIT: 10 answer checks a minute from one address.
 //

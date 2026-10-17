@@ -37,7 +37,7 @@ from .units import faction_units, read_units
 
 VERSION = "0.34.0"
 KOFI = "https://ko-fi.com/pfadfinder"
-SPONSORS = "https://github.com/sponsors/MasterOogwayHomebrew"
+SPONSORS = "https://github.com/sponsors/Pfadfinder-Adam"
 DISCORD = "https://discord.gg/uqA9MEn4Z"
 YOUTUBE = "https://www.youtube.com/channel/UC8j5rv6mTmtvRR8u7NmaCvQ"
 APP = "RTW & M2TW Campaign Editor"
@@ -184,7 +184,7 @@ THE GAMES
 SUPPORT
   The tool is free. If it helps you, a coffee keeps new features coming:
   https://ko-fi.com/pfadfinder  (Support me on... > Ko-fi)
-  https://github.com/sponsors/MasterOogwayHomebrew  (Support me on... > GitHub Sponsors)
+  https://github.com/sponsors/Pfadfinder-Adam  (Support me on... > GitHub Sponsors)
 """
 
 _showerror = messagebox.showerror

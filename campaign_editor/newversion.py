@@ -14,7 +14,7 @@ import urllib.request
 
 from . import log, settings
 
-REPO = "MasterOogwayHomebrew/RTW-M2TW-Campaign-Editor"
+REPO = "Pfadfinder-Adam/RTW-M2TW-Campaign-Editor"
 PAGE = "https://github.com/" + REPO
 API = "https://api.github.com/repos/%s/releases/latest" % REPO
 CHECK_EVERY = 6 * 3600          # seconds between the looks while the editor stays open
