@@ -952,6 +952,7 @@ class App(tk.Tk):
         _plan.WRITTEN.append(lambda bdir, p: self.after_idle(lambda: self._written(bdir, p)))
         _plan.BEFORE.append(self._own_folder_first)
         self._own_folder_asked = set()
+        self._own_folder_wanted = set()              # roots the modder chose to leave clean (his own mod folder first)
         self.status_line = ttk.Label(srow, anchor="w", justify="left")
         self.status_line.pack(side="left", fill="x", expand=True)
         # long work (over a second or two): a moving bar and the seconds beside the message (NN/g: feedback while
@@ -4590,8 +4591,18 @@ class App(tk.Tk):
         from .newmod import game_root_of, marker
         from .textio import NotWritten
         import threading
-        if self.mod is None or plan.mod is not self.mod or threading.current_thread() is not threading.main_thread():
-            return                                   # another mod's plan (the test mod makes its own), or no window
+        if self.mod is None or threading.current_thread() is not threading.main_thread():
+            return                                   # no window (the test mod makes its own plans)
+        if plan.mod is not self.mod:                 # a window still open on the mod loaded before (a tester: Bring
+            # units -> 'Make my own mod folder' -> made and loaded -> Write again in the same window: it went into the
+            # game itself, not the new folder)
+            old = os.path.normcase(os.path.dirname(os.path.abspath(plan.mod.data)))
+            if old in self._own_folder_wanted and os.path.normcase(os.path.abspath(plan.mod.data)) != \
+                    os.path.normcase(os.path.abspath(self.mod.data)):
+                raise NotWritten("Nothing was written: this window still works on %s, which you chose to keep clean "
+                                 "- close it and open it again on the mod loaded now (%s)." % (plan.mod.data,
+                                                                                            self.mod.data))
+            return                                   # another mod's plan (the test mod makes its own)
         root = os.path.dirname(os.path.abspath(self.mod.data))
         key = os.path.normcase(root)
         said = list(_settings.get("own_folder_ok", []) or [])
@@ -4608,6 +4619,7 @@ class App(tk.Tk):
                                                                base or "the game")),
             ["Make my own mod folder", "Write here"], default=0, cancel=1)
         if pick == 0:
+            self._own_folder_wanted.add(key)
             self.after_idle(self.new_mod)
             raise NotWritten("Nothing was written: make your own mod folder first - the New mod folder window is "
                              "open; it is loaded when made, then do the change again there.")

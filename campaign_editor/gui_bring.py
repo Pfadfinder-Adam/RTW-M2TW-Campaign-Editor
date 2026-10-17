@@ -53,6 +53,22 @@ class BringWindow(StepWindow):
         self.make_steps(steps)
         self.show()
 
+    def retarget(self, mod):
+        """The units go into another mod (the one loaded now): its factions, names and recruiting worked out again,
+        back to step 3 to look them over."""
+        self.mod = mod
+        facs = [n for n, _ in mod.factions()]
+        self.factions = facs
+        self.cultures = sorted({c for _, c in mod.factions() if c and c not in facs})
+        self._gathered = None
+        self._twins_of = (None,)
+        if self._gather() is False:
+            return
+        self.step = 2
+        self.show()
+        messagebox.showinfo(self.title(), "The mod loaded now is %s - the %s go into it. Look over the names, the "
+                            "owners and the recruiting again, then write." % (mod.data, self.what), parent=self)
+
     # ---- step 1: the other mod ----
     def s_mod(self):
         self._note("Pick the mod to bring %s from - they go into the mod loaded now (%s). It is only read - nothing "
@@ -276,11 +292,20 @@ class BringWindow(StepWindow):
                                         parent=self)
                     return False
         key = tuple(self.picked)
+        # the faction picked in step 2 is the look the units bring (texture, card) - HLR's Gallic units brought as
+        # the gauls' came out in their first owner's blue (a tester)
+        look = getattr(self, "_owner", None)
+        try:
+            look = look if look in [n for n, _ in self.src.factions()] else None
+        except Exception:
+            look = None
         if getattr(self, "_gathered", None) == (self.src.data, key):
+            self.man["look"] = look
             return None
         try:
             if self.kind == "unit":
                 self.man, self.files = packs.collect(self.src, self.picked)
+                self.man["look"] = look
                 self.names = packs.plan_names(self.mod, self.man)
                 self.recruit_map = packs.default_recruit_map(self.mod, self.man)
                 had = set()
@@ -540,12 +565,27 @@ class BringWindow(StepWindow):
                 self.title(), "The %s editor holds changes not written yet; writing now reads the files again, so "
                               "they would be dropped. Go on?" % self.kind, parent=self, yes='Write, drop them', no='Stay', danger=True):
             return
+        app_mod = getattr(self.app, "mod", None)
+        if app_mod is not None and os.path.normcase(os.path.abspath(app_mod.data)) != \
+                os.path.normcase(os.path.abspath(self.mod.data)):
+            # another mod was loaded while this window stood open (a tester: 'Make my own mod folder' made and loaded
+            # one, then Write went into the game itself): the units go into the mod loaded NOW - its names, owners
+            # and recruiting checked again from step 3
+            self.retarget(app_mod)
+            return
         try:
             plan = self._plan()
         except Exception as e:
             messagebox.showerror(self.title(), str(e), parent=self)
             return
-        bdir = plan.apply()
+        from .textio import NotWritten
+        try:
+            bdir = plan.apply()
+        except NotWritten as e:                       # the modder's own choice (his own mod folder first): said
+            self.app.status.set(str(e))
+            messagebox.showinfo(self.title(), "%s\n\nThis window stays open: once the new mod folder is loaded, "
+                                "press '%s' again - the units then go into it." % (e, self.finish_text), parent=self)
+            return
         from . import log
         log.write("Brought %s from %s (backup %s)\n%s" % (self.what, self.src.data, bdir, plan.report()))
         n = len(self.picked)

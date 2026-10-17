@@ -2957,7 +2957,8 @@ building smith
             self.skipTest("no tkinter window: %s" % e)
         try:
             d = os.path.join(self.root, "data")
-            write(os.path.join(d, "export_descr_unit.txt"), EDU.replace("ownership\talpha", "ownership\tslave, alpha"))
+            write(os.path.join(d, "export_descr_unit.txt"), EDU.replace(
+                "ownership\talpha", "soldier\talpha_man, 40, 0, 1\nofficer\talpha_officer\nownership\tslave, alpha"))
             for fac in ("slave", "alpha"):
                 write(os.path.join(d, "ui", "units", fac, "#alpha_general.tga"), fac)
             look = UnitPreview(root, ModData(self.root))
@@ -2968,6 +2969,10 @@ building smith
                 look.show("alpha general")
             self.assertIn(os.path.join("units", "alpha"), seen[0])                 # no faction: the first owner
             self.assertIn(os.path.join("units", "slave"), seen[2])                 # the faction looked at
+            # the men and each officer in 3D, in that faction's look (a tester: blue officers no card showed)
+            words = [w.cget("text") for w in look.bar.winfo_children()]
+            self.assertEqual(words[0], "in 3D (slave):")
+            self.assertEqual(words[1:], ["men", "officer 1"])
         finally:
             root.destroy()
 
@@ -12031,6 +12036,26 @@ building smith
         restore(ModData(self.root), restore_dir)
         self.assertEqual({k: v for k, v in tree_hash(self.root).items() if "_backups" not in k}, before)
 
+    def test_a_window_on_the_old_mod_never_writes_into_the_clean_one(self):
+        """A tester: Bring units into the game -> 'Make my own mod folder' -> made and loaded -> Write again in the
+        bring window still open: it went into the game itself, not the new folder. A plan on a root the modder chose
+        to keep clean is refused now while another mod is loaded."""
+        try:
+            from campaign_editor.gui import App
+        except ImportError as e:
+            self.skipTest("no tkinter: %s" % e)
+        from types import SimpleNamespace
+        from campaign_editor.textio import NotWritten
+        game = os.path.join(self.root, "game", "data")
+        mine = os.path.join(self.root, "game", "mine", "data")
+        old, new = SimpleNamespace(data=game), SimpleNamespace(data=mine)
+        fake = SimpleNamespace(mod=new, _own_folder_asked=set(),
+                               _own_folder_wanted={os.path.normcase(os.path.dirname(os.path.abspath(game)))})
+        with self.assertRaises(NotWritten):
+            App._own_folder_first(fake, SimpleNamespace(mod=old))
+        fake._own_folder_wanted = set()                    # never asked: another mod's plan goes on as before
+        App._own_folder_first(fake, SimpleNamespace(mod=old))
+
     def test_a_brought_unit_takes_its_own_factions_look(self):
         """Reports R-20261013-018380 / 4547BC: Barbarian Invasion's saxon hunters brought into Rome came out in the
         rebels' blue - the model has 'texture slave' and 'texture saxons', no mercenaries' line, and the FIRST line
@@ -12042,6 +12067,18 @@ building smith
         self.assertEqual(packs.look_order(man)[:2], ["saxons", "franks"])
         man["look"] = "franks"
         self.assertEqual(packs.look_order(man)[0], "franks")
+        # each model and card: the owners of the units that wear it, not the first brought unit's (a tester: HLR's
+        # Gallic units came out in spain's blue - every officer took the first unit's first owner)
+        man = {"units": [
+            {"type": "a", "dictionary": "a", "lines": ["type a", "soldier a_man, 40, 0, 1", "officer o1",
+                                                         "ownership spain, gauls"]},
+            {"type": "b", "dictionary": "b", "lines": ["type b", "soldier b_man, 40, 0, 1", "officer o2",
+                                                         "ownership britons, gauls"]}]}
+        self.assertEqual(packs._model_look(man, "o2")[0], "britons")
+        self.assertEqual(packs._model_look(man, "O1")[0], "spain")
+        self.assertEqual(packs._model_look(man, "nobody")[0], "spain")       # worn by none here: every unit's
+        man["look"] = "gauls"                                                # the faction picked in step 2
+        self.assertEqual(packs._model_look(man, "o2")[0], "gauls")
         lines = ["type saxon_hunters", "texture slave, hunters_slave.tga", "texture saxons, hunters_saxons.tga"]
         got, added = packs._owner_textures(lines, ["romans_julii"], ["saxons", "franks"])
         self.assertIn("texture romans_julii, hunters_saxons.tga", got)

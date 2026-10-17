@@ -1203,7 +1203,8 @@ def import_pack(plan, manifest, files, owners, names=None, recruit_map=None):
             if not src:
                 continue
             by_fac = {rel.split("/")[2]: data for rel, data in reversed(src)}
-            look = by_fac.get(_first_of(look_order(manifest), by_fac, None), src[0][1])   # the unit's own faction's
+            order = look_order(manifest, [u for u in manifest["units"] if u.get("dictionary") == old] or None)
+            look = by_fac.get(_first_of(order, by_fac, None), src[0][1])   # the unit's own faction's
             for fac in factions or [src[0][0].split("/")[2]]:
                 pick = by_fac.get(fac, look)
                 _put(plan, "ui/%s/%s/%s" % (sub, fac, pattern % new), pick)
@@ -1353,7 +1354,7 @@ def _put_blocks(plan, manifest, owners):
                         [strip_comment(x).split() for x in lines]:
                     if kind == "model":                        # the very same: shared, textured for the owners
                         a, b = have[same_name]
-                        got, added = _owner_textures(_block_lines(f, (a, b)), owner_facs, look_order(manifest))
+                        got, added = _owner_textures(_block_lines(f, (a, b)), owner_facs, _model_look(manifest, name))
                         if added:
                             f.raw[a:a + len(_block_lines(f, (a, b)))] = [f.make(x) for x in got]
                             have = type_blocks(f, key)
@@ -1364,7 +1365,7 @@ def _put_blocks(plan, manifest, owners):
                 lines = _set_line(lines, key, new)
                 plan.note(f, "%s %s exists with other lines: the pack's is added as %s" % (kind, name, new))
             if kind == "model":                                # every faction the units go to gets a texture
-                lines, added = _owner_textures(lines, owner_facs, look_order(manifest))
+                lines, added = _owner_textures(lines, owner_facs, _model_look(manifest, name))
                 if added:
                     plan.note(f, "model %s: texture lines for %s" % (renamed[kind].get(name, name), ", ".join(added)))
             while f.raw and not f.text(len(f.raw) - 1).strip():
@@ -1596,9 +1597,9 @@ def _modeldb(plan, manifest, renamed, owners):
         if have is None:
             have = db.add_model(m, want)
             n += 1
-        added = MDB.give_owners(have, factions, look_order(manifest))
+        added = MDB.give_owners(have, factions, _model_look(manifest, name))
         if added:
-            src_f = _first_of(look_order(manifest), {r[0] for r in m.textures}, None)
+            src_f = _first_of(_model_look(manifest, name), {r[0] for r in m.textures}, None)
             plan.notes.append((mod.rel(dst), "battle model %s: texture entries for %s (copied from its %s)" % (
                 want, ", ".join(added), "%s'" % src_f if src_f else "first")))
     plan.binary(dst, db.dump().encode("latin-1"))
@@ -1606,18 +1607,38 @@ def _modeldb(plan, manifest, renamed, owners):
         n, "" if src == dst else " (a copy of the game's modeldb, now the mod's own)")))
 
 
-def look_order(manifest):
+def look_order(manifest, units=None):
     """The factions whose look (texture, card) a brought unit copies for a new owner, best first: the modder's pick
-    (manifest['look']), then the units' own factions (their ownership), the mercenaries and the rebels last - a BI
-    unit owned by 'slave, saxons' took the rebels' blue (a report: its first texture line was copied)."""
+    (manifest['look'], the faction picked in the bring's step 2), then the units' own factions (their ownership),
+    the mercenaries and the rebels last - a BI unit owned by 'slave, saxons' took the rebels' blue (a report: its
+    first texture line was copied). units: only these units' ownership (those that wear the model or card) - HLR's
+    Gallic units brought as the gauls' came out in another owner's blue: every model took the first unit's first
+    owner (a tester)."""
     out = [manifest["look"]] if manifest.get("look") else []
-    for u in manifest.get("units") or []:
+    for u in (manifest.get("units") or []) if units is None else units:
         for l in u.get("lines") or []:
             if strip_comment(l).split(None, 1)[:1] == ["ownership"]:
                 for f in [x.strip() for x in strip_comment(l).split(None, 1)[1].split(",") if x.strip()]:
                     if f not in ("slave", "merc") and f not in out:
                         out.append(f)
     return out + [f for f in ("merc", "slave") if f not in out]
+
+
+def _wearers(manifest, model):
+    """The brought units that wear a battle model (soldier, officer, armour upgrade, a REX soldiers block)."""
+    m = model.lower()
+    out = []
+    for u in manifest.get("units") or []:
+        names = [v[0] for key in ("soldier", "officer") for v in _values(u["lines"], key)]
+        names += [n for v in _values(u["lines"], "armour_ug_models") for n in v]
+        names += [n for _, _, n in soldiers_block(u["lines"])]
+        if any(n.lower() == m for n in names):
+            out.append(u)
+    return out
+
+
+def _model_look(manifest, model):
+    return look_order(manifest, _wearers(manifest, model) or None)
 
 
 def _first_of(order, have, default):

@@ -103,6 +103,35 @@ class _Base(ttk.Frame):
         self._photos = []
 
 
+    def _models_3d(self, lines, faction):
+        """3D buttons for the men and each officer, in the faction's look the window shows (a tester: brought HLR
+        units had blue officers that no card showed - now seen before the write)."""
+        from . import models as MO
+        slots = MO.unit_slots(lines)
+        if not slots:
+            return
+        ttk.Label(self.bar, text="in 3D (%s):" % faction if faction else "in 3D:").pack(side="left")
+        n = 0
+        for key, i, model in slots:
+            n += key == "officer"
+            ttk.Button(self.bar, text="men" if key == "soldier" else "officer %d" % n,
+                       command=lambda m=model: self._view_3d(m, faction)).pack(side="left", padx=2)
+
+    def _view_3d(self, model, faction):
+        from tkinter import messagebox
+        from . import models as MO
+        from .gui_meshview import ModelViewer
+        key = os.path.normcase(os.path.abspath(self.mod.data))
+        if getattr(self, "_cat", (None,))[0] != key:
+            self._cat = (key, MO.catalogue(self.mod))
+        info = self._cat[1].get(model.lower())
+        if info is None:
+            messagebox.showinfo("3D", "%s: no battle model of that name in this mod - nothing to show." % model,
+                                parent=self)
+            return
+        ModelViewer(self, self.mod, info, (faction,) if faction else (), title="%s in 3D (%s)" % (model, faction))
+
+
 class BuildingPreview(_Base):
     """A chain: pick a level and a culture; its pictures (in town, when built), the name and description players
     read for that culture, who may build it and what it does."""
@@ -228,6 +257,7 @@ class UnitPreview(_Base):
                   "card")
         self._pic(card_path(self.mod, fac, dic, True, owners=facs, mercenary=merc, pic_dir=val("info_pic_dir")),
                   (120, 160), "description")
+        self._models_3d(lines, fac)
         name = text_value(self.mod, "export_units.txt", dic) or unit
         short = text_value(self.mod, "export_units.txt", dic + "_descr_short")
         parts = [(name + "\n", "h")]
