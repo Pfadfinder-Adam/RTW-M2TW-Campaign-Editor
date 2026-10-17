@@ -8517,8 +8517,8 @@ building smith
         self.assertEqual(said, ["Flavius cannot stand at 9, 9: that is sea"])
 
     def test_map_in_3d_figures_face_the_camera(self):
-        """Report #330: Rome's figures on the 3D map stood with their backs to the camera; turned to look south (our
-        +z) as in the game. Medieval II's files already look that way - left as they are."""
+        """Reports #330 / #331: the figures on the 3D map stood with their backs to the camera, in Rome and in
+        Medieval II; both turned to look south (our +z) as in the game."""
         try:
             import numpy as np
         except ImportError:
@@ -8528,8 +8528,8 @@ building smith
         MM._face_camera(nose, "rome")
         self.assertTrue(np.allclose(nose, [[[-0.1, 1.7, 0.2]]]))       # now toward the camera, height kept
         m2 = np.array([[[0.1, 1.7, 0.2]]], np.float32)
-        MM._face_camera(m2, "medieval2")
-        self.assertTrue(np.allclose(m2, [[[0.1, 1.7, 0.2]]]))
+        MM._face_camera(m2, "medieval2")                          # Medieval II's the same (#331)
+        self.assertTrue(np.allclose(m2, [[[-0.1, 1.7, -0.2]]]))
 
     def test_map_in_3d_finds_the_game_models_of_what_stands_on_the_map(self):
         """Maps > 3D's models (the user, 2026-10-15: 'towns, resources, units...'): a town takes its level's model

@@ -158,11 +158,10 @@ class Loader:
 
 
 def _face_camera(V, game):
-    """A figure turned to look south, at the camera, as the game shows them (report #330: Rome's stood with their
-    backs to it); Medieval II's files already look that way."""
-    if game != "medieval2":
-        V[..., 0] *= -1
-        V[..., 2] *= -1
+    """A figure turned to look south, at the camera, as the game shows them - both games alike (report #330: Rome's
+    stood with their backs to it; #331: Medieval II's too, they were left unturned)."""
+    V[..., 0] *= -1
+    V[..., 2] *= -1
 
 
 def _port_dock(x, y, sea):
