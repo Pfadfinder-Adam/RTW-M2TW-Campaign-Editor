@@ -245,6 +245,8 @@
   line of the block** in both editors; the editor remembers whether it was open.
 
 ### Fixed
+- Maps > 3D: rebel villages (a region with no settlement in descr_strat.txt) were not shown -> each stands there, as in the game; Rome's wonders stand on the map with their own models.
+- Maps > 3D: the heights brush's circle looked dark on sand -> its white line is wider.
 - Maps > 3D with HLR: the figures were white and many grounds plain - the mod's own pack names its files with the mod's folder in front, and a texture named without its ending was not tried as .tga -> both found.
 - Step-by-step windows (Bring units and buildings...) were taller than a small screen and their Next / Cancel row was below its edge -> the buttons always stay in sight.
 - New mod folder: typing a name went next to the proposed one -> the proposed name is picked, typing replaces it; Ctrl+A picks a box's whole text everywhere.

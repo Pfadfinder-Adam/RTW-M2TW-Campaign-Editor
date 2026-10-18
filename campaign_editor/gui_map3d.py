@@ -688,7 +688,7 @@ class Map3DView(ttk.Frame):
         ring = [(x + r * math.cos(a), 0.0, z + r * math.sin(a)) for a in np.linspace(0, 2 * math.pi, 49)]
         ring = [(px, d.ground_height(px, pz), pz) for px, _, pz in ring]
         s = self.gl.to_screen(ring)
-        return [] if s is None else self._outline(s, 3, 1)
+        return [] if s is None else self._outline(s, 4, 2)      # the white wide enough to show on sand (the tester)
 
     def _paint_start(self, e):
         self.canvas.focus_set()
