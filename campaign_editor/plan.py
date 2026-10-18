@@ -362,6 +362,8 @@ class Plan:
         keep_up(self)                       # REX / M2EX: max_factions follows the factions, silently (limits.py)
         from . import lnt
         lnt.keep_up(self)                   # the faction-select screen: a slot for every playable faction (lnt.py)
+        from . import emergence
+        emergence.keep_up(self)             # a 'comes later' faction given a town starts alive (emergence.py)
         self._no_empty_army()
         self.stale_bins()
         self.stale_sounds()
