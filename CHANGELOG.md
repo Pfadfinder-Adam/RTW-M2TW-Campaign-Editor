@@ -12,6 +12,7 @@
 - Edit faction: a faction with more towns than first names gave two captains the same name and the write was refused -> the next captains take a first name with a surname of the list.
 - Interface: a mod's menu file with a tag never closed stopped the Interface work -> it opens; Check mod files names the line.
 - A new playable faction gets its own slot on the faction-select screen by itself (the menu layout had 21, the 22nd faction could not be picked); Steam's Medieval II unpacks again (the unpacker asked three times and stopped after two answers).
+- New faction > From another mod: the window froze for minutes (the whole map was drawn from above again at Preview and again at Apply) -> drawn once for the same map.
 - Maps > 3D (Medieval II): rivers drawn as blue squares and mountains without their models when the game keeps its map files in its packs -> they are read from the packs.
 - Report a bug: the game's newest crash report went with it even when it was days old and from another mod -> only the crash of the game's last run goes; the game's log explains a script condition with nothing to ask about.
 - Bringing units or a whole faction: Medieval II stopped at its start when a brought skeleton named an animation kept as a loose file in the other mod -> the file comes along; a skeleton naming one found nowhere is left out (the units take the nearest one); Check the game's log explains that crash.
