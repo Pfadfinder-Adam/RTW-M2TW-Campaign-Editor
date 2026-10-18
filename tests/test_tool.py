@@ -16426,6 +16426,51 @@ building smith
         for p, data in before.items():
             self.assertEqual(open(p, "rb").read(), data)
 
+    def test_the_crash_doctors_verdict(self):
+        """The crash doctor (the user, 2026-10-18): the engine writes what went wrong on the line after a fatal line -
+        that is the verdict, on the report's first line; a '[fatal] ERROR' the game goes on after (a fallback) is
+        serious, not the stop; a Script Error just before the stop names the file and line (real logs of reports
+        R-20261018-238E7F / -948E29 / -DBBFF7)."""
+        from campaign_editor import gamelog, report
+        stop = ("23:24:51.621 [system.rpt] [info] Capture front buffer copy time 83\n"
+                "23:24:51.639 [core.assert] [fatal] ASSERT FAILED: src\\game\\menu\\menu_layout.cpp(282): new_art\n"
+                "failed to find art piece '_M2_BORDER_FRONTEND'\n"
+                "  at   src/core/system/assert.cpp (477): Core::RetailAssertLog+187\n")
+        v = gamelog.verdict(stop)
+        self.assertEqual(v["headline"], "The game stopped: the game says: failed to find art piece "
+                                        "'_M2_BORDER_FRONTEND'")
+        went_on = ("14:58:41.881 [core.assert] [fatal] ERROR: src\\game\\display\\game_gfx.cpp(955)\n"
+                   "Model blank doesn't have a primary weapon skeleton\n  at   src/core/system/assert.cpp (477): x\n"
+                   "19:44:47.878 [system.rpt] [info] sprites_close()...\n")
+        v = gamelog.verdict(went_on)
+        self.assertTrue(v["headline"].startswith("No crash in the game's log: the game was closed in the usual way."))
+        self.assertIn("primary weapon skeleton", v["serious"][0])
+        script = ("01:03:09.000 [system.rpt] [error] Script Error in data/world/maps/campaign/imperial_campaign/"
+                  "descr_strat.txt, at line 5104, column 5\n   unknown faction 'xx'\n"
+                  "01:03:09.407 [core.assert] [fatal] ASSERT FAILED: src\\game_rtw\\world.cpp(2508): ok\n"
+                  "  at   x\n")
+        v = gamelog.verdict(script)
+        self.assertEqual((v["file"], v["line"]), ("data/world/maps/campaign/imperial_campaign/descr_strat.txt", 5104))
+        self.assertIn("descr_strat.txt line 5104", v["headline"])
+        self.assertIsNone(gamelog.verdict("10:00:00.000 [system.rpt] [info] hello\n"))
+        # on the report: first in sight, first line of report.txt
+        game = os.path.join(self.root, "game")
+        os.makedirs(game, exist_ok=True)
+        write(os.path.join(game, "system.log.txt"), stop)
+        said = report.doctor([(os.path.join(game, "system.log.txt"), "system.log.txt", "the game's log")])
+        self.assertIn("_M2_BORDER_FRONTEND", said)
+        import io
+        import zipfile
+        try:
+            from campaign_editor.gui_report import snap_window
+            import sys
+            if sys.platform != "win32":                  # the editor's window picture: Windows only, never a fault
+                self.assertFalse(snap_window(None, os.path.join(self.root, "w.png")))
+        except ImportError:
+            pass
+        z = zipfile.ZipFile(io.BytesIO(report.build_zip([], "it broke", doctor=said)))
+        self.assertTrue(z.read("report.txt").decode().startswith("The game's log says: The game stopped"))
+
     def test_logs_zip(self):
         import zipfile
         from campaign_editor import log

@@ -17,6 +17,49 @@ APP = "RTW & M2TW Campaign Editor"
 
 SEND_LIMIT = 90                 # seconds without an answer before the report is given up (then: save the zip)
 
+def snap_window(widget, path):
+    """A picture of the editor's own window as it stands (Windows: PrintWindow - this window only, even under
+    another one; nothing else of the screen) saved as path; True when made. Anywhere else, or on any trouble:
+    False, nothing made (the user, 2026-10-18: 'a screenshot of the program alone')."""
+    import sys
+    if sys.platform != "win32":
+        return False
+    try:
+        import ctypes
+        from ctypes import wintypes
+        from PIL import Image
+        u32, g32 = ctypes.windll.user32, ctypes.windll.gdi32
+        hwnd = u32.GetParent(widget.winfo_toplevel().winfo_id()) or widget.winfo_toplevel().winfo_id()
+        r = wintypes.RECT()
+        u32.GetWindowRect(hwnd, ctypes.byref(r))
+        w, h = r.right - r.left, r.bottom - r.top
+        if w <= 0 or h <= 0:
+            return False
+        src = u32.GetWindowDC(hwnd)
+        dc = g32.CreateCompatibleDC(src)
+        bmp = g32.CreateCompatibleBitmap(src, w, h)
+        g32.SelectObject(dc, bmp)
+        ok = u32.PrintWindow(hwnd, dc, 2)                  # PW_RENDERFULLCONTENT
+        buf = ctypes.create_string_buffer(w * h * 4)
+
+        class BMI(ctypes.Structure):
+            _fields_ = [("size", wintypes.DWORD), ("w", wintypes.LONG), ("h", wintypes.LONG),
+                        ("planes", wintypes.WORD), ("bits", wintypes.WORD), ("comp", wintypes.DWORD),
+                        ("img", wintypes.DWORD), ("xpm", wintypes.LONG), ("ypm", wintypes.LONG),
+                        ("used", wintypes.DWORD), ("imp", wintypes.DWORD)]
+        bmi = BMI(ctypes.sizeof(BMI), w, -h, 1, 32, 0, 0, 0, 0, 0, 0)    # top row first
+        got = g32.GetDIBits(dc, bmp, 0, h, buf, ctypes.byref(bmi), 0)
+        g32.DeleteObject(bmp)
+        g32.DeleteDC(dc)
+        u32.ReleaseDC(hwnd, src)
+        if not ok or not got:
+            return False
+        Image.frombuffer("RGB", (w, h), buf.raw, "raw", "BGRX", 0, 1).save(path)
+        return True
+    except Exception:
+        return False
+
+
 def open_report(app, message="", kind="bug", tab=None):
     """tab 'answers' opens on Answers to my reports (the Report button does when one came)."""
     game = mod_dir = None
@@ -26,6 +69,10 @@ def open_report(app, message="", kind="bug", tab=None):
         mod_dir = os.path.dirname(os.path.abspath(app.mod.data))
     files = report.found(game, mod_dir)
     pictures = []
+    # the editor's window as it is now - before this window covers it (an error box of the editor too)
+    shot = os.path.join(log.logs_dir() or os.path.expanduser("~"), "editor_window.png")
+    if kind == "bug" and snap_window(app, shot):
+        pictures.append(shot)
 
     w = tk.Toplevel(app)
     w.title("Report a bug or suggest an idea")
@@ -38,6 +85,12 @@ def open_report(app, message="", kind="bug", tab=None):
         "Sends a problem or an idea to the editor's author - no account needed. A problem takes the logs along, "
         "with anything that could tell who you are cut out. 'Show what is sent' shows it all. "
         "Nothing is sent before you press Send.")).pack(anchor="w")
+    # the crash doctor's word on the game's last run, in sight and on the report's first line (the user,
+    # 2026-10-18: 'what happened, on the first line, so it is seen at once')
+    said = report.doctor(files)
+    if said:
+        ttk.Label(frm, text="The game's log says: " + said, wraplength=620, justify="left",
+                  font=("", 9, "bold")).pack(anchor="w", pady=(6, 0))
 
     v_kind = tk.StringVar(value=kind)
     kinds = ttk.Frame(frm)
@@ -123,9 +176,19 @@ def open_report(app, message="", kind="bug", tab=None):
                    command=lambda: messagebox.showinfo(APP, report.LOG_HOWTO, parent=w)).pack(side="left", padx=6)
     def kind_changed():
         lbl_prompt.configure(text=PROMPTS[v_kind.get()])
-    lbl_pics = ttk.Label(box, foreground="#666", text="No pictures.", wraplength=620,   # many names: more lines,
-                         justify="left")                                             # never a wider window
+    lbl_pics = ttk.Label(box, foreground="#666", text=(
+        "Pictures: %s (the editor's window as it was)" % os.path.basename(shot)) if pictures else "No pictures.",
+        wraplength=620, justify="left")                     # many names: more lines, never a wider window
     lbl_pics.pack(anchor="w", pady=(4, 0))
+    if shot in pictures:                                   # the opposite in the same place: it can stay out
+        def drop_shot():
+            if shot in pictures:
+                pictures.remove(shot)
+            lbl_pics.configure(text=("Pictures: " + ", ".join(os.path.basename(p) for p in pictures))
+                               if pictures else "No pictures.")
+            b_drop.destroy()
+        b_drop = ttk.Button(box, text="Leave the window's picture out", command=drop_shot)
+        b_drop.pack(anchor="w")
 
     def add_pictures():
         picked = filedialog.askopenfilenames(parent=w, title="Pictures for the report (up to %d)" % report.PICTURES,
@@ -209,7 +272,7 @@ def open_report(app, message="", kind="bug", tab=None):
         if listing:
             texts.append((report.MOD_FILES, listing))
         info = dict(kind=ui["kind"], **report.about(app.mod, _version()))
-        data = report.build_zip(texts, ui["msg"], ui["contact"], info, pictures, hide)
+        data = report.build_zip(texts, ui["msg"], ui["contact"], info, pictures, hide, doctor=said)
         return texts, info, ui["msg"], hide, data
 
     def gather():
@@ -268,7 +331,9 @@ def open_report(app, message="", kind="bug", tab=None):
                 result["packed"] = _, info, _, hide, data = pack(ui)
                 result["sending"] = True
                 result["id"], result["issue"] = report.send(
-                    data, ("Idea: " if info["kind"] == "suggestion" else "Bug: ") + report.scrub(msg, hide),
+                    data, ("Idea: " if info["kind"] == "suggestion" else "Bug: ") + report.scrub(
+                        ("The game's log says: %s\n\n" % said if said and info["kind"] != "suggestion" else "") + msg,
+                        hide),
                     ui["contact"].strip(), info, full=True, timeout=SEND_LIMIT)
             except Exception as e:           # RuntimeError in plain words; anything else still shown
                 result["error"] = str(e)
