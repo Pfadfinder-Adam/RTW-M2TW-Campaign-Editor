@@ -3475,6 +3475,41 @@ building smith
                                                          "size": (48, 48)}, "venice", None))
         self.assertEqual(got, [("menu/symbols/fe_faction_units/venice.tga", (224, 119))])
 
+    def test_the_map_from_above_is_the_3d_maps_own_picture(self):
+        """The user, 2026-10-18: 'the 3D map reads the textures, the faction-select map came out in two or three
+        colours' - where the hand finds no texture for a ground, the map from above (faction-select map, minimap) is
+        the graphics card's picture of the 3D map, its sea painted over; with every texture found the hand's own
+        (the user, side by side: 'this one is better, the land is painted')."""
+        try:
+            import numpy as np
+            from PIL import Image  # noqa: F401
+            from unittest import mock
+            from campaign_editor import minimap, glmap, terrain3d
+        except ImportError:
+            self.skipTest("no Pillow / NumPy")
+        card = np.full((20, 30, 3), (10, 200, 10), np.uint8)
+        heights = np.ones((41, 61), np.float32)
+        heights[:, :20] = -5                                     # the west a sea
+        from types import SimpleNamespace
+        hand = SimpleNamespace(rgb=np.full((20, 30, 3), 99, np.uint8), height=np.ones((20, 30), np.float32),
+                               notes=["3 ground texture(s) not found - the game's own picture ..."])
+        with mock.patch.object(glmap, "top_picture", lambda *a, **k: card), \
+                mock.patch.object(terrain3d, "heights_metres", lambda m, c: heights), \
+                mock.patch.object(terrain3d, "colour_map", lambda *a, **k: hand):
+            pic, land = minimap._top_view(None, "c", 30)
+        self.assertEqual(pic.size, (30, 20))
+        self.assertEqual(pic.getpixel((25, 10)), (10, 200, 10))  # the land: the card's picture
+        self.assertNotEqual(pic.getpixel((2, 10)), (10, 200, 10))  # the sea: painted
+        self.assertEqual(land.getpixel((2, 10)), 0)
+        hand.notes = []                                          # every texture found: the hand's own (its rivers)
+        with mock.patch.object(glmap, "top_picture", lambda *a, **k: card), \
+                mock.patch.object(terrain3d, "heights_metres", lambda m, c: heights), \
+                mock.patch.object(terrain3d, "colour_map", lambda *a, **k: hand):
+            pic, _ = minimap._top_view(None, "c", 30)
+        self.assertEqual(pic.getpixel((25, 10)), (99, 99, 99))
+        with mock.patch.object(glmap, "top_picture", lambda *a, **k: None):
+            self.assertIsNone(minimap._card_view(None, "c", 30, False))
+
     def test_the_map_from_above_is_drawn_once_for_the_same_map(self):
         """A tester (Discord): a faction brought from Barbarian Invasion froze the window 3-6 minutes - Preview and
         Apply each drew the whole map from above again for its faction-select picture. Kept for the same map now; a
@@ -8696,6 +8731,11 @@ building smith
         self.assertEqual(int(voids[H - 1 - 4, 2]), 1)                 # top row first: mountains' ground left out
         self.assertEqual(int(voids[H - 1, 7]), 2)                     # the hill's
         self.assertEqual(int(voids[0, 9]), 0)
+        # a model the library does not have keeps its ground: no hole with nothing in it (rivers as blue squares,
+        # a tester's ROCSS: the game's model files were not reached)
+        from types import SimpleNamespace
+        self.assertFalse(TM.void_map(idx, SimpleNamespace(model=lambda *a: None)).any())
+        self.assertEqual(int(TM.void_map(idx, SimpleNamespace(model=lambda *a: object()))[H - 1, 7]), 2)
 
         class Lib:                                                   # one model: the triangle above, a rock on it
             pages = {"mountains": ("mask.tga", 6, 6)}
