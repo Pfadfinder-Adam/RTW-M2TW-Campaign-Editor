@@ -553,9 +553,12 @@ def map_changes(plan, campaign, changes):
     """What the Map changed for factions other than the one being made or edited (or with none picked - the Map
     editor): changes = {'owners': {region: new owner}, 'characters': {faction: [character dicts as
     start.extra_characters takes them]}, 'remove': {faction: [{'name', 'from': (x, y)}]}, 'moves': {faction:
-    [{'name', 'from', 'to'}]}, 'army_units': {faction: [{'name', 'from', 'units'}]}} - written into the plan's
+    [{'name', 'from', 'to'}]}, 'army_units': {faction: [{'name', 'from', 'units'}]}, 'scripts': {script file: {line: text}}} - written into the plan's
     descr_strat.txt like the edited faction's own changes. A removed character goes with his whole block (his army
     or fleet too); a man on the family tree stays on it as one who died before the start (take_off_map)."""
+    if changes and changes.get("scripts"):              # the Map's Scripts layer: lines dragged / edited (scriptmap)
+        from .scriptmap import apply as apply_scripts
+        apply_scripts(plan, changes["scripts"])
     if not changes or not any(changes.get(k) for k in ("owners", "characters", "remove", "moves", "army_units")):
         return
     from .start import extra_characters

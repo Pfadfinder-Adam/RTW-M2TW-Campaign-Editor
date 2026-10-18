@@ -131,7 +131,7 @@ much faster on big mods; every picture opens big on a click; reports carry scree
 
 <img src="docs/images/bigger_map_natural.png" width="700" alt="Regions of Italy and Greece 3 x bigger: in squares (left), the natural way (right)">
 
-Scripts follow too: every campaign-map place in the campaign's scripts (spawned armies and characters, `reposition_character`, `move`, the camera, `reveal_tile`, forts and resources made by `console_command`, 'near a tile' and 'in a rectangle' conditions) goes to its block; battle positions in the same scripts stay. Lines the editor cannot read for sure, and Lua / Squirrel scripts that place things by tile (not the engines' own interface scripts), are listed to check by hand.
+Scripts follow too: every campaign-map place in the campaign's scripts (spawned armies and characters, `reposition_character`, `move`, the camera, `reveal_tile`, forts and resources made by `console_command`, 'near a tile' and 'in a rectangle' conditions) goes to its block; battle positions in the same scripts stay. Lua / Squirrel scripts that place things by tile (not the engines' own interface scripts) move too; lines the editor cannot read for sure are listed to check by hand. The Map's **Scripts** layer shows every tile the scripts name as a scroll: drag it to move the place, double click it to edit the lines round it.
 Without REX / M2EX the original exes stop at
 510 tiles - the tool warns. Checked on both vanilla campaigns (103 / 112 towns, 177 / 216 characters, 75 / 77 ports
 in place, no river on the sea, every river end at the sea, a river or the map's edge as in the original). The first

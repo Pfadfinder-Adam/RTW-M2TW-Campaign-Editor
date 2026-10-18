@@ -359,6 +359,7 @@ class App(tk.Tk):
         self.res_moves, self.res_removed, self.res_added, self.region_tags = {}, [], [], {}
         # forts and watchtowers the same way: moved {line: (x, y)}, removed [line], added [{kind, xy}] (forts.py)
         self.fort_moves, self.fort_removed, self.fort_added = {}, [], []
+        self.script_edits = {}          # the Map's Scripts layer: {script file: {line: new text}} (gui_scriptmap.py)
         self._res_placing, self._res_sel = None, None
         self.art_replace, self.sel_map = {}, {}      # Art tab: {path under data: picture}, {on, colour}
         self.figures = {}                           # Art tab: {character type: [strat model per level]}
@@ -883,6 +884,10 @@ class App(tk.Tk):
             self, pid)                                    # a special place's diamond: its window
         self.map_view.on_special_move = lambda pid, xy: __import__(
             "campaign_editor.gui_places", fromlist=["move"]).move(self, pid, xy)    # ... dragged to another tile
+        self.map_view.on_script_open = lambda sid: __import__(
+            "campaign_editor.gui_scriptmap", fromlist=["open_script"]).open_script(self, sid)   # a script's scroll
+        self.map_view.on_script_move = lambda sid, xy: __import__(
+            "campaign_editor.gui_scriptmap", fromlist=["move"]).move(self, sid, xy)
         # Bigger map (x3) on the map's own bar, left of its zoom (- 100% + Fit stay together), with its own '?'
         # saying what it does (once on the top row; a tester: 'not between the zoom's plus and minus')
         from .gui_util import hint as _hint, tip as _tip
@@ -2157,7 +2162,7 @@ class App(tk.Tk):
     UNDO_KEYS = ("chosen", "garrisons", "buildings_picked", "sizes", "kinds", "place_moves", "ports_gone", "char_moves", "field",
                  "removed_existing", "dip_set", "region_paint", "new_regions", "region_religions", "new_religions", "region_edits",
                  "culture_names", "name_list", "res_moves", "res_removed", "res_added", "region_tags", "fort_moves", "fort_removed", "fort_added", "art_replace", "sel_map", "figures", "figures_like", "roster_set",
-                 "family_set", "map_owners", "map_chars", "map_removed", "map_moves", "map_units")
+                 "family_set", "map_owners", "map_chars", "map_removed", "map_moves", "map_units", "script_edits")
 
     def snapshot(self):
         st = {k: copy.deepcopy(getattr(self, k)) for k in self.UNDO_KEYS}
@@ -4177,6 +4182,9 @@ class App(tk.Tk):
                            everyone=True, **region_kw)
         from .gui_places import marks as _special_marks       # special places: engine-drawn models (gold diamonds)
         self.map_view.special = _special_marks(self)
+        if self.map_view.v_scripts.get():                     # the places the scripts name (scrolls), read when shown
+            from .gui_scriptmap import marks as _script_marks
+            self.map_view.scripts = _script_marks(self)
         self.map_view.render()
 
     RELIGION_COLOURS = {"catholic": (214, 170, 60), "orthodox": (70, 110, 190), "islam": (60, 150, 70),
@@ -4890,6 +4898,7 @@ class App(tk.Tk):
         self.name_list = {}
         self.res_moves, self.res_removed, self.res_added, self.region_tags = {}, [], [], {}
         self.fort_moves, self.fort_removed, self.fort_added = {}, [], []
+        self.script_edits = {}
         self._res_placing, self._res_sel, self._res_cache = None, None, None
         self.art_replace, self.sel_map = {}, {}
         self.figures = {}
@@ -6492,6 +6501,8 @@ class App(tk.Tk):
                 per.setdefault(fac, []).append(item)
             if per:
                 out[key] = per
+        if self.script_edits:                             # the Scripts layer: lines dragged or edited
+            out["scripts"] = {p: dict(v) for p, v in self.script_edits.items() if v}
         return out
 
     def _faction_label(self):

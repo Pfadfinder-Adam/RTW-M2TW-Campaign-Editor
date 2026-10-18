@@ -37,7 +37,7 @@ author in one click ([video](https://youtu.be/7MbYR9ywNsI)). That is the fastest
 - `descr_terrain.txt` gets the new size; `map.rwm` is deleted so the game rebuilds it.
 - Preview of every file, one backup, Restore byte-exact.
 
-Scripts follow too: every campaign-map place in the campaign's scripts (spawned armies and characters, `reposition_character`, `move`, the camera, `reveal_tile`, forts and resources made by `console_command`, 'near a tile' and 'in a rectangle' conditions) goes to its block; battle positions in the same scripts stay. Lines the editor cannot read for sure, and Lua / Squirrel scripts, are listed to check by hand.
+Scripts follow too: every campaign-map place in the campaign's scripts (spawned armies and characters, `reposition_character`, `move`, the camera, `reveal_tile`, forts and resources made by `console_command`, 'near a tile' and 'in a rectangle' conditions) goes to its block; battle positions in the same scripts stay. Lua / Squirrel scripts that place things by tile move too; lines the editor cannot read for sure are listed to check by hand.
 Without REX / M2EX the original exes stop at
 510 tiles - the tool warns. Checked on both vanilla campaigns (103 / 112 towns, 177 / 216 characters, 75 / 77 ports
 in place, no river on the sea, every river end at the sea, a river or the map's edge as in the original). The first
@@ -231,6 +231,7 @@ The first nine days (0.1.0 → 0.30.0): from a one-mod faction cloner to a campa
 - 📦 Bring buildings from another mod (Rome / BI / REX): the building keeps its look in towns on the battle map - town-plan places, battle building, items and models come along (from a report)
 - 📦 Bring units from another mod: the list sorts (name, kind, owner, cost), the unit under the mouse shows without ticking it, the first step in a window as small as it needs (from reports)
 - 📦 View in 3D: Medieval II's armour upgrades picked in the window; a shield worn two ways drawn once (on the back with the first weapon)
+- 📦 Scripts on the map: a layer with a scroll on every tile the campaign's scripts and the Lua / Squirrel scripts name - dragged to move the place, double clicked to edit the lines round it; Undo, Preview and Apply as the Map's other changes
 - ✅ Special places: any campaign-map model on any tile with its own window on the game's scroll (picture, name, bonus, text, holder) and money a turn, its diamond dragged to move it - REX / M2EX
 - 📦 Leader's and heir's titles on the faction tab (New and Edit, both games)
 - 📦 Make a card: beside the 3D view and following it; its framing kept for the next unit

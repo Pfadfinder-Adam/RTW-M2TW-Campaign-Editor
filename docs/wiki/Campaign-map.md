@@ -367,7 +367,7 @@ could not place).
 
 ![The coast of Italy made 3 x bigger: before (squares), after (smooth)](https://raw.githubusercontent.com/Pfadfinder-Adam/RTW-M2TW-Campaign-Editor/main/docs/images/bigger_map_coast.png)
 ![Regions 3 x bigger: in squares (left), the natural way - winding coast and borders (right)](https://raw.githubusercontent.com/Pfadfinder-Adam/RTW-M2TW-Campaign-Editor/main/docs/images/bigger_map_natural.png)
-The campaign's scripts follow too: every place on the campaign map in `campaign_script.txt` (spawned armies and characters, `reposition_character`, `move`, the camera, `reveal_tile`, forts and resources made by `console_command`, 'near a tile' distances, 'in a rectangle' sizes) goes to its block; battle positions in the same script stay. Lines the editor cannot read for sure, and Lua / Squirrel scripts that place things by tile (not the engines' own interface scripts), are listed to check by hand.
+The campaign's scripts follow too: every place on the campaign map in `campaign_script.txt` (spawned armies and characters, `reposition_character`, `move`, the camera, `reveal_tile`, forts and resources made by `console_command`, 'near a tile' distances, 'in a rectangle' sizes) goes to its block; battle positions in the same script stay. Lua / Squirrel scripts that place things by tile (not the engines' own interface scripts) move too; lines the editor cannot read for sure are listed to check by hand.
 Past 510 tiles the original exes need REX / M2EX.
 The map's real size is shown under the map, bottom left.
 
@@ -425,8 +425,22 @@ keeps nothing. What cannot go is said before any question: a region a faction ri
 whose faction keeps a town but no room near it. Lines of the campaign's scripts that name a town or region cut are
 commented out as when deleting a town (Medieval II's right edge with Baghdad and Mosul can be cut); lines that name
 tiles, a condition naming a town cut, or the faction leaving are listed to change by hand. One backup; **Undo this write** (beside the status line)
-or Tools > Restore a backup gives it all back. Lua / Squirrel scripts are listed to check by hand, as with the bigger
-map.
+or Tools > Restore a backup gives it all back. Places in the scripts (Lua / Squirrel too) that would fall on the cut part
+move in to the new edge, except lines with a condition naming a town that is cut (listed).
+
+## Scripts on the map
+
+**Layers > Scripts (the tiles they name)** puts a small parchment scroll on every campaign-map tile the scripts name:
+the campaign's scripts (`campaign_script.txt` and the script `descr_strat.txt` names - spawned armies and characters'
+`x, y`, `move`, `reposition_character`, the camera, `reveal_tile`, 'near a tile' and 'in a rectangle' conditions) and
+the Lua / Squirrel scripts beside the mod. The scroll sits at the tile's upper right corner, so the town or army on the
+tile stays seen; several on one tile stand side by side. The mouse on one shows its file, line and text.
+
+- **Drag** a scroll to another tile: that one number pair of the line changes (a distance or a size stays as it was).
+- **Double click** a scroll: a window over the map shows the lines round it (its command, as far as the blank lines) -
+  edit them as text, **Keep** holds them, **Put back as in the file** gives the file's own lines back.
+- A changed scroll has a blue edge, one off the map a red edge. Nothing is written until **Apply changes**; Undo / Redo
+  and Preview work as for the Map's other changes.
 
 ## Wonders (Rome)
 
