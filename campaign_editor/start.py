@@ -534,7 +534,7 @@ def build_start(plan, campaign, start):
             plan.note(f, "%s: captain %s leads your garrison of %d unit(s)" % (r, name, len(lines)))
         joined[r] = agents + [(name, kind, chunk)]
 
-    own = []
+    heads = []                          # the leader's and the heir's lines (own() is the land's: a list here broke place())
     for role in ("leader", "heir"):
         who = start.get(role)
         if not who:
@@ -573,18 +573,18 @@ def build_start(plan, campaign, start):
                                            ", the town's garrison included" if garrison else ""))
         if region:
             units = merge(units, region, name)
-        own.append(f.make(";;\t%s" % role))
-        own.append(f.make(character_line(f, name, "named character", who.get("age", 30), xy, role=role)))
+        heads.append(f.make(";;\t%s" % role))
+        heads.append(f.make(character_line(f, name, "named character", who.get("age", 30), xy, role=role)))
         mine = next((m for m in (brought or {}).get("family", {}).get("men", []) if m["name"] == name), None)
         if mine:                                         # a brought faction's leader / heir: his own traits
-            own.extend(f.make(x) for x in mine["rest"])
+            heads.extend(f.make(x) for x in mine["rest"])
         if units:
-            own.append(f.make("army"))
-            own.extend(f.make(u.rstrip("\r")) for u in units)
-        own.append(f.make(""))
+            heads.append(f.make("army"))
+            heads.extend(f.make(u.rstrip("\r")) for u in units)
+        heads.append(f.make(""))
         if role == "heir" and not region:
             plan.note(f, "heir %s stands next to %s (a town holds one army)" % (name, capital))
-    if not own:
+    if not heads:
         raise ValueError("the new faction needs a leader")
     if not start.get("characters") and not (start.get("heir") or {}).get("name"):
         plan.note(f, "AI: %s starts with one army, led by its faction leader: the computer seldom sends its leader out "
@@ -603,7 +603,7 @@ def build_start(plan, campaign, start):
     for b in moved_blocks:
         block.extend(b)
         block.append(f.make(""))
-    block.extend(own)
+    block.extend(heads)
     if start.get("characters"):
         armies_now = {c.xy for x in s.factions for c in x.characters
                       if c.xy and _has_army(s.lines[c.start:c.end]) and c.start not in removed}
