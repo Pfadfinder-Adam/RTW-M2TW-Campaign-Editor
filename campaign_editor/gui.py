@@ -1097,7 +1097,9 @@ class App(tk.Tk):
         else:
             if row.winfo_manager() != "pack":
                 row.place_forget()
-                row.pack(side="bottom", fill="x", padx=6, pady=(0, 6), before=self.nb)
+                # before the tabs - once they are laid out (report R-20261018-07F36B: '.!notebook isn't packed')
+                where = {"before": self.nb} if self.nb.winfo_manager() == "pack" else {}
+                row.pack(side="bottom", fill="x", padx=6, pady=(0, 6), **where)
             self._status_in_bar = False
         self._show_status()
 
