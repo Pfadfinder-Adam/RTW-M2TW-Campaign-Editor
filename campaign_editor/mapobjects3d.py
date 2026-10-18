@@ -206,6 +206,36 @@ def objects(mod, campaign, strat, moved=None):
             if model and fo.kind != "landmark":
                 out.append({"kind": kind, "model": model, "texture": None, "xy": tuple(fo.xy), "scale": 1.0,
                             "faction": fb.name})
+    # a region with no settlement in descr_strat: the game's rebel village stands there (the user: 'some villages are
+    # not shown') - in the culture of the faction that built it (descr_regions' creator), else the rebels'
+    try:
+        regions = mod.regions(campaign)
+    except Exception:
+        regions = {}
+    for region, xy in tiles.items():
+        if tuple(xy) in towns or region not in regions:
+            continue
+        creator = (regions.get(region) or {}).get("creator") or "slave"
+        cm = culture_of(creator)
+        model = cm["levels"].get("village") or next(iter(cm["levels"].values()), None)
+        if model:
+            out.append({"kind": "town", "model": model, "texture": None, "xy": tuple(xy), "scale": 1.0,
+                        "faction": "slave"})
+            towns.add(tuple(xy))
+    # Rome's wonders ('landmark <type> x, y' in descr_strat): their own models of descr_sm_landmarks.txt
+    try:
+        from . import wonders as W
+        kinds = W.types(mod)
+    except Exception:
+        kinds = {}
+    for fo in strat.forts:
+        if fo.kind != "landmark":
+            continue
+        item = (kinds.get(fo.type) or {}).get("item")
+        if item:
+            rel = item[5:] if item.lower().startswith("data/") else item
+            out.append({"kind": "landmark", "model": rel, "texture": None, "xy": tuple(fo.xy), "scale": 1.0,
+                        "faction": None})
     # resources (their lines in descr_strat: 'resource gold, 83, 128')
     res = resource_models(mod)
     for line in strat.lines:
