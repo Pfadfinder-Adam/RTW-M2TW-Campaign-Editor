@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.35.1 - 2026-10-18
+
+### In short
+- **Fixed**: crashes of the game after the editor's work (a faction brought from another mod, a town given to a faction that comes later, two guilds in one town), the 3D map's blue squares for rivers and missing mountains, a freeze of minutes when bringing a faction, errors of the editor itself (Recolour, New mod folder under Wine, the start).
+- **Added**: the crash doctor - Report a bug says in one line why the game stopped, from the game's own log; View in 3D plays loose .cas animations.
+- **Changed**: the faction-select map and minimap use the 3D map's picture where a ground's texture was not found; a name given twice in a faction gets a free one instead of a refused write.
+
+### Fixed
+- New faction > From another mod: a name list typed in the window was replaced by the other mod's, so the leader typed from it was refused (naming the template) -> the typed list wins; the message names the faction whose list it is.
+- An error box at start (the message line placed before the tabs before they were laid out) -> gone.
+- Two characters of one faction with the same name: the write was refused (naming captains stopped) -> the second one takes a free name of the faction's own list, said in the report.
+- A faction that comes later (by an event) given a town or a character on the Map: the game stopped at the campaign's start -> it starts alive with the write, said in the report.
+- Recolour: a click on a picture's tick could end in an error (the window's after-picture hid a part of the window itself) -> fixed.
+- Report a bug: the game's newest crash report went with it even when it was days old and from another mod -> only the crash of the game's last run goes; the game's log explains a script condition with nothing to ask about.
+- Bringing units or a whole faction: Medieval II stopped at its start when a brought skeleton named an animation kept as a loose file in the other mod -> the file comes along; a skeleton naming one found nowhere is left out (the units take the nearest one); Check the game's log explains that crash.
+
+### Added and changed
+- Crash doctor: the game's log is read for the line the engine writes after a crash (what it failed to find or load) - shown in Report a bug, on the report's first line and at the top of the game's log in plain words; errors the game went on after are told apart from the real stop. Report a bug takes a picture of the editor's window by itself (Windows; it can be left out).
+- Faction-select map and minimap drawn from the map: where a ground's texture was not found they came out in two or three plain colours -> there the 3D map's own picture (the graphics card) is used; 3D map: a river or mountain whose model is not found no longer leaves a blue square.
+- View in 3D plays a man's animations kept as loose .cas files too (Medieval II reads them when no pack holds them).
+- Check mod files: a town with two guild buildings (Medieval II stops at the campaign's start) is named.
+- New mod folder: one file that would not copy (a path too long under Wine / Linux) stopped it with 'File not found' and no folder -> that file is left out and named, the folder is made; 'make your own mod folder first' is no longer shown as a red Writing failed.
+- Art: the faction screen's units picture (menu/symbols/fe_faction_units) gets Draw from the map too - Stainless Steel and the mods made on it show the faction's map there.
+- New faction > From another mod: the window froze for minutes (the whole map was drawn from above again at Preview and again at Apply) -> drawn once for the same map.
+- Maps > 3D (Medieval II): rivers drawn as blue squares and mountains without their models when the game keeps its map files in its packs -> they are read from the packs.
+- Maps > 3D: a short stall each time a carried army, agent, fleet or resource was let go (the whole map was laid again) -> only the thing let go is laid again.
+
 ## 0.35.0 - 2026-10-18
 
 ### In short
@@ -12,22 +39,6 @@
 - Edit faction: a faction with more towns than first names gave two captains the same name and the write was refused -> the next captains take a first name with a surname of the list.
 - Interface: a mod's menu file with a tag never closed stopped the Interface work -> it opens; Check mod files names the line.
 - A new playable faction gets its own slot on the faction-select screen by itself (the menu layout had 21, the 22nd faction could not be picked); Steam's Medieval II unpacks again (the unpacker asked three times and stopped after two answers).
-- Faction-select map and minimap drawn from the map: where a ground's texture was not found they came out in two or three plain colours -> there the 3D map's own picture (the graphics card) is used; 3D map: a river or mountain whose model is not found no longer leaves a blue square.
-- New faction > From another mod: a name list typed in the window was replaced by the other mod's, so the leader typed from it was refused (naming the template) -> the typed list wins; the message names the faction whose list it is.
-- View in 3D plays a man's animations kept as loose .cas files too (Medieval II reads them when no pack holds them).
-- Check mod files: a town with two guild buildings (Medieval II stops at the campaign's start) is named.
-- An error box at start (the message line placed before the tabs before they were laid out) -> gone.
-- Two characters of one faction with the same name: the write was refused (naming captains stopped) -> the second one takes a free name of the faction's own list, said in the report.
-- A faction that comes later (by an event) given a town or a character on the Map: the game stopped at the campaign's start -> it starts alive with the write, said in the report.
-- Recolour: a click on a picture's tick could end in an error (the window's after-picture hid a part of the window itself) -> fixed.
-- New mod folder: one file that would not copy (a path too long under Wine / Linux) stopped it with 'File not found' and no folder -> that file is left out and named, the folder is made; 'make your own mod folder first' is no longer shown as a red Writing failed.
-- Crash doctor: the game's log is read for the line the engine writes after a crash (what it failed to find or load) - shown in Report a bug, on the report's first line and at the top of the game's log in plain words; errors the game went on after are told apart from the real stop. Report a bug takes a picture of the editor's window by itself (Windows; it can be left out).
-- Art: the faction screen's units picture (menu/symbols/fe_faction_units) gets Draw from the map too - Stainless Steel and the mods made on it show the faction's map there.
-- New faction > From another mod: the window froze for minutes (the whole map was drawn from above again at Preview and again at Apply) -> drawn once for the same map.
-- Maps > 3D (Medieval II): rivers drawn as blue squares and mountains without their models when the game keeps its map files in its packs -> they are read from the packs.
-- Report a bug: the game's newest crash report went with it even when it was days old and from another mod -> only the crash of the game's last run goes; the game's log explains a script condition with nothing to ask about.
-- Bringing units or a whole faction: Medieval II stopped at its start when a brought skeleton named an animation kept as a loose file in the other mod -> the file comes along; a skeleton naming one found nowhere is left out (the units take the nearest one); Check the game's log explains that crash.
-- Maps > 3D: a short stall each time a carried army, agent, fleet or resource was let go (the whole map was laid again) -> only the thing let go is laid again.
 - Bring units: units shared by several factions came out in the first owner's colours (blue officers and cards on Gallic units) -> they take the look of the faction picked in step 2, else of their own owners; the men and each officer can be seen in 3D there before writing.
 - Bring units: after 'Make my own mod folder' the same window wrote into the game itself -> it now writes into the mod loaded now.
 - Maps (Map, Terrain, Coast and heights, 3D): the switches, brushes and zoom stand in the empty part of the tabs' own row, the zoom first on every tab; the column on the right holds only the legend or the brush colours (each as wide as its words) and is gone when there is nothing in it; the message line sits in the bottom bar's free middle - the map has the window's whole height.
