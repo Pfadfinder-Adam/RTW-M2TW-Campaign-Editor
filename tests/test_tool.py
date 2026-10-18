@@ -3719,6 +3719,21 @@ building smith
         write(os.path.join(d, "menu", "Rome.lnt"), lost)
         self.assertIn("the game stops when it opens that menu", " ".join(L.problems(mod)))
 
+    def test_region_rebels_must_be_a_rebel_type(self):
+        """#343: a region's rebels written as the window's '(as the land it is cut from)' - the game stopped after the
+        campaign loaded ('couldn't find rebel type'); Check mod files names such a region, both games."""
+        from campaign_editor.check import region_rebel_problems
+        data = os.path.join(self.root, "data")
+        write(os.path.join(data, "descr_rebel_factions.txt"),
+              "rebel_type German_Rebels\ncategory peasant_revolt\nunit Peasants\n\nrebel_type Brigands // Rome\n")
+        mod = ModData(data)
+        regions = {"Orle": {"rebels": "(as the land it is cut from)"}, "Rugen": {"rebels": "German_Rebels"},
+                   "Lands": {"rebels": "Brigands"}, "Sea": {}}
+        got = region_rebel_problems(mod, regions)
+        self.assertEqual(len(got), 1)
+        self.assertIn("Orle", got[0])
+        self.assertIn("(as the land it is cut from)", got[0])
+
     def test_heights_picture_kept_and_painted_in_place(self):
         """The Coast & heights map: the blown-up heights picture is made once and the brush's points painted into it
         (made again at every puff and every move of the map it lagged on a big map) - the same as made anew."""

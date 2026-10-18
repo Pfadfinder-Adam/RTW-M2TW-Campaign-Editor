@@ -245,6 +245,7 @@
   line of the block** in both editors; the editor remembers whether it was open.
 
 ### Fixed
+- A region's window let '(as the land it is cut from)' be picked as its rebels for a region already on the map - it was written so and the game stopped after loading the campaign -> only new regions offer it, a rebel type the mod lacks is refused, and Check mod files names such a region.
 - The 2D map lagged when moved, zoomed or painted with the heights brush -> each move about twice as quick (the map's picture painted over in place, the heights picture kept, the names measured once); the coast's line follows when the brush is let go.
 - Interface: dragging a piece lagged (the whole layout file was read again twice a mouse move) -> it follows the mouse; the page is drawn by the graphics card where it gives OpenGL 3.3, so zooming and moving the page are quick too.
 - Maps > Terrain or Coast & heights would not open after the 3D map's heights brush came -> they open again.
