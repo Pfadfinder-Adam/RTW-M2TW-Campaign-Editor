@@ -3029,7 +3029,9 @@ class App(tk.Tk):
         w.transient(self)
         frm = scroll_body(w, 10)          # resizable, scrolls when the window is lower than it
         facs = [fb.name for fb in self.strat.factions]
-        rebels = sorted({v.get("rebels") for v in self.regions.values() if v.get("rebels")})
+        from .masstown import rebel_types
+        kinds = set(rebel_types(self.mod)) if self.mod else set()     # every rebel type the mod has
+        rebels = sorted(kinds | {v.get("rebels") for v in self.regions.values() if v.get("rebels")})
         res = self._region_tag_names()
         me = self.v["template"].get().strip()
         fields = [("Region - name in the files", "name", "", "letters, digits, _ ; no spaces (Tribus_Novus)"),
@@ -3098,13 +3100,16 @@ class App(tk.Tk):
             ttk.Label(frm, text=label).grid(row=i, column=0, sticky="w", pady=1)
             v = tk.StringVar(value=default)
             vs[key] = v
+            # 'as the land it is cut from' only for a new region: a region of the map has its own (#343: picked for
+            # one, it was written as its rebels and the game stopped)
+            as_land = [] if old else [AS_LAND]
             if key in ("creator", "owner"):
-                vals = [AS_LAND] + facs if key == "creator" else \
+                vals = as_land + facs if key == "creator" else \
                     ([rebel_text] if not old or default == rebel_text else []) + facs
                 from .gui_util import FactionBox
                 FactionBox(frm, v, vals, self.shown_names(), width=34).grid(row=i, column=1, sticky="we", padx=6)
             elif key == "rebels":
-                ttk.Combobox(frm, textvariable=v, values=[AS_LAND] + rebels,
+                ttk.Combobox(frm, textvariable=v, values=as_land + rebels,
                              width=34).grid(row=i, column=1, sticky="we", padx=6)
             elif key == "resources":                     # the mod's tags under the arrow, several picked
                 ManyPick(frm, v, res, width=34).grid(row=i, column=1, sticky="we", padx=6)
@@ -3138,8 +3143,14 @@ class App(tk.Tk):
                     if k in ("triumph", "farming") and val and not val.isdigit():
                         messagebox.showerror(APP, "%s is a whole number" % k, parent=w)
                         return
+                    if k in ("creator", "rebels") and val == AS_LAND:
+                        continue                         # the region keeps its own (only new regions take the land's)
                     if k == "creator" and val and val not in facs:
                         messagebox.showerror(APP, "%s is no faction of this mod" % val, parent=w)
+                        return
+                    if k == "rebels" and val and kinds and val not in kinds:
+                        messagebox.showerror(APP, "%s is no rebel type of this mod (descr_rebel_factions.txt) - the "
+                                                  "game would stop with it" % val, parent=w)
                         return
                     if val and val != now:
                         ch[k] = val

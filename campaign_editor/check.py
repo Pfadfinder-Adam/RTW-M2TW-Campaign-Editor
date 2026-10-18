@@ -386,6 +386,8 @@ def check_mod(mod, campaign, deep=False, progress=None, found=None):
         bad(msg)
     for msg in rebel_problems(mod, units):
         bad(msg)
+    for msg in region_rebel_problems(mod, regions):
+        bad(msg)
     for msg in slaves_problems(mod, regions):
         bad(msg)
     from .emergence import problems as later_problems       # emergent / shadow / split-off factions
@@ -903,6 +905,19 @@ def rebel_problems(mod, units):
                 out.append("descr_rebel_factions.txt, %s: unit '%s' has no 'slave' in its ownership - the game "
                            "crashes when these rebels appear" % (cur, u))
     return out
+
+
+def region_rebel_problems(mod, regions):
+    """A region whose rebels (descr_regions.txt, its third line) are no rebel_type of descr_rebel_factions.txt: the
+    game stops after the campaign loads ('couldn't find rebel type ... in rebel database' - a tester's Medieval II,
+    #343). Both games."""
+    from .masstown import rebel_types
+    if not mod.find("descr_rebel_factions.txt"):
+        return []
+    known = set(rebel_types(mod))
+    return ["descr_regions.txt, %s: its rebels '%s' are no rebel type of descr_rebel_factions.txt - the game stops "
+            "after the campaign loads; pick one in the region's window (Maps, right click > Edit region)" % (r, v["rebels"])
+            for r, v in sorted(regions.items()) if v.get("rebels") and v["rebels"] not in known]
 
 
 def town_ring_problems(mod, campaign):
