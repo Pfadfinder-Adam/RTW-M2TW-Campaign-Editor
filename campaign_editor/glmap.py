@@ -361,12 +361,35 @@ class MapData:
         ys = 0.0005 * self.scale
         self.objects = MM.build([o for o in objs if not pick(o)], loader, self.heights, ys)
         self.ghost = MM.build(held, loader, self.heights, ys)
+        self._held = held
+        return True
+
+    def put_down(self, tile=None):
+        """What is in the hand put down - on tile (its objects moved there, only they laid again), else back where it
+        stood - and joined to the rest without laying the whole map again (a tester: a short stall each time a
+        figure was let go: every town, army and resource was laid anew, 0.7 s on Rome's map)."""
+        from . import mapmodels as MM
+        held = getattr(self, "_held", None)
+        if not held or not getattr(self, "ghost", None):
+            return False
+        if tile is not None:
+            towns = {tuple(o["xy"]) for o in self._objs[0] if o["kind"] == "town"}
+            for o in held:
+                o["xy"] = tuple(tile)
+                if o["kind"] == "character":
+                    o["in_town"] = tuple(tile) in towns
+            self.ghost = MM.build(held, self._objs[1], self.heights, 0.0005 * self.scale)
+        for tex, arr in self.ghost.items():
+            if len(arr):
+                have = self.objects.get(tex)
+                self.objects[tex] = arr if have is None or not len(have) else np.concatenate([have, arr])
+        self.ghost, self._held = {}, None
         return True
 
     def put_back(self):
         """What is in the hand back where it stood (Esc, a tile the game would not take)."""
         if getattr(self, "ghost", None):
-            self.place_objects()
+            self.put_down()
 
     def _net(self, mod, campaign, strat):
         """The roads and region borders (mapnet): the towns' road buildings and the regions' owners from strat."""
