@@ -77,17 +77,53 @@ def open_script(app, sid):
     sp = _spot(app, sid)
     if sp is None:
         return None
-    rs = SM.rows(sp["path"], app.script_edits)
-    n = next((k for k, r in enumerate(rs) if r[0] == sp["line"] and r[1] == sp["sub"]), 0)
-    a, b = SM.block(rs, n, sp["code"])
-    key = (sp["path"], rs[a][0] if rs else 0)
+    return open_line(app, sp["path"], sp["line"], sp["code"], sp["sub"])
+
+
+def open_line(app, path, line, code=False, sub=0):
+    """The window of the lines round a script file's line (a scroll, or a town's right click > Scripts of ...)."""
+    rs = SM.rows(path, app.script_edits)
+    n = next((k for k, r in enumerate(rs) if r[0] == line and r[1] == sub), 0)
+    a, b = SM.block(rs, n, code)
+    key = (path, rs[a][0] if rs else 0)
     w = _OPEN.get(key)
     if w is not None and w.winfo_exists():
         w.deiconify()
         w.lift()
         return w
-    w = _OPEN[key] = ScriptWindow(app, sp, key[1], n - a)
+    w = _OPEN[key] = ScriptWindow(app, {"path": path, "code": code, "line": line}, key[1], n - a)
     return w
+
+
+def town_lines(app, region, town, xy):
+    """[(label, path, line, code)] of the script lines about a town: the ones naming its tile, then the ones naming
+    the town or its region by name (I_SettlementOwner Sarkel, a region in a list ...) - for its right click."""
+    import re
+    if not app.mod:
+        return []
+    out, seen = [], set()
+    for sp in spots(app):
+        if xy and tuple(sp["xy"]) == tuple(xy) and (sp["path"], sp["line"]) not in seen:
+            seen.add((sp["path"], sp["line"]))
+            out.append((sp["path"], sp["line"], sp["code"], sp["text"]))
+    words = {w for w in (region, town) if w}
+    if words:
+        pat = re.compile(r"(?<![\w-])(%s)(?![\w-])" % "|".join(re.escape(w) for w in words), re.I)
+        try:
+            fs = SM.files(app.mod, app.v_campaign.get())
+        except Exception:
+            fs = []
+        for path, code in fs:
+            try:
+                rs = SM.rows(path, app.script_edits)
+            except OSError:
+                continue
+            for i, j, text in rs:
+                body = text.split(";")[0] if not code else text
+                if (path, i) not in seen and pat.search(body):
+                    seen.add((path, i))
+                    out.append((path, i, code, text))
+    return [("%s:%d   %s" % (os.path.basename(p), i + 1, t.strip()[:70]), p, i, c) for p, i, c, t in out[:40]]
 
 
 class ScriptWindow(tk.Toplevel):
@@ -99,7 +135,7 @@ class ScriptWindow(tk.Toplevel):
         super().__init__(app)
         self.app, self.path, self.code, self.first, self.at = app, sp["path"], sp["code"], first, at
         self.transient(app)
-        self.title("%s - %s" % (TITLE, title(app, sp)))
+        self.title("%s - %s:%d" % (TITLE, os.path.basename(sp["path"]), sp["line"] + 1))
         frm = ttk.Frame(self, padding=8)
         frm.pack(fill="both", expand=True)
         self.lbl = ttk.Label(frm, text="", wraplength=640, justify="left")
@@ -196,4 +232,4 @@ class ScriptWindow(tk.Toplevel):
         self.reload()
 
 
-__all__ = ["marks", "move", "open_script", "spots", "ScriptWindow"]
+__all__ = ["marks", "move", "open_script", "open_line", "town_lines", "spots", "ScriptWindow"]
