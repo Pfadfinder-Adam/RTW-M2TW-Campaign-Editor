@@ -4849,9 +4849,12 @@ class App(tk.Tk):
                         "its own data" if st.get("thin") else "%d file(s) linked, %d copied (%.0f MB really written)%s"
                         % (st["linked"], st["copied"], st["bytes_copied"] / 1048576.0,
                            "" if st["hard_links"] else " - every file copied"),
-                        ("The linked files show full size in Explorer but take no disk space: they are the "
-                         "base's own files under a second name. Deleting this folder never touches the "
-                         "game.\n\n") if st["hard_links"] and st["linked"] else "",
+                        (("The linked files show full size in Explorer but take no disk space: they are the "
+                          "base's own files under a second name. Deleting this folder never touches the "
+                          "game.\n\n") if st["hard_links"] and st["linked"] else "") + (
+                            "%d file(s) could not be copied and were left out (the first: %s - %s); copy them by "
+                            "hand if the mod needs them.\n\n" % ((len(st["skipped"]),) + st["skipped"][0])
+                            if st.get("skipped") else ""),
                         "Start_%s.bat" % name)))
             wait()
         bar = ttk.Frame(frm)
@@ -6952,7 +6955,8 @@ class App(tk.Tk):
     def _write(self, parts):
         """Write [(key, label, plan or None)] in order; a plan left None is built just
         before it is written, on the files as the pieces before it left them."""
-        done, failed, applied, bdirs = [], None, set(), []
+        from .textio import NotWritten
+        done, failed, applied, bdirs, chose = [], None, set(), [], None
         # a New faction about to be written: once it is, its form is done (see _new_faction_made)
         new_made = self.v["name"].get().strip() if self.mod and not self.editing() and not self.map_only() else None
         for key, label, plan in parts:
@@ -6964,6 +6968,10 @@ class App(tk.Tk):
                 if plan is None:
                     plan = self._part_plan(key)
                 bdir = plan.apply()
+            except NotWritten as e:                     # the modder's own choice (own mod folder first): no error
+                chose = str(e)                          # (report R-20261018-BB79B8: a red 'Writing failed' box)
+                log.write("Not written: %s" % e)
+                break
             except Exception as e:
                 failed = "%s: %s" % (label or key, e)
                 log.write("Writing failed: %s\n%s" % (failed, traceback.format_exc()))
@@ -6983,6 +6991,8 @@ class App(tk.Tk):
             if key in self.editors:
                 self.editors[key].mod = None
         text = "\n\n".join(done)
+        if chose:
+            self.status.set(chose)
         if failed:
             text = "Writing stopped - %s\n\n%s" % (failed, text or "nothing was written.")
             messagebox.showerror(APP, "Writing failed: %s" % failed)

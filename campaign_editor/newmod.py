@@ -206,7 +206,15 @@ def create_mod(data_dir, name, copy_all=False, progress=None):
                     if base_name and re.match(r"^%s\." % re.escape(base_name), n, re.I):
                         names.append(name + n[len(base_name):])
                     for dn in names:
-                        _put(src, os.path.join(out_dir, dn), link_ok, stats)
+                        try:
+                            _put(src, os.path.join(out_dir, dn), link_ok, stats)
+                        except OSError as e:
+                            # one file that will not copy (a path too long, a name the system cannot take - a
+                            # tester under Wine got '[WinError 2] File not found' and no folder at all): left out
+                            # and named, the rest is made
+                            stats.setdefault("skipped", []).append(
+                                (os.path.relpath(src, base_dir).replace("\\", "/"), e.strerror or str(e)))
+                            continue
                         if dn != n:
                             stats["renamed"] += 1
                     total = stats["linked"] + stats["copied"]
@@ -227,6 +235,10 @@ def create_mod(data_dir, name, copy_all=False, progress=None):
     except Exception:
         shutil.rmtree(target, ignore_errors=True)
         raise
+    if len(stats.get("skipped", ())) and not (stats["linked"] + stats["copied"]):
+        shutil.rmtree(target, ignore_errors=True)       # nothing at all could be copied: no empty folder left
+        rel, why = stats["skipped"][0]
+        raise OSError("no file of %s could be copied (the first: %s - %s)" % (base_name, rel, why))
     stats["target"] = target
     stats["base"] = base_name or "(game)"
     stats["hard_links"] = link_ok[0]
