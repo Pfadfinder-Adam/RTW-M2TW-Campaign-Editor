@@ -100,7 +100,11 @@ def build(mod, campaign, template, new, opts):
     if not RE_NAME.match(new):
         raise ValueError("internal name must be lower case letters, digits and _ (like 'saba')")
     names = [n for n, _ in mod.factions()]
-    if new in names:
+    # a faction of the mod (descr_sm_factions.txt) that is not in this campaign: brought INTO it - only the
+    # campaign's part written (its block in descr_strat.txt: towns, family; victory, description, diplomacy), its
+    # files kept as the mod has them (a tester, #341: it was refused as 'already exists' and could not be edited)
+    into = new in names and not _in_campaign(mod, campaign, new)
+    if new in names and not into:
         raise ValueError("a faction called '%s' already exists" % new)
     if template not in names or template == "slave":
         raise ValueError("pick an existing faction (not slave) as the template")
@@ -109,6 +113,8 @@ def build(mod, campaign, template, new, opts):
         opts.setdefault("template_" + k, v)
     plan = Plan(mod, template, new, opts)
     plan.campaign = campaign
+    if into:
+        return _into_campaign(plan, campaign, opts)
     clone.sm_factions(plan)
     clone.sm_factions_json(plan)
     clone.faction_blocks(plan, "character", heads=("faction", "type"))
@@ -180,6 +186,42 @@ def build(mod, campaign, template, new, opts):
     return plan
 
 
+def _in_campaign(mod, campaign, faction):
+    path = mod.campaign_file(campaign, "descr_strat.txt")
+    return bool(path) and Strat(mod.load(path)).faction(faction) is not None
+
+
+def _into_campaign(plan, campaign, opts):
+    """build() for a faction the mod has already: the campaign's files only - the template lends its start (the
+    family and armies are made for the faction, build_start), its victory and description lines."""
+    new = plan.new
+    wc = plan.mod.campaign_file(campaign, "descr_win_conditions.txt")
+    if not wc or not any(strip_comment(l).strip() == new and not l[:1].isspace() for l in plan.mod.load(wc).texts()):
+        clone.win_conditions(plan, campaign)         # (a mod may hold its victory already)
+    clone.campaign_description(plan, campaign)
+    if opts.get("regions"):
+        from .regionedit import apply_opts as apply_region_opts
+        apply_region_opts(plan, campaign, opts["regions"])
+    build_start(plan, campaign, opts["start"])
+    if opts.get("places"):
+        from .mapedit import apply_places
+        apply_places(plan, campaign, opts["places"], (opts.get("regions") or {}).get("painted"))
+    if opts.get("resources"):
+        from .resources import apply as apply_resources
+        apply_resources(plan, campaign, opts["resources"])
+    if opts.get("relations"):
+        from .diplomacy import apply_opts
+        apply_opts(plan, campaign, new, opts["relations"])
+    if opts.get("victory"):
+        from .wincond import apply_opts as apply_victory
+        apply_victory(plan, campaign, new, opts["victory"], opts)
+    plan.note(plan.edit(plan.mod.campaign_file(campaign, "descr_strat.txt")),
+              "%s is a faction of the mod already: brought into the campaign %s - its own files (descr_sm_factions, "
+              "units, names, pictures) stay as they are" % (new, campaign))
+    validate(plan, campaign)
+    return plan
+
+
 def validate(plan, campaign):
     """Checks that catch the crashes we have met: duplicate settlements, broken
     braces, unknown units, faction counts that disagree between files."""
@@ -206,7 +248,7 @@ def validate(plan, campaign):
                 plan.warn(f, "%s has two settlement blocks (%s and %s)" % (st.region, seen[st.region], fb.name))
             seen[st.region] = fb.name
     # units in the new block exist in export_descr_unit
-    edu = plan.files.get(mod.file("edu"))
+    edu = plan.files.get(mod.file("edu")) or mod.load(mod.file("edu"))      # (not edited: a faction brought in)
     known, mercs = set(), set()        # mercenaries are hired, never recruited: no warning
     owners = {}
     cur = None
@@ -236,7 +278,7 @@ def validate(plan, campaign):
         plan.warn(f, "%s does not own these garrison units (they stay, but it cannot recruit them): %s"
                   % (new, ", ".join(sorted(set(foreign)))))
     # every file that lists factions by block agrees on the count
-    sm = plan.files[mod.file("sm_factions")]
+    sm = plan.files.get(mod.file("sm_factions")) or mod.load(mod.file("sm_factions"))
     count = sum(1 for l in sm.texts() if tokens(l)[:1] == ["faction"])
     ch = plan.files.get(mod.file("character"))
     if ch is not None:
