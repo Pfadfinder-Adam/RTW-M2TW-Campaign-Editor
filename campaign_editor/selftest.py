@@ -2338,6 +2338,31 @@ def s_scripts(c, mod):
     return plan
 
 
+@step("Scripts on the map: the first army a campaign script spawns ('character ..., x N, y M') carried to free land "
+      "beside {new}'s capital - as the Map's Scripts layer drags its scroll",
+      "when the script spawns it ({script_line}), {spawned} appears at {spawned_at}, beside {new}'s capital, not "
+      "where it used to")
+def s_script_place(c, mod):
+    from . import scriptmap as SMAP
+    tiles = mod.city_tiles(c.campaign)
+    cap = next((tiles[r] for r in towns_of(c, mod, c.new) if tiles.get(r)), None)
+    if cap is None:
+        raise Skip("%s has no town" % c.new)
+    sp = next((x for x in SMAP.spots(mod, c.campaign) if not x["code"] and " x " in " %s " % x["text"]
+               and "character" in x["text"]), None)
+    if sp is None:
+        raise Skip("the campaign's scripts spawn no character")
+    to = free_land(c, mod, cap, skip=set())
+    if to is None:
+        raise Skip("no free land beside %s's capital" % c.new)
+    plan = Plan(mod, "map", "scripts", {})
+    SMAP.apply(plan, SMAP.move_spot({}, sp, to))
+    c.said["script_line"] = "%s, line %d" % (os.path.basename(sp["path"]), sp["line"] + 1)
+    c.said["spawned"] = sp["text"].split("character", 1)[1].split(",")[0].strip() or "the character"
+    c.said["spawned_at"] = "%d, %d" % tuple(to)
+    return plan
+
+
 ABOARD_SCRIPT = "ce_test_aboard.nut"
 ABOARD_NUT = r"""// @title CE Test army aboard
 // @summary The editor's test mod: at the campaign start puts %(army)s (an army of %(faction)s on the shore beside its
@@ -2871,6 +2896,7 @@ COVERAGE = {
     "Own buildings on the map: a wonder, a new resource type, an engine model": ["s_special_type", "s_special"],
     "Special places (Map editor: right click > Special place here...)": ["s_special"],
     "Scripts in the game (script/modules: settings, off / on, delete, the test mod's taken out)": ["s_scripts"],
+    "Map: the Scripts layer (the tiles scripts name dragged / edited)": ["s_script_place"],
     "Art: replace a picture": ["s_art", "s_art_all"],
     "Faction emblem": ["s_emblem"],
     "Own logos for this mod (sprite_format xml)": "unit tests - CE_Test reads the .sd.xml sheets already (the switch shows only on a mod without it); its logos are replaced by s_emblem",

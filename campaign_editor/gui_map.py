@@ -116,6 +116,8 @@ class MapView(ttk.Frame):
         self.v_rebels = tk.BooleanVar(value=False)     # the rebels' land coloured as strongly as a faction's
         self.v_chars = tk.BooleanVar(value=True)
         self.v_res = tk.BooleanVar(value=False)
+        # the places the scripts name (scriptmap.py): a scroll on each tile, carried and opened like a town
+        self.v_scripts = tk.BooleanVar(value=False)
         # forts, watchtowers and wonders: always picked, moved (right drag) and deleted (right click) on the Map; new
         # ones come from the legend (fort, watchtower) or the right click (a wonder) - no mode of their own (the user)
         self.v_forts = tk.BooleanVar(value=True)
@@ -158,7 +160,8 @@ class MapView(ttk.Frame):
             for label, var, cmd in (("Borders", self.v_borders, relayer), ("Towns and ports", self.v_towns, self.render),
                                     ("Town names", self.v_names, self.render),
                                     ("Rebel land coloured", self.v_rebels, relayer),
-                                    ("Characters", self.v_chars, self.render), ("Resources", self.v_res, relayer)):
+                                    ("Characters", self.v_chars, self.render), ("Resources", self.v_res, relayer),
+                                    ("Scripts (the tiles they name)", self.v_scripts, relayer)):
                 ttk.Checkbutton(f, text=label, variable=var, command=cmd).pack(anchor="w")
             ttk.Separator(f).pack(fill="x", pady=4)
             for label, var in (("Relief (map_heights)", self.v_relief),
@@ -384,6 +387,10 @@ class MapView(ttk.Frame):
         self.on_special_move = None                      # (id, (x, y)) -> a special place dragged to a tile
         self._sdrag = None                               # [id, x, y, moved] - a special place being dragged
         self.menu_special = None
+        self.scripts = []                                # script spots [{'id', 'xy', 'title', 'changed'}] (scriptmap)
+        self.on_script_open = None                       # (id) -> the script's window over the map
+        self.on_script_move = None                       # (id, (x, y)) -> a script's place dragged to a tile
+        self._scdrag = None                              # [id, x, y, moved]
         self.on_town = None                              # (region) -> the town's own page (a double click)
         self.on_new_town = None                          # (new region) -> its names and data (a double click)
         self.menu_new = None                             # ('city' | 'port', new region) under the last right click
@@ -448,7 +455,7 @@ class MapView(ttk.Frame):
         on = ([mode] if mode else []) + [n for n, v in (
             ("borders", self.v_borders), ("towns", self.v_towns), ("rebel land", self.v_rebels),
             ("names", self.v_names),
-            ("characters", self.v_chars), ("resources", self.v_res)) if v.get()]
+            ("characters", self.v_chars), ("resources", self.v_res), ("scripts", self.v_scripts)) if v.get()]
         self.lbl_layers.configure(text="shown: " + (", ".join(on) or "the ground only"))
 
     def _pick_toggled(self):
@@ -1545,6 +1552,8 @@ class MapView(ttk.Frame):
             c.create_text(x0, y0, text=name, anchor="w", fill="white", font=font)       # reads on any land
         if self.v_chars.get() and signs and not self.region_mode:
             self._characters(cw, ch, size)
+        if signs and self.v_scripts.get() and not self.region_mode:
+            self._script_marks(cw, ch)                   # on top of everything: a script often names a town's tile
         self._size_badge()
 
     def _ink(self, rgb):
@@ -1575,6 +1584,64 @@ class MapView(ttk.Frame):
                              width=2, dash=(3, 2) if sp.get("new") else None, tags=tags)
             if self.z >= 6:
                 c.create_text(sx + r + 3, sy, text=sp["title"], anchor="w", fill="#ffe9a8", font=("", 8), tags=tags)
+
+    def _script_marks(self, cw, ch):
+        """The places the scripts name (scriptmap.py): a parchment scroll at the tile's upper right corner (the town or
+        army on the tile stays seen), several on one tile side by side - red-edged off the map, blue-edged when changed
+        and not written yet; the file and line beside the first when near."""
+        c = self.canvas
+        r = max(6.0, min(self.z * 0.32, 14))
+        on = {}
+        for sp in self.scripts:
+            on.setdefault(tuple(sp["xy"]), []).append(sp)
+        for (x, y), here in on.items():
+            sx, sy = self.to_screen(x, y)
+            if not (-20 < sx < cw + 20 and -20 < sy < ch + 20):
+                continue
+            off = not (0 <= x < self.cmap.w and 0 <= y < self.cmap.h)
+            sx, sy = sx + self.z * 0.45, sy - self.z * 0.45
+            for n, sp in enumerate(here[:6]):
+                px = sx + n * r * 0.9
+                edge = "#d01010" if off else "#1060d0" if sp.get("changed") else "#4a2a08"
+                tags = ("script", "script:%s" % sp["id"])
+                c.create_rectangle(px - r * 0.6, sy - r * 0.75, px + r * 0.6, sy + r * 0.75, fill="#f1dfae",
+                                   outline=edge, width=2 if sp.get("changed") or off else 1, tags=tags)
+                for yy in (sy - r * 0.75, sy + r * 0.75):    # the rolled ends
+                    c.create_oval(px - r * 0.75, yy - r * 0.2, px + r * 0.75, yy + r * 0.2, fill="#d9bf7c",
+                                  outline=edge, width=1, tags=tags)
+                if r >= 8:
+                    for k in (-0.3, 0.0, 0.3):               # the writing
+                        c.create_line(px - r * 0.35, sy + r * k, px + r * 0.35, sy + r * k, fill="#6b4a1a",
+                                      tags=tags)
+            if self.z >= 10:
+                more = " +%d" % (len(here) - 1) if len(here) > 1 else ""
+                c.create_text(sx + min(len(here), 6) * r * 0.9, sy, text=here[0]["title"] + more, anchor="w",
+                              fill="#ffe9a8", font=("", 8), tags=("script", "script:%s" % here[0]["id"]))
+
+    def _script_under(self, sx, sy):
+        """The id of the script place under the mouse, or None."""
+        for item in reversed(self.canvas.find_overlapping(sx - 3, sy - 3, sx + 3, sy + 3)):
+            for tag in self.canvas.gettags(item):
+                if tag.startswith("script:"):
+                    return tag.split(":", 1)[1]
+        return None
+
+    def _script_hover(self, e):
+        """The mouse on a scroll: its file, line and text in the readout (True when one is there)."""
+        sid = self._script_under(e.x, e.y) if self.scripts and self.v_scripts.get() else None
+        sp = next((s for s in self.scripts if s["id"] == sid), None) if sid else None
+        if not sp:
+            return False
+        self.readout.configure(text="%s (tile %d, %d): %s   (drag: move it; double click: open it)" % (
+            sp["title"], sp["xy"][0], sp["xy"][1], sp.get("text", "").strip()[:120]))
+        return True
+
+    def _script_outside(self, xy):
+        """Why a script's place cannot go to a tile: only off the map (a script may name the sea, a fleet's tile)."""
+        x, y = xy
+        if not (0 <= x < self.cmap.w and 0 <= y < self.cmap.h):
+            return "off the map"
+        return None
 
     def _special_under(self, sx, sy):
         """The id of the special place under the mouse, or None."""
@@ -2037,6 +2104,10 @@ class MapView(ttk.Frame):
         if sp is not None and self.on_special and not self.v_pick.get():
             self.on_special(sp)                          # a special place: its own window
             return
+        sc = self._script_under(e.x, e.y)
+        if sc is not None and self.on_script_open and not self.v_pick.get():
+            self.on_script_open(sc)                      # a script's place: its lines in a window over the map
+            return
         new = self._new_under(e.x, e.y)
         if new and self.on_new_town and not self.v_pick.get():
             self.on_new_town(new[1])                     # a new region's town: its names and data (before Apply)
@@ -2108,7 +2179,7 @@ class MapView(ttk.Frame):
             for tag in c.gettags(item):
                 # every sign grows: towns, ports, characters and also resources, wonders, forts, watchtowers and
                 # special places (#304: 'not all signs grow - the tower, the wonder, the 3D model, resources, forts')
-                if not tag.startswith(("char:", "city:", "port:", "res:", "fort:", "special:")):
+                if not tag.startswith(("char:", "city:", "port:", "res:", "fort:", "special:", "script:")):
                     continue
                 box = c.bbox(tag)
                 if not box:
@@ -2533,6 +2604,10 @@ class MapView(ttk.Frame):
         if sp is not None:
             self._sdrag = [sp, e.x, e.y, False]           # a special place: dragged like a town (a click opens nothing)
             return
+        sc = self._script_under(e.x, e.y) if self.cmap and self.on_script_move and not self.on_place else None
+        if sc is not None:
+            self._scdrag = [sc, e.x, e.y, False]          # a script's place: dragged like a town
+            return
         pl = self._place_under(e.x, e.y) if self.cmap and self.on_place_move and not self.on_place else None
         if pl:
             self._pdrag = [pl[0], pl[1], e.x, e.y, False]          # nothing happens unless the mouse moves
@@ -2632,6 +2707,21 @@ class MapView(ttk.Frame):
             self.canvas.create_rectangle(ax - r, ay - r, ax + r, ay + r, outline="#ff3030" if why else "#30ff60",
                                          width=2, tags=("target",))
             self.readout.configure(text="special place to tile %d, %d: %s" % (x, y, why or "fine - drop it here"))
+            return
+        if self._scdrag:
+            sc, lx, ly, started = self._scdrag
+            if not started and abs(e.x - lx) + abs(e.y - ly) <= 3:
+                return
+            self.canvas.move("script:" + sc, e.x - lx, e.y - ly)
+            self._scdrag = [sc, e.x, e.y, True]
+            x, y = self.to_tile(e.x, e.y)
+            why = self._script_outside((x, y))
+            self.canvas.delete("target")
+            ax, ay = self.to_screen(x, y)
+            r = max(self.z / 2, 4)
+            self.canvas.create_rectangle(ax - r, ay - r, ax + r, ay + r, outline="#ff3030" if why else "#30ff60",
+                                         width=2, tags=("target",))
+            self.readout.configure(text="script's place to tile %d, %d: %s" % (x, y, why or "fine - drop it here"))
             return
         if getattr(self, "_pdrag", None):
             what, region, lx, ly, started = self._pdrag
@@ -2758,6 +2848,18 @@ class MapView(ttk.Frame):
             return
         rpress, self._rpress = self._rpress, None
         doubled, self._doubled = getattr(self, "_doubled", False), False
+        if self._scdrag:
+            sc, _, _, started = self._scdrag
+            self._scdrag = None
+            if started:
+                xy = self.to_tile(e.x, e.y)
+                why = self._script_outside(xy)
+                if why:
+                    self.readout.configure(text="not moved - " + why)
+                    self.render()
+                else:
+                    self.on_script_move(sc, xy)
+            return
         if self._sdrag:
             sp, _, _, started = self._sdrag
             self._sdrag = None
@@ -2875,6 +2977,8 @@ class MapView(ttk.Frame):
                 self.readout.configure(text="%s at %d, %d - %s   (click: pick it; right drag: move it)" % (
                     res["kind"], x, y, self.cmap.region_at(x, y) or next(
                         (r for r, t in self.cmap.cities.items() if t == (x, y)), "no region")))
+                return
+            if self._script_hover(e):
                 return
             cid = self._char_under(e.x, e.y)
             ch_ = next((c for c in self.chars if c["id"] == cid), None) if cid else None

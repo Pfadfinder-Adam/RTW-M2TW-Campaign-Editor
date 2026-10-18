@@ -22,6 +22,7 @@
 - Maps > 3D: the heights brush now works on the water too - the sea's floor raised out of it becomes land, land pushed under becomes water, as in the game; and a second way, the game's own: grab the land and move the mouse up or down.
 
 ### Added
+- Maps: a Scripts layer - a scroll on every tile the campaign's scripts and the Lua / Squirrel scripts name; drag it to move the place, double click it to edit the lines round it, Apply writes them.
 - Maps > 3D: wonders, special places and a new region's town or port are carried with the left button too; the mouse resting on anything that can be carried shows a white frame round it (a little bigger round a town or a port) and a hand.
 - View in 3D: Rome's siege engines show their crew at the engine's own places, and an elephant carries its whole crew (the driver on its neck, the rest in the tower) in both games.
 - Interface: Replace picture... gives a piece a picture of your own (a file or one from the new Picture library) and keeps what it does; Back to the game's picture undoes it; Check mod files says a menu picture that would stop the game and a page with too many pictures.
