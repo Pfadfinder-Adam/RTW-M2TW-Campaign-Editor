@@ -75,9 +75,10 @@ def read_faction(mod, campaign, faction):
     fb = s.faction(faction)
     if not fb:
         raise ValueError("%s is a faction of the mod (descr_sm_factions.txt) but is not in the campaign %s - its "
-                         "descr_strat.txt has no 'faction %s' block, so there is nothing of it to edit there. Pick "
-                         "another campaign at the top right, or bring it into this one: New faction with it as the "
-                         "template, or Events... > a faction that comes later." % (faction, campaign, faction))
+                         "descr_strat.txt has no 'faction %s' block, so there is nothing of it to edit there. Bring it "
+                         "into this campaign: New faction with the internal name '%s' (its towns and family are "
+                         "written, its own files stay as they are), or Events... > a faction that comes later; or "
+                         "pick another campaign at the top right." % (faction, campaign, faction, faction))
     out["ai"] = " ".join(tokens(fb.header)[2:])
     for i in range(fb.start, fb.end):
         t = tokens(s.lines[i])

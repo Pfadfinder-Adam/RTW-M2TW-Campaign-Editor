@@ -54,6 +54,28 @@ class ToolTest(unittest.TestCase):
         self.assertLessEqual(max(abs(aaron.xy[0] - 1), abs(aaron.xy[1] - 1)), 2)
         self.assertTrue(any("Aaron Alphid" in w and "next to it" in w for _, w in plan.warnings))
 
+    def test_faction_of_the_mod_brought_into_a_campaign_it_is_not_in(self):
+        """#341: a faction of the mod (descr_sm_factions.txt) with no block in this campaign's descr_strat.txt was
+        refused as 'already exists' by New faction and could not be edited. Now New faction with its name brings it
+        into the campaign: its block written, its files (descr_sm_factions...) not copied a second time."""
+        mod = ModData(self.root)
+        build(mod, "test", "alpha", "beta", {"start": {"regions": ["B_R"], "leader": {"name": "Boris"}}}).apply()
+        strat = mod.campaign_file("test", "descr_strat.txt")
+        f = TextFile.load(strat)
+        fb = Strat(f).faction("beta")
+        lines = f.texts()
+        with open(strat, "w", encoding="latin-1", newline="") as fh:     # beta taken out of the campaign again
+            fh.write("".join(l + "\r\n" for l in lines[:fb.start] + lines[fb.end:]))
+        mod = ModData(self.root)
+        sm_before = open(mod.file("sm_factions"), "rb").read()
+        plan = build(mod, "test", "alpha", "beta", {"start": {"regions": ["B_R"], "leader": {"name": "Boris"}}})
+        self.assertIsNotNone(Strat(plan.files[strat]).faction("beta"))
+        self.assertNotIn(mod.file("sm_factions"), plan.files)                 # its own files not touched
+        plan.apply()
+        self.assertEqual(open(mod.file("sm_factions"), "rb").read(), sm_before)
+        with self.assertRaises(ValueError):                                     # in the campaign now: refused
+            build(ModData(self.root), "test", "alpha", "beta", {"start": {"regions": ["B_R"], "leader": {"name": "B"}}})
+
     def test_new_faction_drops_the_compiled_sounds(self):
         """Discord (Bodkin_Arrow, 2026-10-17): after new factions every faction spoke another's accent until
         data/sounds/events.dat / events.idx were deleted - the game's compiled sounds name the factions by their place.
