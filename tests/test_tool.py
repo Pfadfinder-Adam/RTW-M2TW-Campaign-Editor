@@ -15171,6 +15171,16 @@ building smith
             fh.write(v4)
         idx = G.read_index(os.path.join(packs, "v4.pack"))
         self.assertEqual(G.read_file(os.path.join(packs, "v4.pack"), idx["data/x.txt"]), b"hello")
+        # a mod's own pack names its files from the game's folder ('hlr/data/...', HLR's): found as data/... too
+        name = b"hlr/data/terrain/aerial_map/ground_types/rsalpine.tga"
+        table = struct.pack("<QIIB", 0, 5, 5, 0) + name + b"\0"
+        table = struct.pack("<QIIB", 20 + 4 + len(table), 5, 5, 0) + name + b"\0"
+        with open(os.path.join(packs, "w4.pack"), "wb") as fh:
+            fh.write(b"PACK" + struct.pack("<4I", G.V4, 1, len(table), 0) + struct.pack("<I", 0) + table + b"alpin")
+        idx = G.read_index(os.path.join(packs, "w4.pack"))
+        self.assertIn("data/terrain/aerial_map/ground_types/rsalpine.tga", idx)
+        with open(mod.find_any("terrain/aerial_map/ground_types/RSalpine.tga"), "rb") as fh:
+            self.assertEqual(fh.read(), b"alpin")
         frame = bytes.fromhex("28b52ffd60cf001d0100c87468652067726f756e64206f6620746865206d61702c656e640200ae3a1540a1"
                               "3401")
         try:

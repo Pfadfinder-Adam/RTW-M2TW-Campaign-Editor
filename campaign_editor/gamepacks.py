@@ -194,6 +194,13 @@ def read_index(path):
                 out = _pak_index(f)
     except (OSError, struct.error, ValueError):
         out = {}
+    # a mod's own pack names its files from the game's folder - 'hlr/data/terrain/...' (HLR's
+    # hlr_visual_textures.pack, the tester's index): each also under 'data/...', as the mod reads it (the 3D map found
+    # none of HLR's grounds and figures' textures in it - white models)
+    for name in [n for n in out if not n.startswith("data/")]:
+        head, sep, rest = name.partition("/data/")
+        if sep and "/" not in head and ("data/" + rest) not in out:
+            out["data/" + rest] = out[name]
     _index[path] = (mtime, out)
     return out
 

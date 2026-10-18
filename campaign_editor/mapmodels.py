@@ -46,9 +46,11 @@ class Loader:
         if not name:
             return None
         folder = model.replace("\\", "/").rsplit("/", 1)[0] if "/" in model else ""
-        for rel in (folder + "/textures/" + name, folder + "/" + name, "models_strat/textures/" + name, name):
-            if self.picture(rel) is not None:
-                return rel
+        # a name with no ending (HLR's 'Paccos_barbarian_texture') is its .tga (texture_image finds .tga.dds too)
+        for nm in [name] + ([name + ".tga"] if "." not in name.rsplit("/", 1)[-1] else []):
+            for rel in (folder + "/textures/" + nm, folder + "/" + nm, "models_strat/textures/" + nm, nm):
+                if self.picture(rel) is not None:
+                    return rel
         self.missing.add(name)
         return None
 
