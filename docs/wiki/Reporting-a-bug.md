@@ -5,8 +5,12 @@ When the game crashes, the tool shows an error, or something looks wrong, please
 1. **The logs**: in the tool, **Report a bug / Suggest** (bottom right, also Tools -> Report a bug...). Write a few
    words of what happened, add a screenshot if you like (**Add a screenshot...**, or take one with Win+Shift+S /
    PrintScreen and press **Ctrl+V** in the report window), press **Send** - the tool's log, the game's
-   `system.log.txt` and the newest REX crash report go to the author at once, no account needed, and you get a
-   report number. The author's answer comes back to the editor (see *Answers to my reports* below). When the tool itself shows an error, it offers
+   `system.log.txt` and the crash report of the game's last run (REX / M2EX) go to the author at once, no account
+   needed, and you get a report number. **The crash doctor** reads the game's log first and says in one line, at
+   the top of the window and on the report's first line, why the game stopped - the line the engine writes after
+   a crash (a picture or model it could not find, a Script Error with its file and line), or that the game was
+   closed in the usual way. On Windows the window also takes a picture of the editor's own window as it was
+   (nothing else of the screen) - **Leave the window's picture out** if you do not want it. The author's answer comes back to the editor (see *Answers to my reports* below). When the tool itself shows an error, it offers
    the same window. A long game log is cut to fit: its start (where the game reads the mod's files and says what it
    does not like), every error and warning line of the middle, and its end - a game log of several MB goes as
    about 100 KB. A big screenshot goes made smaller (a JPEG, at most 2560 pixels wide), so a few fit the 4 MB a
