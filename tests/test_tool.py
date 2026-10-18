@@ -12442,6 +12442,54 @@ building smith
                 gui_modpack.open_pack(app)
             self.assertEqual((f.call_count, d.call_count, w.call_count), {2: (0, 0, 0), 0: (1, 0, 0), 1: (0, 1, 0)}[pick])
 
+    def test_check_finds_two_guilds_in_one_town(self):
+        """Medieval II allows one guild building a town and stops at the campaign's start otherwise ('there is
+        already a guild building here', the log of report R-20261018-DE4EAB) - Check mod files names the town."""
+        camp = os.path.dirname(ModData(self.root).campaign_file("test", "descr_strat.txt"))
+        town = ("settlement\n{\n\tlevel village\n\tregion C_R\n\tpopulation 400\n"
+                "\tbuilding\n\t{\n\t\ttype guild_masons_guild masons_guild\n\t}\n"
+                "\tbuilding\n\t{\n\t\ttype guild_merchants_guild merchants_guild\n\t}\n}\n\n")
+        write(os.path.join(camp, "descr_strat.txt"), STRAT.replace(";;\tBtown", town + ";;\tBtown"))
+        write(os.path.join(self.root, "data", "export_descr_guilds.txt"),
+              "Guild masons_guild\n    building guild_masons_guild\nGuild merchants_guild\n"
+              "    building guild_merchants_guild\n")
+        from campaign_editor.check import check_mod
+        got = check_mod(ModData(self.root), "test")
+        self.assertIn("C_R (slave): its descr_strat.txt town has 2 guild buildings", got)
+        write(os.path.join(camp, "descr_strat.txt"), STRAT.replace(";;\tBtown", town.replace(
+            "\tbuilding\n\t{\n\t\ttype guild_merchants_guild merchants_guild\n\t}\n", "") + ";;\tBtown"))
+        self.assertNotIn("guild buildings", check_mod(ModData(self.root), "test"))
+
+    def test_view_in_3d_plays_a_loose_cas_animation(self):
+        """Medieval II reads an animation no pack holds from its loose .cas file (engine source anim_db
+        load_anim_file; SS 6.3's mangonel crew, report R-20261018-D47E51) - View in 3D lists and plays it too, the
+        .cas's Scene Root left out."""
+        import struct
+        from campaign_editor import animations as AN
+
+        def text(t):
+            return struct.pack("<I", len(t) + 1) + t.encode() + b"\x00"
+        head = struct.pack("<f", 3.18) + b"\x00" * 46 + struct.pack("<H", 3) + struct.pack("<3I", 0, 0, 1)
+        head += struct.pack("<I3f", 3, 0.05, 0.1, 0.15)
+        bones = text("Scene Root") + struct.pack("<5I", 0, 0, 0, 48, 0) + b"\x01\x00\x00\x00\x00"
+        bones += text("bone_pelvis") + struct.pack("<5I", 0, 0, 0, 48, 0) + b"\x01\x00\x00\x00\x00"
+        bones += text("bone_spine") + struct.pack("<5I", 3, 1, 0, 48, 0) + b"\x01\x00\x00\x00\x00"
+        keys = b"".join(struct.pack("<4f", 0.1 * k, 0, 0, 1) for k in range(3)) + struct.pack("<3f", 0, 1, 0.25)
+        rest = struct.pack("<9f", 0, 0, 0, 0, 0.5, 0, 9, 9, 9)
+        d = os.path.join(self.root, "data")
+        with open(os.path.join(d, "x_loose.cas"), "wb") as fh:
+            fh.write(head + bones + keys + rest + b"\x00" * 40)
+        os.makedirs(os.path.join(d, "animations"), exist_ok=True)
+        os.replace(os.path.join(d, "x_loose.cas"), os.path.join(d, "animations", "x_loose.cas"))
+        write(os.path.join(d, "descr_skeleton.txt"), "type\t\tfs_x\nanim\t\tstand\tdata/animations/x_loose.cas\n")
+        mod = ModData(self.root)
+        self.assertEqual(AN.of_skeleton(mod, "fs_x"), [("stand", "data/animations/x_loose.cas")])
+        a = AN.find(mod, "data/animations/x_loose.cas")
+        self.assertEqual((a.frames, a.bones, a.kind), (3, 2, 2))
+        self.assertAlmostEqual(a.rotations(2)[1][0], 0.2, places=5)
+        self.assertEqual(len(a.offsets(0)), 2)
+        self.assertIsNone(AN.find(mod, "data/animations/none.cas"))
+
     def test_tile_models_read_from_the_games_packs(self):
         """A tester's photo (ROCSS, Medieval II): the 3D map's rivers were blue squares - the mod has no
         descr_aerial_map_tile_models.txt of its own, the game keeps it in its packs, and the editor looked for it

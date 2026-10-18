@@ -118,8 +118,44 @@ def packs(mod):
     return out
 
 
+class LooseAnim:
+    """A man's animation kept as a loose .cas file (no pack holds it) read like Anim: Medieval II reads such files by
+    their path when no pack has them (anim_db load_anim_file - SS 6.3's mangonel crew, report R-20261018-D47E51), so
+    View in 3D plays them too. The .cas skeleton's 'Scene Root' is left out; every bone's offset is kept (kind =
+    bones)."""
+
+    def __init__(self, cas, name):
+        skip = 1 if cas.names and cas.names[0].lower().replace(" ", "") == "sceneroot" else 0
+        self.name, self.frames, self._cas, self._skip = name, cas.frames, cas, skip
+        self.bones = self.kind = cas.bones - skip
+
+    def rotations(self, k):
+        return self._cas.rotations(k)[self._skip:]
+
+    def offsets(self, k):
+        return self._cas.offsets(k)[self._skip:]
+
+
+def _rel(name):
+    n = name.replace("\\", "/")
+    return n[5:] if n.lower().startswith("data/") else n
+
+
+def loose(mod, name):
+    """The LooseAnim of a loose .cas file at this path (mod, game, packs), or None."""
+    from . import meshview as MV
+    try:
+        p = mod.find_any(_rel(name))
+        if not p:
+            return None
+        with open(p, "rb") as fh:
+            return LooseAnim(MV.CasAnim(fh.read(), name), name)
+    except (OSError, ValueError, AttributeError):
+        return None
+
+
 def find(mod, name):
-    """The Anim of this name from the first pack holding it, or None."""
+    """The Anim of this name from the first pack holding it, else its loose .cas file (LooseAnim), or None."""
     for p in packs(mod):
         try:
             got = p.anim(name)
@@ -127,7 +163,14 @@ def find(mod, name):
             got = None
         if got is not None:
             return got
-    return None
+    return loose(mod, name)
+
+
+def _loose_here(mod, name):
+    try:
+        return bool(mod.find(_rel(name)))
+    except (OSError, ValueError, AttributeError):
+        return False
 
 
 def skeletons(mod, name="descr_skeleton.txt"):
@@ -188,7 +231,7 @@ def of_skeleton(mod, skeleton):
             continue
     out, seen = [], set()
     for what, f in skeletons(mod).get((skeleton or "").lower(), []):
-        if key(f) in names and (what, key(f)) not in seen:
+        if (key(f) in names or _loose_here(mod, f)) and (what, key(f)) not in seen:     # a loose .cas plays too
             seen.add((what, key(f)))
             out.append((what, f))
     # the compiled set the game loads (data/animations/skeletons.dat) has the rest: a skeleton descr_skeleton.txt
@@ -197,7 +240,7 @@ def of_skeleton(mod, skeleton):
     # its animations by file, and the files say what they are ('LIS 01 Stand Idle') - the file's name shown for each
     files = {key(f) for _, f in out}
     for f in _set_record_anims(mod, skeleton):
-        if key(f) in names and key(f) not in files:
+        if (key(f) in names or _loose_here(mod, f)) and key(f) not in files:
             files.add(key(f))
             out.append((os.path.splitext(os.path.basename(f))[0], f))
     return out
