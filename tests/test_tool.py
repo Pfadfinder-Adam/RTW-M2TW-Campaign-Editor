@@ -10210,7 +10210,7 @@ building smith
         from campaign_editor import addons as A
         a = A.by_key("recruit_order")
         self.assertTrue(a.fits("rome") and a.fits("medieval2"))
-        text = a.template()
+        text = a.template().replace("\r\n", "\n")       # a Windows checkout's line ends
         for part in ("trueCost", "recruitCost", "::units.count()", '"FactionTurnStart"', '"FactionTurnEnd"',
                      '"SettlementPanelOpen"', '"campaignMapLoaded"', '"PreBattle"', '"PostBattle"',
                      '"unloadCampaign"', "isPlayerControlled",

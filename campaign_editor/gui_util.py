@@ -679,7 +679,7 @@ class FactionBox(ttk.Combobox):
 
     def __init__(self, master, variable, names=(), shown=None, **kw):
         self._real = variable
-        self._shown = tk.StringVar()
+        self._shown = tk.StringVar(master)                 # its own window's Tk (a second Tk would not see it)
         self._labels = {}
         self._busy = False
         super().__init__(master, textvariable=self._shown, **kw)
