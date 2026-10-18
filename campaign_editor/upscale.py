@@ -2771,6 +2771,76 @@ def code_names_tiles(line):
     return bool(RE_CODE_TILE.search(line) and RE_SCRIPT_XY.search(line))
 
 
+RE_CODE_PAIR = re.compile(r"(?<![\w.])(-?\d+)(\s*,\s*)(-?\d+)(?![\w.])")
+CODE_COMMENTS = ("--", "//", "#")
+
+
+def move_code_line(line, values=None, xy=None):
+    """One line of a Lua / Squirrel script with its campaign-map tiles moved (the user, 2026-10-18: 'nothing must
+    stop the modder' - they were only listed before): a tile command given as a string with its numbers after it
+    (runScriptCommand("move", 120, 88)) moves as in a campaign script; a tile / teleport / spawn / coordinates call
+    moves its first 'x, y' after the word. (new line, how many places moved)."""
+    values, xy = values or _script_values, xy or new_xy
+    if line.lstrip().startswith(CODE_COMMENTS):
+        return line, 0
+    edits, moved = [], 0
+    for m in RE_SCRIPT_CMD.finditer(line):
+        if not (m.start() and line[m.start() - 1] in "\"'"):
+            continue
+        kind = SCRIPT_TILES[next(c for c in SCRIPT_TILES if c.lower() == m.group(1).lower())]
+        ints = list(RE_INT.finditer(line, m.end()))[:4 if kind == "rect" else NEEDS[kind]]
+        if len(ints) < NEEDS[kind]:
+            continue
+        new = values(kind, [int(i.group()) for i in ints])
+        edits += [(i.start(), i.end(), str(v)) for i, v in zip(ints, new)]
+        moved += 1
+    if not moved:
+        w = RE_CODE_TILE.search(line)
+        p = RE_CODE_PAIR.search(line, w.end()) if w else None
+        if p:
+            x, y = xy(int(p.group(1)), int(p.group(3)))
+            edits = [(p.start(1), p.end(1), str(x)), (p.start(3), p.end(3), str(y))]
+            moved = 1
+    for a, b, v in sorted(edits, reverse=True):
+        line = line[:a] + v + line[b:]
+    return line, moved
+
+
+def code_files_with_tiles(root):
+    """[path] of the Lua / Squirrel scripts beside a mod's data that name map tiles by number (code_with_tiles)."""
+    out = []
+    for sub, ext in ((("eopData", "eopScripts"), ".lua"), (("script",), ".nut")):
+        d = os.path.join(root, *sub)
+        for dirpath, dirs, files in os.walk(d):
+            if dirpath == d and ext == ".nut":
+                dirs[:] = [x for x in dirs if x.lower() not in ENGINE_SCRIPTS]
+                files = [x for x in files if x.lower() not in ENGINE_SCRIPTS]
+            for name in files:
+                if name.lower().endswith(ext):
+                    p = os.path.join(dirpath, name)
+                    with open(p, encoding="latin-1") as fh:
+                        if any(code_names_tiles(line) for line in fh):
+                            out.append(p)
+    return out
+
+
+def move_code(plan, root, values=None, xy=None):
+    """Every Lua / Squirrel script beside the mod moved (move_code_line), in the plan: [(file name, places moved)]."""
+    out = []
+    for p in code_files_with_tiles(root):
+        f = plan.edit(p)
+        n = 0
+        for i in range(len(f.raw)):
+            new, k = move_code_line(f.text(i), values, xy)
+            if k:
+                f.raw[i] = f.make(new)
+                n += k
+        if n:
+            plan.note(f, "%d place(s) on the campaign map moved (a Lua / Squirrel script)" % n)
+            out.append((os.path.basename(p), n))
+    return out
+
+
 def code_with_tiles(root):
     """[(folder, [script files])] of the Lua (eopData/eopScripts) and Squirrel (script/) scripts beside a mod's data
     that name map tiles by number - the engines' own interface (script/core, script/ui) left out."""
@@ -3176,9 +3246,10 @@ def _upscale_all(plan, campaign, vertical=FACTOR, progress=None, edges=EDGE_DEFA
         else:
             warn.append("%s: %d condition(s) name map tiles - not moved, the file serves the mod's other campaigns "
                         "too (a tile x, y becomes 3x+1, 3y+1 on this campaign's map)" % (os.path.basename(p), hits))
-    for sub, hits in code_with_tiles(os.path.dirname(os.path.abspath(mod.data))):
-        warn.append("%s: %s - Lua / Squirrel scripts are not changed; if they place things on the map by x, y, "
-                    "make those 3x+1, 3y+1 by hand" % (sub, ", ".join(hits[:8])))
+    moved_code = move_code(plan, os.path.dirname(os.path.abspath(mod.data)))
+    if moved_code:
+        warn.append("Lua / Squirrel scripts: %s - their map places moved too; look them over (a place computed in "
+                    "code, not written as numbers, cannot be seen)" % ", ".join("%s (%d)" % x for x in moved_code[:8]))
     from .limits import HARD_LIMITS, game_kind, lifted
     from .tga import read_tga
     img = read_tga(regions_path)

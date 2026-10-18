@@ -149,9 +149,10 @@ def step_grid(plan, campaign, st):
                 with open(p, encoding="latin-1") as fh:
                     if any(U.RE_SCRIPT_CMD.search(line.split(";")[0]) for line in fh):
                         U.move_script(plan.edit(p))
-    for sub, hits in U.code_with_tiles(os.path.dirname(os.path.abspath(mod.data))):
-        warn.append("%s: %s - Lua / Squirrel scripts are not changed; if they place things on the map by x, y, make "
-                    "those 3x+1, 3y+1 by hand" % (sub, ", ".join(hits[:8])))
+    moved_code = U.move_code(plan, os.path.dirname(os.path.abspath(mod.data)))
+    if moved_code:
+        warn.append("Lua / Squirrel scripts: %s - their map places moved too; look them over (a place computed in "
+                    "code, not written as numbers, cannot be seen)" % ", ".join("%s (%d)" % x for x in moved_code[:8]))
     return warn
 
 
