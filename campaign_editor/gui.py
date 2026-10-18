@@ -5222,6 +5222,17 @@ class App(tk.Tk):
             self.lbl_template.configure(text="Template (copied)")
             self.cb_template.state(["!disabled"])
             self._from_zero_look()
+            # nothing of the faction forgotten stays (the tester: its internal name and names were kept)
+            for key in ("name", "display_name", "short_name", "adjective", "leader_title", "heir_title"):
+                self.v[key].set("")
+            for role in ("leader", "heir"):
+                self.v[role + "_first"].set("")
+                self.v[role + "_last"].set("")
+            for t in (self.t_descr, self.t_long):
+                t.delete("1.0", "end")
+            self.colours = {}
+            self._auto_titles = {}
+            self.template_changed()
             self.status.set("New faction: a copy of the template again.")
             return
         fields = picked.get("fields") or {}
@@ -5254,6 +5265,32 @@ class App(tk.Tk):
             if rgb:
                 self.colours[key] = tuple(rgb)
                 theme.paint(b, tuple(rgb))
+        # its own AI, titles, money, religion and culture - not the frame's (the tester, 2026-10-17: Macedon brought
+        # into Barbarian Invasion kept the Huns' AI, culture, leader's title and victory)
+        if fields.get("ai"):
+            vals = list(self.cb_ai["values"])
+            if fields["ai"] not in vals:
+                self.cb_ai["values"] = vals + [fields["ai"]]
+            self.v["ai"].set(fields["ai"])
+        for key in ("leader_title", "heir_title"):
+            self.v[key].set(fields.get(key) or "")
+        self._auto_titles = {k: self.v[k].get() for k in ("leader_title", "heir_title")}
+        if fields.get("denari") is not None:
+            self._auto_denari = str(fields["denari"])
+            self.v["denari"].set(self._auto_denari)
+        if fields.get("religion") and fields["religion"] in (self.cb_religion["values"] if hasattr(
+                self, "cb_religion") else ()):
+            self.v["religion"].set(fields["religion"])
+        from .culture import names as culture_names
+        have_cultures = list(culture_names(self.mod))
+        own_culture = picked.get("culture")
+        culture_note = ""
+        if own_culture in have_cultures:
+            self.v["culture"].set(own_culture)
+        elif own_culture:
+            culture_note = (" Its culture %s is not in this mod - it takes %s (pick another under Culture)."
+                            % (own_culture, self.v["culture"].get() or "none"))
+        self._bring_victory(fields.get("victory"))
         where = os.path.basename(os.path.dirname(os.path.abspath(picked["src"]))) or picked["src"]
         # made from zero (report #270: 'not a clone'): nothing of the template is seen - it only gives the new
         # faction its lines in the game's lists; the select map is drawn from this map
@@ -5267,7 +5304,22 @@ class App(tk.Tk):
                         "nothing of the template (it only gives the lines in the game's lists, inside); its select map is "
                         "drawn from "
                         "this map. Pick its towns on the map - its family stands by the capital, the garrisons are "
-                        "its own units." % (picked["faction"], where))
+                        "its own units.%s" % (picked["faction"], where, culture_note))
+
+    def _bring_victory(self, cond):
+        """The brought faction's victory conditions with only the regions and factions this campaign has - never the
+        frame's regions (with none of its own: no regions to hold, no one to outlive, the frame's number of regions to
+        take). Loaded over the frame's (what the copy writes first), so Apply writes them."""
+        import copy
+        self.load_victory(self.v["template"].get().strip())
+        vb = self.victory
+        have_r, have_f = {r for r, _ in vb.regions}, {f for f, _ in vb.factions}
+        src = cond or vb.base
+        vb.cond = {part: dict(copy.deepcopy(c), hold=[r for r in c.get("hold") or [] if cond and r in have_r],
+                              outlive=[f for f in c.get("outlive") or [] if cond and f in have_f])
+                   for part, c in src.items()}
+        vb.show()
+        self._victory_changed()
 
     def rename_faction(self):
         """Edit faction > Rename...: the faction's code name changed in every file of the mod (factionrename) -
