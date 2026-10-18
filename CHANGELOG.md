@@ -186,6 +186,8 @@
   its own where others wear the same file. Keep for Apply, written with Apply (one backup).
 
 ### Changed
+- A bigger map (x3) or a new map size moves the places in Lua / Squirrel scripts too (they were only listed for you to change by hand).
+- Cutting the map: a place in the campaign's scripts on the part cut off no longer stops the cut - it comes in to the new edge of the map.
 - The Report a bug / Suggest button is yellow with black words, easy to find.
 - The editor moved to github.com/Pfadfinder-Adam: the new-version check, Credits, Sponsors and every link point there.
 - Maps > 3D: the older 3D picture drawn without the graphics card is gone, and with it the towns and armies drawn as little pictures - the game's models come back on the graphics card later.

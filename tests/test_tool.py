@@ -5251,6 +5251,19 @@ building smith
             shutil.copy(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "assets", "addons",
                                      name), os.path.join(game, "script", "modules", name))
         self.assertEqual(code_with_tiles(game)[1], ("script", ["forts.nut", "jump.nut"]))
+        # and moved now (the user, 2026-10-18: 'nothing must stop the modder' - they were only listed before)
+        from campaign_editor.upscale import move_code_line
+        self.assertEqual(move_code_line("character.teleport(120, 85)"), ("character.teleport(361, 256)", 1))
+        self.assertEqual(move_code_line('game.runConsoleCommand("create_fort", "120 85 romans_julii roman 0 1")'),
+                         ('game.runConsoleCommand("create_fort", "361 256 romans_julii roman 0 1")', 1))
+        self.assertEqual(move_code_line("character.teleport(120, 85)", xy=lambda x, y: (x - 10, y + 2))[0],
+                         "character.teleport(110, 87)")
+        self.assertEqual(move_code_line("-- character.teleport(120, 85)"), ("-- character.teleport(120, 85)", 0))
+        self.assertEqual(move_code_line("pane.setPosition(10, 20)"), ("pane.setPosition(10, 20)", 0))
+        # a cut: a script's place on the part cut off comes in to the new edge (it no longer stops the cut)
+        from campaign_editor.mapresize import _mover
+        xy, values = _mover(-5, 0, 40, 30)
+        self.assertEqual((xy(2, 10), xy(20, 10), xy(50, 40)), ((0, 10), (15, 10), (39, 29)))
 
     def test_bigger_map_coast_has_no_pins(self):
         """x3 heights' water (a tester's Rome and DaC x3 in game): a sea tile held only by its middle point (land on 3

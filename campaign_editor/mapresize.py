@@ -175,10 +175,17 @@ def hgt_shifted(raw, left, bottom, right, top, fill_tile):
     return struct.pack("<II", W, H) + struct.pack("<%df" % (W * H), *out)
 
 
-def _mover(left, bottom):
-    """(xy(x, y), values(kind, nums)) moving tiles by the shift: distances, radii and sizes stay."""
+def _mover(left, bottom, W=None, H=None):
+    """(xy(x, y), values(kind, nums)) moving tiles by the shift: distances, radii and sizes stay. W, H: the new map's
+    size - a tile the cut takes off comes in to its new edge (the user, 2026-10-18: a script's spawn place on the part
+    cut off moves in by as much as was cut, it never stops the modder)."""
     def xy(x, y):
-        return x + left, y + bottom
+        x, y = x + left, y + bottom
+        if W is not None:
+            x = min(max(x, 0), W - 1)
+        if H is not None:
+            y = min(max(y, 0), H - 1)
+        return x, y
 
     def values(kind, nums):
         if kind == "xy":
@@ -266,7 +273,8 @@ def off(p, W, H, left=0, bottom=0, right=0, top=0, town=False):
 def blocking(found, width, height, left=0, bottom=0, right=0, top=0):
     """Of places() those a cut would leave off a width x height map, as places() gives them ((x, y) as now)."""
     W, H = width + left + right, height + bottom + top
-    return [x for x in found if off(x[1], W, H, left, bottom, right, top, x[2] in ("town", "port"))]
+    # a script's tile there does not stop a cut: it comes in to the new edge (_mover)
+    return [x for x in found if x[2] != "script" and off(x[1], W, H, left, bottom, right, top, x[2] in ("town", "port"))]
 
 
 def off_map(mod, campaign, left, bottom, right, top):
@@ -316,8 +324,8 @@ def cut_words(hit, waste=False):
         lines.append("%d event(s) placed there (%s)" % (len(by["event"]), ", ".join(sorted({w for _, _, w in
                                                                                          by["event"]}))))
     if by.get("script"):
-        lines.append("%d line(s) of the campaign's scripts name tiles there - left as they are: change them by hand "
-                     "(the game may stop at them)" % len(by["script"]))
+        lines.append("%d place(s) in the campaign's scripts there - moved in to the new edge of the map"
+                     % len(by["script"]))
     return lines
 
 
@@ -350,7 +358,7 @@ def clear_cut(plan, campaign, left=0, bottom=0, right=0, top=0, factions_out=())
       nearest town his faction keeps; every other character - armies, agents, fleets, rebels - goes with his army;
     - resources, forts, watchtowers, wonders: their lines go;
     - an event placed there goes;
-    - lines of the campaign's scripts naming tiles there are left as they are (returned as warnings); lines naming a
+    - places in the campaign's scripts there come in to the new edge (plan_resize's mover; said); lines naming a
       town or region cut: list entries and one-line commands commented out, conditions warned (report #179);
     - a faction left without a town, when it is in factions_out (the modder said yes): taken out of the campaign
       with all its people (factionout.take_out - it stays in the mod).
@@ -489,8 +497,8 @@ def clear_cut(plan, campaign, left=0, bottom=0, right=0, top=0, factions_out=())
         events_apply(plan, campaign, {"remove": [e["id"] for e in events]})
     hit = [x for x in places(mod, campaign) if x[2] == "script" and gone(x[1])]
     if hit:
-        warn.append("%d line(s) of the campaign's scripts name tiles the cut takes off - left as they are, change "
-                    "them by hand (the game may stop at them): %s%s" % (
+        warn.append("%d place(s) in the campaign's scripts were on the part cut off - moved in to the new edge of the "
+                    "map (look them over: %s%s)" % (
                         len(hit), "; ".join(x[0] for x in hit[:6]), " ..." if len(hit) > 6 else ""))
     return warn
 
@@ -650,7 +658,7 @@ def plan_resize(plan, campaign, left=0, bottom=0, right=0, top=0, clear=False, f
     img = read_tga(regions_path)
     W, H = img.width + left + right, img.height + bottom + top
     fill = deepest_sea(mod, campaign) if max(left, bottom, right, top) > 0 else (0, 0)   # a cut adds no point
-    xy, values = _mover(left, bottom)
+    xy, values = _mover(left, bottom, W, H)
     words = _words(left, bottom, right, top)
     base = os.path.dirname(regions_path)
     camp = os.path.dirname(mod.campaign_file(campaign, "descr_strat.txt"))
@@ -751,9 +759,11 @@ def plan_resize(plan, campaign, left=0, bottom=0, right=0, top=0, clear=False, f
                 warn.append("%s: %d condition(s) name map tiles - not moved, the file serves the mod's other "
                             "campaigns too (a tile x, y becomes x%+d, y%+d on this campaign's map)"
                             % (os.path.basename(p), hits, left, bottom))
-        for sub, hits in U.code_with_tiles(os.path.dirname(os.path.abspath(mod.data))):
-            warn.append("%s: %s - Lua / Squirrel scripts are not changed; if they place things on the map by x, y, "
-                        "move those by %d, %d by hand" % (sub, ", ".join(hits[:8]), left, bottom))
+        moved_code = U.move_code(plan, os.path.dirname(os.path.abspath(mod.data)), values, xy)
+        if moved_code:
+            warn.append("Lua / Squirrel scripts: %s - their map places moved by %d, %d too; look them over (a place "
+                        "computed in code, not written as numbers, cannot be seen)"
+                        % (", ".join("%s (%d)" % x for x in moved_code[:8]), left, bottom))
     p = os.path.join(base, "map.rwm")
     if os.path.isfile(p):
         plan.delete(p, "the game builds it again from the new pictures")
