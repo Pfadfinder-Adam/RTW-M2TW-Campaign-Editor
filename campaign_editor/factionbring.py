@@ -37,7 +37,9 @@ def frame_of(mod, culture, prefer=None):
 
 
 def window_fields(src, campaign, faction):
-    """What the New faction window takes from the brought faction: names players read, colours, culture."""
+    """What the New faction window takes from the brought faction: names players read, colours, culture, its AI,
+    its leader's and heir's titles, money, religion, victory conditions (the tester, 2026-10-17: the template's
+    stayed in the window)."""
     from .build import template_display
     from .edit import read_faction
     out = {}
@@ -49,9 +51,16 @@ def window_fields(src, campaign, faction):
         now = read_faction(src, campaign, faction)
         out["primary_colour"] = now.get("primary_colour")
         out["secondary_colour"] = now.get("secondary_colour")
-        for k in ("description", "long_description"):
+        for k in ("description", "long_description", "leader_title", "heir_title", "religion", "denari", "ai"):
             if now.get(k):
                 out[k] = now[k]
+    except Exception:
+        pass
+    try:
+        from .wincond import read as read_wins
+        got = read_wins(src, campaign).get(faction)
+        if got:
+            out["victory"] = got
     except Exception:
         pass
     try:

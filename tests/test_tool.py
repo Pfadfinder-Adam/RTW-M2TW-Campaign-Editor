@@ -7451,6 +7451,14 @@ building smith
         fb = Strat(plan.files[mod.campaign_file("test", "descr_strat.txt")]).faction("beta")
         self.assertTrue(any(c.name == "Brude" for c in fb.characters))
 
+    def test_brought_faction_window_fields_are_its_own(self):
+        """The tester (2026-10-17): a faction brought from another mod kept the frame's AI, money and victory in the
+        window - the window takes the brought faction's own."""
+        from campaign_editor import factionbring as FB
+        got = FB.window_fields(ModData(self.root), "test", "alpha")
+        self.assertEqual((got["ai"], got["denari"], got["culture"]), ("balanced smith", 1000, "eastern"))
+        self.assertEqual(got["victory"]["long"]["hold"], ["A_R"])
+
     def test_general_card_is_his_portrait(self):
         # a general's own unit shows his face beside his army's cards, as in the game: the portrait card of the
         # number the character editor picks for his name (portraits/cards/<age>/generals)
