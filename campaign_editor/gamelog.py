@@ -147,9 +147,17 @@ def report(path, game=None, limit=40):
         data = fh.read()
     if len(data) > 40 * 1024 * 1024:
         data = data[-40 * 1024 * 1024:]                 # a very long log: its newest part
-    entries = parse(data.decode("latin-1", "replace"))
+    text = data.decode("utf-8", "replace")
+    entries = parse(text)
     errs = sum(1 for e in entries if e["level"] != "warning")
-    out = ["THE GAME'S LOG IN PLAIN WORDS - %s" % path, "",
+    v = verdict(text, game)
+    out = ["THE GAME'S LOG IN PLAIN WORDS - %s" % path, ""]
+    if v:                                                # the crash doctor's word first
+        out += ["IN SHORT: " + v["headline"]]
+        if v.get("now"):
+            out += ["    %s line %s reads now: %s" % (v["file"], v["line"], v["now"].strip()[:200])]
+        out += ["    serious, the game went on: " + w for w in v["serious"][:3]] + [""]
+    out += [
            "%d error line(s), %d warning(s). Grouped below: errors first, the most frequent first. A Script Error "
            "names a file and a line: that line is shown as the mod has it now." % (errs, len(entries) - errs), ""]
     if not entries:
@@ -175,4 +183,89 @@ def report(path, game=None, limit=40):
     return "\n".join(out)
 
 
-__all__ = ["parse", "explain", "summary", "mod_line", "report"]
+RE_FATAL = re.compile(r"\[fatal\]|encountered an unspecified error", re.I)
+RE_STOP = re.compile(r"ASSERT FAILED|encountered an unspecified error", re.I)
+RE_CLOSED = re.compile(r"sprites_close\(\)|libs called display_close", re.I)
+RE_CODE = re.compile(r"(?:ASSERT FAILED|ERROR|DATA):\s*src[\\/](\S+?)\((\d+)\)(?::\s*(.*))?", re.I)
+RE_PATH = re.compile(r"((?:data/)?[\w\-./\\]+\.(?:txt|tga|dds|texture|cas|mesh|xml|lnt|db|modeldb|spr))", re.I)
+GENERIC = ("The game crashed.", "The game's own check failed", "The game met a name")
+
+
+def fatal_events(lines):
+    """[(index, the fatal line, its detail)] - the engine (REX, M2EX) writes what went wrong on the lines after a
+    fatal line, before its '  at ...' call stack ('failed to find art piece ...', 'Unable to load ....texture')."""
+    out = []
+    for i, l in enumerate(lines):
+        if not RE_FATAL.search(l):
+            continue
+        detail = []
+        for t in lines[i + 1:i + 6]:
+            if not t.strip():
+                continue
+            if t.lstrip().startswith("at ") or RE_ANY.match(t):
+                break
+            detail.append(t.strip())
+        out.append((i, l.strip(), " ".join(detail)))
+    return out
+
+
+def _words(line, detail):
+    """Plain words for a fatal line and its detail: a known one's, else the engine's own detail, else its code."""
+    for text in (detail, line):
+        plain = explain(text) if text else ""
+        if plain and not plain.startswith(GENERIC):
+            return plain
+    if detail:
+        return "the game says: %s" % detail[:220]
+    m = RE_CODE.search(line)
+    if m:
+        return "the game's check %s line %s%s failed (no words of its own)" % (
+            m.group(1).replace("\\", "/"), m.group(2), ": " + m.group(3) if m.group(3) else "")
+    return ""
+
+
+def verdict(text, game=None):
+    """The crash doctor's word on the game's last run (its system.log.txt as text): {'headline': one line in plain
+    words, 'lines': [the log lines it rests on], 'serious': [plain words of fatal errors the game went on after],
+    'file', 'line', 'now' (that line of the mod as it reads now)} - or None for a log with nothing to say. A stop
+    is an ASSERT FAILED or 'unspecified error'; a '[fatal] ERROR' the game goes on after (a fallback taken) is
+    serious, not the stop. Its cause: the engine's detail line, else the nearest Script Error before it."""
+    lines = text.splitlines()
+    events = fatal_events(lines)
+    stops = [e for e in events if RE_STOP.search(e[1])]
+    serious = []
+    for i, line, detail in events:
+        if stops and i == stops[-1][0]:
+            continue
+        w = _words(line, detail)
+        if w and w not in serious:
+            serious.append(w)
+    closed = any(RE_CLOSED.search(t) for t in lines[-60:])
+    if not stops:
+        if not events and not closed:
+            return None
+        head = "No crash in the game's log%s." % (": the game was closed in the usual way" if closed else "")
+        if serious:
+            head += " %d serious error(s) it went on after - the first: %s" % (len(serious), serious[0])
+        return {"headline": head, "lines": [], "serious": serious[:5], "file": None, "line": None, "now": None}
+    at, first, detail = stops[-1]
+    why = _words(first, detail)
+    rel = line_no = None
+    paths = RE_PATH.findall(detail or "")
+    if paths:
+        rel = paths[0].replace("\\", "/")
+    before = [t for t in lines[max(0, at - 30):at] if t.strip()]
+    for e in reversed(parse("\n".join(before))):          # a Script Error just before: its file and line
+        if e["file"]:
+            if rel is None:
+                rel, line_no = e["file"], e["line"]
+            if not why or why.startswith("the game's check"):
+                why = "%s line %s: %s" % (e["file"], e["line"], (e["why"] or e["msg"])[:200])
+            break
+    head = "The game stopped: %s" % (why or "the log names no cause - the lines before the stop go with the report")
+    return {"headline": head, "lines": before[-8:] + [first] + ([detail] if detail else []), "serious": serious[:5],
+            "file": rel, "line": line_no,
+            "now": mod_line(game, rel, line_no) if rel and line_no else None}
+
+
+__all__ = ["parse", "explain", "summary", "mod_line", "report", "verdict"]

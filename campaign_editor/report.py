@@ -429,11 +429,27 @@ def mod_files(mod, words=()):
     return scrub("\n".join(head + rows) + "\n", words)
 
 
-def build_zip(texts, message="", contact="", info=None, pictures=(), words=()):
-    """The report's zip as bytes: report.txt (what happened, the contact, the set-up), the scrubbed logs, the
-    pictures (as they are - the user picked them)."""
+def doctor(files):
+    """The crash doctor's headline (gamelog.verdict) of the newest game log among files ([(path, name, what)]),
+    or ''."""
+    from . import gamelog
+    logs = [f for f, n, _ in files if n.endswith("system.log.txt") and os.path.isfile(f)]
+    if not logs:
+        return ""
+    try:
+        text = _read_tail(max(logs, key=os.path.getmtime), cap=8 * 1024 * 1024)
+        v = gamelog.verdict(text)
+    except Exception:
+        return ""
+    return v["headline"] if v else ""
+
+
+def build_zip(texts, message="", contact="", info=None, pictures=(), words=(), doctor=""):
+    """The report's zip as bytes: report.txt (the crash doctor's word first, what happened, the contact, the set-up),
+    the scrubbed logs, the pictures (as they are - the user picked them)."""
     info = dict(info or {})
-    head = ["What happened:", scrub(message.strip(), words) or "(not said)", "",
+    head = ["The game's log says: %s" % scrub(doctor, words), ""] if doctor else []
+    head += ["What happened:", scrub(message.strip(), words) or "(not said)", "",
             "Contact (given by the sender): %s" % (contact.strip() or "none"), ""]
     head += ["%s: %s" % (k, scrub(str(v), words)) for k, v in info.items()]
     buf = io.BytesIO()
