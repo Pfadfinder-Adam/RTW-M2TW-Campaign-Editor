@@ -439,6 +439,8 @@ tile stays seen; several on one tile stand side by side. The mouse on one shows 
 - **Drag** a scroll to another tile: that one number pair of the line changes (a distance or a size stays as it was).
 - **Double click** a scroll: a window over the map shows the lines round it (its command, as far as the blank lines) -
   edit them as text, **Keep** holds them, **Put back as in the file** gives the file's own lines back.
+- **Right click a town > Scripts of ...**: every script line naming its tile, the town or its region by name - one
+  click opens it in the same window.
 - A changed scroll has a blue edge, one off the map a red edge. Nothing is written until **Apply changes**; Undo / Redo
   and Preview work as for the Map's other changes.
 

@@ -5816,6 +5816,12 @@ class App(tk.Tk):
             items.append(("This town...  (double click)", lambda: self.town_window(region)))
             txy = tuple(self.place_moves.get(("city", region)) or self._cmap.cities.get(region) or ()) \
                 if self._cmap else ()
+            # its scripts: the lines naming its tile or its name, each opens its window (the Map's Scripts layer)
+            from .gui_scriptmap import open_line, town_lines
+            lines = town_lines(self, region, town, txy)
+            items.append(("Scripts of %s (%d lines)" % (town, len(lines)), [
+                (label, lambda p=p, i=i, c=c: open_line(self, p, i, c)) for label, p, i, c in lines]) if lines
+                else ("Scripts of %s: none name it" % town, None))
             agents = []
             for acid, ach in (getattr(self, "_map_chars", None) or {}).items():
                 if tuple(ach.get("xy") or ()) != txy or acid not in getattr(self.map_view, "draggable", ()):
