@@ -12,6 +12,7 @@
 - Edit faction: a faction with more towns than first names gave two captains the same name and the write was refused -> the next captains take a first name with a surname of the list.
 - Interface: a mod's menu file with a tag never closed stopped the Interface work -> it opens; Check mod files names the line.
 - A new playable faction gets its own slot on the faction-select screen by itself (the menu layout had 21, the 22nd faction could not be picked); Steam's Medieval II unpacks again (the unpacker asked three times and stopped after two answers).
+- Recolour: a click on a picture's tick could end in an error (the window's after-picture hid a part of the window itself) -> fixed.
 - New mod folder: one file that would not copy (a path too long under Wine / Linux) stopped it with 'File not found' and no folder -> that file is left out and named, the folder is made; 'make your own mod folder first' is no longer shown as a red Writing failed.
 - Crash doctor: the game's log is read for the line the engine writes after a crash (what it failed to find or load) - shown in Report a bug, on the report's first line and at the top of the game's log in plain words; errors the game went on after are told apart from the real stop. Report a bug takes a picture of the editor's window by itself (Windows; it can be left out).
 - Art: the faction screen's units picture (menu/symbols/fe_faction_units) gets Draw from the map too - Stainless Steel and the mods made on it show the faction's map there.

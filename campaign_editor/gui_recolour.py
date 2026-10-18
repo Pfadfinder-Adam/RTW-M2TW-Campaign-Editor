@@ -179,12 +179,12 @@ class _Recolour(AutoKeep):
         pics = ttk.Frame(right)
         pics.pack(anchor="w", pady=6)
         self.before = tk.Label(pics, relief="sunken")
-        self.after = tk.Canvas(pics, width=self.side, height=self.side, highlightthickness=1, highlightbackground="#999",
+        self.after_pic = tk.Canvas(pics, width=self.side, height=self.side, highlightthickness=1, highlightbackground="#999",
                                cursor="crosshair")
         ttk.Label(pics, text="now").grid(row=0, column=0)
         ttk.Label(pics, text="after").grid(row=0, column=1)
         self.before.grid(row=1, column=0, padx=4)
-        self.after.grid(row=1, column=1, padx=4)
+        self.after_pic.grid(row=1, column=1, padx=4)
         # touch-ups by hand on the 'after' picture: what the colour test missed (or took wrongly)
         tools = ttk.LabelFrame(right, text="Touch up by hand - paint on the 'after' picture", padding=6)
         tools.pack(anchor="w", fill="x", pady=(4, 0))
@@ -218,7 +218,7 @@ class _Recolour(AutoKeep):
                     "wheel: zoom. The touch-ups are kept for that picture until Apply changes writes them, or Clear.").pack(
             side="left")
         self.edits, self.zoom = {}, {}
-        a = self.after
+        a = self.after_pic
         a.bind("<ButtonPress-1>", self._paint)
         a.bind("<B1-Motion>", self._paint)
         a.bind("<ButtonRelease-1>", lambda e: self._painted())
@@ -379,7 +379,7 @@ class _Recolour(AutoKeep):
         self._photos = [ImageTk.PhotoImage(im.resize(size, Image.NEAREST)),
                         ImageTk.PhotoImage(new.resize(big, Image.NEAREST))]
         self.before.configure(image=self._photos[0])
-        a = self.after
+        a = self.after_pic
         a.delete("all")
         a.create_image(0, 0, image=self._photos[1], anchor="nw")
         a.configure(scrollregion=(0, 0, big[0], big[1]))
@@ -394,7 +394,7 @@ class _Recolour(AutoKeep):
         it = getattr(self, "_shown", None)
         if it is None or it.get("skip"):
             return
-        a = self.after
+        a = self.after_pic
         x, y = a.canvasx(e.x), a.canvasy(e.y)
         if self.v_tool.get() == "area":
             if str(e.type) in ("ButtonPress", "4"):             # one click = one area (a drag adds nothing)
