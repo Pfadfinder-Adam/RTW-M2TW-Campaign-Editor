@@ -1544,6 +1544,9 @@ class App(tk.Tk):
         tools = self.__dict__.setdefault("_tab_tools", {})
         if names not in tools:
             tools[names] = ttk.Frame(self)
+            # laid again when its buttons come (placed while still empty, one pixel high, it was centred that way and
+            # stood lower than the tabs, hanging over the map - #345)
+            tools[names].bind("<Configure>", lambda e: self.after_idle(self._place_tab_tools), add="+")
             self.after_idle(self._place_tab_tools)
         return tools[names]
 
@@ -1554,6 +1557,20 @@ class App(tk.Tk):
             if nb.identify(x, y):
                 return x + 1
         return 0
+
+    def _tab_strip(self, row):
+        """The height of the tabs themselves (where a tab answers the mouse) - less than the row down to the page,
+        which holds the notebook's own border and padding too: a bar centred on that row stood lower than the tabs
+        and hung over the map (#345)."""
+        nb, last = self.nb, -1
+        for y in range(0, row):
+            try:
+                nb.index("@%d,%d" % (6, y))
+                last = y
+            except tk.TclError:
+                if last >= 0:
+                    break
+        return last + 1 if last >= 0 else row
 
     def _place_tab_tools(self):
         tools = getattr(self, "_tab_tools", {})
@@ -1568,17 +1585,18 @@ class App(tk.Tk):
         for names, f in tools.items():
             if name in names and row > 1:
                 need = f.winfo_reqheight()
-                if need > row - 2:                      # the tabs grow to hold the bar's buttons
+                strip = self._tab_strip(row)
+                if need > strip:                        # the tabs grow to hold the bar's buttons
                     st = ttk.Style(self)
                     pad = st.configure("TNotebook.Tab", "padding") or (6, 2)
                     pad = [int(v) for v in (pad if isinstance(pad, (list, tuple)) else str(pad).split())]
                     pad = (pad + pad)[:2] if len(pad) < 2 else pad
-                    grow = (need - row + 3) // 2 + 1
+                    grow = (need - strip + 1) // 2 + 1
                     st.configure("TNotebook.Tab", padding=(pad[0], pad[1] + grow))
                     self.after_idle(self._place_tab_tools)
                     return
-                left = self._tabs_end(row // 2) + 12
-                f.place(in_=nb, x=left, y=max(0, (row - need) // 2), width=max(1, nb.winfo_width() - left))
+                left = self._tabs_end(strip // 2) + 12
+                f.place(in_=nb, x=left, y=max(0, (strip - need + 1) // 2), width=max(1, nb.winfo_width() - left))
                 f.lift()
             else:
                 f.place_forget()
