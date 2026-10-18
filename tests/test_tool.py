@@ -12356,6 +12356,19 @@ building smith
                 gui_modpack.open_pack(app)
             self.assertEqual((f.call_count, d.call_count, w.call_count), {2: (0, 0, 0), 0: (1, 0, 0), 1: (0, 1, 0)}[pick])
 
+    def test_tile_models_read_from_the_games_packs(self):
+        """A tester's photo (ROCSS, Medieval II): the 3D map's rivers were blue squares - the mod has no
+        descr_aerial_map_tile_models.txt of its own, the game keeps it in its packs, and the editor looked for it
+        loose only. It is taken out of the packs now (find_any); found nowhere, that is said."""
+        from types import SimpleNamespace
+        from campaign_editor import tilemodels as TM
+        p = os.path.join(self.root, "tm.txt")
+        write(p, "tile_set rivers { }\n")
+        mod = SimpleNamespace(find=lambda rel: None, find_any=lambda rel: p if rel.endswith("tile_models.txt") else None)
+        self.assertEqual(TM.Library(mod).missing, set())
+        mod.find_any = lambda rel: None
+        self.assertEqual(TM.Library(mod).missing, {"descr_aerial_map_tile_models.txt"})
+
     def test_a_window_on_the_old_mod_never_writes_into_the_clean_one(self):
         """A tester: Bring units into the game -> 'Make my own mod folder' -> made and loaded -> Write again in the
         bring window still open: it went into the game itself, not the new folder. A plan on a root the modder chose

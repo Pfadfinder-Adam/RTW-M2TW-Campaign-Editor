@@ -88,11 +88,11 @@ def lighting(mod):
     out = {"ambient": (0.5, 0.5, 0.52) if m2 else (0.3, 0.3, 0.5),
            "diffuse": (0.7, 0.7, 0.72) if m2 else (1.1, 1.1, 0.85),
            "direction": (-1.0, -1.0, 1.0), "linear": False, "exposure": 1.0}
-    p = mod.find("descr_strategy_lighting_ex.txt")
+    p = mod.find_any("descr_strategy_lighting_ex.txt")
     if p:
         out["linear"] = True
     else:
-        p = mod.find("descr_strategy_lighting.txt")
+        p = mod.find_any("descr_strategy_lighting.txt")
     if p:
         for line in mod.load(p).texts():
             t = strip_comment(line).split()
@@ -277,7 +277,7 @@ class MapData:
         from . import maptrees as MT
         self.trees, self.tree_models, self.tree_pictures, self._tree_src = {}, {}, {}, None
         try:
-            path = mod.find("descr_climates.txt")
+            path = mod.find_any("descr_climates.txt")
             climates = MT.read_climates("\n".join(mod.load(path).texts())) if path else []
             ground = self._model_src[0] if getattr(self, "_model_src", None) else \
                 T3._picture(mod, campaign, "map_ground_types.tga")
