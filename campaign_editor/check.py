@@ -361,6 +361,18 @@ def check_mod(mod, campaign, deep=False, progress=None, found=None):
                 bad("%s (%s): its descr_strat.txt town has %s but the region has no port on the map - the game leaves "
                     "the port building out ('this region is not allowed a port'); place a port (Map) or take it out"
                     % (st.region, fb.name, ", ".join(pb)))
+    # Medieval II: one guild building a town (the engine stops at the campaign's start: 'Adding guild building to
+    # settlement buildings list, but there is already a guild building here!' - settlement_construction.cpp, the
+    # log of report R-20261018-DE4EAB); a guild's building is named in export_descr_guilds.txt
+    guilds = guild_buildings(mod)
+    if guilds:
+        for fb in s.factions:
+            for st in fb.settlements:
+                gs = [c for c, _ in _info(s.lines[st.start:st.end])[1] if c.lower() in guilds]
+                if len(gs) > 1:
+                    bad("%s (%s): its descr_strat.txt town has %d guild buildings (%s) - the game allows one and stops "
+                        "at the campaign's start ('there is already a guild building here'); take all but one out "
+                        "(Buildings)" % (st.region, fb.name, len(gs), ", ".join(gs)))
     from . import resources as RS2
     wet = [r for r in RS2.read(mod.load(mod.campaign_file(campaign, "descr_strat.txt")))
            if RS2.problem(mod, campaign, r.xy)]
@@ -577,6 +589,23 @@ def check_mod(mod, campaign, deep=False, progress=None, found=None):
         say("No problems found.")
     say("(%.1f s)" % (time.time() - t0))
     return "\n".join(out)
+
+
+def guild_buildings(mod):
+    """{chain (lower case)} of the guilds' buildings (export_descr_guilds.txt 'building <chain>'), empty without it."""
+    try:
+        p = mod.find_any("export_descr_guilds.txt")
+        if not p:
+            return set()
+        from .textio import strip_comment
+        out = set()
+        for line in mod.load(p).texts():
+            t = strip_comment(line).split()
+            if t[:1] == ["building"] and len(t) > 1:
+                out.add(t[1].lower())
+        return out
+    except Exception:
+        return set()
 
 
 def ai_label_problems(mod, strat_f):

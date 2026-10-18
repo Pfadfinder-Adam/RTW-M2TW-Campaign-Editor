@@ -12,6 +12,8 @@
 - Edit faction: a faction with more towns than first names gave two captains the same name and the write was refused -> the next captains take a first name with a surname of the list.
 - Interface: a mod's menu file with a tag never closed stopped the Interface work -> it opens; Check mod files names the line.
 - A new playable faction gets its own slot on the faction-select screen by itself (the menu layout had 21, the 22nd faction could not be picked); Steam's Medieval II unpacks again (the unpacker asked three times and stopped after two answers).
+- View in 3D plays a man's animations kept as loose .cas files too (Medieval II reads them when no pack holds them).
+- Check mod files: a town with two guild buildings (Medieval II stops at the campaign's start) is named.
 - An error box at start (the message line placed before the tabs before they were laid out) -> gone.
 - Two characters of one faction with the same name: the write was refused (naming captains stopped) -> the second one takes a free name of the faction's own list, said in the report.
 - A faction that comes later (by an event) given a town or a character on the Map: the game stopped at the campaign's start -> it starts alive with the write, said in the report.
