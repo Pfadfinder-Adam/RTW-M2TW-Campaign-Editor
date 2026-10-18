@@ -43,7 +43,7 @@ def aerial_sets(mod, path=None):
     """({climate: {ground key: (summer file, winter file or None)}}, texture_density) of
     descr_aerial_map_ground_types.txt (the mod's, else the game's; path: that file)."""
     from .textio import strip_comment
-    p = path or mod.find("descr_aerial_map_ground_types.txt")
+    p = path or mod.find_any("descr_aerial_map_ground_types.txt")
     out, density, cur = {}, 1.0, None
     if not p:
         return out, density

@@ -599,7 +599,7 @@ class Library:
 
     def __init__(self, mod):
         self.mod = mod
-        p = mod.find("descr_aerial_map_tile_models.txt")
+        p = mod.find_any("descr_aerial_map_tile_models.txt")
         text = ""
         if p:
             with open(p, "rb") as fh:
@@ -607,7 +607,10 @@ class Library:
         self.sets, self.pages = read_sets(text)
         self._parts = {}
         self._models = {}
-        self.missing = set()
+        # none anywhere (not loose, not in the game's packs): rivers, mountains and cliffs have no models - said, so
+        # their plain tiles are not taken for a bug of the map (a tester: rivers as blue squares - the file was only
+        # in Medieval II's packs and the editor looked for it loose)
+        self.missing = set() if p else {"descr_aerial_map_tile_models.txt"}
 
     def parts(self, tile_set):
         """{part name (lower case): stratcas.Part} of a tile set's .cas files."""

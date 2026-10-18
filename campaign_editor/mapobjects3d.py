@@ -31,7 +31,7 @@ def culture_models(mod):
     games' files (data-relative model paths)."""
     out = {}
     for name in ("descr_sm_settlements.txt", "descr_cultures.txt", "descr_sm_forts_ports_watchtowers.txt"):
-        p = mod.find(name)
+        p = mod.find_any(name)
         if not p:
             continue
         cur, level, depth, pending = None, None, 0, None
@@ -82,7 +82,7 @@ def culture_models(mod):
 
 def resource_models(mod):
     """{resource type: model} of descr_sm_resources.txt."""
-    p = mod.find("descr_sm_resources.txt")
+    p = mod.find_any("descr_sm_resources.txt")
     out, cur = {}, None
     for line in (mod.load(p).texts() if p else []):
         t = strip_comment(line).split(None, 1)
@@ -97,7 +97,7 @@ def resource_models(mod):
 
 def _strat_scales(mod):
     """{figure: (scale, skeleton)} of descr_model_strat.txt (its 'scale' line - 1 when none - and 'skeleton')."""
-    p = mod.find("descr_model_strat.txt")
+    p = mod.find_any("descr_model_strat.txt")
     out, cur = {}, None
     for line in (mod.load(p).texts() if p else []):
         t = strip_comment(line).replace(",", " ").split()
