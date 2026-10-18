@@ -442,7 +442,9 @@ The Windows `.exe` is the window only. Use Python for the command line.
 - **Should I make my own mod folder?** Yes - **New mod folder...** first: the game or the mod you build on stays
   clean. The editor asks once before it writes into a mod it did not make.
 - **Windows warns about the exe.** It is not signed yet (see *Code signing policy*). Download it only from
-  [Releases](../../releases); Windows SmartScreen may ask once - *More info > Run anyway*.
+  [Releases](../../releases); Windows SmartScreen may ask once - *More info > Run anyway*. An antivirus (Avast...)
+  may hold a new version back for a while: one-exe Python programs are often flagged at first - let it finish or mark
+  the exe safe.
 - **How do I go back?** **Undo this write** right after a write, or **Tools > Restore a backup** - every byte back.
 
 ## Known limits

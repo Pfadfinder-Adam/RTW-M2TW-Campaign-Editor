@@ -3413,6 +3413,26 @@ building smith
         rebel = {"label": "flag on its towns in battle", "rel": "models_building/textures/##standard_slave.tga"}
         self.assertTrue(E._rebels_flag(rebel))
 
+    def test_draw_from_the_map_on_the_faction_screens_units_picture(self):
+        """A tester (Discord): Stainless Steel and the mods made on it show the faction's map in
+        menu/symbols/fe_faction_units - its card gets 'Draw from the map' too, at that picture's size."""
+        try:
+            from campaign_editor.gui_art import ArtEditor
+        except ImportError as e:
+            self.skipTest("no tkinter: %s" % e)
+        from types import SimpleNamespace
+        from unittest import mock
+        got = []
+        me = SimpleNamespace(draw_start_map=lambda t, s: got.append((t, s)))
+        units = {"rel": "menu/symbols/fe_faction_units/venice.tga", "size": (224, 119)}
+        with mock.patch("campaign_editor.factionart.picture_target", lambda p, f, n: p["rel"]):
+            b = ArtEditor._map_button(me, units, "venice", None)
+            self.assertEqual(b[0][0], "Draw from the map")
+            b[0][1]()
+            self.assertIsNone(ArtEditor._map_button(me, {"rel": "menu/symbols/fe_buttons_48/venice.tga",
+                                                         "size": (48, 48)}, "venice", None))
+        self.assertEqual(got, [("menu/symbols/fe_faction_units/venice.tga", (224, 119))])
+
     def test_the_map_from_above_is_drawn_once_for_the_same_map(self):
         """A tester (Discord): a faction brought from Barbarian Invasion froze the window 3-6 minutes - Preview and
         Apply each drew the whole map from above again for its faction-select picture. Kept for the same map now; a

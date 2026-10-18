@@ -35,7 +35,8 @@ PICTURE_KINDS = (
     (lambda low, name: "battlefield_pics" in low, "battle-select picture",
      "the custom / historical battle screen, behind the faction's name"),
     (lambda low, name: "fe_faction_units" in low, "units picture on the faction screen",
-     "the faction-select screen, the soldiers standing under the faction's name"),
+     "the faction-select screen, the soldiers standing under the faction's name (Stainless Steel and the mods made "
+     "on it show the faction's map here: Draw from the map)"),
     (lambda low, name: "fe_symbols_80" in low, "symbol on the faction screen",
      "the faction-select screen, the faction's symbol (80 px)"),
     (lambda low, name: "faction_symbols" in low, "faction symbol (in-game panels)",

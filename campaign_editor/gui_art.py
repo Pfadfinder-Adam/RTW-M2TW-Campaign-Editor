@@ -218,6 +218,15 @@ class ArtEditor(ttk.Frame):
             ttk.Button(host, text="Draw one from the map", command=lambda: self.draw_start_map(rel, None)).pack(
                 anchor="w", pady=(4, 0))
 
+    def _map_button(self, p, src_faction, new):
+        """'Draw from the map' on the faction screen's units picture too: Stainless Steel and the mods made on it
+        show the faction's map there (menu/symbols/fe_faction_units - a tester, Discord: the drawn campaign-select
+        map did not show in his SS mod)."""
+        if "fe_faction_units" not in p["rel"].replace("\\", "/").lower():
+            return None
+        t = FA.picture_target(p, src_faction, new or src_faction)
+        return [("Draw from the map", lambda t=t, s=p["size"]: self.draw_start_map(t, s))]
+
     def draw_start_map(self, target, size):
         """'Draw from the map' (the user, 2026-10-14): the faction-select map made from the campaign map itself -
         relief and rivers, no signs - the faction's land one solid patch in its primary colour (factionart.
@@ -240,7 +249,9 @@ class ArtEditor(ttk.Frame):
         from . import log
         folder = os.path.join(log.home(), "drawn")
         os.makedirs(folder, exist_ok=True)
-        path = os.path.join(folder, "map_%s.png" % (new or src_faction))
+        stem = "map" if os.path.basename(target).lower().startswith("map_") else \
+            os.path.basename(os.path.dirname(target)) or "map"
+        path = os.path.join(folder, "%s_%s.png" % (stem, new or src_faction))
         im.save(path)
         a.remember()
         a.art_replace[target] = path
@@ -277,7 +288,8 @@ class ArtEditor(ttk.Frame):
                 g.say("No %s named after %s were found.%s" % (title.lower(), src_faction, (
                     " The campaign-select map is on the faction tab, beside the description." if k == "maps" else "")))
                 continue
-            g.fill([self.card(g.inner, p, src_faction, new) for p in groups[k]])
+            g.fill([self.card(g.inner, p, src_faction, new, buttons=self._map_button(p, src_faction, new))
+                    for p in groups[k]])
         self.draw_map()
 
     def card(self, parent, p, src_faction, new, box=(72, 72), wrap=None, short=False, buttons=None, slim=False):

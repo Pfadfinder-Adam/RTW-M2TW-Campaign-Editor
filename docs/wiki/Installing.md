@@ -53,7 +53,10 @@ The exe is not signed yet (a free certificate from the SignPath Foundation has b
 browser and Windows SmartScreen may warn about it:
 
 - the browser: **Keep**;
-- SmartScreen: **More info -> Run anyway**.
+- SmartScreen: **More info -> Run anyway**;
+- an antivirus (Avast, AVG and others have done it) may hold a new version back for a while or call it suspicious:
+  a program packed into one exe the way this one is (PyInstaller) is often taken for one at first. Download it only
+  from Releases; you can let the antivirus finish its check, or mark the exe as safe in it.
 
 The tool sends nothing over the network unless you press **Send** in *Report a bug / Suggest*. It reads and
 writes only the game or mod folder you load and its own two files beside the exe.
