@@ -3413,6 +3413,30 @@ building smith
         rebel = {"label": "flag on its towns in battle", "rel": "models_building/textures/##standard_slave.tga"}
         self.assertTrue(E._rebels_flag(rebel))
 
+    def test_the_map_from_above_is_drawn_once_for_the_same_map(self):
+        """A tester (Discord): a faction brought from Barbarian Invasion froze the window 3-6 minutes - Preview and
+        Apply each drew the whole map from above again for its faction-select picture. Kept for the same map now; a
+        brush stroke (another key) draws it anew."""
+        try:
+            from PIL import Image
+            from unittest import mock
+            from campaign_editor import minimap
+        except ImportError:
+            self.skipTest("no Pillow / NumPy")
+        calls = []
+
+        def draw(*a):
+            calls.append(a)
+            return Image.new("RGB", (4, 4)), Image.new("L", (4, 4))
+        minimap._VIEWS.clear()
+        with mock.patch.object(minimap, "_top_view", draw), \
+                mock.patch.object(minimap, "_view_key", side_effect=["k1", "k1", "k2"]):
+            for _ in range(3):
+                pic, land = minimap.top_view(None, "c")
+        self.assertEqual(len(calls), 2)
+        self.assertEqual(pic.size, (4, 4))
+        minimap._VIEWS.clear()
+
     def test_minimap_drawn_again_keeps_size_depth_and_border(self):
         """The minimap (radar_map2) drawn again from the map seen from above: its own size and depth, Medieval II's
         blue border line (top and right) kept, the map inside it."""

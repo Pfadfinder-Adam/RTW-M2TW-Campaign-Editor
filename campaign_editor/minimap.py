@@ -21,9 +21,46 @@ MINIMAPS = ("radar_map1.tga", "radar_map2.tga", "map_radar2.tga")
 DEEP, SHALLOW, FOAM = (22, 62, 105), (58, 140, 160), (200, 225, 225)
 
 
+_VIEWS = {}
+
+
+def _view_key(mod, campaign, limit, winter):
+    """What the top view is made of: the map's pictures as they stand in memory (a brush may have painted them) and
+    the ground textures' list - the same key, the same picture."""
+    import hashlib
+    from . import terrain3d as T3
+    h = hashlib.md5()
+    for name in ("map_heights.tga", "map_ground_types.tga", "map_climates.tga", "map_features.tga"):
+        pic = T3._picture(mod, campaign, name)
+        h.update(name.encode() + (pic.tobytes() if pic is not None else b"-"))
+    try:
+        p = mod.find_any("descr_aerial_map_ground_types.txt")
+        h.update(("%s %s" % (p, os.path.getmtime(p) if p else 0)).encode())
+    except OSError:
+        pass
+    return (os.path.normcase(os.path.abspath(mod.data)), campaign, limit, winter, h.hexdigest())
+
+
 def top_view(mod, campaign, limit=1600, winter=False):
     """(Pillow RGB picture, land mask 'L' of the same size) of the whole map seen from above, top row first. Raises
-    ValueError without map_heights.tga; ImportError without Pillow."""
+    ValueError without map_heights.tga; ImportError without Pillow. Made once for the same map (a tester: a faction
+    brought from Barbarian Invasion froze the window 3-6 minutes - Preview, then Apply, each drew the whole map
+    again for its faction-select picture)."""
+    try:
+        key = _view_key(mod, campaign, limit, winter)
+    except Exception:
+        key = None
+    if key is not None and key in _VIEWS:
+        a, b = _VIEWS[key]
+        return a.copy(), b.copy()
+    out = _top_view(mod, campaign, limit, winter)
+    if key is not None:
+        _VIEWS.clear()                                    # one map at a time: a big picture kept, not many
+        _VIEWS[key] = (out[0].copy(), out[1].copy())
+    return out
+
+
+def _top_view(mod, campaign, limit=1600, winter=False):
     from PIL import Image, ImageFilter
     from . import terrain3d as T3
     cm = T3.colour_map(mod, campaign, winter=winter, limit=limit)
