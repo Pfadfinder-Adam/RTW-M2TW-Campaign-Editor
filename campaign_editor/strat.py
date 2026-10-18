@@ -543,6 +543,49 @@ def check_names(before, after):
                          % (new[0][0], new[0][1]))
 
 
+def fix_names(plan, path, before):
+    """A name the write would give twice to one faction: the later character takes a free first name of the
+    faction's own list (descr_names.txt) - the game would skip it ('duplicated character name in this faction'),
+    and refusing the whole write stopped a tester giving captains names (report R-20261018-DE4EAB). Said in the
+    report; only when the list has no free name is it refused (check_names). Names twice in the file before stay."""
+    f = plan.files[path]
+    old = set(duplicate_names(before)) if before is not None else set()
+    for _ in range(200):
+        s = Strat(f)
+        new = [d for d in duplicate_names(s) if d not in old]
+        if not new:
+            return
+        fac, name = new[0]
+        fb = s.faction(fac)
+        used = {n.split()[0] for n in faction_names(s, fac) if n}
+        free = [n for n in (plan.name_pool(fac).get("characters") or []) if n not in used]
+        if not free:
+            break
+        seen = False
+        for i in range(fb.start, fb.end):
+            body = strip_comment(f.text(i)).strip()
+            head = body.split(None, 1)[:1]
+            if head not in (["character"], ["character_record"]):
+                continue
+            parts = [p.strip() for p in body[len(head[0]):].strip().split(",")]
+            if parts and parts[0].startswith("sub_faction"):
+                parts = parts[1:]
+            if not parts or parts[0] != name:
+                continue
+            if not seen:
+                seen = True
+                continue
+            first = name.split()[0]
+            new_name = free[0] + name[len(first):]
+            f.set(i, re.sub(r"(\b%s\b)" % re.escape(name), new_name.replace("\\", r"\\"), f.text(i), count=1))
+            plan.note(f, "%s: a second character called %s is called %s now (the game skips a name given twice in "
+                         "one faction)" % (fac, name, new_name))
+            break
+        else:
+            break
+    check_names(before, Strat(f))
+
+
 def medieval(lines):
     """Whether a descr_strat's character lines name the sex (Medieval II:
     'character Name, general, male, age 30, x 1, y 2'); Rome's do not

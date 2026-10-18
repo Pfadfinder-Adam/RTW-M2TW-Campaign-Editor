@@ -239,8 +239,9 @@ def validate(plan, campaign):
     for name in characters_after_tree(s):
         raise ValueError("internal check failed - a character would follow the family tree of %s "
                          "(the game crashes on that); nothing written" % name)
-    from .strat import check_names
-    check_names(Strat(TextFile.load(strat_path)), s)
+    from .strat import fix_names
+    fix_names(plan, strat_path, Strat(TextFile.load(strat_path)))
+    s = Strat(f)
     seen = {}
     for fb in s.factions:
         for st in fb.settlements:

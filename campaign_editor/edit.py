@@ -168,9 +168,9 @@ def edit(mod, campaign, faction, opts):
         if bad:
             raise ValueError("internal check failed - a character would follow the family tree of %s "
                              "(the game crashes on that); nothing written" % ", ".join(bad))
-        from .strat import check_names
+        from .strat import fix_names
         from .textio import TextFile
-        check_names(Strat(TextFile.load(sp)), Strat(plan.files[sp]))
+        fix_names(plan, sp, Strat(TextFile.load(sp)))
         s = Strat(plan.files[sp])
         tiles = plan_tiles(plan, campaign)
         fb = s.faction(faction)
