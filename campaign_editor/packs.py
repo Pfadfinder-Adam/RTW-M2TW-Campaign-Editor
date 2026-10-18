@@ -864,6 +864,17 @@ def _carry_skeletons(mod, manifest, files):
             n += 1
             files[rel] = body
             man["anims"][key].append([rec.hex(), rel])
+        if not items:
+            # in no set: a loose .cas file of the source the game reads by its path (anim_db load_anim_file) -
+            # carried as a file (report R-20261018-D47E51: SS 6.3's mangonel crew animation was left behind and
+            # Medieval II stopped at its start: 'skeleton.cpp(1035): adata != 0')
+            try:
+                p = mod.find(key[5:] if key.startswith("data/") else key)
+            except (OSError, ValueError):
+                p = None
+            if p:
+                with open(p, "rb") as fh:
+                    files[key[5:] if key.startswith("data/") else key] = fh.read()
     # the skeletons' own blocks of descr_skeleton.txt (what a later rebuild of the packs reads: Rome's -util:animdb,
     # Medieval II's first start without packs) - kept with them
     try:

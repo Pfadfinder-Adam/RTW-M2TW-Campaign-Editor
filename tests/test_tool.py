@@ -34,6 +34,34 @@ def tree_hash(root):
     return out
 
 
+def _make_anim_set(folder, skels, anims):
+    """A game animation set (pack.idx / .dat, skeletons.idx / .dat) in folder: skels {name: [anim path]}, anims
+    {path: [(scale, bytes)]}."""
+    import struct as _st
+    os.makedirs(folder, exist_ok=True)
+    head = lambda magic, stamp, ver, n: magic + stamp + _st.pack("<II", ver, n)  # noqa: E731
+    pidx, pdat = bytearray(head(b"ANIM.PACK", b"\0\0\0", 4, 0)), bytearray(head(b"ANIM.PACK", b"\0\0\0", 4, 0))
+    n = 0
+    for path, scales in anims.items():
+        for scale, body in scales:
+            raw = path.encode()
+            pidx += _st.pack("<IIIfHHB", len(raw) + 10, len(pdat), len(body), scale, 2, 3, 1) + raw + b"\0"
+            pdat += body
+            n += 1
+    for b in (pidx, pdat):
+        _st.pack_into("<I", b, 16, n)
+    sidx, sdat = bytearray(head(b"SKEL.PACK", b"\x80\x79\x08", 3, len(skels))), \
+        bytearray(head(b"SKEL.PACK", b"\x80\x79\x08", 3, len(skels)))
+    for name, paths in skels.items():
+        rec = b"\x01\x02" + b"".join(p.encode() + b"\0" * 9 for p in paths)
+        sidx += _st.pack("<III", len(name) + 1, len(sdat), len(rec)) + name.encode() + b"\0"
+        sdat += rec
+    for name, data in (("pack.idx", pidx), ("pack.dat", pdat), ("skeletons.idx", sidx),
+                       ("skeletons.dat", sdat)):
+        with open(os.path.join(folder, name), "wb") as fh:
+            fh.write(bytes(data))
+
+
 class ToolTest(unittest.TestCase):
     def setUp(self):
         self.root = tempfile.mkdtemp()
@@ -7831,34 +7859,11 @@ building smith
         # (HLR) has skeletons of its own in its own animation set; the target's set (its own, or the game's) is
         # written into the target mod with the source's skeleton records and every animation they name appended
         # (each scale; one the target has stays its own), the counts raised - and the model keeps its skeleton
-        import struct as _st
         from unittest import mock
         from campaign_editor import animpacks as AP, packs
         from campaign_editor.plan import Plan
 
-        def make_set(folder, skels, anims):
-            os.makedirs(folder, exist_ok=True)
-            head = lambda magic, stamp, ver, n: magic + stamp + _st.pack("<II", ver, n)  # noqa: E731
-            pidx, pdat = bytearray(head(b"ANIM.PACK", b"\0\0\0", 4, 0)), bytearray(head(b"ANIM.PACK", b"\0\0\0", 4, 0))
-            n = 0
-            for path, scales in anims.items():
-                for scale, body in scales:
-                    raw = path.encode()
-                    pidx += _st.pack("<IIIfHHB", len(raw) + 10, len(pdat), len(body), scale, 2, 3, 1) + raw + b"\0"
-                    pdat += body
-                    n += 1
-            for b in (pidx, pdat):
-                _st.pack_into("<I", b, 16, n)
-            sidx, sdat = bytearray(head(b"SKEL.PACK", b"\x80\x79\x08", 3, len(skels))), \
-                bytearray(head(b"SKEL.PACK", b"\x80\x79\x08", 3, len(skels)))
-            for name, paths in skels.items():
-                rec = b"\x01\x02" + b"".join(p.encode() + b"\0" * 9 for p in paths)
-                sidx += _st.pack("<III", len(name) + 1, len(sdat), len(rec)) + name.encode() + b"\0"
-                sdat += rec
-            for name, data in (("pack.idx", pidx), ("pack.dat", pdat), ("skeletons.idx", sidx),
-                               ("skeletons.dat", sdat)):
-                with open(os.path.join(folder, name), "wb") as fh:
-                    fh.write(bytes(data))
+        make_set = _make_anim_set
         d = os.path.join(self.root, "data")
         write(os.path.join(d, "export_descr_unit.txt"), EDU.replace(
             "ownership\talpha", "soldier\t\talpha_model, 20, 0, 1\nownership\talpha"))
@@ -7908,6 +7913,47 @@ building smith
                                                                       {"primary": "MTW2_Spear",
                                                                        "secondary": "MTW2_Sword"}]}}),
                          ["MTW2_Spear", "MTW2_Sword"])
+
+    def test_a_brought_skeleton_never_names_an_animation_found_nowhere(self):
+        """Report R-20261018-D47E51: a faction brought from SS 6.3 into Medieval II, the game stopped at its start
+        ('skeleton.cpp(1035): adata != 0') - the mangonel's skeleton named a crew animation in no set: SS keeps it as a
+        loose .cas file, which was left behind. The loose file comes along now; a skeleton naming one found nowhere
+        is not brought (the units take the nearest skeleton) and that is said."""
+        from unittest import mock
+        from campaign_editor import animpacks as AP, packs
+        from campaign_editor.plan import Plan
+        d = os.path.join(self.root, "data")
+        write(os.path.join(d, "export_descr_unit.txt"), EDU.replace(
+            "ownership\talpha", "soldier\t\talpha_model, 20, 0, 1\nownership\talpha"))
+        write(os.path.join(d, "descr_model_battle.txt"),
+              "type\t\talpha_model\nskeleton\t\tfs_crew, fs_lost\nmodel_flexi\t\tdata/models_unit/a.cas, max\n")
+        write(os.path.join(d, "models_unit", "a.cas"), "A")
+        inset, loose, lost = "data/animations/in_set.cas", "data/animations/crew/loose.cas", "data/animations/gone.cas"
+        _make_anim_set(os.path.join(d, "animations"), {"fs_crew": [inset, loose], "fs_lost": [inset, lost]},
+                       {inset: [(1.0, b"IN-SET")]})
+        write(os.path.join(d, "animations", "crew", "loose.cas"), "LOOSE")
+        with mock.patch.object(AP, "game_set", lambda mod: None):
+            man, files = packs.collect(ModData(self.root), ["alpha general"])
+        self.assertEqual(files.get("animations/crew/loose.cas"), b"LOOSE")          # the loose file comes along
+        target = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, target)
+        troot = os.path.join(target, "mod")
+        shutil.copytree(self.root, troot)
+        tan = os.path.join(troot, "data", "animations")
+        shutil.rmtree(tan)
+        _make_anim_set(tan, {"fs_swordsman": [inset]}, {inset: [(1.0, b"IN-SET")]})
+        write(os.path.join(troot, "data", "descr_model_battle.txt"), "type\t\tother\nskeleton\t\tfs_swordsman\n")
+        plan = Plan(ModData(troot), "pack", "pack", {})
+        packs.import_pack(plan, man, files, ["alpha"])
+        self.assertIn("fs_lost not brought", plan.report() + " ".join(w for _, w in plan.warnings))
+        from campaign_editor import gamelog                    # the crash doctor knows that line of the game's log
+        self.assertIn("names an animation the game cannot find",
+                      gamelog.explain("[core.assert] [fatal] ASSERT FAILED: src\\game\\display\\skeleton.cpp(1035): "
+                                      "adata != 0"))
+        plan.apply()
+        got = AP.AnimSet.at(tan)
+        self.assertEqual(sorted(got.skeletons()), ["fs_crew", "fs_swordsman"])         # fs_lost left out
+        self.assertTrue(os.path.isfile(os.path.join(tan, "crew", "loose.cas")))
 
     def test_unit_pack_brings_the_units_own_name_call(self):
         # the user, 2026-10-14: 'sounds too - everything of the unit the target lacks': the unit's own name call

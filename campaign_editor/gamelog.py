@@ -45,6 +45,12 @@ KNOWN = [
      "wrong (a folder with non-Latin letters on the way to the game), or the engine started away from the game's "
      "folder. Start the mod with its .bat from the mod's folder, or with the -mod: line from the game's folder; this "
      "is the engine's own log - the campaign editor does not start the game."),
+    (r"skeleton\.cpp\(\d+\): adata != 0",
+     "A battle skeleton names an animation the game cannot find - in no animation pack (data/animations/pack.idx) "
+     "and no loose .cas file at its path - so the game stops while it loads the animations, before the menu. "
+     "Units brought from another mod are the usual cause: bring them again with this editor's newest version (it "
+     "carries the animation or leaves that skeleton out), or copy the missing .cas file from the other mod. "
+     "(Report R-20261018-D47E51.)"),
     (r"encountered an unspecified error",
      "The game crashed. The lines just before this one in the log name what it was doing."),
     (r"DATA: src.(.+?)\((\d+)\)",
