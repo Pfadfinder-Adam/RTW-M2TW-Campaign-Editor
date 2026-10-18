@@ -853,7 +853,12 @@ def _garrisons(plan, f, s, campaign, faction=None, picked=None, add=False):
     used |= {n.split()[0] for n in faction_names(s, faction) if n}
     used |= {(c.get("name") or "").split()[0] for c in plan.opts.get("characters") or [] if c.get("name")}
     men = first_names(pool, "general")
-    captains = [n for n in men if n not in used] or men
+    # the free first names first; when they run out (a faction with more towns than names - report #348: 42 towns,
+    # 'Albrecht' given twice), a first name with a surname of the same list, as for rebel captains - never a name twice
+    whole = taken | set(faction_names(s, faction))
+    captains = [n for n in men if n not in used]
+    captains += [a + " " + b for b in pool.get("surnames", []) if b.strip() and " " not in b.strip()
+                 for a in men if (a + " " + b) not in whole]
     jobs = []
     for region, types in picked.items():
         if region not in [st.region for st in fb.settlements]:
@@ -935,10 +940,13 @@ def _garrisons(plan, f, s, campaign, faction=None, picked=None, add=False):
                                              region, sub))
                 taken.add(name)
             else:
-                if not captains:
+                if not captains and not men:
                     raise ValueError("%s: a garrison needs a captain, and %s has no men's names in descr_names.txt "
                                      "(the 'characters' list of its part is empty) - add names there, or leave this "
                                      "town without a garrison" % (region, faction))
+                if not captains:
+                    raise ValueError("%s: no free name in %s's name list for a captain (every first name and first "
+                                     "name + surname is taken) - add names to descr_names.txt" % (region, faction))
                 name = captains.pop(0)
             block = [character_line(f, name, "general", 30, xy, sub_faction=sub), "army"] + lines + [""]
             f.insert(_chars_at(f, fb), block)

@@ -9,6 +9,8 @@
 - **Fixed**: faction logos can be replaced without REX / M2EX too; many fixes from testers' reports (units and
   buildings brought from other mods, the recruitment order, Medieval II's add-on words, crashes).
 - **Changed**: a slimmer Unit editor and Models tab; the support buttons in one drop-down.
+- Edit faction: a faction with more towns than first names gave two captains the same name and the write was refused -> the next captains take a first name with a surname of the list.
+- Interface: a mod's menu file with a tag never closed stopped the Interface work -> it opens; Check mod files names the line.
 - A new playable faction gets its own slot on the faction-select screen by itself (the menu layout had 21, the 22nd faction could not be picked); Steam's Medieval II unpacks again (the unpacker asked three times and stopped after two answers).
 - Bring units: units shared by several factions came out in the first owner's colours (blue officers and cards on Gallic units) -> they take the look of the faction picked in step 2, else of their own owners; the men and each officer can be seen in 3D there before writing.
 - Bring units: after 'Make my own mod folder' the same window wrote into the game itself -> it now writes into the mod loaded now.

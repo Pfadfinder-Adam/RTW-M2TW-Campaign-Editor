@@ -2262,6 +2262,22 @@ building smith
         said = "\n".join(m for _, m in p.notes)
         self.assertIn("captain Cyrus", said)
 
+    def test_captains_never_share_a_name_when_the_first_names_run_out(self):
+        """Report #348 (Medieval II with M2EX, a faction of 42 towns): garrisons for more towns than free first names
+        gave 'Albrecht' twice and the write was refused - the next captains take a first name + a surname of the
+        list (as rebel captains do), never a name already in the faction."""
+        from campaign_editor.edit import edit
+        write(os.path.join(self.root, "data", "descr_names.txt"), NAMES.replace("\t\tAaron\n", "", 1))
+        path = ModData(self.root).campaign_file("test", "descr_strat.txt")
+        with open(path) as fh:
+            text = fh.read()
+        with open(path, "w") as fh:                                 # Boris, the only first name, is taken
+            fh.write(text.replace("weapon_lvl 0\n;#####<", "weapon_lvl 0\n\ncharacter_record\t\tBoris, \tmale, "
+                                  "age 9, alive, never_a_leader\n;#####<", 1))
+        p = edit(ModData(self.root), "test", "alpha", {"take": ["B_R"], "garrisons": {"B_R": ["alpha general"]}})
+        said = "\n".join(m for _, m in p.notes)
+        self.assertIn("captain Boris Alphid holds", said)
+
     def test_children_are_written_oldest_first(self):
         """A tester in Medieval II (with M2EX): 'Children of King Philip: Adenin (age 3) is supposed to be younger
         than Henry (age 1)' - a new son was put after a younger child. Both games want each couple's children oldest
@@ -3952,8 +3968,17 @@ building smith
             lnt.remove_piece(page, name)
         lnt.move("main_menu", "main_single", x=255, y=256)
         self.assertEqual(lnt.dump().decode("latin-1").replace("        <height>168</height>\r\n", "", 1), self.LNT)
-        with self.assertRaises(LntError):
-            Lnt("<layout>\r\n  <lpage>a\r\n</layout>\r\n")
+        # a slip the game reads past (report #349: an <identifier> never closed before </UI piece>): no stop - the
+        # tag left open is one line, a stray close passed over, both in problems; the bytes stay as they are
+        slip = Lnt("<layout>\r\n  <lpage>a\r\n</layout>\r\n")
+        self.assertEqual(slip.problems, ["line 2: <lpage> is never closed - read as one line"])
+        piece = ("<layout>\r\n  <lpage>p\r\n    <UI piece>b\r\n      <identifier>button\r\n"
+                 "      <object_id>obj</object_id>\r\n    </UI piece>\r\n  </lpage>\r\n  </stray>\r\n</layout>\r\n")
+        slip = Lnt(piece)
+        self.assertEqual(slip.dump().decode("latin-1"), piece)
+        p = slip.root.find("layout").find("lpage").find("UI piece")
+        self.assertEqual((p.get("identifier"), p.get("object_id")), ("button", "obj"))
+        self.assertEqual(len(slip.problems), 2)
         # a modder's comments, one line and several (#305: '</lpage> closes nothing open (open: <!-- HEADING ...')
         noted = ("<layout>\r\n  <!-- HEADING WITH TITLE \"FACTIONS\" I THINK -->\r\n  <lpage>a\r\n  <!-- two\r\n"
                  "  <lpage>b -->\r\n  </lpage>\r\n</layout>\r\n")
