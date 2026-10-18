@@ -7586,6 +7586,32 @@ building smith
         self.assertIn("Brude", used)
         self.assertEqual(_own_name(plan, f, got, "Brude", "general", {"characters": ["Brude"]}, set())[1], "Brude")
 
+    def test_brought_faction_keeps_the_name_list_typed_in_the_window(self):
+        """Report R-20261018-B80774: a faction brought from another mod with a name list typed in the window - the
+        other mod's list took its place, so the leader typed from it was refused ('not in the england name list',
+        the template named, not the faction). The typed list wins now."""
+        from types import SimpleNamespace
+        from unittest import mock
+        from campaign_editor import factionbring as FB
+        notes, called = [], []
+        mod = SimpleNamespace(factions=lambda: [("alpha", "c")], file=lambda k: None)
+        plan = SimpleNamespace(new="beta", template="alpha", mod=mod, opts={"names": {"characters": ["Adenin"]},
+                                                                         "copy_art": False},
+                               note=lambda f, m: notes.append(m), warn=lambda f, m: notes.append(m),
+                               edit=lambda p: None)
+        src = SimpleNamespace(culture=lambda f: None)
+        stubs = dict(bring_units=lambda *a: ([], [], {}), start_of=lambda *a: None, bring_sm_files=lambda *a: None,
+                     own_select_map=lambda *a: None, bring_characters=lambda *a: None, bring_figures=lambda *a: None,
+                     bring_names=lambda *a: called.append(a))
+        with mock.patch.multiple(FB, **stubs), mock.patch("campaign_editor.moddata.ModData", lambda p: src), \
+                mock.patch("campaign_editor.packs.game_kind", lambda m: "medieval2"):
+            FB.overlay(plan, "test", {"src": "/x/data", "faction": "brittany"})
+            self.assertEqual(called, [])
+            self.assertTrue(any("typed in the window" in n for n in notes))
+            plan.opts.pop("names")
+            FB.overlay(plan, "test", {"src": "/x/data", "faction": "brittany"})
+            self.assertEqual(len(called), 1)                    # none typed: the other mod's lists come along
+
     def test_brought_faction_family_placed_by_create(self):
         """The tester (2026-10-17): Create faction for every faction brought from another mod stopped with "'list'
         object is not callable" - the family's places by the capital ran into the leader's lines named like the

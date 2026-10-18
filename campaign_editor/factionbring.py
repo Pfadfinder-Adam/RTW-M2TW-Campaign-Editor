@@ -586,7 +586,10 @@ def overlay(plan, campaign, bring):
                 art[rel] = pic                          # a cut-out or another format: made to fit (Art's way)
     bring_sm_files(plan, src, faction, new)
     own_select_map(plan, campaign, new)
-    bring_names(plan, src, faction, new)
+    if not plan.opts.get("names"):                      # a name list typed in the window wins (clone.names wrote it):
+        bring_names(plan, src, faction, new)            # the other mod's took its place and the leader typed from it
+    else:                                               # was refused (report R-20261018-B80774)
+        plan.note(None, "%s's name lists: the ones typed in the window (not %s's of the other mod)" % (new, faction))
     bring_characters(plan, src, faction, new)
     bring_figures(plan, src, faction, new)
     plan.note(None, "brought from %s: %s as %s (made on %s; %d unit(s) shared, %d brought). Not brought: its towns "
