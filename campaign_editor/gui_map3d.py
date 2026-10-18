@@ -528,7 +528,7 @@ class Map3DView(ttk.Frame):
 
     # a town or a port is wider than its tile: its frame grows this much on every side, so it shows round the model
     # (the user: 'bigger for a town or a port, not hidden under its texture')
-    TOWN_FRAME = 0.8
+    TOWN_FRAME = 0.2
 
     def _draw_frame(self, t=None, grow=0.0):
         """The white frame of a tile lying on the ground - the tile under the mouse while a figure is carried, or the
