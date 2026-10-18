@@ -2277,11 +2277,14 @@ building smith
         self.assertNotIn("Aaron", [c.name for c in s2.faction("beta").characters])
         self.assertIn("has no unit - not written", bare.report())
         # a name the faction already gives someone: the game skips the second one ("duplicated character
-        # name in this faction" - the user's nabataea army named like its leader)
-        with self.assertRaises(ValueError) as e:
-            build(ModData(self.root), "test", "alpha", "beta", {"start": {
-                "regions": ["B_R"], "leader": {"name": "Boris"}, "characters": [dict(chars[0], name="Boris")]}})
-        self.assertIn("duplicated character name", str(e.exception))
+        # name in this faction" - the user's nabataea army named like its leader); it takes a free name of the
+        # faction's own list now, said (report R-20261018-DE4EAB: refusing stopped a tester naming captains)
+        twice = build(ModData(self.root), "test", "alpha", "beta", {"start": {
+            "regions": ["B_R"], "leader": {"name": "Boris"}, "characters": [dict(chars[0], name="Boris")]}})
+        names = [c.name for c in Strat(twice.files[mod.campaign_file("test", "descr_strat.txt")]).faction(
+            "beta").characters]
+        self.assertEqual(len(names), len(set(names)))
+        self.assertIn("a second character called Boris is called", twice.report())
         bad = [dict(chars[0], name="Zed"), dict(chars[2], xy=(3, 2)), dict(chars[0], xy=(2, 2))]
         for c in bad:                                   # unknown name, fleet on land, army into a held town
             with self.assertRaises(ValueError):
