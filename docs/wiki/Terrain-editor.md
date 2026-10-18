@@ -58,8 +58,10 @@ the sea floor shows) and the beach and surf, and lets the surf stand still. It r
 did not write yet is there - the tab makes the map again when you open it after a change (**Draw it again** at any
 time). The right button dragged moves over the map, the wheel held down and dragged turns and tilts the view, the
 wheel turned goes nearer or farther, the arrow keys (or W A S D) move too; the left button carries anything the Map
-moves - an army, agent or fleet, a town, a port, a resource, a fort or watchtower - to another tile: it goes with the
-mouse, standing on the ground of the tile under it, a white frame on that tile; the Map's own check refuses a tile the
+moves - an army, agent or fleet, a town, a port (a new region's too), a resource, a fort or watchtower, a wonder, a
+special place - to another tile: it goes with the mouse, standing on the ground of the tile under it, a white frame on
+that tile. The mouse resting on anything that can be carried shows the same white frame round it (bigger round a town
+or a port) and a hand; the Map's own check refuses a tile the
 game would not take (it goes back, Esc too), and the move is the Map's (Undo, Preview, Apply); an army in a town stands
 on its roofs, as in the game's own editor. Another mod or campaign loaded while the tab is open is drawn at once;
 the relief stands as high as in the game;

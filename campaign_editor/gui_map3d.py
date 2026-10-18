@@ -230,6 +230,7 @@ class Map3DView(ttk.Frame):
     def load(self):
         """The tab opened: the picture made again when anything it shows changed since; when only descr_strat did
         (the Map's armies moved), only what stands on the map is laid again."""
+        self._hover_gen = getattr(self, "_hover_gen", 0) + 1   # the hover's list read anew
         if self.app.mod is None:
             self.lbl.configure(text="load a mod first")
             return
@@ -525,20 +526,47 @@ class Map3DView(ttk.Frame):
         got = self._point(x, y)
         return None if got is None else tile_of(*got[1])
 
-    def _draw_frame(self):
-        """The white frame of the tile under the mouse while a figure is carried, lying on the ground."""
-        t = self._tile(*self._mouse) if self._mouse else None
+    # a town or a port is wider than its tile: its frame grows this much on every side, so it shows round the model
+    # (the user: 'bigger for a town or a port, not hidden under its texture')
+    TOWN_FRAME = 0.8
+
+    def _draw_frame(self, t=None, grow=0.0):
+        """The white frame of a tile lying on the ground - the tile under the mouse while a figure is carried, or the
+        one given (what the mouse rests on); grow: tiles more on every side."""
+        if t is None:
+            t = self._tile(*self._mouse) if self._mouse else None
         if t is None:
             return
         d = self.gl.data
-        x0, z0 = t[0], (d.rows - 1) // 2 - 1 - t[1]
-        steps = [i / 8.0 for i in range(9)]
-        edge = ([(x0 + a, z0) for a in steps] + [(x0 + 1, z0 + a) for a in steps[1:]] +
-                [(x0 + 1 - a, z0 + 1) for a in steps[1:]] + [(x0, z0 + 1 - a) for a in steps[1:]])
+        x0, z0 = t[0] - grow, (d.rows - 1) // 2 - 1 - t[1] - grow
+        side = 1.0 + 2 * grow
+        n = 8 + int(8 * grow)
+        steps = [side * i / n for i in range(n + 1)]
+        edge = ([(x0 + a, z0) for a in steps] + [(x0 + side, z0 + a) for a in steps[1:]] +
+                [(x0 + side - a, z0 + side) for a in steps[1:]] + [(x0, z0 + side - a) for a in steps[1:]])
         s = self.gl.to_screen([(px, d.ground_height(px, pz), pz) for px, pz in edge])
         if s is None:
             return
         return self._outline(s, 4, 2)
+
+    def _hover_frame(self):
+        """What the mouse rests on and the left button would carry: the same white tile frame (bigger round a town
+        or a port), the hand cursor; nothing there: none."""
+        t = self._tile(*self._mouse)
+        got = getattr(self, "_hover_at", None)            # the same tile as the last move: its list again
+        if got is not None and got[0] == t and got[1] == getattr(self, "_hover_gen", 0):
+            here = got[2]
+        else:
+            here = self._things_at(t) if t is not None else []
+            self._hover_at = (t, getattr(self, "_hover_gen", 0), here)
+        try:
+            self.canvas.configure(cursor="hand2" if here else "")
+        except tk.TclError:
+            pass
+        if not here:
+            return []
+        # a town's tile (an army in it too - it stands on the roofs): the bigger frame round the town
+        return self._draw_frame(t, self.TOWN_FRAME if any(o[0] == "place" for o in here) else 0.0) or []
 
     def _things_at(self, tile):
         """[(what, key, name)] standing on a tile, as the Map moves them: 'char' (an army before an agent), 'place'
@@ -555,14 +583,22 @@ class Map3DView(ttk.Frame):
                 for region, xy in table.items():
                     if tuple(places.get((what, region), xy)) == tile:
                         out.append(("place", (what, region), "%s %s" % (region, "town" if what == "city" else "port")))
+            for p in getattr(mv, "region_points", None) or []:      # a new region's town / port, not written yet
+                if len(p) > 3 and tuple(p[0]) == tile and ("place", (p[1], p[3])) not in [o[:2] for o in out]:
+                    out.append(("place", (p[1], p[3]), "%s %s" % (p[3], "town" if p[1] == "city" else "port")))
         if hasattr(app, "res_shown"):
-            out += [("res", r["id"], r["kind"]) for r in app.res_shown() if tuple(r["xy"]) == tile]
+            out += [("res", r["id"], r["type"] if r["kind"] == "landmark" and r.get("type") else r["kind"])
+                    for r in app.res_shown() if tuple(r["xy"]) == tile]
+        if mv is not None and getattr(mv, "on_special_move", None):     # special places (engine-drawn models)
+            out += [("special", sp["id"], sp.get("title") or "special place") for sp in getattr(mv, "special", None) or []
+                    if tuple(sp["xy"]) == tile]
         return out
 
     @staticmethod
     def _picks(what, key, tile):
         """pick(object) -> True for the 3D map's objects (mapobjects3d.objects) of the thing carried."""
-        kinds = {"char": ("character",), "res": ("resource", "fort", "watchtower")}.get(what)
+        kinds = {"char": ("character",), "res": ("resource", "fort", "watchtower", "landmark"),
+                 "special": ()}.get(what, ())
         if what == "place":
             kinds = ("town", "wall") if key[0] == "city" else ("port", "port_sea")
         return lambda o: o["kind"] in kinds and tuple(o["xy"]) == tile
@@ -632,6 +668,8 @@ class Map3DView(ttk.Frame):
             why = app._map_check(key, tile)
         elif what == "place":
             why = mv.check_place(key[0], key[1], tile) if getattr(mv, "check_place", None) else None
+        elif what == "special":
+            why = mv._outside(tile) if hasattr(mv, "_outside") else None
         else:
             why = app.res_check(key, tile)
         if why:
@@ -639,10 +677,13 @@ class Map3DView(ttk.Frame):
             app.status.set("%s cannot stand at %d, %d: %s" % (name, tile[0], tile[1], why))
             return
         self._carry_stop(back=False)
+        self._hover_gen = getattr(self, "_hover_gen", 0) + 1   # what stands where has changed
         if what == "char":
             app._map_moved(key, tile)
         elif what == "place":
             mv.on_place_move(key[0], key[1], tile)
+        elif what == "special":
+            mv.on_special_move(key, tile)
         else:
             app.res_moved(key, tile)
         self.load()
@@ -670,7 +711,9 @@ class Map3DView(ttk.Frame):
 
     def _ring_lines(self):
         if self._carry is not None and self._mouse and self._on():
-            return self._draw_frame() or []
+            return self._draw_frame(grow=self.TOWN_FRAME if self._carry[0] == "place" else 0.0) or []
+        if not self.v_brush_on.get() and self._mouse and self._on():
+            return self._hover_frame()
         if not (self.v_brush_on.get() and self._mouse and self._on()):
             return []
         got = self._point(*self._mouse)
