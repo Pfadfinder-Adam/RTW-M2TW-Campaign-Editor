@@ -60,12 +60,40 @@ def top_view(mod, campaign, limit=1600, winter=False):
     return out
 
 
+def _card_view(mod, campaign, limit, winter):
+    """(rgb float32, water bool) of the map from above as the graphics card draws the 3D map (glmap.top_picture: the
+    textures, relief and models the 3D map finds - the user, 2026-10-18: 'the 3D map reads the textures, the
+    faction-select map came out in two or three colours'), the sea left for _top_view to paint; None when the card
+    cannot (no OpenGL, another thread) - the drawing by hand then."""
+    from PIL import Image
+    from . import glmap
+    from . import terrain3d as T3
+    try:
+        arr = glmap.top_picture(mod, campaign, limit, winter=winter, sea=False)
+        h = T3.heights_metres(mod, campaign)
+    except Exception:
+        return None
+    if arr is None or h is None:
+        return None
+    hh, ww = arr.shape[:2]
+    water = np.asarray(Image.fromarray((h <= 0).astype(np.uint8) * 255).resize((ww, hh), Image.BILINEAR)) >= 128
+    return arr.astype(np.float32), water
+
+
 def _top_view(mod, campaign, limit=1600, winter=False):
     from PIL import Image, ImageFilter
     from . import terrain3d as T3
+    # drawn by hand first (the user, 2026-10-18, the two side by side: 'this one is better, the land is painted' -
+    # its rivers and colours); the graphics card's picture of the 3D map only where the hand found no texture for a
+    # ground (its plain colour: 'two or three colours') and the 3D map can do better
     cm = T3.colour_map(mod, campaign, winter=winter, limit=limit)
-    rgb = np.asarray(cm.rgb, dtype=np.float32).copy()
-    water = np.asarray(cm.height) <= 0
+    got = _card_view(mod, campaign, limit, winter) if any("not found" in n or "plain colour" in n
+                                                         for n in cm.notes) else None
+    if got is not None:
+        rgb, water = got
+    else:
+        rgb = np.asarray(cm.rgb, dtype=np.float32).copy()
+        water = np.asarray(cm.height) <= 0
     h, w = water.shape
     land = Image.fromarray(((~water) * 255).astype(np.uint8))
     near = np.asarray(land.filter(ImageFilter.GaussianBlur(w / 90)), dtype=np.float32) / 255      # the shallows

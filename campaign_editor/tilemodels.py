@@ -856,12 +856,20 @@ def build(lib, idx, seed, heights, yscale):
             "lift": lift}
 
 
-def void_map(idx):
+def void_map(idx, lib=None):
     """(H, W) uint8 of what a tile's ground gives way to, top row first: 0 nothing, else KIND (1 mountains and
-    volcanoes, 2 hills) - the 3D map leaves that ground out while that Layers switch shows the models."""
+    volcanoes, 2 hills) - the 3D map leaves that ground out while that Layers switch shows the models. lib: only
+    where it has the model - a model not found keeps its ground (rivers drawn as blue squares: holes in the ground
+    with nothing in them, when the game's model files were not reached - a tester's ROCSS)."""
     out = np.zeros(idx.shape, np.uint8)
     for index in np.unique(idx[idx >= 0]):
         got = link_of(int(index))
+        if got and lib is not None:
+            try:
+                if lib.model(*got) is None:
+                    continue
+            except Exception:
+                continue
         if got:
             out[idx == index] = KIND.get(got[0], 1)
     return out[::-1].copy()

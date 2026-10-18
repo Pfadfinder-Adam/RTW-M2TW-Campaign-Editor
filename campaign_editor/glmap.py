@@ -270,7 +270,7 @@ class MapData:
             return
         idx, seed = TM.assign(self.heights, *self._model_src)
         self.models = TM.build(self._lib, idx, seed, self.heights, 0.0005 * self.scale)
-        self.voids = TM.void_map(idx)
+        self.voids = TM.void_map(idx, self._lib)
 
     def _trees(self, mod, campaign, winter):
         """The forests' trees (maptrees): each forest tile's models from descr_climates.txt, their pictures."""
@@ -1070,6 +1070,47 @@ class Camera:
         return (proj @ view).astype(np.float32), eye
 
 
+class TopCamera(Camera):
+    """Straight down on the whole map, no perspective (a map's picture: the faction-select map) - the same
+    attributes as Camera for render()."""
+
+    def __init__(self, data):
+        super().__init__(data)
+        self.cols, self.rows = data.tiles()
+        self.pitch = math.pi / 2
+
+    def matrix(self, w, h, ground=0.0):
+        cx, cz, hw, hh = self.cols / 2.0, self.rows / 2.0, self.cols / 2.0, self.rows / 2.0
+        depth = 400.0                                    # world heights stay within +-200 (a few units in truth)
+        m = np.array([[1.0 / hw, 0.0, 0.0, -cx / hw],
+                      [0.0, 0.0, -1.0 / hh, cz / hh],     # z runs south: down the picture
+                      [0.0, -2.0 / depth, 0.0, 0.0],      # higher ground nearer
+                      [0.0, 0.0, 0.0, 1.0]])
+        return m.astype(np.float32), (cx, 1000.0, cz)
+
+
+def top_picture(mod, campaign, width, winter=False, sea=True):
+    """The whole campaign map seen straight down as the graphics card draws the 3D map - the game's ground textures,
+    relief, rivers, mountains, trees, the sea - no towns, armies, roads or borders: (h, w, 3) uint8, the map's shape,
+    `width` wide. None when the card cannot draw (available()). sea=False: the sea floor (a picture painting its own
+    sea over it). The user, 2026-10-18: the faction-select map drawn by hand came out in two or three colours - the
+    3D map's own picture of it."""
+    if not available()[0]:
+        return None
+    data = MapData(mod, campaign, winter=winter)
+    cols, rows = data.tiles()
+    w = int(width)
+    h = max(16, int(round(w * rows / float(max(cols, 1)))))
+    gl = GLMap(data)
+    try:
+        cam = TopCamera(data)
+        show = {k: False for k in ("roads", "borders", "towns", "resources", "armies")}
+        show["sea"] = bool(sea)
+        return gl.render(cam, w, h, show=show)
+    finally:
+        gl.release()
+
+
 class GLMap:
     """The map on the card: made from MapData, then render(camera, w, h) -> (h, w, 3) uint8 picture as many times
     as the view moves. set_heights / set_layers change part of what the card holds (the brushes, live)."""
@@ -1547,4 +1588,4 @@ class FrameClock:
                                                                    round(total), 1000 / max(total, 1)))
 
 
-__all__ = ["available", "context", "MapData", "GLMap", "FrameClock", "Camera", "lighting", "LAYERS", "coast_line", "coast_strips"]
+__all__ = ["available", "context", "MapData", "GLMap", "FrameClock", "Camera", "TopCamera", "top_picture", "lighting", "LAYERS", "coast_line", "coast_strips"]
