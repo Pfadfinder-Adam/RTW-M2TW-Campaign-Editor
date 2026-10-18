@@ -210,6 +210,30 @@ def put(plan, carried):
         return []
     mod = plan.mod
     target = loaded_set(mod)
+    if target is not None:
+        # a skeleton naming an animation found nowhere - not in the set, not carried, no loose .cas brought or here -
+        # stops the game at its start (Medieval II: 'skeleton.cpp(1035): adata != 0', report R-20261018-D47E51): it
+        # is left out, the units take the nearest skeleton the mod has
+        have = {k for k, _, _, _ in target.anims()}
+        loose = {_key(r) for r in (getattr(plan, "carried_files", None) or {})}
+
+        def found(k):
+            rel = k[5:] if k.startswith("data/") else k
+            if k in have or carried["anims"].get(k) or rel in loose:
+                return True
+            try:
+                return bool(mod.find(rel))
+            except (OSError, ValueError):
+                return False
+        gone = {n: [k for k in anim_paths(r) if not found(k)] for n, r in carried["skeletons"].items()}
+        gone = {n: ks for n, ks in gone.items() if ks}
+        if gone:
+            carried = dict(carried, skeletons={n: r for n, r in carried["skeletons"].items() if n not in gone})
+            plan.warn(None, "skeleton(s) %s not brought: they name animation(s) found nowhere (%s) - the game would "
+                            "stop at its start; the units take the nearest skeleton this mod has" % (
+                                ", ".join(sorted(gone)), ", ".join(sorted({k for ks in gone.values() for k in ks})[:3])))
+            if not carried["skeletons"]:
+                return []
     if target is None:
         plan.warn(None, "the brought units' own skeletons (%s) were not carried: this mod reads no animation set the "
                         "editor knows (the nearest skeletons are taken)" % ", ".join(sorted(carried["skeletons"])))
@@ -228,8 +252,7 @@ def put(plan, carried):
                     "%d animation(s) they move by%s" % (len(added), ", ".join(added), len(anims),
                                                      "" if os.path.normcase(target.folder) == os.path.normcase(own)
                                                      else " - the set the game read is copied into this mod first"))
-    if missing:                                   # the games' own sets name some they lack too (BI: 32) - no harm
-        plan.note(None, "%d animation(s) the brought skeletons name are not in the source's set either (the games' "
-                        "own sets have such names too): %s%s" % (len(missing), ", ".join(missing[:3]),
-                                                                 " ..." if len(missing) > 3 else ""))
+    if missing:                                   # read from their loose .cas files (carried, or the mod's own)
+        plan.note(None, "%d animation(s) the brought skeletons name come as loose .cas files (in no set): %s%s" % (
+            len(missing), ", ".join(missing[:3]), " ..." if len(missing) > 3 else ""))
     return added
