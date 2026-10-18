@@ -12561,7 +12561,10 @@ building smith
         descr_aerial_map_tile_models.txt of its own, the game keeps it in its packs, and the editor looked for it
         loose only. It is taken out of the packs now (find_any); found nowhere, that is said."""
         from types import SimpleNamespace
-        from campaign_editor import tilemodels as TM
+        try:
+            from campaign_editor import tilemodels as TM
+        except ImportError:
+            self.skipTest("no NumPy")
         p = os.path.join(self.root, "tm.txt")
         write(p, "tile_set rivers { }\n")
         mod = SimpleNamespace(find=lambda rel: None, find_any=lambda rel: p if rel.endswith("tile_models.txt") else None)
