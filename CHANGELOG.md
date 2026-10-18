@@ -12,6 +12,7 @@
 - Edit faction: a faction with more towns than first names gave two captains the same name and the write was refused -> the next captains take a first name with a surname of the list.
 - Interface: a mod's menu file with a tag never closed stopped the Interface work -> it opens; Check mod files names the line.
 - A new playable faction gets its own slot on the faction-select screen by itself (the menu layout had 21, the 22nd faction could not be picked); Steam's Medieval II unpacks again (the unpacker asked three times and stopped after two answers).
+- Maps > 3D: a short stall each time a carried army, agent, fleet or resource was let go (the whole map was laid again) -> only the thing let go is laid again.
 - Bring units: units shared by several factions came out in the first owner's colours (blue officers and cards on Gallic units) -> they take the look of the faction picked in step 2, else of their own owners; the men and each officer can be seen in 3D there before writing.
 - Bring units: after 'Make my own mod folder' the same window wrote into the game itself -> it now writes into the mod loaded now.
 - Maps (Map, Terrain, Coast and heights, 3D): the switches, brushes and zoom stand in the empty part of the tabs' own row, the zoom first on every tab; the column on the right holds only the legend or the brush colours (each as wide as its words) and is gone when there is nothing in it; the message line sits in the bottom bar's free middle - the map has the window's whole height.

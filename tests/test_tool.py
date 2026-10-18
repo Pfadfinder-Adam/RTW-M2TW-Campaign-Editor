@@ -8383,6 +8383,14 @@ building smith
             self.assertEqual((data.objects, sorted(data.ghost)), ({}, [None]))
             data.put_back()                                               # Esc: back where it stood
             self.assertEqual((sorted(data.objects), data.ghost), ([None], {}))
+            # let go on another tile: only what was carried is laid again there, the map is not laid anew (a
+            # tester: a short stall at every let go)
+            self.assertTrue(data.lift_out(lambda o: True))
+            with mock.patch.object(glmap.MapData, "place_objects", side_effect=AssertionError("laid anew")):
+                self.assertTrue(data.put_down((0, 1)))
+            self.assertTrue(np.allclose(data.objects[None][0, [0, 2]], [0.5, 4 - 1 - 1 + 0.5]))
+            self.assertEqual((data.ghost, data._objs[0][0]["xy"]), ({}, (0, 1)))
+            self.assertFalse(data.put_down((2, 2)))                      # nothing in the hand: nothing done
         cam = glmap.Camera(data)
         self.assertEqual((cam.x, cam.z), (2.0, 2.0))
         cam.moved(1.0, 0.0)                            # forward = north = up the map

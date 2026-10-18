@@ -686,6 +686,14 @@ class Map3DView(ttk.Frame):
             mv.on_special_move(key, tile)
         else:
             app.res_moved(key, tile)
+        # an army, agent, fleet or resource: only it is laid again where it was let go - the whole map is not (a
+        # tester: a short stall at every let go); a town or port pulls its roads along: laid again as before
+        if what in ("char", "res") and getattr(self, "gl", None) is not None and self.gl.data.put_down(tile):
+            self.gl.ghost_shift = (0.0, 0.0, 0.0)
+            self.gl._objects()
+            self._strat_for = self._strat()[1]           # in step with the Map's change: load() lays nothing again
+            self.draw()
+            return
         self.load()
 
     def _outline(self, s, wide, thin):
