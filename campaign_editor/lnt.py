@@ -75,6 +75,7 @@ class Lnt:
     # ---- reading ----
     def parse(self):
         self._cache = {}                     # textures / objects / pieces read from the tree, made again on a parse
+        self.problems = []                   # the file's slips the game passes over (an open tag never closed ...)
         self.root = Node("", "", -1)
         stack = [self.root]
         comment = False
@@ -95,9 +96,15 @@ class Lnt:
                 continue
             m = _CLOSE.match(s)
             if m:
-                if len(stack) == 1 or stack[-1].tag != m.group(1):
-                    raise LntError("line %d: </%s> closes nothing open%s" % (
+                # the game reads a mod's slips (report #349: an <identifier> never closed before </UI piece>): an
+                # open tag left open is a one-line leaf, a close with nothing of its name open is passed over -
+                # both said in problems (Check mod files), never a stop
+                if not any(n.tag == m.group(1) for n in stack[1:]):
+                    self.problems.append("line %d: </%s> closes nothing open%s - passed over" % (
                         i + 1, m.group(1), "" if len(stack) == 1 else " (open: <%s>)" % stack[-1].tag))
+                    continue
+                while stack[-1].tag != m.group(1):
+                    self._unclosed(stack)
                 stack[-1].end = i
                 stack.pop()
                 continue
@@ -106,9 +113,18 @@ class Lnt:
                 n = Node(m.group(1), m.group(2).strip(), i)
                 stack[-1].children.append(n)
                 stack.append(n)
-        if len(stack) > 1:
-            raise LntError("<%s> (line %d) is never closed" % (stack[-1].tag, stack[-1].start + 1))
+        while len(stack) > 1:
+            self._unclosed(stack)
         self.root.end = len(self.lines)
+
+    def _unclosed(self, stack):
+        """The open block on top never closed: read as a one-line leaf, what was read under it goes back beside it."""
+        n = stack.pop()
+        self.problems.append("line %d: <%s> is never closed - read as one line" % (n.start + 1, n.tag))
+        parent = stack[-1]
+        at = parent.children.index(n) + 1
+        parent.children[at:at] = n.children
+        n.children, n.leaf, n.end = [], True, n.start
 
     def textures(self):
         """{page as the objects name it (textures\\FE_texture1.tga): {'path', 'regions': {name: (l, t, r, b)}}} -
@@ -644,7 +660,7 @@ def problems(mod):
             known_missing = set(game.missing_regions())
     except (OSError, LntError, ValueError):
         pass
-    out = []
+    out = ["menu %s, %s (the game reads past it; the editor too)" % (name, slip) for slip in lnt.problems[:10]]
     pages = set(lnt.pages())
     said = set()
     for page in lnt.pages():
