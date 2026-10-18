@@ -51,6 +51,10 @@ KNOWN = [
      "Units brought from another mod are the usual cause: bring them again with this editor's newest version (it "
      "carries the animation or leaves that skeleton out), or copy the missing .cas file from the other mod. "
      "(Report R-20261018-D47E51.)"),
+    (r"Condition eval: (\w+) needs a (\w+)",
+     "A script condition '{0}' asks about a {1}, but the event it runs on gives none (campaign_script.txt or "
+     "export_descr_*: a condition on an event of another kind) - the game takes it as false and goes on; the "
+     "trigger never fires. Not a crash."),
     (r"encountered an unspecified error",
      "The game crashed. The lines just before this one in the log name what it was doing."),
     (r"DATA: src.(.+?)\((\d+)\)",

@@ -7947,6 +7947,8 @@ building smith
         packs.import_pack(plan, man, files, ["alpha"])
         self.assertIn("fs_lost not brought", plan.report() + " ".join(w for _, w in plan.warnings))
         from campaign_editor import gamelog                    # the crash doctor knows that line of the game's log
+        self.assertIn("Not a crash", gamelog.explain("[game.script] [error] Condition eval: SettlementName needs a "
+                                                     "settlement."))
         self.assertIn("names an animation the game cannot find",
                       gamelog.explain("[core.assert] [fatal] ASSERT FAILED: src\\game\\display\\skeleton.cpp(1035): "
                                       "adata != 0"))
@@ -16374,6 +16376,7 @@ building smith
         os.makedirs(os.path.join(game, "reports"))
         with open(os.path.join(game, "system.log.txt"), "w") as fh:
             fh.write("log")
+        os.utime(os.path.join(game, "system.log.txt"), (2000000000, 2000000000))   # the run of the newest crash
         for n, t in (("report-Some Nick-7-26_09_27.txt", 2000000000), ("report-x-1-26_09_01.txt", 1000000000)):
             with open(os.path.join(game, "reports", n), "w") as fh:
                 fh.write("r")
@@ -16464,6 +16467,12 @@ building smith
         names = [n for _, n, _ in files]
         self.assertIn("system.log.txt", names)
         self.assertIn("reports/report-7-26_09_27.txt", names)
+        # a crash report of another day than the game's last run stays out (R-20261018-948E29 carried one of Oct 3)
+        dump = os.path.join(game, "reports", "report-Some Nick-7-26_09_27.txt")
+        log_t = os.path.getmtime(os.path.join(game, "system.log.txt"))
+        os.utime(dump, (log_t - 3 * 86400, log_t - 3 * 86400))
+        self.assertNotIn("reports/report-7-26_09_27.txt", [n for _, n, _ in report.found(game)])
+        os.utime(dump, (log_t, log_t))
         texts = dict(report.contents(files, report.hidden_words(files)))
         self.assertNotIn("Some Nick", texts["reports/report-7-26_09_27.txt"])
         self.assertNotIn("Bob", texts["system.log.txt"])

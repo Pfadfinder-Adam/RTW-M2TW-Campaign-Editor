@@ -12,6 +12,7 @@
 - Edit faction: a faction with more towns than first names gave two captains the same name and the write was refused -> the next captains take a first name with a surname of the list.
 - Interface: a mod's menu file with a tag never closed stopped the Interface work -> it opens; Check mod files names the line.
 - A new playable faction gets its own slot on the faction-select screen by itself (the menu layout had 21, the 22nd faction could not be picked); Steam's Medieval II unpacks again (the unpacker asked three times and stopped after two answers).
+- Report a bug: the game's newest crash report went with it even when it was days old and from another mod -> only the crash of the game's last run goes; the game's log explains a script condition with nothing to ask about.
 - Bringing units or a whole faction: Medieval II stopped at its start when a brought skeleton named an animation kept as a loose file in the other mod -> the file comes along; a skeleton naming one found nowhere is left out (the units take the nearest one); Check the game's log explains that crash.
 - Maps > 3D: a short stall each time a carried army, agent, fleet or resource was let go (the whole map was laid again) -> only the thing let go is laid again.
 - Bring units: units shared by several factions came out in the first owner's colours (blue officers and cards on Gallic units) -> they take the look of the faction picked in step 2, else of their own owners; the men and each officer can be seen in 3D there before writing.
