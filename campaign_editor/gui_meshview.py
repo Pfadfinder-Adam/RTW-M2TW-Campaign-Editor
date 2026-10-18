@@ -664,8 +664,15 @@ class ModelViewer(tk.Toplevel):
             if self.anim is not None and man.joints:          # riding: seated on the saddle, as the game does
                 seat = MV.seat_of(man, horse, MO.rider_offset(self.mod, self.mount[1]))
                 turn = MV.seat_turn(horse) if seat is not None else 0.0
-            mesh = MV.combine(man, groups, horse, horse.shown(0, True),
-                              mount_one=True if not mi.attach else None, seat=seat, turn=turn)
+            if seat is None and self.anim is not None and man.joints:
+                # the horse has no moves to stand in (its skeleton's animations not found - #346, a mod's horse):
+                # the rider still on its back, where descr_mount puts him - its root node + rider_offset
+                mesh = MV.crewed(man, groups, horse, horse.shown(0, True), [MO.rider_offset(self.mod, self.mount[1])],
+                                 MO.root_node_height(self.mod, self.mount[1]),
+                                 mount_one=True if not mi.attach else None)
+            else:
+                mesh = MV.combine(man, groups, horse, horse.shown(0, True),
+                                  mount_one=True if not mi.attach else None, seat=seat, turn=turn)
             groups = mesh.groups
             more = {2: self._texture(mi.textures) if mi.textures else None,
                     3: self._texture(mi.attach) if mi.attach else None}
