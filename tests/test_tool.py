@@ -3719,6 +3719,19 @@ building smith
         write(os.path.join(d, "menu", "Rome.lnt"), lost)
         self.assertIn("the game stops when it opens that menu", " ".join(L.problems(mod)))
 
+    def test_skeleton_parent_read_in_any_case(self):
+        """#347: a mod's skeleton listing only its own few moves takes the rest from its parent - 'Type' / 'Parent'
+        written with a capital too (it showed only its swimming moves)."""
+        from campaign_editor import animations as AN
+        data = os.path.join(self.root, "data")
+        write(os.path.join(data, "descr_skeleton.txt"),
+              "Type MTW2_Shortbowman\nanim default a/base.cas\nanim stand_a_idle a/idle.cas\nanim run a/run.cas\n\n"
+              "Type MTW2_Fast_Shortbowman_String\nParent MTW2_Shortbowman\nanim swim a/swim.cas\n"
+              "anim run a/fast_run.cas\n")
+        got = AN.skeletons(ModData(data))["mtw2_fast_shortbowman_string"]
+        self.assertEqual(got, [("default", "a/base.cas"), ("stand_a_idle", "a/idle.cas"), ("run", "a/fast_run.cas"),
+                               ("swim", "a/swim.cas")])
+
     def test_region_rebels_must_be_a_rebel_type(self):
         """#343: a region's rebels written as the window's '(as the land it is cut from)' - the game stopped after the
         campaign loaded ('couldn't find rebel type'); Check mod files names such a region, both games."""

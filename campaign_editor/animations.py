@@ -146,12 +146,12 @@ def skeletons(mod, name="descr_skeleton.txt"):
         line = line.split(";", 1)[0].strip()
         if not line:
             continue
-        m = re.match(r"type\s+(\S+)", line)
+        m = re.match(r"type\s+(\S+)", line, re.I)
         if m:
             cur = m.group(1).lower()
             own.setdefault(cur, [])
             continue
-        m = re.match(r"parent\s+(\S+)", line)
+        m = re.match(r"parent\s+(\S+)", line, re.I)
         if m and cur is not None:
             parent[cur] = m.group(1).lower()
             continue
@@ -191,14 +191,15 @@ def of_skeleton(mod, skeleton):
         if key(f) in names and (what, key(f)) not in seen:
             seen.add((what, key(f)))
             out.append((what, f))
-    if not out:
-        # a skeleton descr_skeleton.txt does not have (HLR keeps its own only in data/animations/skeletons.dat, the
-        # compiled set the game loads): its record names its animations by file, and the files say what they are
-        # ('LIS 01 Stand Idle') - the file's name is shown for each
-        for f in _set_record_anims(mod, skeleton):
-            if key(f) in names and key(f) not in seen:
-                seen.add(key(f))
-                out.append((os.path.splitext(os.path.basename(f))[0], f))
+    # the compiled set the game loads (data/animations/skeletons.dat) has the rest: a skeleton descr_skeleton.txt
+    # does not have (HLR keeps its own only there), or one whose text lists only its few own lines and leaves the
+    # rest to a parent the text does not hold (#347: a mod's bowman showed only its swimming moves). Its record names
+    # its animations by file, and the files say what they are ('LIS 01 Stand Idle') - the file's name shown for each
+    files = {key(f) for _, f in out}
+    for f in _set_record_anims(mod, skeleton):
+        if key(f) in names and key(f) not in files:
+            files.add(key(f))
+            out.append((os.path.splitext(os.path.basename(f))[0], f))
     return out
 
 
