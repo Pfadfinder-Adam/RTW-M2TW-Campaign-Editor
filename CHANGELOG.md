@@ -245,6 +245,7 @@
   line of the block** in both editors; the editor remembers whether it was open.
 
 ### Fixed
+- Create faction stopped with an error for every faction brought from another mod -> it is written, its family beside the capital.
 - A faction of the mod that is not in the campaign could not be added (New faction said it already exists, Edit said it has no block) -> New faction with its name brings it into the campaign: its towns and family are written, its own files stay as they are.
 - View in 3D: a mod's animation set that lists only a few moves of its own (the rest from its parent) showed only those -> every move the game has for it is offered.
 - View in 3D: a horseman in an animation stood beside his horse when the mod's horse had no moves of its own -> he sits in the saddle where descr_mount.txt puts him.

@@ -7434,6 +7434,23 @@ building smith
         self.assertIn("Brude", used)
         self.assertEqual(_own_name(plan, f, got, "Brude", "general", {"characters": ["Brude"]}, set())[1], "Brude")
 
+    def test_brought_faction_family_placed_by_create(self):
+        """The tester (2026-10-17): Create faction for every faction brought from another mod stopped with "'list'
+        object is not callable" - the family's places by the capital ran into the leader's lines named like the
+        land's own(). The whole build with a brought family now writes it."""
+        from unittest import mock
+        mod = ModData(self.root)
+
+        def overlay(plan, campaign, bring):
+            plan.bring_start = {"pool": [], "bodyguard": None, "family": {
+                "men": [{"name": "Brude", "line": "character\tBrude, named character, age 40, , x 9, y 9", "rest": [],
+                         "bodyguard": "unit alpha bodyguard exp 0"}], "records": [], "relatives": []}}
+        with mock.patch("campaign_editor.factionbring.overlay", overlay):
+            plan = build(mod, "test", "alpha", "beta", {"bring": {"from": "x"}, "copy_art": False,
+                                                        "start": {"regions": ["B_R"], "leader": {"name": "Boris"}}})
+        fb = Strat(plan.files[mod.campaign_file("test", "descr_strat.txt")]).faction("beta")
+        self.assertTrue(any(c.name == "Brude" for c in fb.characters))
+
     def test_general_card_is_his_portrait(self):
         # a general's own unit shows his face beside his army's cards, as in the game: the portrait card of the
         # number the character editor picks for his name (portraits/cards/<age>/generals)
