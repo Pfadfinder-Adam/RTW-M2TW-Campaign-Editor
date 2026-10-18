@@ -1353,6 +1353,24 @@ building smith
         self.assertEqual(before, tree_hash(hlr))
         with self.assertRaises(ValueError):
             create_mod(os.path.join(hlr, "data"), "HLR_Beta")        # exists already
+        # one file that will not copy (Wine: a path too long - '[WinError 2] File not found' and no folder at all,
+        # report R-20261018-BB79B8): left out and named, the rest is made
+        from unittest import mock
+        from campaign_editor import newmod
+        real = newmod._put
+
+        def put(src, dst, link_ok, stats):
+            if src.endswith("export_descr_unit.txt"):
+                raise FileNotFoundError(2, "File not found")
+            return real(src, dst, link_ok, stats)
+        with mock.patch.object(newmod, "_put", put):
+            data2, st2 = create_mod(os.path.join(hlr, "data"), "HLR_Gamma")
+        self.assertEqual(st2["skipped"], [("data/export_descr_unit.txt", "File not found")])
+        self.assertTrue(os.path.isdir(data2))
+        with mock.patch.object(newmod, "_put", side_effect=FileNotFoundError(2, "File not found")):
+            with self.assertRaises(OSError):
+                create_mod(os.path.join(hlr, "data"), "HLR_Delta")   # nothing copied at all: said, no folder
+        self.assertFalse(os.path.exists(os.path.join(game, "HLR_Delta")))
 
     def test_new_mod_on_the_game_is_thin(self):
         """New mod folder on the plain game makes a THIN mod (nothing copied - the game reads the rest from its own
