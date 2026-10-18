@@ -16489,6 +16489,20 @@ building smith
         z = zipfile.ZipFile(io.BytesIO(report.build_zip([], "it broke", doctor=said)))
         self.assertTrue(z.read("report.txt").decode().startswith("The game's log says: The game stopped"))
 
+    def test_no_window_hides_tks_own_timer(self):
+        """Report R-20261018-238E7F: Recolour kept its 'after' picture as self.after, which hides Tk's own after() -
+        a click on a tick ended in "'Canvas' object is not callable". No window of the editor names a part so."""
+        import re as _re
+        pkg = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "campaign_editor")
+        bad = []
+        for n in os.listdir(pkg):
+            if n.endswith(".py"):
+                with open(os.path.join(pkg, n), encoding="utf-8") as fh:
+                    for i, line in enumerate(fh, 1):
+                        if _re.search(r"self\.(after|after_idle|after_cancel|update|destroy|bind)\s*=[^=]", line):
+                            bad.append("%s:%d" % (n, i))
+        self.assertEqual(bad, [])
+
     def test_logs_zip(self):
         import zipfile
         from campaign_editor import log
