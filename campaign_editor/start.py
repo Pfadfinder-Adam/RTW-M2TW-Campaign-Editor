@@ -424,6 +424,7 @@ def build_start(plan, campaign, start):
     if not template_army and not start.get("army"):
         plan.warn(f, "the template leader has no army to copy - the leader starts with no units")
     pool = plan.name_pool(new) or plan.name_pool(t)
+    pool_of = new if plan.name_pool(new) else t          # whose list the names are checked against, said so
 
     def merge(role_units, region, into):
         """Fold the armies that join with `region` into `into`'s units; the
@@ -543,10 +544,10 @@ def build_start(plan, campaign, start):
         first = name.split(" ")[0]
         if pool and first not in pool.get("characters", []):
             raise ValueError("%s: '%s' is not in the %s name list - the game crashes on names it has no "
-                             "string for; pick one from the list" % (role, first, t))
+                             "string for; pick one from the list" % (role, first, pool_of))
         rest = name[len(first):].strip()
         if rest and pool and rest not in pool.get("surnames", []):
-            raise ValueError("%s: surname '%s' is not in the %s surname list" % (role, rest, t))
+            raise ValueError("%s: surname '%s' is not in the %s surname list" % (role, rest, pool_of))
         region, xy = spots[role]
         if region in custom:
             units = template_army[:1] + custom[region]                # bodyguard + your garrison
