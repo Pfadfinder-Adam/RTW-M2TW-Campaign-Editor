@@ -245,6 +245,10 @@
   line of the block** in both editors; the editor remembers whether it was open.
 
 ### Fixed
+- Step-by-step windows (Bring units and buildings...) were taller than a small screen and their Next / Cancel row was below its edge -> the buttons always stay in sight.
+- New mod folder: typing a name went next to the proposed one -> the proposed name is picked, typing replaces it; Ctrl+A picks a box's whole text everywhere.
+- Bring units: when this mod has none of the units' owners, the faction you work on is picked already in 'Who has them'.
+- A drop-down with long entries (the Mod list) could open across the whole screen -> at most three fifths of it, under its box.
 - Maps: the buttons in the tabs' row stood lower than the tabs and hung over the map -> level with the tabs.
 - New faction > From another mod: the window kept the template's AI, culture, titles, money and victory -> it takes the brought faction's own (its culture when this mod has it, its victory with the regions this campaign has); Forget it clears its names too.
 - Create faction stopped with an error for every faction brought from another mod -> it is written, its family beside the capital.
