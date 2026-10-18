@@ -326,6 +326,15 @@ class BringWindow(StepWindow):
             messagebox.showerror(self.title(), str(e), parent=self)
             return False
         self.owners = [o for o in self.factions + self.cultures if o in had]
+        if not [o for o in self.owners if o != "slave"]:
+            # none of its owners lives here (HLR's gauls brought into Barbarian Invasion - the tester had to pick the
+            # celts by hand): the faction you are working on gets them, picked already
+            try:
+                cur = self.app.field_faction()
+            except Exception:
+                cur = ""
+            if cur in self.factions and cur not in self.owners:
+                self.owners.append(cur)
         self._gathered = (self.src.data, key)
         return None
 
@@ -381,7 +390,8 @@ class BringWindow(StepWindow):
                     "They get the units' cards too.") if self.kind == "unit" else
                    "Who may build these buildings: the factions (or whole cultures) of this mod. Every level and every "
                    "recruit line in them gets this list.")
-        self._note("Picked already: those of the other mod's owners that this mod has too.")
+        self._note("Picked already: those of the other mod's owners that this mod has too - when it has none of them, "
+                   "the faction you are working on. Pick any others with a click.")
         box = ttk.Frame(self.body)
         box.pack(fill="both", expand=True)
         lists = []

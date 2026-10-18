@@ -894,6 +894,17 @@ def install_window_helpers(root):
     import tkinter.font as tkfont
     scrolling_without_bars(root)
 
+    def select_all(ev):                     # Ctrl+A picks the whole text, as everywhere on Windows (Tk's own
+        try:                                # moved the cursor to the start: a typed name went in front of the old one)
+            ev.widget.select_range(0, "end")
+            ev.widget.icursor("end")
+        except (tk.TclError, AttributeError):
+            return None
+        return "break"
+    for cls in ("TEntry", "Entry", "TCombobox", "TSpinbox"):
+        root.bind_class(cls, "<Control-a>", select_all, add="+")
+        root.bind_class(cls, "<Control-A>", select_all, add="+")
+
     def seen(w):
         try:
             w.attributes("-alpha", 1.0)
@@ -949,11 +960,17 @@ def install_window_helpers(root):
                 have = cb.winfo_width()
                 if need <= have:
                     return
-                sw = cb.winfo_screenwidth()
-                need = min(need, sw - 8)
-                x = min(cb.winfo_rootx(), sw - need - 4)
+                sw, sh = cb.winfo_screenwidth(), cb.winfo_screenheight()
+                # at most 3/5 of the screen wide, under its box and inside the screen (the tester: the mod list once
+                # opened as a white list over the whole screen - its long paths made it the screen's width)
+                need = min(need, max(have, sw * 3 // 5), sw - 8)
+                x = max(0, min(cb.winfo_rootx(), sw - need - 4))
                 y = int(cb.tk.call("winfo", "rooty", pop))
                 h = int(cb.tk.call("winfo", "height", pop))
+                below = cb.winfo_rooty() + cb.winfo_height()
+                if abs(y - below) > 4 and y > below:          # not yet under its box: put it there
+                    y = below
+                h = max(40, min(h, sh - y - 8))
                 cb.tk.call("wm", "geometry", pop, "%dx%d+%d+%d" % (need, h, x, y))
             except tk.TclError:
                 pass
@@ -1490,10 +1507,12 @@ class StepWindow(tk.Toplevel):
         self.crumbs.pack(anchor="w")
         self.head = ttk.Label(outer, font=("", 12, "bold"))
         self.head.pack(anchor="w", pady=(2, 6))
+        # the buttons first, at the bottom: never pushed off a small screen by a tall step (the tester, a 900 px
+        # screen: Bring's Next / Cancel row was below its edge)
+        nav = ttk.Frame(outer)
+        nav.pack(side="bottom", fill="x", pady=(8, 0))
         self.body = ttk.Frame(outer)
         self.body.pack(fill="both", expand=True)
-        nav = ttk.Frame(outer)
-        nav.pack(fill="x", pady=(8, 0))
         self.b_back = ttk.Button(nav, text="< Back", command=lambda: self.go(-1))
         self.b_back.pack(side="left")
         self.b_next = ttk.Button(nav, text="Next >", command=lambda: self.go(1))
@@ -1541,6 +1560,8 @@ class StepWindow(tk.Toplevel):
         if not self.full_size:
             return
         W, H, mw, mh = self.full_size
+        sh = self.winfo_screenheight() - 100              # never taller than the screen (its task bar too)
+        H, mh = min(H, sh), min(mh, sh)
         self.update_idletasks()
         w = self.winfo_width() if self.winfo_ismapped() and self.winfo_width() > 1 else W
         if self.step in self.fit_steps:

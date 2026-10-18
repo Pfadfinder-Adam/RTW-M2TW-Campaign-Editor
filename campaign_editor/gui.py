@@ -4776,7 +4776,11 @@ class App(tk.Tk):
             row=1, column=0, columnspan=2, sticky="w", pady=(0, 8))
         ttk.Label(frm, text="New mod name").grid(row=2, column=0, sticky="w")
         v_name = tk.StringVar(value=(base or ("M2" if m2 else "RTW")) + "_" + (self.v["name"].get().strip().capitalize() or "New"))
-        ttk.Entry(frm, textvariable=v_name, width=30).grid(row=3, column=0, sticky="we", padx=(0, 6))
+        e_name = ttk.Entry(frm, textvariable=v_name, width=30)
+        e_name.grid(row=3, column=0, sticky="we", padx=(0, 6))
+        e_name.focus_set()                              # the proposed name picked: typing replaces it (the tester)
+        e_name.select_range(0, "end")
+        e_name.icursor("end")
         v_links = tk.BooleanVar(value=False)            # copies by default: a mod one shares stands on its own
         if base:                                        # the plain game: a thin mod, nothing to copy or link
             ttk.Checkbutton(frm, text="Hard links instead of copies (no extra disk space - for a mod you keep to "
