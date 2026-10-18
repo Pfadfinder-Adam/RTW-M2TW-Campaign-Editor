@@ -2,7 +2,7 @@
 
 **An editor for the campaigns of Rome: Total War (with REX) and Medieval II: Total War (with M2EX)** - factions,
 the campaign map, towns, armies, characters, units, buildings, diplomacy, texts and pictures, in a window, with a
-preview of every change and a backup you can always go back to. Version **0.34.0**.
+preview of every change and a backup you can always go back to. Version **0.35.0**.
 
 [![Download](https://img.shields.io/github/v/release/Pfadfinder-Adam/RTW-M2TW-Campaign-Editor?label=Download&style=for-the-badge)](../../releases)
 [![Wiki](https://img.shields.io/badge/Guide-Wiki-2b6cb0?style=for-the-badge)](../../wiki)
@@ -89,10 +89,11 @@ with the game's own unpacker.
 
 ## ✨ What's new
 
-**0.34.0** ([release](../../releases/tag/v0.34.0)): **View in 3D** plays the game's animations - riders on their
-horses, siege engines, a unit's card and picture made from the 3D view; a deleted town's region kept as a
-**wasteland** and one common wasteland for free land; **Pull and Push the coast**; thin mods from New mod folder;
-much faster on big mods; every picture opens big on a click; reports carry screenshots made smaller. Everything: [CHANGELOG.md](CHANGELOG.md).
+**0.35.0** ([release](../../releases/tag/v0.35.0)): **a whole faction brought from another mod**; the campaign map
+in **3D**, drawn by the graphics card - towns, armies and everything on it carried with the mouse, the heights brush;
+**one emblem** for every flag, banner and logo of a faction; locked factions opened to play; the menus with **your own
+pictures**; every **script's places on the map** - dragged, opened and edited; many fixes from testers' reports.
+Everything: [CHANGELOG.md](CHANGELOG.md).
 
 ## 🗺️ Rescale the whole campaign map 3 x
 

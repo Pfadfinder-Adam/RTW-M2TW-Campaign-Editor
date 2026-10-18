@@ -1,11 +1,11 @@
 # Changelog
 
-## Unreleased
+## 0.35.0 - 2026-10-18
 
 ### In short
 - **Added**: a whole faction brought from another mod; the campaign map in 3D, with the minimap and the
   faction-select map drawn from it, drawn by the graphics card; one emblem for every flag, banner and
-  logo of a faction, right beside its colours; locked factions opened to play; rebels, campaign script and special places on the map.
+  logo of a faction, right beside its colours; locked factions opened to play; rebels, special places and every script's places on the map (dragged, opened, edited).
 - **Fixed**: faction logos can be replaced without REX / M2EX too; many fixes from testers' reports (units and
   buildings brought from other mods, the recruitment order, Medieval II's add-on words, crashes).
 - **Changed**: a slimmer Unit editor and Models tab; the support buttons in one drop-down.
