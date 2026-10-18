@@ -54,12 +54,12 @@ def add_at(app, kind, xy, preset=None, faction=None):
     facs = factions_here(app)
     if not facs:
         return
-    v_fac = tk.StringVar(value=faction or owner_at(app, xy) or facs[0])
+    v_fac = tk.StringVar(app, value=faction or owner_at(app, xy) or facs[0])
     if v_fac.get() not in facs:
         v_fac.set(facs[0])
     agent = kind not in ("army", "fleet")
-    v_kind = tk.StringVar(value=(preset if preset in app.AGENTS else app.AGENTS[0]) if agent else kind)
-    v_sub = tk.StringVar()
+    v_kind = tk.StringVar(app, value=(preset if preset in app.AGENTS else app.AGENTS[0]) if agent else kind)
+    v_sub = tk.StringVar(app)
     w = tk.Toplevel(app)
     w.title({"army": "New army", "fleet": "New fleet"}.get(kind, "New agent") + " at %d, %d" % xy)
     w.transient(app)
@@ -81,7 +81,7 @@ def add_at(app, kind, xy, preset=None, faction=None):
         row += 1
     ttk.Label(frm, text="Name" if agent else ("Admiral" if kind == "fleet" else "General")).grid(
         row=row, column=0, sticky="w")
-    v_first, v_last, v_age = tk.StringVar(), tk.StringVar(), tk.StringVar(value="30")
+    v_first, v_last, v_age = tk.StringVar(app), tk.StringVar(app), tk.StringVar(app, value="30")
     cb_first = ttk.Combobox(frm, textvariable=v_first, width=16)
     cb_first.grid(row=row, column=1)
     # only the faction's own surnames (a tester: an Egyptian army got a surname Egypt has not - kept from the faction
@@ -92,7 +92,7 @@ def add_at(app, kind, xy, preset=None, faction=None):
     ttk.Label(frm, text="Age").grid(row=row, column=0, sticky="w")
     ttk.Entry(frm, textvariable=v_age, width=5).grid(row=row, column=1, sticky="w")
     row += 1
-    v_general = tk.BooleanVar(value=False)
+    v_general = tk.BooleanVar(app, value=False)
     if kind == "army":                           # a general of his own name: the bodyguard leads his army
         ttk.Checkbutton(frm, text="Make him a general", variable=v_general).grid(row=row, column=1, columnspan=2,
                                                                               sticky="w")
