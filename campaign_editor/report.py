@@ -16,6 +16,7 @@ import json
 import os
 import platform
 import re
+import time
 import zipfile
 
 from . import log
@@ -37,6 +38,7 @@ _EMAIL = re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+")
 _STEAM = re.compile(r"\b7656119\d{10}\b")
 _SID = re.compile(r"\bS-1-5-21(?:-\d+){3,4}\b")
 _IP = re.compile(r"(?<![\d.])(?:(?:25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(?:25[0-5]|2[0-4]\d|1?\d?\d)(?![\d.])")
+STALE_DUMP = 15 * 60          # seconds between the game's log and a crash report of the same run, at most
 _NICK = re.compile(r"^report-(.+)-(\d+)-(\d{2}_\d{2}_\d{2}(?:-\d+)?)\.txt$")
 _COMMON = {"user", "admin", "administrator", "owner", "public", "default", "guest", "pc", "desktop", "home"}
 
@@ -209,8 +211,15 @@ def found(game=None, mod_dir=None):
         if os.path.isdir(reports):
             txts = [os.path.join(reports, n) for n in os.listdir(reports) if n.lower().endswith(".txt")]
             txts = [f for f in txts if os.path.isfile(f)]
+            logs = [os.path.getmtime(f) for f, n, _ in out if n.endswith("system.log.txt")]
             if txts:
                 latest = max(txts, key=os.path.getmtime)
+                # only the crash of the game's last run (the log is written to its end at the crash): an old one of
+                # another day and mod went with half the reports (R-20261018-948E29 carried one of Oct 3)
+                when = os.path.getmtime(latest)
+                if (abs(when - max(logs)) > STALE_DUMP) if logs else (time.time() - when > 2 * 86400):
+                    txts = []
+            if txts:
                 m = _NICK.match(os.path.basename(latest))
                 name = "report-%s-%s.txt" % (m.group(2), m.group(3)) if m else os.path.basename(latest)
                 out.append((latest, "reports/" + name, "the newest crash report (REX)"))
