@@ -19,6 +19,7 @@ How a faction comes into the campaign is written in three files:
 
 WAYS: 'map' (there from the start), 'event', 'shadow' (of a faction), 'revolt' (splits off a faction)."""
 
+import os
 import re
 
 from .textio import strip_comment, tokens
@@ -306,6 +307,43 @@ def set_dead(plan, campaign, faction, dead, re_emergent=False):
         f.insert(at, ["dead_until_resurrected"] + (["re_emergent"] if re_emergent else []))
     plan.note(f, "%s: %s" % (faction, ("starts dead%s" % (", may come back after it dies" if re_emergent else ""))
                              if dead else "starts alive"))
+
+
+def keep_up(plan):
+    """Every write that changes a descr_strat.txt: a faction that starts dead (dead_until_resurrected - it comes
+    later, by an event) but holds a town or a character now starts alive - the engine cannot give a town to a dead
+    faction and stops at the campaign's start ('world_map.cpp: faction->get_faction_status() == ALIVE', report
+    R-20261018-969A72: Constantinople given on the Map to SS 6.3's latin_empire). Said in the write's report; never
+    stops a write. -> [factions made alive]."""
+    out = []
+    try:
+        from .strat import Strat
+        for path, f in list(plan.files.items()):
+            if os.path.basename(path).lower() != "descr_strat.txt":
+                continue
+            while True:
+                s = Strat(f)
+                hit = None
+                for fb in s.factions:
+                    if fb.name == "slave" or not (fb.settlements or fb.characters):
+                        continue
+                    gone = [i for i in range(fb.start + 1, fb.end)
+                            if tokens(strip_comment(f.text(i)))[:1] and tokens(strip_comment(f.text(i)))[0] in DEAD_WORDS]
+                    if gone:
+                        hit = (fb, gone)
+                        break
+                if hit is None:
+                    break
+                fb, gone = hit
+                for i in reversed(gone):
+                    f.delete(i, i + 1)
+                out.append(fb.name)
+                plan.note(f, "%s holds %d town(s) and %d character(s) now, so it starts alive (it came later, by an "
+                             "event - a faction that is not there yet cannot hold a town: the game would stop at the "
+                             "campaign's start)" % (fb.name, len(fb.settlements), len(fb.characters)))
+    except Exception:
+        pass                                            # never stops a write
+    return out
 
 
 def set_horde(plan, faction):

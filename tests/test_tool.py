@@ -82,6 +82,27 @@ class ToolTest(unittest.TestCase):
         self.assertLessEqual(max(abs(aaron.xy[0] - 1), abs(aaron.xy[1] - 1)), 2)
         self.assertTrue(any("Aaron Alphid" in w and "next to it" in w for _, w in plan.warnings))
 
+    def test_a_later_faction_given_a_town_starts_alive(self):
+        """Report R-20261018-969A72: Constantinople given on the Map to SS 6.3's latin_empire (it comes later, by an
+        event: dead_until_resurrected) - the game stopped at the campaign's start ('faction->get_faction_status() ==
+        ALIVE'). A faction that starts dead and holds a town or a character starts alive with the write, said."""
+        mod = ModData(self.root)
+        strat = mod.campaign_file("test", "descr_strat.txt")
+        f = TextFile.load(strat)
+        fb = Strat(f).faction("alpha")
+        self.assertTrue(fb.settlements)
+        lines = f.texts()
+        lines.insert(fb.start + 1, "dead_until_resurrected")
+        with open(strat, "w", encoding="latin-1", newline="") as fh:
+            fh.write("".join(l + "\r\n" for l in lines))
+        plan = Plan(ModData(self.root), "map", "map", {})
+        g = plan.edit(strat)
+        g.set(len(g.raw) - 1, g.text(len(g.raw) - 1) + " ")
+        plan.apply()
+        text = open(strat, encoding="latin-1").read()
+        self.assertNotIn("dead_until_resurrected", text)
+        self.assertIn("alpha holds", plan.report())
+
     def test_faction_of_the_mod_brought_into_a_campaign_it_is_not_in(self):
         """#341: a faction of the mod (descr_sm_factions.txt) with no block in this campaign's descr_strat.txt was
         refused as 'already exists' by New faction and could not be edited. Now New faction with its name brings it
