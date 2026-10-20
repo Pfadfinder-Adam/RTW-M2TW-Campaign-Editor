@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+### Added
+- The editor's own look: Tools > Edit the editor's look - drag any button, tick or label anywhere, rename it, give it a hover text or a width, hide it, take it back; kept for every start. The editor's language from a language file (Settings), and Words to translate writes every word for translators.
+
 ## 0.35.1 - 2026-10-18
 
 ### In short

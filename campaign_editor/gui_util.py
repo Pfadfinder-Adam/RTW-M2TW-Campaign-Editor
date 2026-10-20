@@ -779,7 +779,9 @@ def flow(frame, top=False):
     items = lefts + rights[::-1]                    # packed side="right" = the last one packed shows leftmost
     state = {"key": None}
 
-    def reflow(_=None):
+    def reflow(_=None, again=False):
+        if again:                                   # its pieces changed (gui_look moved one in or out)
+            state["key"] = None
         width = frame.winfo_width()
         if width <= 1:
             width = max(frame.winfo_toplevel().winfo_width() - 20, 200)
@@ -793,6 +795,7 @@ def flow(frame, top=False):
         for (w, _, _, _), (px, py) in zip(live, places):
             w.place(x=px, y=py)
         frame.configure(height=height)
+    frame._flow_items, frame._flow_reflow = items, reflow      # [(widget, pad left, pad right, side)]: gui_look
     frame.bind("<Configure>", reflow, add="+")
     for w, _, _, _ in items:                        # new words on a button: its width changes
         w.bind("<Configure>", reflow, add="+")
@@ -849,6 +852,11 @@ class Tip:
     def _show(self):
         self.job = None
         text = self.text() if callable(self.text) else self.text
+        try:
+            from .gui_look import word
+            text = word(text)                          # in the language picked in Settings, when it has them
+        except Exception:
+            pass
         if not text or not self.widget.winfo_exists():
             return
         self.win = popup_text(self.widget, text, self.width)

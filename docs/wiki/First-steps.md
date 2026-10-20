@@ -13,6 +13,21 @@ Every change waits until you press **Preview changes** (shows every file and lin
 
 **Scrolling**: every list, table, page and text shows a scrollbar while there is more to see; every list, table, page and read-only text also scrolls by the mouse wheel, by **dragging** it with the left button (it follows the mouse, up / down and left / right) and by the **middle button**: press the wheel and move the mouse - the further from where you pressed, the faster it scrolls, both ways (held: it stops when you let go; a click: it goes on until the next click or Esc). A text you can type in keeps the left drag for selecting words. The map is as before (the right button moves it).
 
+## Your own look and language
+
+**Tools > Edit the editor's look...** turns the windows into a layout you can change: a click picks a button, tick or
+label (a yellow frame); drag it with the left button before or after any other piece, in any bar of any window (in a
+bar of another part of the window a copy of it stands there - it does the same and greys out with it); its right
+click renames it, gives it a hover text or a width, hides it or takes it back. The small bar beside it holds **Undo**,
+**Hidden pieces...** (show one again), **Back to how it was**, **Save my look...** and **Load a look...** (to share
+one). The look is kept for every start in `CampaignEditor_look.json`; a piece whose words a new version of the editor
+changes simply goes back to its place.
+
+**Settings > Language of the window** puts a language on every window, the hover texts and the menus; **Add a
+language file...** puts one in. **Words to translate...** writes every word of the windows into a file - fill in the
+translations, add the language's name and yours, and send it: it comes with the editor. Words a file has none for
+stay English.
+
 ## Medieval II
 
 Medieval II keeps most data in `packs`. Load the game folder (or a Kingdoms campaign's folder, such as `mods/british_isles`) and the tool offers to

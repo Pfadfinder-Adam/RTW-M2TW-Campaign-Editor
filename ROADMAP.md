@@ -431,6 +431,7 @@ The first nine days (0.1.0 → 0.30.0): from a one-mod faction cloner to a campa
 - 🧪 Alliances and wars at the start (both games): one status per faction that pulls the AI feelings along, every value in words; Medieval II's diplomacy read as the game writes it (`faction_standings`), a new Medieval II faction at war with the rebels (0.23.0)
 - 🧪 Victory conditions on the Faction tab: regions to hold and take, factions to outlive, Rome's goal - long and short campaign (0.23.0)
 - ✅ Wonders on the Map (Rome): shown, dragged, added, removed; the map's real size shown (0.25.0)
+- 📦 The editor's own look: Tools > Edit the editor's look - any button, tick or label dragged anywhere, renamed, given a hover text or width, hidden, taken back; the window's language from a language file (Settings), Words to translate for the community
 - 🧪 A Settings window (look, language, game folder, the map's look, report contact, set-up questions, folders); Check mod renamed Check mod files (0.24.0)
 - 🧪 The family tree folded behind a Family tree button on the Faction tab; hover texts on the work buttons (0.23.0)
 - 🧪 A faction's religion pulls its temples, guilds, priests and their figures along (Medieval II) (0.22.0)
@@ -499,7 +500,7 @@ The first nine days (0.1.0 → 0.30.0): from a one-mod faction cloner to a campa
 | A religion of one's own, step by step in its own window: name, symbol, text, its temple chain (levels, pictures, effects like the Building editor), which factions follow it - Medieval II and Barbarian Invasion (BI's `descr_beliefs.txt`, `religious_belief` in the buildings); greyed on plain Rome, which has no religions | Time; BI's campaign files for the test |
 | A faction brought over from Rome into Barbarian Invasion (or between any two Rome mods): a faction pack - its units already go over as unit packs | Time; then an in-game test |
 | Saved games edited (money, characters, towns of a running campaign), if the save files can be read safely - to be researched first | Research: the save format of both games |
-| The window in other languages, picked at the first start: Spanish, French, German, Italian, Russian, Turkish (asked on Discord); hover texts in place of long labels so longer words fit | Time; translators to check the words |
+| The window in other languages - the language files themselves (the editor reads them since the look editor: Settings > Language of the window, Words to translate...) | Translators from the community |
 | More of REX's settings in plain words (sprites, arrow visibility, fort upkeep, trade fleets...) - the engine files `descr_ex.txt` / `descr_caps_ex.txt` are in Campaign rules already | Time |
 | The AI's war plans (`invade_*` in descr_campaign_ai_db.xml) explained in plain words on the Faction tab | Time |
 | 3D for everything: buildings, strat-map models, wonders, ships, agents - viewed, replaced and saved (both games); custom models placed on the map, a mode for wonders | Time |
