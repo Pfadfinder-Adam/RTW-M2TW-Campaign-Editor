@@ -6,12 +6,11 @@ import os
 import subprocess
 import sys
 import tkinter as tk
-from tkinter import filedialog, ttk
+from tkinter import filedialog, messagebox, ttk
 
 from . import log, settings
 from .gui_util import one_window, hint
 
-LANGUAGES_PLANNED = "Spanish, French, German, Italian, Russian and Turkish are planned."
 
 
 def open_folder(path):
@@ -76,12 +75,65 @@ class SettingsWindow(tk.Toplevel):
             self.app.toggle_theme()
 
     def _language(self, body):
-        _, row = self._box(body, "Language of the window", "The window speaks English for now. %s Hover texts "
-                                                            "('?') keep the room longer words need." % LANGUAGES_PLANNED)
-        cb = ttk.Combobox(row, values=["English"], state="readonly", width=14)
-        cb.set("English")
+        from . import look as LK
+        lf, row = self._box(body, "Language of the window", "The editor's words in another language: a language "
+                            "file the community translated (Add a language file... puts one in). Words to "
+                            "translate... writes every word of the windows into a file to fill - send it back and "
+                            "it comes with the editor. What a file has no word for stays English.")
+        names = sorted(LK.languages())
+        self.v_lang = tk.StringVar(value=settings.get("language") or "English")
+        cb = ttk.Combobox(row, textvariable=self.v_lang, values=["English"] + names, state="readonly", width=18)
         cb.pack(side="left")
-        ttk.Label(row, text=LANGUAGES_PLANNED, foreground="#777").pack(side="left", padx=8)
+        cb.bind("<<ComboboxSelected>>", lambda e: self._language_picked())
+        ttk.Button(row, text="Add a language file...", command=lambda: self._language_add(cb)).pack(
+            side="left", padx=(6, 0))
+        ttk.Button(row, text="Words to translate...", command=self._language_words).pack(side="left", padx=(6, 0))
+
+    def _language_picked(self):
+        name = self.v_lang.get()
+        name = "" if name == "English" else name
+        settings.put("language", name)
+        look = getattr(self.app, "look", None)
+        if look is not None:
+            look.set_language(name)
+
+    def _language_add(self, cb):
+        from . import look as LK
+        p = filedialog.askopenfilename(parent=self, title="A language file of the editor",
+                                       filetypes=(("Language", "*.json"),))
+        if not p:
+            return
+        try:
+            name = LK.add_language(p)
+        except (OSError, ValueError) as e:
+            messagebox.showerror("Settings", str(e), parent=self)
+            return
+        cb.configure(values=["English"] + sorted(LK.languages()))
+        self.v_lang.set(name)
+        self._language_picked()
+
+    def _language_words(self):
+        import json
+        from . import look as LK
+        look = getattr(self.app, "look", None)
+        have = look.words if look is not None else {}
+        seen = sorted(look.seen_words) if look is not None else []
+        p = filedialog.asksaveasfilename(parent=self, title="Words to translate", defaultextension=".json",
+                                         initialfile="language.json", filetypes=(("Language", "*.json"),))
+        if not p:
+            return
+        data = LK.template(have, seen)
+        if look is not None and look.language:
+            data["language"] = look.language
+        try:
+            with open(p, "w", encoding="utf-8") as fh:
+                json.dump(data, fh, indent=1, ensure_ascii=False)
+        except OSError as e:
+            messagebox.showerror("Settings", str(e), parent=self)
+            return
+        messagebox.showinfo("Settings", "%d words written. Fill each \"\" with its translation, put the language's "
+                                        "own name in \"language\" and yours in \"by\", then Add a language file..."
+                                        % len(data["words"]), parent=self)
 
     def _game(self, body):
         lf, row = self._box(body, "Game and mod", "The game folder is where the mods list (top left) is looked for; "

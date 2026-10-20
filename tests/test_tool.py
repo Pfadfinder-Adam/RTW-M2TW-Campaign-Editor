@@ -4252,6 +4252,144 @@ building smith
         self.assertTrue(InterfacePanel._video_shown(ModData(self.root)))
         self.assertFalse(InterfacePanel._video_shown(ModData(bi)))
 
+    def test_editor_look_words_language_and_pieces_moved(self):
+        """The editor's own look (the user, 2026-10-20: buttons and ticks dragged anywhere, renamed, the editor's
+        language translated by the community): every piece named by its window, box and English words; a language
+        file's words on every window; a button renamed, hidden, moved inside its bar (the wrapping bars too) and into
+        another bar - there a copy stands with the same command and variable and follows the piece's state; Undo and
+        Back to how it was take it back; the look file put on again when the editor starts."""
+        try:
+            import tkinter as tk
+            from tkinter import ttk
+            root = tk.Tk()
+        except Exception as e:
+            self.skipTest("no window: %s" % e)
+        import json
+        from unittest import mock
+        from campaign_editor import gui_look as GL
+        from campaign_editor import log
+        from campaign_editor import look as LK
+        from campaign_editor.gui_util import flow
+        home = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, home)
+        langs = os.path.join(home, log.SHORT + LK.LANG_FOLDER)
+        os.makedirs(langs)
+        with open(os.path.join(langs, "es.json"), "w", encoding="utf-8") as fh:
+            json.dump({"language": "Espanol", "by": "a tester", "words": {"Load": "Cargar", "Tools": ""}}, fh)
+        pressed = []
+
+        def build(root):
+            bar = ttk.Frame(root)
+            bar.pack(fill="x")
+            for t in ("Load", "Save", "Tools"):
+                ttk.Button(bar, text=t, command=lambda t=t: pressed.append(t)).pack(side="left")
+            flow(bar)
+            box = ttk.LabelFrame(root, text="Map")
+            box.pack(fill="x")
+            v = tk.BooleanVar(root, value=False)
+            ttk.Checkbutton(box, text="relief", variable=v).pack(side="left")
+            ttk.Button(box, text="Rename...").pack(side="left")
+            ttk.Button(box, text="Rename...").pack(side="left")
+            other = ttk.Frame(root)
+            other.pack(fill="x")
+            ttk.Label(other, text="Size:").pack(side="left")
+            ttk.Entry(other).pack(side="left")
+            root.update()
+            return bar, box, other, v
+
+        try:
+            with mock.patch.object(log, "home", lambda: home):
+                from campaign_editor import settings
+                with mock.patch.object(settings, "get", lambda k, d=None: "Espanol" if k == "language" else d):
+                    look = GL.install(root)
+                    bar, box, other, v = build(root)
+                keys = sorted(look.by_key)
+                self.assertIn("main||TButton:Load", keys)
+                self.assertIn("main|Map|TCheckbutton:relief", keys)
+                self.assertIn("main|Map|TButton:Rename...#2", keys)            # the second of one name
+                self.assertIn("main||TEntry:after:Size:", keys)                # no words: the words before it
+                load = look.by_key["main||TButton:Load"]
+                self.assertEqual(load.cget("text"), "Cargar")                 # the language's words
+                self.assertEqual(look.by_key["main||TButton:Tools"].cget("text"), "Tools")   # none: English
+                look.set_language("")
+                self.assertEqual(load.cget("text"), "Load")
+                save = look.by_key["main||TButton:Save"]
+                look.change(save, text="Write")
+                self.assertEqual(save.cget("text"), "Write")
+                # moved inside its wrapping bar: after Tools
+                tools = look.by_key["main||TButton:Tools"]
+                look.change(load, to=tools._look_key, where="after")
+                root.update()
+                self.assertEqual([it[0] for it in bar._flow_items], [save, tools, load])
+                # moved into another bar (not its parent's): a copy there, the piece itself hidden
+                relief = look.by_key["main|Map|TCheckbutton:relief"]
+                look.change(save, to=relief._look_key, where="before")
+                root.update()
+                copy_ = look.clones[str(save)]
+                self.assertEqual(copy_.master, box)
+                self.assertNotIn(save, [it[0] for it in bar._flow_items])
+                copy_.invoke()
+                self.assertEqual(pressed, ["Save"])                          # the same command
+                self.assertIs(GL.piece_of(copy_), save)                      # a click on the copy picks the piece
+                save.state(["disabled"])
+                look._sync()
+                self.assertIn("disabled", copy_.state())                     # follows the piece
+                look.change(relief, hidden=True)
+                self.assertFalse(relief.winfo_manager())
+                self.assertTrue(look.do_undo())
+                root.update()
+                self.assertTrue(relief.winfo_manager())
+                saved = LK.load()
+                self.assertEqual(saved["pieces"]["main||TButton:Save"]["to"], "main|Map|TCheckbutton:relief")
+                # the editor started again: the look put on as the windows show
+                root.destroy()
+                root = tk.Tk()
+                with mock.patch.object(settings, "get", lambda k, d=None: d):
+                    look = GL.install(root)
+                    bar, box, other, v = build(root)
+                root.update()
+                save = look.by_key["main||TButton:Save"]
+                self.assertEqual(save.cget("text"), "Write")
+                self.assertEqual(look.clones[str(save)].master, box)
+                look.back_all()
+                root.update()
+                self.assertEqual(save.cget("text"), "Save")
+                self.assertEqual(look.clones, {})
+                self.assertIn(save, [it[0] for it in bar._flow_items])
+                self.assertEqual(LK.load()["pieces"], {})
+                look.edit(True)                                              # the edit mode on and off
+                root.update()
+                self.assertIn(GL.TAG, save.bindtags())
+                look.edit(False)
+                self.assertNotIn(GL.TAG, save.bindtags())
+        finally:
+            try:
+                root.destroy()
+            except Exception:
+                pass
+
+    def test_editor_words_to_translate(self):
+        """Words to translate: every whole English word of the windows read from the code (buttons, titles, hover
+        texts), each with its translation so far; a language file read, a broken one refused."""
+        from campaign_editor import look as LK
+        got = LK.words()
+        for w in ("Apply changes", "Settings", "Words to translate..."):
+            self.assertIn(w, got)
+        t = LK.template({"Settings": "Ajustes"}, ["seen at run time"])
+        self.assertEqual(t["words"]["Settings"], "Ajustes")
+        self.assertEqual(t["words"]["seen at run time"], "")
+        d = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, d)
+        bad = os.path.join(d, "x.json")
+        write(bad, "not json")
+        self.assertIsNone(LK.read_language(bad))
+        look = {"pieces": {}, "order": []}
+        LK.set_entry(look, "a", {"to": "b", "where": "after", "junk": 1})
+        LK.set_entry(look, "c", {"text": "x"})
+        self.assertEqual(look, {"pieces": {"a": {"to": "b", "where": "after"}, "c": {"text": "x"}}, "order": ["a"]})
+        LK.set_entry(look, "a", None)
+        self.assertEqual(look["order"], [])
+
     def test_interface_own_picture_window_library_and_apply(self):
         """Replace picture... in the window (the user, 2026-10-17): a picture file made the piece's own (drawn at
         once, before the write), the library shows the game's pieces and my own pictures, a click there gives the

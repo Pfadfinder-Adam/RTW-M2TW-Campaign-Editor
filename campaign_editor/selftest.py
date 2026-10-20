@@ -2969,6 +2969,7 @@ UI = {
     "Report a bug": "Report a bug / Suggest, Answers to my reports",
     "Test mod": "Test mod",
     "Settings": "Settings, Help, the log, Save logs, Game manifest",
+    "Edit the editor's look": "Settings, Help, the log, Save logs, Game manifest",
     "Help": "Settings, Help, the log, Save logs, Game manifest",
 }
 

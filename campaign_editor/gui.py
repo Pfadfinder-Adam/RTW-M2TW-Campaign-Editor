@@ -380,6 +380,8 @@ class App(tk.Tk):
         self.colours = {"primary": None, "secondary": None}
         self.editing_now = None
         self.char_moves = {}            # "faction:index" -> (x, y) dragged on the map (Edit)
+        from .gui_look import install as own_look
+        own_look(self)                  # the modder's own look and language on every window (gui_look)
         self._build()
         self.v_work.set("edit")         # Factions opens on its first tab, Edit faction (the user, 2026-10-09)
         self.work_changed()
@@ -1016,6 +1018,8 @@ class App(tk.Tk):
             menu.add_separator()
             menu.add_command(label=text, state="disabled")
         menu.add_command(label="Settings...", command=self.once("settings_window", self.settings_window))
+        menu.add_command(label="Edit the editor's look (move, rename, hide its buttons)...",
+                         command=lambda: self.look.edit(True))
         menu.add_command(label="Help", command=self.once("show_help", self.show_help))
         head("Find what is wrong")
         menu.add_command(label="Check mod files (what the game would stumble on)", command=self.once("check", self.check))

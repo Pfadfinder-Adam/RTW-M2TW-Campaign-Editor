@@ -272,6 +272,8 @@ Tested on the plain games - Rome: Total War (with REX), Barbarian Invasion, Medi
 
 **Scrolling**: every list, table, page and text shows a scrollbar while there is more to see; every list, table, page and read-only text also scrolls by the mouse wheel, by **dragging** it with the left button (it follows the mouse, up / down and left / right) and by the **middle button**: press the wheel and move the mouse - the further from where you pressed, the faster it scrolls, both ways (held: it stops when you let go; a click: it goes on until the next click or Esc). A text you can type in keeps the left drag for selecting words. The map is as before (the right button moves it).
 
+**Your own look and language:** **Tools > Edit the editor's look...** - a click picks any button, tick or label (yellow frame); drag it with the left button before or after any other piece, in any bar; its right click renames it, gives it a hover text, a width, hides it or takes it back (Undo, Hidden pieces..., Back to how it was, Save / Load a look). It is kept for every start (`CampaignEditor_look.json`). **Settings > Language of the window** puts a language on every window; **Words to translate...** writes every word of the windows into a file to fill - a translation sent back comes with the editor.
+
 1. **Close the game** and press **Browse...** to pick the mod's `data` folder (for example `...\Rome Total War Gold\HLR\data`).
 2. Pick the **campaign** (usually `imperial_campaign`).
 3. Pick a **template**. The new faction gets its culture, units, buildings, character models, name lists, trait triggers and art.
