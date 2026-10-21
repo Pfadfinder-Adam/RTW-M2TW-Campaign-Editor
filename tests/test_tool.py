@@ -3246,6 +3246,66 @@ building smith
         with self.assertRaises(ValueError):
             SE.set_box(Plan(mod, "x", "x", {}), mod, sheet, "NONE", (0, 0, 1, 1))
 
+    def test_map_from_zero(self):
+        """The user, 2026-10-21: a map from zero - one island, one region with its town (black pixel), a port (white,
+        on the coast, sea beside it), a resource, one faction and the rebels; every picture at its size for W x H
+        (tiles / corners / double), the heights land >= 1 and sea blue, descr_terrain's size, the region keeps the
+        faction's capital names; a map too small refused; Restore puts every byte back."""
+        try:
+            import PIL  # noqa: F401
+        except ImportError:
+            self.skipTest("no Pillow")
+        from campaign_editor import mapzero as MZ
+        from campaign_editor.strat import Strat
+        from campaign_editor.tga import read_tga
+        mod = ModData(self.root)
+        camp = mod.campaign_dir("test")
+        before = {}
+        for d, _, fs in os.walk(self.root):
+            for n in fs:
+                with open(os.path.join(d, n), "rb") as fh:
+                    before[os.path.join(d, n)] = fh.read()
+        with self.assertRaises(ValueError):
+            MZ.make(Plan(mod, "z", "alpha", {}), "test", "alpha", (10, 10))
+        plan = Plan(mod, "z", "alpha", {})
+        region = MZ.make(plan, "test", "alpha", (32, 24))
+        bdir = plan.apply()
+        mod = ModData(self.root)
+        regions = mod.regions("test")
+        self.assertEqual(list(regions), [region])
+        self.assertEqual(regions[region]["creator"], "alpha")
+        im = read_tga(os.path.join(camp, "map_regions.tga"))
+        self.assertEqual((im.width, im.height), (32, 24))
+        px = lambda xy: tuple(im.get(xy[0], xy[1])[:3])              # tga rows from the bottom, as the map
+        self.assertEqual(px(MZ.TOWN), (0, 0, 0))
+        self.assertEqual(px(MZ.PORT), (255, 255, 255))
+        self.assertEqual(px((MZ.PORT[0] + 1, MZ.PORT[1])), MZ.SEA_REGION)
+        self.assertEqual(px((MZ.TOWN[0] - 1, MZ.TOWN[1])), regions[region]["colour"])
+        h = read_tga(os.path.join(camp, "map_heights.tga"))
+        self.assertEqual((h.width, h.height), (65, 49))
+        self.assertGreaterEqual(h.get(2 * MZ.PORT[0] + 1, 2 * MZ.PORT[1] + 1)[0], 1)       # the port's tile: land
+        self.assertEqual(tuple(h.get(1, 1)[:3]), MZ.SEA_BLUE)
+        self.assertEqual(read_tga(os.path.join(camp, "map_roughness.tga")).width, 64)
+        with open(os.path.join(camp, "descr_terrain.txt"), encoding="latin-1") as fh:
+            t = fh.read()
+        self.assertRegex(t, r"width\s+32")
+        self.assertRegex(t, r"height\s+24")
+        st = Strat(mod.load(os.path.join(camp, "descr_strat.txt")))
+        self.assertEqual([fb.name for fb in st.factions], ["alpha", "slave"])
+        self.assertEqual(st.factions[0].settlements[0].region, region)
+        self.assertEqual(st.factions[0].characters[0].xy, MZ.TOWN)
+        restore(mod, bdir)
+        after = {}
+        for d, _, fs in os.walk(self.root):
+            for n in fs:
+                p = os.path.join(d, n)
+                if "CampaignEditor" not in p and "backup" not in p.lower():
+                    with open(p, "rb") as fh:
+                        after[p] = fh.read()
+        self.assertEqual({k: v for k, v in after.items() if k in before}, {k: v for k, v in before.items()
+                                                                          if "CampaignEditor" not in k})
+        self.assertEqual([k for k in after if k not in before], [])
+
     def test_campaign_hud_laid_out_as_the_engine(self):
         """Interface > Campaign HUD (the engines' places, hudlayout): the HUD's bottom at 768, its top 768 - the LEFT
         panel's height, the MIDDLE panel on the bottom, the pieces from the mod's own sheet; a changed page shows."""

@@ -900,6 +900,11 @@ class App(tk.Tk):
         q = _hint(self.map_view.zoom_bar, WHAT_HAPPENS, width=520)
         q.pack(side="left", padx=(0, 2))
         up.pack(side="left")
+        _tip(ttk.Button(self.map_view.zoom_bar, text="Map from zero...", command=self.once(
+            "map_zero", lambda: self.map_from_zero())),
+            "a new small map in place of this campaign's: one island, one region with its town, a port and a "
+            "resource, one faction (Rome: the Gauls, Medieval II: France) and the rebels - the start of your own "
+            "map (a backup first; Restore puts the old map back)").pack(side="left", padx=(4, 0))
         self.map_view.on_tool = self.map_tool
         self.map_view.on_resize = self.map_size_window    # Change size... beside the map's size
         self.v_borders = self.map_view.v_borders
@@ -2671,6 +2676,69 @@ class App(tk.Tk):
         map back with one button (gui_upscale)."""
         from .gui_upscale import open_upscale
         return open_upscale(self)
+
+    def map_from_zero(self):
+        """Map from zero... (the map's bar): the campaign's map replaced by a small one - one island, one region, its
+        town, a port, a resource, one faction and the rebels (mapzero); the faction and the size asked first, a
+        backup made, Restore puts the old map back."""
+        from . import mapzero
+        from .limits import game_kind
+        from .plan import Plan
+        if not self.mod:
+            messagebox.showinfo(APP, "Load a mod first.", parent=self)
+            return
+        camp = self.v_campaign.get()
+        rome = game_kind(self.mod) == "rome"
+        want = mapzero.DEFAULT_FACTION["rome" if rome else "medieval2"]
+        have = [fb.name for fb in (self.strat.factions if self.strat else []) if fb.settlements and fb.name != "slave"]
+        w = tk.Toplevel(self)
+        w.title("Map from zero")
+        w.transient(self)
+        f = ttk.Frame(w, padding=12)
+        f.pack(fill="both", expand=True)
+        ttk.Label(f, text="This campaign's map (%s) is replaced by a small one: an island in the sea, ONE region with "
+                          "its town, a port and a resource, one faction and the rebels with one army. The region "
+                          "keeps the names of the faction's own capital region (so every text is there). The other "
+                          "factions are not in the new map. A backup is made first - Restore puts the old map "
+                          "back." % camp, wraplength=520, justify="left").grid(row=0, column=0, columnspan=3,
+                                                                              sticky="w")
+        v_fac = tk.StringVar(value=want if want in have else (have[0] if have else ""))
+        ttk.Label(f, text="Faction").grid(row=1, column=0, sticky="w", pady=(10, 2))
+        ttk.Combobox(f, textvariable=v_fac, values=have, state="readonly", width=24).grid(row=1, column=1, sticky="w")
+        v_w, v_h = tk.StringVar(value=str(mapzero.SIZE[0])), tk.StringVar(value=str(mapzero.SIZE[1]))
+        ttk.Label(f, text="Size (tiles)").grid(row=2, column=0, sticky="w", pady=2)
+        sz = ttk.Frame(f)
+        sz.grid(row=2, column=1, sticky="w")
+        ttk.Spinbox(sz, from_=26, to=1000, textvariable=v_w, width=6).pack(side="left")
+        ttk.Label(sz, text=" x ").pack(side="left")
+        ttk.Spinbox(sz, from_=21, to=1000, textvariable=v_h, width=6).pack(side="left")
+        ttk.Label(f, text="the island stays its size in the middle; more tiles = more sea round it",
+                  foreground="#666").grid(row=3, column=1, columnspan=2, sticky="w")
+
+        def go():
+            try:
+                size = (int(v_w.get()), int(v_h.get()))
+                plan = Plan(self.mod, "mapzero", v_fac.get(), {})
+                region = mapzero.make(plan, camp, v_fac.get(), size)
+            except (ValueError, KeyError) as e:
+                messagebox.showerror(APP, "Not made: %s" % e, parent=w)
+                return
+            warn = "\n".join("- " + m for _, m in plan.warnings)
+            if not ask(APP, "Write the new map (%d file(s))? A backup is made first.%s" % (
+                    len(plan.changed_files()), ("\n\n" + warn) if warn else ""), yes="Write it", no="Cancel",
+                       parent=w):
+                return
+            bdir = plan.apply()
+            log.write("Map from zero (backup %s)\n%s" % (bdir, plan.report()))
+            w.destroy()
+            self.load()
+            self.status.set("A new map from zero: %s, %s's - start a NEW campaign in the game (the game builds the "
+                            "map anew). Restore puts the old map back." % (region, v_fac.get()))
+        b = ttk.Frame(f)
+        b.grid(row=4, column=0, columnspan=3, sticky="e", pady=(12, 0))
+        ttk.Button(b, text="Make it", command=go).pack(side="left", padx=4)
+        ttk.Button(b, text="Cancel", command=w.destroy).pack(side="left")
+        return w
 
     def game_log_window(self, path=None):
         """Tools > The game's log in plain words: the newest system.log.txt of this mod (else of the game folder)
