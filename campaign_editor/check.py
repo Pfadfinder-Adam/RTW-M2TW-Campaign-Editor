@@ -399,6 +399,8 @@ def check_mod(mod, campaign, deep=False, progress=None, found=None):
         bad(msg)
     for msg in rebel_problems(mod, units):
         bad(msg)
+    for msg in custom_battle_problems(mod, units):
+        bad(msg)
     for msg in region_rebel_problems(mod, regions):
         bad(msg)
     for msg in slaves_problems(mod, regions):
@@ -957,6 +959,40 @@ def win_condition_problems(mod, campaign, regions, factions):
             for fac in t[1:]:
                 if fac not in known:
                     out.append("descr_win_conditions.txt line %d: faction '%s' does not exist" % (i + 1, fac))
+    return out
+
+
+def custom_battle_availability(mod):
+    """{faction: True / False} - descr_sm_factions.txt's custom_battle_availability (yes when the line is missing)."""
+    p = _data_file(mod, "descr_sm_factions.txt")
+    out, cur = {}, None
+    if not p:
+        return out
+    for l in mod.load(p).texts():
+        t = tokens(strip_comment(l).replace(",", " "))
+        if t[:1] == ["faction"] and len(t) > 1:
+            cur = t[1]
+            out[cur] = True
+        elif cur and t[:1] == ["custom_battle_availability"] and len(t) > 1:
+            out[cur] = t[1].lower() != "no"
+    return out
+
+
+def custom_battle_problems(mod, units):
+    """A faction open to custom / quick battles with no land unit it may field there (none in its ownership, by name,
+    culture or 'all', without no_custom): a quick battle that picks it makes an army of nothing and the game stops
+    (a Discord player's REX log, 2026-10-21: 'there are no units in this army', then the general's unit)."""
+    out = []
+    cultures = dict(mod.factions())
+    for fac, open_ in custom_battle_availability(mod).items():
+        if not open_ or fac == "slave":
+            continue
+        owners = {fac, "all", cultures.get(fac) or fac}
+        if not any(owners & set(u.ownership) and u.category not in ("ship", "non_combatant") and
+                   "no_custom" not in u.attributes for u in units):
+            out.append("%s has no unit for custom / quick battles (none in its ownership without no_custom) - a quick "
+                       "battle that picks it stops the game; give it a unit (Units: ownership, take no_custom out) or "
+                       "set 'custom_battle_availability no' in descr_sm_factions.txt" % fac)
     return out
 
 
