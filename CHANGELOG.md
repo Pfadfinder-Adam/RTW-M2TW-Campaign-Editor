@@ -13,6 +13,8 @@
 - New mod folder puts no switched-off engine settings files (descr_ex, descr_caps_ex) in: the mod runs on the engine's defaults as before; the editor writes the line a change needs, Check mod files' Copy them in brings the whole list.
 
 ### Fixed
+- New / Edit faction kept the fields of the faction shown before (names, texts, colours, pictures picked) -> the form starts empty when New faction opens, a template is picked, a faction is brought or another faction is edited.
+- A faction brought from another mod got its template's flags and icons where it had none of its own -> those pictures are left empty now (give your own on the Art tab).
 - Building '?' hints mislabelled half the vanilla lines (a level and 'bonus N' are both allowed on every effect) -> both forms explained; free_upkeep, religion, settlement sizes (castles too) and Rome's weapon levels said right; Medieval II level lines, hidden_resources and Barbarian Invasion's religious_belief get hints.
 - Unit '?' hints checked against the games' files: class skirmish, voice words, banner, animal (wardogs, pigs), berserker discipline, formations, weapon sounds and types, era number, soldier radius / height corrected; lines that are only notes in Medieval II's file (stat_pri_ex, stat_armour_ex, unit_info) are said as not read and refused when typed into a unit.
 - A recruit line ending in 'bonus N' is no longer called a mistake.

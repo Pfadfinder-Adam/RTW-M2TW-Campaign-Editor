@@ -3139,6 +3139,48 @@ building smith
         finally:
             app.destroy()
 
+    def test_faction_form_starts_empty(self):
+        """The user, 2026-10-21: 'I made a faction, picked another - the fields were still full; remove it all by
+        hand?'. New faction opened after Edit faction, another template, another faction in Edit: nothing of the one
+        before is left - names, texts, colours, pictures picked."""
+        try:
+            from unittest import mock
+            from campaign_editor import gui
+            app = gui.App()
+        except Exception as e:                        # no tkinter / no display
+            self.skipTest("no tkinter window: %s" % e)
+        try:
+            with mock.patch("tkinter.messagebox.showinfo"), mock.patch("tkinter.messagebox.showwarning"), \
+                    mock.patch("tkinter.messagebox.showerror"), mock.patch("tkinter.messagebox.askyesno",
+                                                                          return_value=False):
+                app.v_path.set(os.path.join(self.root, "data"))
+                app.load()
+                app.update()
+                app.v_work.set("edit")
+                app.work_changed()
+                app.v["template"].set("alpha")
+                app.template_changed()
+                self.assertEqual(app.v["name"].get(), "alpha")
+                app.art_replace["menu/x_alpha.tga"] = "/pic.png"
+                app.v_work.set("new")
+                app.work_changed()
+                app.v["template"].set("alpha")
+                app.template_changed()
+                self.assertEqual((app.v["name"].get(), app.v["display_name"].get()), ("", ""))
+                self.assertEqual(app.art_replace, {})
+                app.v["name"].set("picts")
+                app.v["display_name"].set("Picts")
+                app.t_descr.insert("1.0", "old words")
+                app.colours["primary"] = (1, 2, 3)
+                app.art_replace["menu/x_picts.tga"] = "/pic.png"
+                app.v["template"].set("beta")
+                app.template_changed()
+                self.assertEqual((app.v["name"].get(), app.v["display_name"].get()), ("", ""))
+                self.assertEqual(app.t_descr.get("1.0", "end-1c"), "")
+                self.assertEqual((app.colours["primary"], app.art_replace), (None, {}))
+        finally:
+            app.destroy()
+
     def test_a_letter_a_one_byte_file_cannot_hold_is_written_plain(self):
         """R-20261018-308C60 / R-20261020-6718BB: a name with 'ė' / 'ā' in descr_strat.txt (a one-byte file) stopped
         the write ('latin-1' codec can't encode). Now the nearest plain letter is written and the write says so."""
@@ -8201,6 +8243,36 @@ building smith
         plan = Plan(mod, "alpha", "picts", {"art": {mine: "/x/own.png"}})
         self.assertIsNone(FB.own_select_map(plan, "test", "picts"))   # a picture of its own wins
         self.assertEqual(plan.opts["art"][mine], "/x/own.png")
+
+    def test_brought_faction_has_no_picture_of_its_frame(self):
+        """The user, 2026-10-21: 'I got the Huns' flags - flags, icons, pictures: zero'. Every picture the frame's
+        copy put under the new name that the brought faction has none of is made EMPTY (a clear picture, the file
+        there for the game); its own pictures, the modder's picks, shared pictures and the select map's stand-in are
+        left alone."""
+        try:
+            import PIL  # noqa: F401
+        except ImportError:
+            self.skipTest("no Pillow")
+        from unittest import mock
+        from campaign_editor import factionart as FA
+        from campaign_editor import factionbring as FB
+        from campaign_editor.plan import Plan
+        mod = ModData(self.root)
+        camp = os.path.relpath(mod.campaign_dir("test"), mod.data).replace(os.sep, "/")
+        pics = [{"rel": "menu/symbols/symbol48_alpha.tga", "path": "/x/a"},
+                {"rel": "loading_screen/symbols/symbol128_alpha.tga", "path": "/x/b"},
+                {"rel": "models/textures/standard_alpha.tga.dds", "path": "/x/c"},
+                {"rel": "models/textures/standard_routing.tga.dds", "path": "/x/shared"},
+                {"rel": camp + "/map_alpha.tga", "path": "/x/map"}]
+        plan = Plan(mod, "alpha", "picts", {"art": {"loading_screen/symbols/symbol128_picts.tga": "/mine.png"}})
+        with tempfile.TemporaryDirectory() as t, mock.patch.object(FA, "faction_pictures", return_value=pics), \
+                mock.patch("campaign_editor.symbols.entries", return_value=[{"rel": "symbol:flag", "path": "/x/f"}]):
+            got = FB.blank_frame_pictures(plan, "test", {"models/textures/standard_picts.tga.dds"}, t)
+            self.assertEqual(sorted(got), ["menu/symbols/symbol48_picts.tga", "symbol:flag"])
+            from PIL import Image
+            with Image.open(plan.opts["art"]["symbol:flag"]) as im:
+                self.assertEqual(im.convert("RGBA").getextrema()[3], (0, 0))          # clear: nothing of the frame
+        self.assertEqual(plan.opts["art"]["loading_screen/symbols/symbol128_picts.tga"], "/mine.png")
 
     def test_brought_faction_pictures_and_figures(self):
         # its own pictures come even when the new faction keeps its name; a strat model this mod lacks comes with
