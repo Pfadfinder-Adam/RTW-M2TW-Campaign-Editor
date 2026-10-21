@@ -3139,6 +3139,24 @@ building smith
         finally:
             app.destroy()
 
+    def test_sd_xml_read_as_the_engine_does(self):
+        """Wholesome Queen's campaign UI editor showed it (the engine's sd_xml_parser): a sprite's attributes come in
+        any order; tw / th (M2EX's --ui-pack, hi-res sprites) are the picture's box on the page, w / h the size shown;
+        a loose <sprite name file/> outside the pages is a page of its own."""
+        from campaign_editor import symbols as SY
+        text = ('<sprite_definitions>\n <page file="p.tga" w="512" h="512">\n'
+                '  <sprite x="10" y="20" name="A" w="14" h="11" tw="56" th="44" alpha="1"/>\n'
+                '  <sprite name="B" x="0" y="0" w="8" h="8"/>\n </page>\n'
+                ' <sprite name="CUR" file="ui/cursor.tga" w="32" h="32" cursor="1" hotspot_x="3"/>\n'
+                '</sprite_definitions>\n')
+        got = SY.xml_boxes(text)
+        self.assertEqual(got[0], ("p.tga", [("A", (10, 20, 56, 44)), ("B", (0, 0, 8, 8))]))
+        self.assertEqual(got[1], ("ui/cursor.tga", [("CUR", (0, 0, 32, 32))]))
+        a = SY.sprite_list(text)[0]
+        self.assertEqual((a["shown"], a["cursor"]), ((14, 11), False))
+        loose = SY.loose_sprites(text)[0]
+        self.assertEqual((loose["cursor"], loose["hotspot"]), (True, (3, 0)))
+
     def test_faction_form_starts_empty(self):
         """The user, 2026-10-21: 'I made a faction, picked another - the fields were still full; remove it all by
         hand?'. New faction opened after Edit faction, another template, another faction in Edit: nothing of the one

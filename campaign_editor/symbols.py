@@ -381,7 +381,40 @@ def sprite_mode(mod):
 
 
 RE_PAGE = re.compile(r'<page\s+file="([^"]+)"[^>]*>(.*?)</page>', re.S)
-RE_SPRITE = re.compile(r'<sprite\s+name="([^"]+)"\s+x="(\d+)"\s+y="(\d+)"\s+w="(\d+)"\s+h="(\d+)"')
+RE_SPRITE = re.compile(r'<sprite\b([^>]*?)/?>')
+RE_ATTR = re.compile(r'([\w-]+)\s*=\s*"([^"]*)"')
+
+
+def _int(v):
+    try:
+        return int(v)
+    except (TypeError, ValueError):
+        return 0
+
+
+def sprite_list(body):
+    """[{'name', 'box': (x, y, art w, art h), 'shown': (w, h), 'file' (a loose sprite's picture) or None, 'cursor'}]
+    of the <sprite .../> tags in body, read as the engines' .sd.xml reader does (the M2EX engine source,
+    sd_xml_parser.cpp; Wholesome Queen's campaign UI editor showed the gap): attributes in any order; w / h the size
+    shown, tw / th the picture's box on the page when set (0 or none = w / h; M2EX's own --ui-pack writes them for
+    hi-res sprites); cursor and hotspot_x / _y kept."""
+    out = []
+    for m in RE_SPRITE.finditer(body):
+        at = dict(RE_ATTR.findall(m.group(1)))
+        if not at.get("name"):
+            continue
+        w, h = _int(at.get("w")), _int(at.get("h"))
+        tw, th = _int(at.get("tw")) or w, _int(at.get("th")) or h
+        out.append({"name": at["name"], "box": (_int(at.get("x")), _int(at.get("y")), tw, th), "shown": (w, h),
+                    "file": at.get("file"), "cursor": _int(at.get("cursor")) != 0,
+                    "hotspot": (_int(at.get("hotspot_x")), _int(at.get("hotspot_y")))})
+    return out
+
+
+def loose_sprites(text):
+    """The sheet's loose sprites - <sprite name file w h/> outside every <page>: one picture, a page of its own
+    (the engine makes it a virtual page the whole picture covers)."""
+    return [sp for sp in sprite_list(RE_PAGE.sub("", text)) if sp["file"]]
 
 
 def _xml_text(plan, path):
@@ -439,11 +472,14 @@ def find_sprite(mod, sheet, name, plan=None):
         return None
     text = _xml_text(plan, xp)
     for m in RE_PAGE.finditer(text):
-        for s in RE_SPRITE.finditer(m.group(2)):
-            if s.group(1) == name:
-                x, y, w, h = (int(v) for v in s.groups()[1:])
+        for sp in sprite_list(m.group(2)):
+            if sp["name"] == name:
                 return {"xml": xp, "page": m.group(1), "page_path": page_path(mod, m.group(1), plan),
-                        "box": (x, y, w, h)}
+                        "box": sp["box"], "shown": sp["shown"]}
+    for sp in loose_sprites(text):
+        if sp["name"] == name:
+            return {"xml": xp, "page": sp["file"], "page_path": _find(mod, *sp["file"].replace("\\", "/").split("/"))
+                    or page_path(mod, sp["file"], plan), "box": sp["box"], "shown": sp["shown"], "loose": True}
     return None
 
 
@@ -555,7 +591,7 @@ def own_logo(plan, faction, which, im=None):
                 own_logo(plan, other, which)
             if not binary:
                 xp = xml_path(mod, sheet, plan)
-                text = re.sub(r'[ \t]*<sprite\s+name="%s"[^>]*/>\r?\n?' % re.escape(name), "", _xml_text(plan, xp),
+                text = re.sub(r'[ \t]*<sprite\b[^>]*\bname="%s"[^>]*/>\r?\n?' % re.escape(name), "", _xml_text(plan, xp),
                               count=1)
                 mine = os.path.join(mod.data, "ui", sheet)
                 plan.binary(mine, text.encode("latin-1"))
@@ -747,9 +783,10 @@ def _sheet_files(mod):
 
 
 def xml_boxes(text):
-    """[(page file, [(sprite name, (x, y, w, h))])] of a .sd.xml text."""
-    return [(m.group(1), [(s.group(1), tuple(int(v) for v in s.groups()[1:])) for s in RE_SPRITE.finditer(m.group(2))])
-            for m in RE_PAGE.finditer(text)]
+    """[(page file, [(sprite name, (x, y, w, h))])] of a .sd.xml text - the box the picture takes on its page (tw / th
+    when the sheet sets them); a loose sprite is a page of its own, its file."""
+    out = [(m.group(1), [(sp["name"], sp["box"]) for sp in sprite_list(m.group(2))]) for m in RE_PAGE.finditer(text)]
+    return out + [(sp["file"], [(sp["name"], sp["box"])]) for sp in loose_sprites(text)]
 
 
 def all_sheets(mod):
