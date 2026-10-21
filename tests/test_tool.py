@@ -3315,7 +3315,10 @@ building smith
 
     def test_emblem_window_says_a_picture_of_no_known_size(self):
         """R-20261021-BFEE56: Emblem everywhere stopped on a picture whose size could not be read (size None)."""
-        from campaign_editor.gui_art import picture_words
+        try:
+            from campaign_editor.gui_art import picture_words
+        except ImportError as e:                      # no tkinter (the window module)
+            self.skipTest(str(e))
         self.assertEqual(picture_words({"label": "Logo", "rel": "a.tga", "size": (64, 32, 32)}), "Logo\n64 x 32")
         self.assertEqual(picture_words({"label": "Logo", "rel": "a.tga", "size": None}), "Logo\nsize unknown")
 
