@@ -7437,6 +7437,38 @@ building smith
         restore(m2, bdir)
         self.assertNotIn("N_R", ModData(self.root).regions("test"))
 
+    def test_new_region_in_a_medieval2_map_with_legion_lines(self):
+        """Discord 2026-10-20 (Mekkermann, a Medieval II map whose regions carry 'legion:' lines): a new region got a
+        Barbarian Invasion beliefs line ('pagan 100') before its religions { } line - Medieval II read it as the next
+        region and found none of the new ones ('cannot find this pixel colour ... in the region_db'). Now a new
+        region there is legion + 8 lines + religions, and Load's check takes such lines out of an older file."""
+        from campaign_editor import gamefix
+        from campaign_editor.edit import edit
+        rp = os.path.join(self.root, "data", "world", "maps", "campaign", "test", "descr_regions.txt")
+        text = REGIONS.replace("\t1\nB_R", "\t1\n\treligions { catholic 100 pagan 0 }\nB_R").rstrip("\n") + \
+            "\n\treligions { catholic 0 pagan 100 }\n"
+        text = text.replace("A_R\n", "A_R\n\tlegion: LA\n", 1).replace("B_R\n", "B_R\n\tlegion: LB\n", 1)
+        write(rp, text)
+        mod = ModData(self.root)
+        new = {"name": "N_R", "settlement": "Ntown", "creator": "alpha", "rebels": "Rebels", "resources": [],
+               "city": (0, 3), "owner": "alpha", "level": "village"}
+        edit(mod, "test", "alpha", {"regions": {"painted": {(0, 3): "N_R", (1, 3): "N_R"}, "new": [new]}}).apply()
+        with open(rp, encoding="latin-1") as fh:
+            lines = [ln.strip() for ln in fh.read().split("\n")]
+        at = lines.index("N_R")
+        self.assertTrue(lines[at + 1].startswith("legion:"))
+        self.assertTrue(lines[at + 9].startswith("religions {"), lines[at:at + 11])
+        self.assertEqual(ModData(self.root).regions("test")["N_R"]["settlement"], "Ntown")
+        self.assertIsNone(gamefix.m2_beliefs_lines(ModData(self.root)))
+        # an older editor's file: the stray line found and taken out
+        with open(rp, encoding="latin-1") as fh:
+            old = fh.read().replace("\treligions { catholic 0 pagan 100 }", "\tpagan 100\n\treligions { catholic 0 pagan 100 }", 1)
+        write(rp, old)
+        found = gamefix.m2_beliefs_lines(ModData(self.root))
+        self.assertEqual(len(found["rows"]), 1)
+        gamefix.fix_plan(ModData(self.root), [found]).apply()
+        self.assertIsNone(gamefix.m2_beliefs_lines(ModData(self.root)))
+
     def test_new_region_gets_its_slaves_resource_in_rome(self):
         """Rome: every region carries a 'resource slaves' (the enslaved people go there); a new region without one
         stops the game ("could not find slave resource in CE Newland(97), every region must have one" - the
