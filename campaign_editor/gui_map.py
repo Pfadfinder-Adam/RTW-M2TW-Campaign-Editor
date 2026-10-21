@@ -827,7 +827,7 @@ class MapView(ttk.Frame):
         what the tiles and points show can be told from what the game will draw. Drawn INTO the map's picture (the
         user, 2026-10-21: thousands of canvas lines made the coast and climate brushes lag on a big map - valp,
         Discord: 'turning off shore lines helps'); the pieces are worked out once per block of 8 x 8 points and kept
-        (_shore_cache) - a brush's tick (shore_dirty) works out only its blocks again, never while the brush is held."""
+        (_shore_cache) - a brush's tick (shore_dirty) works out only its blocks again, while the brush is held too."""
         if self.shore is None or self.z < SHORE_ZOOM:
             return
         img, metres = self.shore
@@ -838,7 +838,8 @@ class MapView(ttk.Frame):
             cache = self._shore_cache = (img, metres, {})
         blocks, B = cache[2], self.SHORE_BLOCK
         dirty = getattr(self, "shore_dirty", None)
-        if dirty and not self._spray:                   # what the brush changed: its blocks worked out again
+        if dirty:                                       # what the brush changed: its blocks worked out again - while
+            # it is held too, so the line follows the brush (the user, 2026-10-21: 'he sees nothing while he drags?')
             for x, y in dirty:
                 for dx in (-1, 0):
                     for dy in (-1, 0):
@@ -2654,7 +2655,7 @@ class MapView(ttk.Frame):
         box = (self.ox, self.oy, self.ox + cw / self.z, self.oy + ch / self.z)
         base = self._base()
         pic = view_of(base, box, (cw, ch), Image.NEAREST, self._field(), self._per_tile(base))
-        self._shore_into(pic)                           # in the picture: the brush's blocks again (not while held)
+        self._shore_into(pic)                           # in the picture: the brush's blocks again, live
         self._put_bg(pic)
 
     def _move(self, e):
