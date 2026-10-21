@@ -3277,6 +3277,24 @@ building smith
             launch.start({"exe": "C:\\G\\REX.exe", "args": ["-mod:My Mod", "-nm"], "cwd": "C:\\G"})
         sf.assert_called_once_with("C:\\G\\REX.exe", "runas", '"-mod:My Mod" -nm', "C:\\G")
 
+    def test_apply_on_a_page_with_nothing_kept_says_what_to_do(self):
+        """R-20261020-F7AA90: Apply on Recolour with nothing kept said 'its changes are kept by themselves - Apply
+        changes writes them' (read as a refusal). Now it names the page and what to do."""
+        try:
+            import tkinter as tk
+            root = tk.Tk()
+        except Exception as e:                        # no tkinter / no display
+            self.skipTest("no window: %s" % e)
+        from campaign_editor.gui_util import Page
+        try:
+            p = Page(root)
+            p.title("Recolour")
+            with self.assertRaises(ValueError) as got:
+                p.make_plan()
+            self.assertIn("Nothing to write yet from Recolour", str(got.exception))
+        finally:
+            root.destroy()
+
     def test_answers_come_after_the_report_window_closed(self):
         """R-20261014-D5B6A6: the Report window closed while the answers were still being fetched - the late answer
         touched its gone button ('invalid command name ...!button'). Now it is dropped quietly."""
