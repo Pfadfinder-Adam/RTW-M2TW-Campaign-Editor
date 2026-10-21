@@ -4,6 +4,7 @@
 
 ### Added
 - Interface > Campaign HUD: the campaign map's bottom panel as the game draws it (both games, the engines' own places), from the mod's pictures; right click a piece to replace its picture or set its place and size; preview on bigger screens; save as PNG.
+- Interface > Campaign HUD: a screenshot of the game over it to compare - how much of it shows (slider, [ ]), O shows / hides it.
 - Interface > Sprite sheets: right click a sprite to replace its picture (stretched, kept in shape or filling its box) or the whole page's; Undo, back to the files; written by Apply into the mod's own copy of the page, the click mask follows.
 - Interface > Sprite sheets: Place and size of a sprite - its box on the page and, on an engine's .sd.xml sheet, the size the game shows it at; the sheet's twin follows.
 - Units and Buildings: the block's lines also as text, as written in the file - this block or the whole file (line numbers, colours, Undo, Find, a wrong line underlined red); both views show the same changes, Apply writes them (renames drag their recruit lines and armies along). Open in Notepad++ (at the block's line). A right click on a line says what it means, its form (commas or spaces, values in order), a line like it, and the words it takes.
