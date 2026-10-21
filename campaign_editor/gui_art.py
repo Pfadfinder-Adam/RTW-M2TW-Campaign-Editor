@@ -158,7 +158,12 @@ class ArtEditor(ttk.Frame):
         kinds = set()
         row = ttk.Frame(host)                  # the map and the leader's face side by side, as the screen shows them
         row.pack(anchor="w")                   # (the user, 2026-10-10: 'the leader's portrait beside the map')
-        for p in FA.start_pictures(a.mod, a.v_campaign.get(), src_faction):
+        # a faction brought from another mod shows ITS pictures there, never the frame's (a tester, 2026-10-18: the
+        # leader's face was still the template's); the frame's copies its mod has none of are emptied on Apply
+        from .factionbring import select_screen_source
+        look_mod, look_camp, src_faction, frame_face = select_screen_source(
+            a.mod, a.v_campaign.get(), src_faction, None if a.editing() else getattr(a, "bring", None))
+        for p in FA.start_pictures(look_mod, look_camp, src_faction):
             kind = FA.start_kind(p)
             kinds.add(kind)
             leader = kind == FA.START_KINDS[1]
@@ -172,7 +177,7 @@ class ArtEditor(ttk.Frame):
             missing.append("no campaign-select map of its own in this campaign (map_%s.tga)" % src_faction)
         if FA.START_KINDS[1] not in kinds:
             # no leader_pic of its own: the screen shows its faction leader's portrait (all three games)
-            got = FA.leader_portrait(a.mod, a.v_campaign.get(), src_faction)
+            got = None if frame_face else FA.leader_portrait(look_mod, look_camp, src_faction)
             box = ttk.Frame(row)
             box.pack(side="left", anchor="nw", padx=(0, 8))
             ttk.Label(box, text="Leader's face", font=("", 9, "bold")).pack(anchor="w")
@@ -196,6 +201,9 @@ class ArtEditor(ttk.Frame):
                 ttk.Label(line, text="its leader's portrait", foreground="#666").pack(side="left")
                 _hint(line, got[1] + ". The faction-select screen shows it; change it in Characters (his "
                              "portrait).", width=420).pack(side="left", padx=2)
+            elif frame_face:                            # the frame's leader_pic copy is made an empty picture
+                ttk.Label(box, text="left empty on Apply (none of its own) - Replace... gives it one",
+                          foreground="#666", wraplength=150).pack(anchor="w")
             else:
                 ttk.Label(box, text="no faction leader on the map", foreground="#666", wraplength=150).pack(
                     anchor="w")

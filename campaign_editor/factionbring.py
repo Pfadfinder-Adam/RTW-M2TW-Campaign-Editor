@@ -563,6 +563,24 @@ def blank_frame_pictures(plan, campaign, picks_done, folder):
     return out
 
 
+def select_screen_source(mod, campaign, template, bring):
+    """Where the faction tab's select-screen pictures (the map, the leader's face) are read from: (mod, campaign,
+    faction, frame_face). A faction brought from another mod (bring = {'src', 'faction', 'campaign'}) shows ITS
+    pictures, never the frame's (a tester, 2026-10-18: the leader's face was still the template's); frame_face: the
+    frame has a leader_pic of its own here, which Apply empties (blank_frame_pictures) when the brought faction has
+    none - the screen then shows an empty picture, not the brought leader's portrait."""
+    from .factionart import START_KINDS, start_kind, start_pictures
+    if not bring:
+        return mod, campaign, template, False
+    try:
+        from .moddata import ModData
+        src = ModData(bring["src"])
+        frame_face = any(start_kind(p) == START_KINDS[1] for p in start_pictures(mod, campaign, template))
+        return src, bring.get("campaign") or campaign, bring["faction"], frame_face
+    except Exception:
+        return mod, campaign, template, False
+
+
 def own_select_map(plan, campaign, new):
     """A brought faction is made from zero (report #270: 'not a clone - pictures of the clone stayed'): its
     faction-select map is never its frame's copy (the frame's land lit). It gets a stand-in, this map with no land
@@ -649,4 +667,4 @@ def overlay(plan, campaign, bring):
                         new, plan.template, len(shared), len(brought)))
 
 
-__all__ = ["factions", "frame_of", "window_fields", "own_units", "overlay", "art_picks", "own_select_map"]
+__all__ = ["factions", "frame_of", "window_fields", "own_units", "overlay", "art_picks", "own_select_map", "select_screen_source"]
