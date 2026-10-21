@@ -11460,6 +11460,30 @@ building smith
         got = T.height_spray(img, c, r, "raise", 10, {}, dome=True)
         self.assertEqual(sorted(got), sorted(pts))                                           # exactly those, all raised
 
+    def test_mercenary_pool_naming_a_region_the_map_lacks_still_edits(self):
+        """R-20261020-0A520D: a pool of the mod naming a region its map lacks (North_America on a smaller map) - a
+        region moved out of that pool refused the whole write. Only the regions a pool gains are checked now."""
+        from campaign_editor import mercenaries as ME
+        camp = os.path.join(self.root, "data", "world", "maps", "campaign", "test")
+        mod_edu = os.path.join(self.root, "data", "export_descr_unit.txt")
+        with open(mod_edu) as fh:
+            old_edu = fh.read()
+        write(mod_edu, old_edu + "\ntype\t\tmerc spear\ndictionary\tmerc_spear\ncategory\tinfantry\nclass\t\tspearmen\n"
+              "attributes\tsea_faring, mercenary_unit\nownership\tslave\n")
+        write(os.path.join(camp, "descr_mercenaries.txt"),
+              "pool America\n\tregions A_R North_America\n\tunit merc spear\texp 0 cost 100 replenish 0.1 - 0.2 "
+              "max 2 initial 1\n")
+        mod = ModData(self.root)
+        _, pools = ME.read(mod, "test")
+        new = ME.Pool("Mine")
+        pools.append(new)
+        ME.give_regions(pools, new, ["A_R"])
+        new.units = [ME.Unit("merc spear", cost="50")]
+        plan = Plan(mod, "mercenaries", "test", {})
+        ME.plan_pools(plan, "test", pools)
+        self.assertEqual([(p.name, p.regions) for p in ME.read_lines(plan.files[ME.path_of(mod, "test")].texts())],
+                         [("America", ["North_America"]), ("Mine", ["A_R"])])
+
     def test_mercenary_pools(self):
         """Mercenaries window: pools read with every unit's numbers; a new pool of regions takes them out of their old
         pools (a pool left without a region goes), a unit's numbers changed, one added, a pool renamed - lines not

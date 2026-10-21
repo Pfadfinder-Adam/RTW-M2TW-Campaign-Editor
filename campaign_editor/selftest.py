@@ -2655,7 +2655,10 @@ def s_mercs(c, mod):
     units = ME.mercenary_units(mod)
     if not path or len(pools) < 2 or not units:
         raise Skip("no descr_mercenaries.txt with two pools, or no mercenary unit")
-    region = pools[0].regions[0]
+    known = mod.regions(c.campaign)
+    region = next((r for p in pools for r in p.regions if r in known), None)   # one the map has
+    if region is None:
+        raise Skip("no pool names a region of this map")
     new = ME.Pool("ce_test_pool")
     pools.append(new)
     ME.give_regions(pools, new, [region])
