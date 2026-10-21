@@ -1311,6 +1311,20 @@ class RecordEditor(ttk.Frame):
                     side="left")
                 ttk.Button(bar, text="Your own files...", command=lambda k=key, i=idx, m=model: self.own_files(
                     k, i, m)).pack(side="left", padx=(4, 0))
+                # every armour upgrade's own model in the list too, each viewed by itself (a modder, R-20261020-4B454C:
+                # 'show all the models the unit really has - soldiers, armour upgrades, mounts, officers')
+                for (lv, m), (words, uinfo) in zip(MO.armour_models(lines) if key == "soldier" else [], ups):
+                    if m.lower() == model.lower():
+                        continue
+                    urow = ttk.Frame(cell)
+                    urow.pack(anchor="w", pady=(2, 0))
+                    ttk.Label(urow, text="Armour upgrade%s: %s" % (" (level %s)" % lv if lv else "", m)).pack(
+                        side="left")
+                    if uinfo is None:
+                        ttk.Label(urow, text="  not in this mod's battle models", foreground="#a33").pack(side="left")
+                    else:
+                        ttk.Button(urow, text="View in 3D...", command=lambda i=uinfo, u=ups: self.view_model(
+                            i, mount=mount, unit=True, upgrades=u)).pack(side="left", padx=4)
         # the mount (horse, camel, elephant ...): its own model, from descr_mount.txt
         if kind:
             r = len(slots)
