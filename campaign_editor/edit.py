@@ -193,15 +193,27 @@ def edit(mod, campaign, faction, opts):
 # ---------------------------------------------------------------------------
 def _texts(plan, now, campaign):
     o, F = plan.opts, plan.new.upper()
+    # the old words of the three names swapped for the new ones in the faction's other strings - only a word that
+    # means ONE thing: when two names had the same old word ('Arverni' as name, short name and adjective) and they
+    # now differ, which use is which cannot be told there, so the names' own strings are set alone (report
+    # R-20261020-704A13: a new full name became the short name and the adjective too)
+    olds = {}
+    for k in ("display_name", "short_name", "adjective"):
+        if now.get(k):
+            olds.setdefault(now[k], set()).add(o.get(k) or now[k])
     pairs = []
     for k in ("display_name", "short_name", "adjective"):
         old, new = now.get(k), o.get(k)
-        if old and new and old != new:
+        if old and new and old != new and olds[old] == {new}:
             pairs += [(old, new)] + ([(old.upper(), new.upper())] if old.upper() != old else [])
     pairs.sort(key=lambda p: -len(p[0]))
     set_to = {}
     if o.get("display_name") and o["display_name"] != now.get("display_name"):
         set_to[F] = o["display_name"]
+    if o.get("short_name") and now.get("short_name") and o["short_name"] != now["short_name"]:
+        set_to["ST_" + F] = o["short_name"]
+    adj_old, adj_new = now.get("adjective"), o.get("adjective")
+    adj = (adj_old, adj_new) if adj_old and adj_new and adj_old != adj_new else None
     if o.get("description") is not None and o.get("description") != now.get("description"):
         set_to[F + "_DESCR"] = o["description"]
     for suffix, k in EXTRA_TEXTS.items():
@@ -222,7 +234,7 @@ def _texts(plan, now, campaign):
         keys = {m.group(2).upper() for p in plan.mod.campaign_text_files(campaign)
                 for l in plan.mod.load(p).texts() for m in [RE_KEY.match(l)] if m}
         set_to[description_key(plan.new, campaign, keys) + "_DESCR"] = long_new
-    if not pairs and not set_to:
+    if not pairs and not set_to and not adj:
         return
     fe = FE_NAMES.get(plan.new)
     word = re.compile(r"(?<![A-Z0-9])(%s)(?![A-Z0-9])" % "|".join(re.escape(x) for x in (F, fe) if x))
@@ -248,6 +260,8 @@ def _texts(plan, now, campaign):
                 old = [value] + texts[i + 1:end]
                 if key in set_to:
                     new = [gap + set_to[key].replace("\n", "\\n")]
+                elif adj and key.startswith("EMT_" + F + "_") and value.lstrip().startswith(adj[0] + " "):
+                    new = [gap + adj[1] + value.lstrip()[len(adj[0]):]] + old[1:]   # 'Arverni Spy' -> 'Arvernian Spy'
                 else:
                     new = list(old)
                     for a, b in pairs:
