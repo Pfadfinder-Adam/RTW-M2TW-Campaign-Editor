@@ -472,10 +472,10 @@ def make(plan, campaign, faction=None, size=SIZE, regions=1, others=0):
                         lay["port"][0], lay["port"][1], resource, lay["resource"][0], lay["resource"][1]))
     if rome and len(owners) < 5:
         plan.warn(None, "Rome: with fewer than 5 factions alive the Faction Rankings 'Top 5' view crashes the game "
-                        "(the engine's own loop) - do not pick it, or make the map with 5 factions")
-    if not rome and len(picked) < 10:
-        plan.warn(None, "Medieval II: modders say the game wants 10 regions or more (not found in the engine's "
-                        "code) - try it; if it does not load, make the map with 10 regions")
+                        "(the engine's own loop reads past its list) - do not pick it, or make the map with 5 factions")
+    if rome:                                            # the engine source: END_CAMPAIGN_SCROLL, < 50 regions
+        plan.note(None, "Rome: on a map of fewer than 50 regions (the sea's counted) the campaign's victory scroll "
+                        "ends the game instead of offering to play on - not a crash")
     return region
 
 
