@@ -2020,6 +2020,7 @@ class App(tk.Tk):
         """New faction (clone a template) or Edit faction (change one in place); read=False: the side's kept work is
         put back right after (_bring_side), so the edited faction is not read from the files again."""
         edit = self.editing()
+        self._clear_form(keep_bring=not edit)          # nothing of the faction shown before (its kept work comes back)
         self.fill_faction_list()
         self.chk_playable.configure(state="normal")
         self._lock_frame(self.lf2, False)
@@ -2088,6 +2089,7 @@ class App(tk.Tk):
         except Exception as e:
             messagebox.showerror(APP, str(e))
             return
+        self._clear_form()                               # nothing of the faction shown before stays
         self.editing_now = now
         self.v["name"].set(faction)
         for k in ("display_name", "short_name", "adjective", "ai", "religion", "culture", "leader_title", "heir_title"):
@@ -5177,6 +5179,12 @@ class App(tk.Tk):
                         return                        # not written (refused or failed): stay
                     self.v["template"].set(t)
             self.load_existing()
+        else:
+            # a new template: a new faction from the start - nothing typed or picked for the one before is kept
+            # (a brought faction stays: its own things fill the form after this)
+            self._clear_form(keep_bring=True)
+            self.refresh_field()
+            self.refresh_chosen()
         if self.tab_name() in self.FACTION_TABS and self._family_open:     # the family tree open in the form's place
             self.family_editor.load()
         self.show_family_button()
@@ -5245,6 +5253,41 @@ class App(tk.Tk):
         from .gui_factionbring import FactionBringWindow
         FactionBringWindow(self, self.set_bring)
 
+    def _clear_form(self, keep_bring=False):
+        """The faction form emptied - every field, text, colour, picture picked, town, garrison, army, diplomacy,
+        name list, figure - nothing of the faction shown before is left to be written for the next one (the user,
+        2026-10-21: 'I made a faction, pick another - the fields are still full; the flags of the Huns came along').
+        One place, called when New faction opens, a template is picked, a faction is brought, an Edit faction is
+        read. keep_bring: the faction brought from another mod stays picked (its own things fill the form next)."""
+        for k, var in self.v.items():
+            if k != "template":
+                var.set("")
+        self.v["leader_age"].set("40")
+        self.v["heir_age"].set("22")
+        for t in (self.t_descr, self.t_long):
+            t.delete("1.0", "end")
+        self.colours = {"primary": None, "secondary": None}
+        for b in (self.b_primary, self.b_secondary):
+            b.configure(style="TButton")
+        for k in self.SIDE_KEYS:
+            if k == "dip_set":                            # the diplomacy tab holds this very dict
+                self.dip_set.clear()
+            else:
+                setattr(self, k, [] if isinstance(getattr(self, k, None), list) else {})
+        self._auto_titles, self._auto_denari, self._auto_religion = {}, None, None
+        self.v_playable.set(True)
+        self.v_triggers.set(True)
+        self.v_art.set(True)
+        self.v_dip.set("neutral")
+        for ed in (getattr(self, "roster_editor", None), getattr(self, "family_editor", None)):
+            if ed is not None:
+                ed.forget()
+        self.undo_stack, self.redo_stack = [], []
+        if not keep_bring and getattr(self, "bring", None):
+            self.bring = None
+            self.lbl_bring.configure(text="")
+            self.b_unbring.pack_forget()
+
     def _from_zero_look(self):
         """A faction brought from another mod is made from zero: nothing of the template is seen (the user,
         2026-10-15, again: 'why does it still say Gauls - misleading'). The template row, 'Copy art named after the
@@ -5291,6 +5334,7 @@ class App(tk.Tk):
             self.template_changed()
             self.status.set("New faction: a copy of the template again.")
             return
+        self._clear_form(keep_bring=True)                # from zero: only what the brought faction has fills it
         fields = picked.get("fields") or {}
         frame = FB.frame_of(self.mod, picked.get("culture"))
         if frame:
