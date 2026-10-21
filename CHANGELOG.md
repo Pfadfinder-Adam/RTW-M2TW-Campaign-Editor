@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### Added
+- Interface > Sprite sheets: right click a sprite to replace its picture (stretched, kept in shape or filling its box) or the whole page's; Undo, back to the files; written by Apply into the mod's own copy of the page, the click mask follows.
 - Units and Buildings: the block's lines also as text, as written in the file - this block or the whole file (line numbers, colours, Undo, Find, a wrong line underlined red); both views show the same changes, Apply writes them (renames drag their recruit lines and armies along). Open in Notepad++ (at the block's line). A right click on a line says what it means, its form (commas or spaces, values in order), a line like it, and the words it takes.
 - The game stopped? The editor notices it (after Start the game, or at its next start when it was closed) and asks once whether to send a report - the reason in one line, nothing sent without your click; can be switched off in Settings.
 - Coast & heights drawn by the graphics card straight into the window on Windows (the map, the shore line and the brush; moving, zooming and painting no longer remake a picture each time); the frame's time shows beside the zoom. Elsewhere, or if the card fails, it draws as before.

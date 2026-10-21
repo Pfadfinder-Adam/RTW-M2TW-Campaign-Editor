@@ -1,7 +1,8 @@
 """Interface > Sprite sheets: every sprite sheet of the mod as the game reads it (symbols.all_sheets - the binary
 .rsd / .sd of the plain games, the .sd.xml of an engine on 'sprite_format xml'), page by page, with the page's picture
 of each culture and the box of every sprite on it. Find looks through every sheet; a sprite's right click opens it big
-or saves it (or the whole page) as a PNG. Read only: nothing here writes the mod."""
+or saves it (or the whole page) as a PNG, or replaces its picture (or the whole page's) - kept for the main window's
+Apply changes, written into the mod's own copy of the page (spriteedit)."""
 
 import os
 import tkinter as tk
@@ -21,6 +22,7 @@ class SpriteSheetsPanel(ttk.Frame):
         self.sheets, self.sheet, self.page, self.culture = [], None, None, None
         self.picked, self.hover = None, None
         self._img, self._shown, self._photo, self._cultures = None, None, None, []
+        self.changes, self.undo, self.redo = {}, [], []     # {(page, culture): new page picture}; steps back / on
         self._build()
 
     # ---- reading ----
@@ -29,6 +31,8 @@ class SpriteSheetsPanel(ttk.Frame):
         mod = self.app.mod
         if mod is self.mod and not force:
             return
+        if self.mod is None or mod is None or mod.data != self.mod.data:
+            self.changes, self.undo, self.redo = {}, [], []     # another mod: its pages are others
         self.mod = mod
         self.sheets = SY.all_sheets(mod) if mod else []
         self.cb_sheet.configure(values=[self._sheet_label(s) for s in self.sheets])
@@ -78,12 +82,13 @@ class SpriteSheetsPanel(ttk.Frame):
         shown as picture tools show them)."""
         self._img = self._shown = None
         path = dict(self._cultures).get(self.culture)
-        if not path:
+        changed = self.changes.get((self.page, self.culture))
+        if not path and changed is None:
             return
         try:
             from PIL import Image
             from .recolour import read_picture
-            self._img = read_picture(path).convert("RGBA")
+            self._img = changed.copy() if changed is not None else read_picture(path).convert("RGBA")
             w, h = self._img.size
             bg = Image.new("RGBA", (w, h), (60, 60, 60, 255))
             for y in range(0, h, 16):
@@ -317,6 +322,12 @@ class SpriteSheetsPanel(ttk.Frame):
             m.add_command(label="Copy its name", command=self.copy_name)
             m.add_separator()
         m.add_command(label="Save the whole page as PNG...", command=lambda: self.save_png(False))
+        m.add_separator()
+        if self.picked:
+            m.add_command(label="Replace this sprite's picture...", command=self.replace_sprite)
+        m.add_command(label="Replace the whole page's picture...", command=self.replace_page)
+        if (self.page, self.culture) in self.changes:
+            m.add_command(label="Back to the page as it is in the files", command=self.page_back)
         try:
             m.tk_popup(e.x_root, e.y_root)
         finally:
@@ -359,3 +370,101 @@ class SpriteSheetsPanel(ttk.Frame):
             messagebox.showerror(TITLE, "%s could not be saved: %s" % (out, e), parent=self)
             return
         self.lbl_info.configure(text="Saved %s" % out)
+
+    # ---- changes (kept for Apply changes) ----
+    def _set(self, im):
+        key = (self.page, self.culture)
+        self.undo.append((key, self.changes.get(key)))
+        self.redo = []
+        if im is None:
+            self.changes.pop(key, None)
+        else:
+            self.changes[key] = im
+        self._read_picture()
+        self.draw()
+        self.app.update_actions() if hasattr(self.app, "update_actions") else None
+
+    def _pick_file(self):
+        return filedialog.askopenfilename(parent=self, title="A picture", filetypes=[
+            ("Pictures", "*.png *.tga *.dds *.jpg *.jpeg *.bmp"), ("All files", "*.*")])
+
+    def replace_sprite(self):
+        """The sprite's picture: a file of yours put in its box (stretched, kept in shape or filled), the rest of the
+        page as it was."""
+        box = self._crop()
+        if self._img is None or not box:
+            messagebox.showinfo(TITLE, "No picture of this page was found.", parent=self)
+            return
+        src = self._pick_file()
+        if not src:
+            return
+        from .gui_util import ask_choice
+        k = ask_choice(self, TITLE, "%s is %d x %d on the page. Your picture:" % (self.picked, box[2], box[3]),
+                       ["Stretch it to the box", "Keep its shape (the rest clear)", "Fill the box (cut what is over)",
+                        "Cancel"], default=0, cancel=3)
+        if k == 3 or k is None:
+            return
+        from . import spriteedit
+        from .recolour import read_picture
+        try:
+            pic = read_picture(src)
+        except Exception as e:
+            messagebox.showerror(TITLE, "%s cannot be read: %s" % (src, e), parent=self)
+            return
+        self._set(spriteedit.put_sprite(self._img, box, pic, ("stretch", "fit", "crop")[k]))
+        self.lbl_info.configure(text="%s replaced - Apply changes writes the page (%s) into the mod" % (
+            self.picked, self.page))
+
+    def replace_page(self):
+        """The whole page's picture: a file of yours, made the page's size (the sprites' boxes stay where they are)."""
+        if self._img is None:
+            messagebox.showinfo(TITLE, "No picture of this page was found.", parent=self)
+            return
+        src = self._pick_file()
+        if not src:
+            return
+        from . import spriteedit
+        from .recolour import read_picture
+        try:
+            pic = read_picture(src)
+        except Exception as e:
+            messagebox.showerror(TITLE, "%s cannot be read: %s" % (src, e), parent=self)
+            return
+        self._set(spriteedit.fit(pic, self._img.size))
+        self.lbl_info.configure(text="Page %s replaced - Apply changes writes it into the mod" % self.page)
+
+    def page_back(self):
+        self._set(None)
+        self.lbl_info.configure(text="Page %s: as it is in the files" % self.page)
+
+    def step(self, back=True):
+        """Undo (back) / Redo of the picture changes. True when there was a step."""
+        src, dst = (self.undo, self.redo) if back else (self.redo, self.undo)
+        if not src:
+            return False
+        key, im = src.pop()
+        dst.append((key, self.changes.get(key)))
+        if im is None:
+            self.changes.pop(key, None)
+        else:
+            self.changes[key] = im
+        if key[0] == self.page:
+            self._read_picture()
+            self.draw()
+        return True
+
+    def dirty(self):
+        return bool(self.changes)
+
+    def forget(self):
+        """The changes written (or thrown away): the sheets read again the next time they are shown."""
+        self.changes, self.undo, self.redo = {}, [], []
+        self.mod = None
+
+    def plan_into(self, plan):
+        """The changed pages written by plan (spriteedit.write), sheet by sheet."""
+        from . import spriteedit
+        for sh in self.sheets:
+            mine = {k: v for k, v in self.changes.items() if k[0] in dict(sh["pages"])}
+            if mine:
+                spriteedit.write(plan, self.mod, sh, mine)
