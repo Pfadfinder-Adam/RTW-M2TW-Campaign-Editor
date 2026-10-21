@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### Added
+- Coast & heights drawn by the graphics card straight into the window on Windows (the map, the shore line and the brush; moving, zooming and painting no longer remake a picture each time); the frame's time shows beside the zoom. Elsewhere, or if the card fails, it draws as before.
 - Check mod files names the files a mod built on the plain game holds that are still the game's own, byte for byte, with **Take them out** (backed up - Restore puts them back).
 - The editor's own look: Tools > Edit the editor's look - drag any button, tick or label anywhere, rename it, give it a hover text or a width, hide it, take it back; kept for every start. The editor's language from a language file (Settings), and Words to translate writes every word for translators.
 

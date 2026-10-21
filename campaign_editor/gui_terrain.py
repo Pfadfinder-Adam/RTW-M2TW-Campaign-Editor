@@ -141,8 +141,16 @@ class TerrainEditor(ttk.Frame):
             self.v_what.set(self._last_of.get(group) or mine[0])
             self.fill_palette()
         self._rivers_for_mode()
+        # Coast & heights is drawn by the graphics card where it can (glflat; the user, 2026-10-21: 'step 2 at
+        # once') - only the heights, the water, the shore line and the brush there; Terrain stays on the canvas
+        was = self.view.gl_wanted
+        self.view.gl_wanted = group == "heights"
+        if was and not self.view.gl_wanted:
+            self.view.gl_off()
         if (self.view.shore is not None) != self._shore_wanted() and self.mod is not None:
             self._shore_toggled()                         # the shore line on in Coast & heights, off in Terrain
+        elif was != self.view.gl_wanted and self.mod is not None:
+            self.view.render()
 
     def _grid_toggled(self):
         """The lines between the tiles up close, on or off (the same switch as Layers > grid, kept)."""

@@ -17759,6 +17759,103 @@ building smith
         finally:
             root.destroy()
 
+    def test_heights_map_drawn_by_the_card_as_the_canvas_draws_it(self):
+        """Coast & heights on the graphics card (the user, 2026-10-21: 'step 2'): the card shows the map's picture
+        exactly where the canvas way (view_of) puts it - every pixel inside the map the same - and the canvas's own
+        lines (the brush's outline) come over it."""
+        try:
+            from PIL import Image
+            from campaign_editor import glmap
+            from campaign_editor.glflat import FlatGL, segments_rows
+            from campaign_editor.gui_map import view_of
+            ctx = glmap.context()
+        except Exception as e:
+            self.skipTest("no OpenGL here: %s" % e)
+        if ctx is None:
+            self.skipTest("no OpenGL here")
+        import numpy as np
+        base = Image.new("RGB", (40, 20))                      # 20 x 10 tiles, 2 px a tile: a pattern
+        base.putdata([((x * 37) % 256, (y * 53) % 256, (x * y) % 256) for y in range(20) for x in range(40)])
+        W, H, z, ox, oy = 300, 200, 13.0, 3.25, 1.5
+        flat = FlatGL(ctx)
+        flat.set_picture(base)
+        white = segments_rows([(10, 10, 100, 10)], 2, (1, 1, 1, 1))
+        flat.frame(W, H, (ox, oy, z, 20, 10), (10, 20, 30), 2, white)
+        got = Image.frombytes("RGB", (W, H), flat.read())
+        want = view_of(base, (ox, oy, ox + W / z, oy + H / z), (W, H), Image.NEAREST, (10, 20, 30), 2)
+        a, b = np.asarray(got, np.int32), np.asarray(want, np.int32)
+        # every pixel inside the map as the canvas's, or its neighbour's (a tile's edge may round a pixel the other way)
+        near = np.ones((130, 180), bool)
+        for dx in (-1, 0, 1):
+            for dy in (-1, 0, 1):
+                near &= np.abs(a[20:150, 20:200] - b[20 + dy:150 + dy, 20 + dx:200 + dx]).max(axis=2) > 0
+        self.assertFalse(near.any())
+        self.assertEqual(tuple(a[10, 50]), (255, 255, 255))     # the canvas's line over the map
+        flat.release()
+
+    def test_coast_and_heights_view_goes_the_cards_way_and_falls_back(self):
+        """MapView with gl_wanted (Coast & heights): the map is drawn by the card and shown in the window - no picture
+        made on the canvas; when showing fails, the view goes back to the canvas way at once (never a crash)."""
+        try:
+            import tkinter as tk
+            from unittest import mock
+            from campaign_editor import glmap, glwindow
+            from campaign_editor.gui_map import MapView
+            from campaign_editor.mapdata import CampaignMap
+            ctx = glmap.context()
+            root = tk.Tk()
+        except Exception as e:
+            self.skipTest("no window / OpenGL: %s" % e)
+        if ctx is None:
+            root.destroy()
+            self.skipTest("no OpenGL here")
+        shown = []
+        try:
+            mod = ModData(self.root)
+            v = MapView(root)
+            v.pack(fill="both", expand=True)
+            root.geometry("400x300")
+            root.update()
+            v.load(CampaignMap(mod, "test"), {}, {}, region_mode=True, plain=True)
+            with mock.patch.object(glwindow.WindowGL, "attach", lambda self, hwnd: True), \
+                    mock.patch.object(glwindow.WindowGL, "present", lambda self, fbo, W, H, lines=(): shown.append((W, H))):
+                v.gl_wanted = True
+                v._render()
+                root.update()
+                self.assertTrue(shown)                                   # the card's frame shown in the window
+                self.assertEqual([i for i in v.canvas.find_withtag("bg") if v.canvas.type(i) == "image"], [])
+            with mock.patch.object(glwindow.WindowGL, "present", side_effect=RuntimeError("lost")):
+                v._gl_show()
+            root.after(80, root.quit)                                    # the canvas way's drawing (render: soon)
+            root.mainloop()
+            self.assertIs(v._glstate, False)                             # back to the canvas way
+            self.assertTrue([i for i in v.canvas.find_withtag("bg") if v.canvas.type(i) == "image"])
+        finally:
+            root.destroy()
+
+    def test_canvas_lines_and_shapes_for_the_card(self):
+        """What the window draws over the map (the brush's outline: lines, rectangles, ovals) is taken from the
+        canvas for the card, in order; the map's own picture item ('bg') is left out."""
+        try:
+            import tkinter as tk
+            from campaign_editor.glflat import canvas_rows
+            root = tk.Tk()
+        except Exception as e:
+            self.skipTest("no window: %s" % e)
+        try:
+            c = tk.Canvas(root, width=100, height=100)
+            c.create_rectangle(0, 0, 0, 0, state="hidden", tags=("bg",))
+            c.create_line(0, 0, 10, 0, fill="white", width=2)
+            c.create_rectangle(5, 5, 15, 15, outline="white")
+            c.create_oval(20, 20, 40, 40, outline="red", fill="blue")
+            rows = canvas_rows(c)
+            self.assertEqual(rows.shape[1], 6)
+            self.assertEqual(len(rows) % 3, 0)
+            self.assertGreater(len(rows), 6 + 4 * 6)
+            self.assertTrue(((rows[:, 2] == 0) & (rows[:, 4] == 1)).any())      # the blue fill
+        finally:
+            root.destroy()
+
     def test_region_tags_picked_from_a_drop_down(self):
         """New region / Edit region: the region tags are picked from the mod's own under an arrow (the user,
         2026-10-10: 'click 1, 2, 3, 4 and they are added; a click again takes it out'); the box stays free to type
