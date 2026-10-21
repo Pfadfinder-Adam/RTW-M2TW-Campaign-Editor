@@ -6,6 +6,9 @@
 - Check mod files names the files a mod built on the plain game holds that are still the game's own, byte for byte, with **Take them out** (backed up - Restore puts them back).
 - The editor's own look: Tools > Edit the editor's look - drag any button, tick or label anywhere, rename it, give it a hover text or a width, hide it, take it back; kept for every start. The editor's language from a language file (Settings), and Words to translate writes every word for translators.
 
+### Changed
+- New mod folder puts no switched-off engine settings files (descr_ex, descr_caps_ex) in: the mod runs on the engine's defaults as before; the editor writes the line a change needs, Check mod files' Copy them in brings the whole list.
+
 ### Fixed
 - A mod built on the plain game got the game's whole campaign folder (descr_strat, events, scripts, texts) when a faction's map picture was redrawn, and those copies hid the modder's own files -> now only the changed picture goes in, and a map change brings only the map's own files.
 - The editor's automatic fixes (faction-select slots, 'faction destroyed' pictures, a later faction holding a town) put the game's own campaign files into a mod built on the plain game though nothing in them was changed -> they touch only files you changed; a picture written with the game's very bytes is not copied in.

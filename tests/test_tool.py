@@ -9357,10 +9357,11 @@ building smith
         restore(ModData(mod.data), backups(ModData(mod.data))[0])
         self.assertFalse(os.path.exists(os.path.join(mod.data, "descr_ex.txt")))
 
-    def test_new_mod_folder_gets_the_engine_settings_switched_off(self):
-        """New mod folder on a game with REX / M2EX puts the engine's settings files the game has into the new mod at
-        once, every setting switched off (the mod runs as on the engine's defaults; nothing to ask on Load)."""
-        from campaign_editor import gamefix
+    def test_new_mod_folder_gets_no_engine_settings_files(self):
+        """New mod folder on a game with REX / M2EX puts no engine settings file in (the user, 2026-10-21: only what
+        was changed) - the mod runs on the engine's defaults; Check mod files offers 'Copy them in'; a faction over
+        the limit writes the mod's own descr_ex.txt with the one line it needs."""
+        from campaign_editor import check, gamefix
         from campaign_editor.newmod import create_mod
         game = os.path.join(self.root, "game")
         write(os.path.join(game, "medieval2.exe"), "x")
@@ -9369,10 +9370,10 @@ building smith
         write(os.path.join(game, "data", "descr_religions.txt"), "x\n")
         write(os.path.join(game, "data", "descr_sm_factions.txt"), SM)
         data, stats = create_mod(os.path.join(game, "data"), "fresh")
-        with open(os.path.join(data, "descr_ex.txt"), "rb") as fh:
-            self.assertEqual(fh.read().replace(b"\r\n", b"\n"), b";max_factions 31\n")
-        self.assertEqual(stats["engine_settings"], ["descr_ex.txt"])
-        self.assertEqual(gamefix.missing_engine_files(ModData(data)), [])
+        self.assertFalse(os.path.exists(os.path.join(data, "descr_ex.txt")))
+        self.assertNotIn("engine_settings", stats)
+        self.assertEqual(gamefix.missing_engine_files(ModData(data)), ["descr_ex.txt"])
+        self.assertEqual(check.fix_of(gamefix.engine_files_words(ModData(data))), ("Copy them in", "engine_files"))
 
     def test_engine_files_copied_with_every_setting_off(self):
         """Report #174: the game's descr_caps_ex.txt copied into a mod as it was switched M2EX to

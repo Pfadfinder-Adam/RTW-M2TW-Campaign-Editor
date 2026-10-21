@@ -223,13 +223,10 @@ def create_mod(data_dir, name, copy_all=False, progress=None):
         for n, text in starts.items():
             with open(os.path.join(target, n), "wb") as f:
                 f.write(text.encode("latin-1"))
-        # the engine's settings files (REX / M2EX) the game has, every setting off: the mod runs as on the engine's
-        # defaults and Load has nothing to ask (the user, 2026-10-10)
-        from .gamefix import engine_settings_into
-        from .moddata import _ci
-        gdata = _ci(game, "data") if game else None
-        stats["engine_settings"] = engine_settings_into(os.path.join(target, "data"), gdata) if gdata and \
-            os.path.isdir(os.path.join(target, "data")) else []
+        # no engine settings files (REX / M2EX's descr_ex / descr_caps_ex): a mod without them runs on the engine's
+        # defaults, exactly as with every line switched off - the editor writes one when a setting is changed (the
+        # faction limit, Campaign rules), and Check mod files' 'Copy them in' brings the whole list (the user,
+        # 2026-10-21: the mod holds only what was changed; replaces 2026-10-10's 'put them in at once')
         with open(os.path.join(target, MARKER), "w", encoding="utf-8") as f:
             json.dump({"base": base_name or "(game)", "linked": link_ok[0]}, f, indent=2)
     except Exception:
