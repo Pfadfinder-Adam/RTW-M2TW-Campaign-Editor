@@ -237,6 +237,8 @@ Medieval II: the tool loads and edits it (factions, towns, map, its agents such 
 >    names cut out, as one `.zip` in `CampaignEditor\CampaignEditor_logs` next to the exe, to send yourself.
 > 2. **A video or a screenshot** of what you did and what went wrong.
 >
+> When the game itself stops (crashes), the tool notices it - right away after **Start the game**, or the next time you open the tool - and asks once whether to send a report, with the reason in one line. Nothing is sent without your click; **Settings** can switch the question off.
+>
 > With these the cause is usually found and fixed **the same day** (the logs name the file, line and
 > the game's own error); without them it is guesswork and takes much longer.
 

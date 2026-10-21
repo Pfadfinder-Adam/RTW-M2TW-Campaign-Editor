@@ -17065,6 +17065,68 @@ building smith
         for p, data in before.items():
             self.assertEqual(open(p, "rb").read(), data)
 
+    def test_a_game_crash_is_offered_as_a_report_once(self):
+        """The user, 2026-10-21: people wait instead of pressing Report a bug. A crash of the game (a stop in its log,
+        or a crash report of the last run) is offered once - after Start the game (Watch: the log read once it has
+        stayed still) and at the editor's start (unseen); a normal close is not; switched off in Settings, never."""
+        import time as _t
+        from unittest import mock
+        from campaign_editor import crashwatch, settings
+        store = {}
+        game = os.path.join(self.root, "game")
+        os.makedirs(game, exist_ok=True)
+        write(os.path.join(game, "REX.exe"), "exe")
+        stop = ("23:24:51.639 [core.assert] [fatal] ASSERT FAILED: src\\game\\menu\\menu_layout.cpp(282): new_art\n"
+                "failed to find art piece 'X'\n  at   src/core/system/assert.cpp (477): x\n")
+        closed = "10:00:00.000 [system.rpt] [info] libs called display_close().\n"
+        logp = os.path.join(game, "system.log.txt")
+        with mock.patch.object(settings, "get", lambda k, d=None: store.get(k, d)), \
+                mock.patch.object(settings, "put", lambda k, v: store.__setitem__(k, v)):
+            write(logp, closed)
+            self.assertIsNone(crashwatch.unseen(game))                          # closed in the usual way
+            write(logp, stop)
+            c = crashwatch.unseen(game)
+            self.assertIn("failed to find art piece 'X'", c["why"])
+            self.assertIn("Send a report?", crashwatch.question(c))
+            crashwatch.mark_seen(c)
+            self.assertIsNone(crashwatch.unseen(game))                          # asked once only
+            # after Start the game: nothing while the log is being written, the crash once it stays still
+            w = crashwatch.Watch(game, now=_t.time() - 100)
+            write(logp, stop + "more\n")
+            now = _t.time()
+            self.assertIsNone(w.step(now))                                      # still being written
+            c = w.step(now + crashwatch.QUIET + 1)
+            self.assertIsNotNone(c)
+            self.assertTrue(w.done)
+            # a crash report of the run (REX's reports folder) is a crash even when the log ends calmly
+            crashwatch.mark_seen(c)
+            write(logp, closed)
+            write(os.path.join(game, "reports", "report-me-1-26_10_21.txt"), "EXCEPTION_ACCESS_VIOLATION\n")
+            c = crashwatch.unseen(game)
+            self.assertIn("crash report", c["why"])
+            store["crash_offer"] = False
+            self.assertIsNone(crashwatch.unseen(game))                          # switched off
+
+    def test_the_crash_offer_opens_report_a_bug(self):
+        """The offer's 'Send a report...' opens Report a bug with the reason written in; 'Not now' sends nothing; either
+        way it is not asked again (mark_seen)."""
+        from types import SimpleNamespace
+        from unittest import mock
+        try:
+            from campaign_editor import gui
+        except Exception as e:                          # no tkinter: not tested here
+            self.skipTest("no tkinter: %s" % e)
+        from campaign_editor import crashwatch
+        c = {"key": "k", "when": 1.0, "why": "failed to find art piece 'X'"}
+        for answer, want in ((True, ["The game stopped: failed to find art piece 'X'"]), (False, [])):
+            sent, seen = [], []
+            app = SimpleNamespace(send_report=sent.append)
+            with mock.patch.object(gui, "ask", lambda *a, **k: answer), \
+                    mock.patch.object(crashwatch, "mark_seen", seen.append):
+                gui.App.check_game_crash(app, c)
+            self.assertEqual(sent, want)
+            self.assertEqual(seen, [c])
+
     def test_the_crash_doctors_verdict(self):
         """The crash doctor (the user, 2026-10-18): the engine writes what went wrong on the line after a fatal line -
         that is the verdict, on the report's first line; a '[fatal] ERROR' the game goes on after (a fallback) is
