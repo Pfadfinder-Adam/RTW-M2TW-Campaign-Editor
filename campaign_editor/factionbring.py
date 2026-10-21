@@ -514,6 +514,55 @@ def art_picks(src, campaign, faction, new, folder):
     return out
 
 
+def blank_frame_pictures(plan, campaign, picks_done, folder):
+    """A brought faction is made from zero (the user, 2026-10-21: 'I got the Huns' flags - flags, icons, pictures:
+    zero, nothing'): every picture the frame's copy put under the new faction's name (its buttons, logos, flag,
+    banners...) that the brought faction has no picture of its own for is made EMPTY (a clear picture of the same
+    size and format) - never the frame's. The file is there, so the game finds it; the modder gives his own on the
+    Art tab. [the data paths emptied]."""
+    from . import factionart as FA
+    t, new = plan.template, plan.new
+    try:
+        pics = FA.faction_pictures(plan.mod, campaign, t)
+    except Exception:
+        return []
+    try:
+        from .symbols import entries as symbol_entries
+        pics = pics + symbol_entries(plan.mod, t)
+    except Exception:
+        pass
+    own = re.compile(r"(?<![a-z0-9])%s(?![a-z0-9])" % re.escape(t), re.I)
+    art = plan.opts.setdefault("art", {})
+    blank, out = None, []
+    # its campaign-select map gets the stand-in of this map (own_select_map), not an empty picture
+    select_map = os.path.relpath(FA.map_name(plan.mod.campaign_dir(campaign), new), plan.mod.data).replace("\\", "/")
+    for e in pics:
+        rel = e.get("rel") or ""
+        if rel.startswith("symbol:"):
+            mine = rel                                  # its own flag slot / logos (symbols.give_own made them)
+        elif own.search(rel):
+            mine = own.sub(new, rel)
+        else:
+            continue                                    # shared with others (routing, rebels): not the frame's own
+        if mine in art or mine in picks_done or mine.lower() == select_map.lower():
+            continue
+        if blank is None:
+            try:
+                from PIL import Image
+                os.makedirs(folder, exist_ok=True)
+                blank = os.path.join(folder, "empty_picture.png")
+                Image.new("RGBA", (64, 64), (0, 0, 0, 0)).save(blank)
+            except Exception:
+                return out                              # no Pillow: the frame's copies stay (said in the note)
+        art[mine] = blank
+        out.append(mine)
+    if out:
+        plan.note(None, "%s from zero: %d picture(s) the brought faction has none of are left EMPTY, not %s's (%s) - "
+                        "give its own on the Art tab" % (new, len(out), t, ", ".join(sorted(out)[:6]) +
+                                                         (" ..." if len(out) > 6 else "")))
+    return out
+
+
 def own_select_map(plan, campaign, new):
     """A brought faction is made from zero (report #270: 'not a clone - pictures of the clone stayed'): its
     faction-select map is never its frame's copy (the frame's land lit). It gets a stand-in, this map with no land
@@ -576,7 +625,8 @@ def overlay(plan, campaign, bring):
         from . import log
         folder = os.path.join(log.logs_dir() or os.path.expanduser("~"), "brought_pictures")
         art = plan.opts.setdefault("art", {})
-        for rel, pic in art_picks(src, bring.get("campaign") or campaign, faction, new, folder).items():
+        picks = art_picks(src, bring.get("campaign") or campaign, faction, new, folder)
+        for rel, pic in picks.items():
             if rel in art:
                 continue
             if not rel.startswith("symbol:") and _kind(pic) == _kind(rel):
@@ -584,6 +634,7 @@ def overlay(plan, campaign, bring):
                 _put_over(plan, pic, dst)                # over the frame's copy queued there
             else:
                 art[rel] = pic                          # a cut-out or another format: made to fit (Art's way)
+        blank_frame_pictures(plan, campaign, set(art) | set(picks), folder)
     bring_sm_files(plan, src, faction, new)
     own_select_map(plan, campaign, new)
     if not plan.opts.get("names"):                      # a name list typed in the window wins (clone.names wrote it):
