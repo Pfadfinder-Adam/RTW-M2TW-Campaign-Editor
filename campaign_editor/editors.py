@@ -172,6 +172,39 @@ def fields(f, start, end):
     return out
 
 
+def replace_texts(f, start, end, new_texts):
+    """Lines [start, end) of f become new_texts (as typed in the editor's notepad): every line typed as it was keeps
+    its own raw bytes (its ending too), a new or changed one gets the file's usual ending; the file's very last
+    line ('' after the last line end) stays as it is - so a block written back unchanged is byte for byte the same."""
+    import difflib
+    old_raw = f.raw[start:end]
+    old = [r[:-1] if r.endswith("\r") else r for r in old_raw]
+    new = list(new_texts)
+    last = end == len(f.raw) and old_raw and old_raw[-1] == "" and new and new[-1] == ""
+    out = [None] * len(new)
+    # the same lines at both ends taken first (a typed change touches a few lines of thousands), the rest compared
+    p = 0
+    while p < min(len(old), len(new)) and old[p] == new[p]:
+        p += 1
+    q = 0
+    while q < min(len(old), len(new)) - p and old[-1 - q] == new[-1 - q]:
+        q += 1
+    out[:p] = old_raw[:p]
+    if q:
+        out[len(new) - q:] = old_raw[len(old) - q:]
+    mid_old, mid_new = old[p:len(old) - q], new[p:len(new) - q]
+    for tag, i1, i2, j1, j2 in difflib.SequenceMatcher(None, mid_old, mid_new, autojunk=False).get_opcodes():
+        if tag == "equal":
+            out[p + j1:p + j2] = old_raw[p + i1:p + i2]
+        else:
+            for j in range(j1, j2):
+                out[p + j] = f.make(mid_new[j])
+    if last:
+        out[-1] = ""
+    f.raw[start:end] = out
+    return f
+
+
 def set_value(text, value):
     """A line with the text after its key replaced; the indent, the gap after the
     key and a comment at the end are kept."""

@@ -17127,6 +17127,71 @@ building smith
             self.assertEqual(sent, want)
             self.assertEqual(seen, [c])
 
+    def test_unit_block_typed_as_text_is_written_and_drags_its_name_along(self):
+        """The Units editor's notepad (the user, 2026-10-21: 'open the block as it is written in the file'): the block
+        shown as text with its file line numbers; a type renamed there is written by Apply and drags its recruit
+        lines and armies along, as a field changed so; the whole file shows too."""
+        try:
+            from unittest import mock
+            from campaign_editor import gui, settings
+            app = gui.App()
+        except Exception as e:                          # no tkinter / display: not tested here
+            self.skipTest("no window: %s" % e)
+        try:
+            real = settings.get
+            with mock.patch.object(settings, "get", lambda k, d=None: "block" if k == "editor_view" else real(k, d)), \
+                    mock.patch.object(settings, "put", lambda k, v: None), \
+                    mock.patch("tkinter.messagebox.showinfo"), mock.patch("tkinter.messagebox.showerror"):
+                app.v_path.set(os.path.join(self.root, "data"))
+                app.load()
+                app.v_work.set("units")
+                app.work_changed()
+                ed = app.editor()
+                ed.lb.selection_set(0)
+                ed.show()
+                ed.toggle_lines()
+                app.update()
+                lines = ed._textview.lines()
+                self.assertEqual(lines[0].split(), ["type", "alpha", "general"])
+                lines[0] = lines[0].replace("alpha general", "alpha guard")
+                ed._text_typed(lines)
+                self.assertTrue(ed.dirty())
+                ed.make_plan().apply()
+                d = os.path.join(self.root, "data")
+                self.assertIn("alpha guard", open(os.path.join(d, "export_descr_unit.txt")).read())
+                self.assertIn('"alpha guard"', open(os.path.join(d, "export_descr_buildings.txt")).read())
+                ed.v_view.set("file")
+                ed._view_changed()
+                app.update()
+                self.assertGreater(len(ed._textview.lines()), 3)
+        finally:
+            app.destroy()
+
+    def test_a_line_said_for_the_right_click(self):
+        """The right click's knowledge of a line (lineinfo): what it does, its form with separators, its words; a word
+        added keeps the commas and drops 'no'; the form put in to fill."""
+        from campaign_editor import lineinfo
+        info = lineinfo.about("unit", "stat_pri  10, 5, no, 0, 0, melee, blade, piercing, sword, 25, 1")
+        self.assertIn("attack, charge bonus", info["form"])
+        self.assertIn("commas", info["form"])
+        info = lineinfo.about("unit", "attributes sea_faring, hide_forest", factions=["alpha"])
+        self.assertTrue(any(w == "can_swim" for w, _ in info["words"]))
+        self.assertEqual(lineinfo.with_word("attributes no", "hardy"), "attributes\thardy")
+        self.assertEqual(lineinfo.with_word("attributes sea_faring", "hardy"), "attributes\tsea_faring, hardy")
+        self.assertIn("faction or culture", lineinfo.about("unit", "ownership alpha", factions=["alpha"])["form"])
+        b = lineinfo.about("building", "\t\tconstruction  3")
+        self.assertIn("turns", b["form"])
+        self.assertEqual(lineinfo.template("\tcost 100", lineinfo.about("building", "\tcost 100")), "\tcost\tmoney")
+
+    def test_notepad_command_opens_at_the_line(self):
+        """Open in Notepad++: Notepad++ opens at the line (-n), Notepad without one."""
+        from unittest import mock
+        from campaign_editor import notepad
+        with mock.patch.object(notepad, "program", return_value=("C:/npp/notepad++.exe", "notepad++")):
+            self.assertEqual(notepad.command("x.txt", 12), ["C:/npp/notepad++.exe", "-n12", "x.txt"])
+        with mock.patch.object(notepad, "program", return_value=("notepad.exe", "notepad")):
+            self.assertEqual(notepad.command("x.txt", 12), ["notepad.exe", "x.txt"])
+
     def test_the_crash_doctors_verdict(self):
         """The crash doctor (the user, 2026-10-18): the engine writes what went wrong on the line after a fatal line -
         that is the verdict, on the report's first line; a '[fatal] ERROR' the game goes on after (a fallback) is

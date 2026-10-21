@@ -23,6 +23,12 @@ SMALL = dict(cursor="hand2", width=0)        # a row's small x / undo: a button 
 
 EVERYONES = "everyone's units (ownership all)"     # the units any faction may own - HLR hires them by region
 
+def _value_of(line):
+    """What follows the key of a line the right click's menu made."""
+    from .lineinfo import split
+    return split(line)[2]
+
+
 class RecordEditor(ttk.Frame):
     """kind 'unit' (export_descr_unit.txt) or 'building' (export_descr_buildings.txt)."""
 
@@ -146,10 +152,23 @@ class RecordEditor(ttk.Frame):
         bar = ttk.Frame(top, padding=(6, 6, 6, 0))
         bar.pack(fill="x")
         ttk.Button(bar, text="Add line...", command=self.add_dialog).pack(side="left")
-        ttk.Label(bar, text="x beside a line takes it out; the '?' says what each value means",
+        # the block as fields, or as it is written in the file - the block alone or the whole file (the user,
+        # 2026-10-21: 'the lines bind people; both, block and whole file, and Notepad++ too'); the last one kept
+        self.v_view = getattr(self, "v_view", None) or tk.StringVar(value=settings.get("editor_view", "fields"))
+        for val, label in (("fields", "Fields"), ("block", "Text: this block"), ("file", "Text: the whole file")):
+            ttk.Radiobutton(bar, text=label, value=val, variable=self.v_view, command=self._view_changed).pack(
+                side="left", padx=(theme.BUTTON_GAP, 0))
+        ttk.Button(bar, text="Open in Notepad++...", command=self.open_in_notepad).pack(
+            side="left", padx=(theme.BUTTON_GAP * 2, 0))
+        ttk.Label(bar, text="right click a line: what it means, its form, its words",
                   foreground=theme.palette()["muted"]).pack(side="left", padx=8)
+        from .gui_textblock import BlockText
+        self._textview = BlockText(top, on_change=self._text_typed, on_menu=self._line_menu)
         box = self._lines_box = ttk.Frame(top, padding=6)
-        box.pack(fill="both", expand=True)
+        if self.v_view.get() == "fields":
+            box.pack(fill="both", expand=True)
+        else:
+            self._textview.pack(fill="both", expand=True, padx=6, pady=6)
         self._lines_label()
         canvas = tk.Canvas(box, highlightthickness=0)
         sb = ttk.Scrollbar(box, orient="vertical", command=canvas.yview)
@@ -226,12 +245,210 @@ class RecordEditor(ttk.Frame):
             w.withdraw()
         self._lines_label()
 
+    # ---- the notepad: the block / the whole file as text (gui_textblock) ----
+    def _src(self):
+        """The file the editor shows: as typed in the notepad when it was, else as on disk."""
+        return self.work if self.work is not None else self.mod.load(self.path())
+
+    def _disk(self):
+        return self.mod.load(self.path()).dump()
+
+    def _typed(self):
+        """Whether the notepad left the file other than it is on disk."""
+        if self.work is None:
+            return False
+        if getattr(self, "_typed_cache", None) is None:
+            self._typed_cache = self.work.dump() != self._disk()
+        return self._typed_cache
+
+    def _reblock(self):
+        """The blocks again from the file as it is now (typed lines move them); the picked one kept by its place."""
+        f = self._src()
+        old = self.current
+        self.blocks = E.unit_blocks(f) if self.kind == "unit" else E.building_blocks(f)
+        self._typed_cache = None
+        self._recruits = self._required = self._limits = None
+        if old:
+            same = next((b for b in self.blocks if b[0] == old[0]), None) or \
+                next((b for b in self.blocks if b[1] == old[1]), None)
+            self.current = same
+
+    def _flush(self):
+        """The changes made in the fields (changed, added, taken out) laid into the text the notepad shows: from now
+        the text is what Apply writes, and the fields are read from it."""
+        from .textio import TextFile
+        if not (self.changes or self.adds or self.removes) and self.work is not None:
+            return
+        path, mod = self.path(), ModData(self.mod.data)
+        plan = Plan(mod, self.kind + "s", self.kind + "s", {})
+        self._seed(plan, path)
+        changes = {ln: v for ln, v in self.changes.items() if ln not in self.removes}
+        E.apply_fields(plan, path, changes, self.kind)
+        g = plan.edit(path)
+        now = {b[1]: b[0] for b in (E.unit_blocks(g) if self.kind == "unit" else E.building_blocks(g))}
+        E.restructure(plan, path, self.kind, [dict(op, block=now.get(op["at"], op["block"])) for op in self.adds],
+                      sorted(self.removes))
+        self.work = TextFile.from_bytes(path, plan.edit(path).dump())
+        self.changes, self.adds, self.removes = {}, [], set()
+        self._reblock()
+
+    def _seed(self, plan, path):
+        """The plan starts from the file as the editor has it (typed in the notepad or as on disk)."""
+        from .textio import TextFile
+        if self.work is None:
+            return
+        f = plan.edit(path)                              # the disk's file: its backup and its place as written
+        f.raw = list(TextFile.from_bytes(path, self.work.dump()).raw)
+
+    def _view_changed(self):
+        from . import settings as _s
+        self._textview.flush()
+        v = self.v_view.get()
+        _s.put("editor_view", v)
+        if v == "fields":
+            self._textview.pack_forget()
+            self._lines_box.pack(fill="both", expand=True)
+        else:
+            self._lines_box.pack_forget()
+            self._textview.pack(fill="both", expand=True, padx=6, pady=6)
+        if self.mod and self.path():
+            self.show()
+
+    def _show_text(self):
+        """The notepad filled: the picked block (its file line numbers), or the whole file at the picked block."""
+        try:
+            self._flush()
+        except ValueError as e:                          # a field typed wrong cannot be laid in: said, fields kept
+            self.app.status.set("The fields' changes could not go into the text: %s" % e)
+            return
+        f = self._src()
+        cur = self.current
+        if self.v_view.get() == "block":
+            if not cur:
+                self._textview.set_lines(["; pick one on the left"], 0)
+                return
+            self._textview.set_lines([f.text(i) for i in range(cur[1], cur[2])], cur[1])
+        else:
+            self._textview.set_lines(f.texts(), 0, at=cur[1] if cur else None)
+        self._text_check()
+
+    def _text_typed(self, lines):
+        """What was typed laid into the file the editor holds (unchanged lines keep their bytes), the list follows."""
+        if self.mod is None or not self.path():
+            return
+        if self.work is None:
+            self._flush()
+        f = self.work
+        if self.v_view.get() == "block" and self.current:
+            E.replace_texts(f, self.current[1], self.current[2], lines)
+            name, a = self.current[0], self.current[1]
+            self._reblock()
+            self.current = next((b for b in self.blocks if b[1] == a), None) or \
+                next((b for b in self.blocks if b[0] == name), None)
+        else:
+            E.replace_texts(f, 0, len(f.raw), lines)
+            self._reblock()
+        self.fill_list_keep()
+        self._text_check()
+        self.app.status.set("%s typed in the notepad - Preview, then Apply changes writes it (a backup first)." %
+                            os.path.basename(self.path()))
+        try:
+            self.app.update_actions()
+        except Exception:
+            pass
+
+    def _text_check(self):
+        """The lines typed other than on disk checked as Apply checks them; a wrong one underlined red."""
+        import difflib
+        disk = self.mod.load(self.path())
+        now = self._textview.lines()
+        if self.v_view.get() == "block" and self.current:
+            was = next((b for b in (E.unit_blocks(disk) if self.kind == "unit" else E.building_blocks(disk))
+                        if b[0] == self.current[0]), None)
+            base = [disk.text(i) for i in range(was[1], was[2])] if was else []
+        else:
+            base = disk.texts()
+        mod, errors = ModData(self.mod.data), {}
+        for tag, i1, i2, j1, j2 in difflib.SequenceMatcher(None, base, now, autojunk=False).get_opcodes():
+            if tag == "equal":
+                continue
+            for j in range(j1, j2):
+                s = E.strip_comment(now[j]).strip()
+                if not s or s in ("{", "}"):
+                    continue
+                bad = [m for e, m in E.check_text(mod, self.kind, now[j]) if e]
+                if bad:
+                    errors[j + 1] = "; ".join(bad)
+        self._textview.mark_errors(errors)
+
+    def open_in_notepad(self):
+        """The file (the picked block's line) in Notepad++ - or the program picked in Settings, or Notepad. Typed
+        changes not written yet are said first: Notepad++ shows the file as it is on disk."""
+        from . import notepad
+        if not self.mod or not self.path():
+            return
+        if self.dirty() and not ask("Open in Notepad++", "Changes made here are not written yet - Notepad++ shows "
+                                    "the file as it is on disk. Open it anyway?", yes="Open it", no="Not now"):
+            return
+        line = self.current[1] + 1 if self.current else None
+        exe, kind = notepad.program()
+        try:
+            notepad.open_at(self.mod.own(self.path()) if os.path.isfile(self.mod.own(self.path())) else self.path(),
+                            line)
+        except OSError as e:
+            messagebox.showerror("Open in Notepad++", str(e))
+            return
+        self.app.status.set("%s opened in %s%s. Saved there? Load the mod again to see it here." % (
+            os.path.basename(self.path()), os.path.basename(exe), " at line %d" % line if line else "") +
+            ("" if kind == "notepad++" else " (Notepad++ opens at the line - %s)" % notepad.NPP_LINK))
+
+    def _line_menu(self, e, line, put, file_line):
+        """The right click on a line (notepad or fields): what the line means, its form, its words (lineinfo)."""
+        from . import lineinfo
+        m = tk.Menu(self, tearoff=0)
+        from .limits import game_kind
+        facs = [f for f, _ in self.mod.factions()] + sorted({c for _, c in self.mod.factions() if c}) \
+            if self.mod else []
+        info = lineinfo.about(self.kind, line, game_kind(self.mod) == "medieval2" if self.mod else False, facs)
+        if info["key"] and self.mod and self.path():             # a line like it: another of the same key here
+            f = self._src()
+            info["example"] = next((f.text(i).strip() for i in range(len(f.raw))
+                                    if i != file_line and E.tokens(f.text(i))[:1] == [info["key"]]), "")
+        if info["what"]:
+            m.add_command(label=info["key"] + ": " + info["what"][:110], state="disabled")
+        if info["form"]:
+            m.add_command(label="Form: " + info["form"][:140], state="disabled")
+        if info["example"]:
+            m.add_command(label="Like: " + info["example"][:140], state="disabled")
+        if info["words"]:
+            sub = tk.Menu(m, tearoff=0)
+            for w, meaning in info["words"][:60]:
+                sub.add_command(label="%s%s" % (w, " - " + meaning[:70] if meaning else ""),
+                                command=lambda w=w: put(lineinfo.with_word(line, w)))
+            m.add_cascade(label="Add a word to this line", menu=sub)
+        if info["form"]:
+            m.add_command(label="Put the line's form in (to fill)", command=lambda: put(lineinfo.template(line, info)))
+        m.add_separator()
+        m.add_command(label="More about this line...", command=lambda: self._line_about(info))
+        m.tk_popup(e.x_root, e.y_root)
+
+    def _line_about(self, info):
+        text = "%s\n\n%s%s%s%s" % (
+            info["key"], info["what"], "\n\nForm: " + info["form"] if info["form"] else "",
+            "\n\nLike: " + info["example"] if info["example"] else "",
+            "\n\nWords:\n" + "\n".join("  %s%s" % (w, " - " + mm if mm else "") for w, mm in info["words"])
+            if info["words"] else "")
+        self.app.show_text("Line %s" % info["key"], text)
+
     # ---- data ----
     def path(self):
         return self.mod.file("edu" if self.kind == "unit" else "edb") if self.mod else None
 
+    work = None                                         # the file as typed in the notepad (or None: as on disk)
+
     def load(self, mod):
         self.mod = mod
+        self.work = None
         self.changes, self.imports, self.current, self.copy_ops = {}, [], None, []
         self.adds, self.removes, self.text_edits = [], set(), {}
         self._recruits = self._required = self._limits = None      # read from the file when first asked
@@ -258,7 +475,7 @@ class RecordEditor(ttk.Frame):
             self.cb_show["values"] = ["all"]
             self.v_show.set("all")
             return
-        f = self.mod.load(self.path())
+        f = self._src()
         for blk in self.blocks:
             try:
                 self.facets[blk[1]] = E.block_facets(f, self.kind, blk)
@@ -365,7 +582,7 @@ class RecordEditor(ttk.Frame):
             return
         self.current = self.shown[sel[0]]
         name, a, b = self.current
-        f = self.mod.load(self.path())
+        f = self._src()
         self.fields = E.fields(f, a, b)
         self.tree = E.chain_tree(f, a, b) if self.kind == "building" else None
         self.title.configure(text=("unit " if self.kind == "unit" else "building ") + name)
@@ -382,6 +599,12 @@ class RecordEditor(ttk.Frame):
                 continue
             pending.append((at, n, make(op["text"])))
         self._lines_stale = not self._lines_open
+        if not self._lines_stale and self.v_view.get() != "fields":     # the notepad on show instead of the rows
+            self._show_text()
+            self._lines_label()
+            self.show_pictures()
+            self.show_links()
+            return
         if self._lines_stale:                    # folded away: the rows are made when opened (a report: lag)
             self._lines_label()
             self.show_pictures()
@@ -423,6 +646,9 @@ class RecordEditor(ttk.Frame):
                          foreground="#000000" if gone or fd.line in self.changes else theme.palette()["fg"])
             e.grid(row=row, column=2, sticky="we", pady=1)
             v.trace_add("write", lambda *x, fd=fd, v=v, e=e: self.edited(fd, v.get(), e))
+            # the right click: what the line means, its form, its words (the notepad's menu, the same knowledge)
+            e.bind("<Button-3>", lambda ev, fd=fd, v=v: self._line_menu(
+                ev, "%s %s" % (fd.key, v.get()), lambda new, v=v: v.set(_value_of(new)), fd.line))
             if self.kind == "unit" and fd.key in unitattrs.LINES and unitattrs.for_line(fd.key) and not gone:
                 ttk.Button(self.form, text="REX...",
                            command=lambda fd=fd, v=v: self.attrs_dialog(fd, v)).grid(row=row, column=3, padx=(4, 0))
@@ -471,12 +697,12 @@ class RecordEditor(ttk.Frame):
 
     def limits(self):
         if getattr(self, "_limits", None) is None:
-            self._limits = E.line_limits(self.mod.load(self.path()), self.kind)
+            self._limits = E.line_limits(self._src(), self.kind)
         return self._limits
 
     def required(self):
         if getattr(self, "_required", None) is None:
-            self._required = E.required_keys(self.mod.load(self.path()), self.kind)
+            self._required = E.required_keys(self._src(), self.kind)
         return self._required
 
     def toggle_remove(self, fd):
@@ -519,6 +745,10 @@ class RecordEditor(ttk.Frame):
         return self.changes.get(fd.line, fd.value) if fd else ""
 
     def reset(self):
+        self.work = None
+        if self.mod and self.path():
+            f = self._src()
+            self.blocks = E.unit_blocks(f) if self.kind == "unit" else E.building_blocks(f)
         self.changes, self.imports, self.copy_ops, self.text_edits = {}, [], [], {}
         self.adds, self.removes = [], set()
         self.fill_list()
@@ -568,7 +798,7 @@ class RecordEditor(ttk.Frame):
     def _building_links(self):
         from .roster import factions_in
         name, a, b = self.current
-        f = self.mod.load(self.path())
+        f = self._src()
         lv_txt = []
         for lv in self.tree["levels"]:
             names = factions_in(f.text(lv["head"]))
@@ -598,7 +828,7 @@ class RecordEditor(ttk.Frame):
             messagebox.showerror("Add line", "pick the %s on the left first" % self.kind)
             return
         name, a, b = self.current
-        f = self.mod.load(self.path())
+        f = self._src()
         w = tk.Toplevel(self)
         w.title("Add a line to %s" % name)
         w.transient(self)
@@ -985,7 +1215,7 @@ class RecordEditor(ttk.Frame):
 
     def _unit_lines(self):
         name, a, b = self.current
-        f = self.mod.load(self.path())
+        f = self._src()
         return [f.text(i) for i in range(a, b)]
 
     def _unit_models(self, parent):
@@ -1711,7 +1941,7 @@ class RecordEditor(ttk.Frame):
         # the game's stand-ins - no picture, an empty name, 'WARNING! ... never appear on screen!' (a tester)
         from .buildings import builder_cultures, read_buildings
         chain = self.current[0] if self.current else None
-        lv_obj = next((b.level(self.v_level.get()) for b in read_buildings(self.mod.load(self.path()))
+        lv_obj = next((b.level(self.v_level.get()) for b in read_buildings(self._src())
                        if b.name == chain), None)
         builders = [c for c in builder_cultures(self.mod, lv_obj) if c in cultures] if lv_obj else list(cultures)
         others = [c for c in cultures if c not in builders]
@@ -1873,7 +2103,8 @@ class RecordEditor(ttk.Frame):
 
     # ---- writing ----
     def dirty(self):
-        return bool(self.changes or self.imports or self.copy_ops or self.adds or self.removes or self.text_edits)
+        return bool(self.changes or self.imports or self.copy_ops or self.adds or self.removes or self.text_edits or
+                    self._typed())
 
     # ---- unit packs ----
     def bring_dialog(self):
@@ -2029,7 +2260,7 @@ class RecordEditor(ttk.Frame):
     def pending(self):
         """How many changes wait for Apply here."""
         return len(self.changes) + len(self.imports) + len(self.copy_ops) + len(self.adds) + len(self.removes) + \
-            len(self.text_edits)
+            len(self.text_edits) + (1 if self._typed() else 0)
 
     def _signature(self):
         """What the file is now (its bytes' md5): the changes wait on the lines as they were read."""
@@ -2080,7 +2311,42 @@ class RecordEditor(ttk.Frame):
             raise ValueError("Nothing written:\n" + "\n".join(errs))
         self._notes = notes
 
-    def _follow(self, plan, f, changes):
+    def _text_problems(self, mod):
+        """Nothing written while a line typed in the notepad names what the mod has not (as a field's change)."""
+        import difflib
+        disk = mod.load(self.path()).texts()
+        now = self.work.texts()
+        errs = []
+        for tag, i1, i2, j1, j2 in difflib.SequenceMatcher(None, disk, now, autojunk=False).get_opcodes():
+            if tag == "equal":
+                continue
+            for j in range(j1, j2):
+                s = E.strip_comment(now[j]).strip()
+                if s and s not in ("{", "}"):
+                    errs += ["line %d: %s" % (j + 1, m) for e, m in E.check_text(mod, self.kind, now[j]) if e]
+        if errs:
+            raise ValueError("Nothing written - in the text typed:\n" + "\n".join(errs[:20]))
+
+    def _text_renames(self, disk, work):
+        """{disk line: new value} of the names the text changed - a unit's type / dictionary / ownership, a chain's
+        name - block by block (by their order; by name when the count changed): _follow drags them along."""
+        blocks = (E.unit_blocks if self.kind == "unit" else E.building_blocks)
+        b0, b1 = blocks(disk), blocks(work)
+        pairs = list(zip(b0, b1)) if len(b0) == len(b1) else \
+            [(x, y) for x in b0 for y in b1 if x[0] == y[0]]
+        keys = ("type", "dictionary", "ownership") if self.kind == "unit" else ("building",)
+        out = {}
+        for (_, a0, e0), (_, a1, e1) in pairs:
+            f0 = [fd for fd in E.fields(disk, a0, e0) if fd.key in keys]
+            f1 = {fd.key: fd for fd in E.fields(work, a1, e1) if fd.key in keys}
+            for fd in f0:
+                new = f1.get(fd.key)
+                if new is not None and " ".join(new.value.split()) != " ".join(fd.value.split()):
+                    out[fd.line] = new.value
+        return out
+
+    def _follow(self, plan, f, changes, blocks=None):
+        blocks = self.blocks if blocks is None else blocks
         for n in getattr(self, "_notes", []):
             plan.warn(None, n)
         from .roster import copy_cards, covers
@@ -2095,7 +2361,7 @@ class RecordEditor(ttk.Frame):
             elif self.kind == "unit" and key == ["ownership"]:
                 was = [x for x in old.replace(",", " ").split() if x]
                 now = [x for x in new.replace(",", " ").split() if x]
-                blk = next(b for b in self.blocks if b[1] <= ln < b[2])
+                blk = next(b for b in blocks if b[1] <= ln < b[2])
                 dic = next((E.tokens(f.text(i))[1] for i in range(blk[1], blk[2])
                             if E.tokens(f.text(i))[:1] == ["dictionary"] and len(E.tokens(f.text(i))) > 1), None)
                 facs = plan.mod.factions()
@@ -2122,9 +2388,18 @@ class RecordEditor(ttk.Frame):
         mod = ModData(self.mod.data)
         plan = Plan(mod, self.kind + "s", self.kind + "s", {})
         path = mod.file("edu" if self.kind == "unit" else "edb")
-        f = mod.load(path)
+        if hasattr(self, "_textview"):
+            self._textview.flush()                      # what is being typed this moment goes too
+        f = self._src()
+        self._seed(plan, path)                          # the notepad's text: what the fields' changes go on
         changes = {ln: v for ln, v in self.changes.items() if ln not in self.removes}
         self._check(mod, f, changes)
+        if self.work is not None:
+            self._text_problems(mod)
+            # what the typed text renamed drags along, as a field changed so (recruit lines, armies, cards...)
+            disk = mod.load(path)
+            self._follow(plan, disk, self._text_renames(disk, self.work),
+                         E.unit_blocks(disk) if self.kind == "unit" else E.building_blocks(disk))
         by_line = {}
         for name, a, b in self.blocks:
             for ln in changes:
