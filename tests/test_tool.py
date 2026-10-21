@@ -1665,6 +1665,70 @@ building smith
         camp = os.path.join(data, "world", "maps", "campaign", "test")
         self.assertEqual(sorted(os.listdir(camp)), ["map_alpha.tga"])
 
+    def test_thin_mod_game_bytes_and_read_only_files_never_copied(self):
+        """A thin mod gets no copy of a game's file the write leaves as it is (the user, 2026-10-20): a picture written
+        with the game's very bytes is no change, and a game's descr_strat only read is never 'put right' by the
+        keep-ups (here: a later faction holding a town would be made alive) - so nothing at all lands in the mod."""
+        game, _ = self._game()
+        strat_game = os.path.join(game, "data", "world", "maps", "campaign", "test", "descr_strat.txt")
+        with open(strat_game, encoding="utf-8") as f:
+            text = f.read()
+        write(strat_game, text.replace("faction\talpha, balanced smith\n", "faction\talpha, balanced smith\n"
+                                       "dead_until_resurrected\n", 1))
+        pic = os.path.join(game, "data", "world", "maps", "campaign", "test", "map_alpha.tga")
+        write(pic, "picture")
+        data, _ = create_mod(os.path.join(game, "data"), "Beta")
+        mod = ModData(data)
+        plan = Plan(mod, "x", "alpha", {})
+        plan.edit(strat_game)                                           # read for the change, left as it is
+        with open(pic, "rb") as f:
+            plan.binary(pic, f.read())                                  # the game's own bytes
+        self.assertEqual(plan.changed_files(), [])
+        plan.apply()
+        self.assertEqual([n for _, _, fs in os.walk(data) for n in fs], [])
+
+    def test_load_asks_only_about_the_mods_own_campaigns(self):
+        """Load's 'put them right' never offers to open the game's campaign of a thin mod (a yes would copy the game's
+        descr_strat into the mod); Check mod files still names it."""
+        from campaign_editor import gamefix
+        game, _ = self._game()
+        strat_game = os.path.join(game, "data", "world", "maps", "campaign", "test", "descr_strat.txt")
+        with open(strat_game, encoding="utf-8") as f:
+            text = f.read()
+        write(strat_game, text.replace("nonplayable\n\tslave\n", "nonplayable\n\tslave\n\tgamma\n", 1)
+              .replace(";#####>\nfaction\tslave", "faction\tgamma, balanced smith\nsettlement\n{\n\tlevel town\n"
+                       "\tregion A_R\n}\n\n;#####>\nfaction\tslave", 1))
+        data, _ = create_mod(os.path.join(game, "data"), "Beta")
+        mod = ModData(data)
+        ids = lambda found: [p["id"] for p in found]                    # noqa: E731
+        self.assertIn("locked_factions:test", ids(gamefix.problems(mod)))
+        self.assertNotIn("locked_factions:test", ids(gamefix.problems(mod, on_load=True)))
+
+    def test_untouched_copies_named_and_taken_out(self):
+        """Files a thin mod holds that are the game's own byte for byte (an older editor copied whole campaign folders)
+        are named by Check mod files with a 'Take them out' button; taking them out is backed up and Restore puts them
+        back. Map layers beside a changed one stay (the game builds map.rwm from the mod's whole map)."""
+        from campaign_editor import check
+        from campaign_editor.newmod import untouched_copies, untouched_plan
+        game, _ = self._game()
+        data, _ = create_mod(os.path.join(game, "data"), "Beta")
+        camp_game = os.path.join(game, "data", "world", "maps", "campaign", "test")
+        camp = os.path.join(data, "world", "maps", "campaign", "test")
+        os.makedirs(camp)
+        for n in ("descr_strat.txt", "descr_regions.txt", "map_regions.tga"):
+            shutil.copy2(os.path.join(camp_game, n), os.path.join(camp, n))
+        with open(os.path.join(camp, "descr_regions.txt"), "ab") as f:
+            f.write(b"\n")                                              # a changed map layer
+        self.assertEqual([os.path.basename(p) for p in untouched_copies(data)], ["descr_strat.txt"])
+        lines = check.untouched_problems(ModData(data))
+        self.assertEqual(len(lines), 1)
+        self.assertEqual(check.fix_of(lines[0]), ("Take them out", "untouched_copies"))
+        bdir = untouched_plan(ModData(data)).apply()
+        self.assertEqual(sorted(os.listdir(camp)), ["descr_regions.txt", "map_regions.tga"])
+        self.assertEqual(untouched_copies(data), [])
+        restore(ModData(data), bdir)
+        self.assertIn("descr_strat.txt", os.listdir(camp))
+
     def test_new_mod_under_m2ex_starts_with_features_mod(self):
         # M2EX's own Teutonic.bat: start "" "%~dp0M2EX.exe" --features.mod=mods/teutonic
         game = tempfile.mkdtemp()

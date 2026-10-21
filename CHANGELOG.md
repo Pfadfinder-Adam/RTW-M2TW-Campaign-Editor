@@ -3,10 +3,13 @@
 ## Unreleased
 
 ### Added
+- Check mod files names the files a mod built on the plain game holds that are still the game's own, byte for byte, with **Take them out** (backed up - Restore puts them back).
 - The editor's own look: Tools > Edit the editor's look - drag any button, tick or label anywhere, rename it, give it a hover text or a width, hide it, take it back; kept for every start. The editor's language from a language file (Settings), and Words to translate writes every word for translators.
 
 ### Fixed
 - A mod built on the plain game got the game's whole campaign folder (descr_strat, events, scripts, texts) when a faction's map picture was redrawn, and those copies hid the modder's own files -> now only the changed picture goes in, and a map change brings only the map's own files.
+- The editor's automatic fixes (faction-select slots, 'faction destroyed' pictures, a later faction holding a town) put the game's own campaign files into a mod built on the plain game though nothing in them was changed -> they touch only files you changed; a picture written with the game's very bytes is not copied in.
+- Load offered to open the locked factions of the game's own campaigns in a mod built on the plain game, which copied the game's campaign file in -> it asks only about the mod's own campaigns (Check mod files still names them).
 
 ## 0.35.1 - 2026-10-18
 

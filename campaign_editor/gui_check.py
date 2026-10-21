@@ -16,6 +16,8 @@ def go(app, place):
         app.load()
     elif place == "engine_files":
         app.copy_engine_files()
+    elif place == "untouched_copies":
+        app.take_out_untouched()
     elif place == "rules":
         app.campaign_rules()
     elif place == "events":

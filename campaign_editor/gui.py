@@ -4724,6 +4724,23 @@ class App(tk.Tk):
         self.status.set("%s copied into the mod, every setting switched off (backup made) - switch one on there "
                         "for this mod alone." % ", ".join(found[0]["names"]))
 
+    def take_out_untouched(self):
+        """Check mod files' 'Take them out': the mod's files that are the game's own byte for byte go (newmod.
+        untouched_copies, removed by a plan - backed up, Restore puts them back); the game reads its own."""
+        from .newmod import untouched_copies, untouched_plan
+        if not self.mod:
+            return
+        found = untouched_copies(self.mod.data)
+        if not found:
+            self.status.set("No untouched copies of the game's files in this mod.")
+            return
+        plan = untouched_plan(ModData(self.mod.data), found)
+        bdir = plan.apply()
+        log.write("Untouched copies taken out (backup %s)\n%s" % (bdir, plan.report()))
+        self.load()
+        self.status.set("%d untouched copies of the game's files taken out of the mod (backup made - Restore puts "
+                        "them back); the game reads its own." % len(found))
+
     def _own_folder_first(self, plan):
         """Before the first write into a mod the editor did not make (the game's own data, a downloaded mod - no
         CampaignEditor_mod.json): asked once, 'Make your own mod folder first?' (recommended: the game / that mod stays
