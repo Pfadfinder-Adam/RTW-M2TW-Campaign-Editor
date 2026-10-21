@@ -210,7 +210,9 @@ def plan_pools(plan, campaign, pools):
             continue
         was = {u.line: u.key() for u in op.units} if op else {}
         units = [u for u in p.units if u.line not in was or was[u.line] != u.key()]
-        q = Pool(p.name, p.regions if op is None or p.regions != op.regions else [], units)
+        # only the regions it gains are checked: one it already named (a region the mod lacks, report
+        # R-20261020-0A520D) is the mod's own, not this edit's
+        q = Pool(p.name, [r for r in p.regions if op is None or r not in op.regions], units)
         if op is None or p.name != op.name or units or q.regions:
             check.append(q)
     why = problems(mod, campaign, check)
