@@ -29,7 +29,7 @@ EXAMPLE = {
     "long_description": "",
     "primary_colour": [150, 90, 23],
     "secondary_colour": [220, 194, 166],
-    "copy_triggers": True,
+    "copy_triggers": False,
     "copy_art": True,
     "start": {
         "regions": ["Mariba_R", "Sanaa_R", "Sapphar_R"],
