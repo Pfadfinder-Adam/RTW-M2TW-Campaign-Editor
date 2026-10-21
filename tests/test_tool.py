@@ -17716,6 +17716,47 @@ building smith
         finally:
             root.destroy()
 
+    def test_shore_line_drawn_into_the_map_picture(self):
+        """Coast & heights: the shore line is drawn INTO the map's picture (Discord, valp: thousands of canvas lines
+        made the brushes lag on a big map - 'turning off shore lines helps'); its pieces are worked out once per block
+        and kept - a brush's tick works out only the blocks round the points it changed."""
+        try:
+            import tkinter as tk
+            from PIL import Image
+            from types import SimpleNamespace
+            from campaign_editor.gui_map import MapView
+            root = tk.Tk()
+        except Exception as e:                        # no tkinter / display / Pillow (CI): not tested here
+            self.skipTest("no window: %s" % e)
+        try:
+            W = H = 33                                # map_heights points of a 16 x 16 tile map: an island in a sea
+            land = {(x, y) for x in range(10, 23) for y in range(10, 23)}
+            raw = bytearray()
+            for y in range(H):
+                for x in range(W):
+                    raw += bytes((90, 90, 90) if (x, y) in land else (0, 0, 200))
+            img = SimpleNamespace(raw=bytes(raw), width=W, height=H)
+            v = MapView(root)
+            v.cmap = SimpleNamespace(w=16, h=16)
+            v.z, v.ox, v.oy, v._spray = 20, 0.0, 0.0, False
+            v.shore = (img, lambda px, py: 5.0 if (px, py) in land else -10.0)
+            worked = []
+            real = v._shore_block
+            v._shore_block = lambda *a: worked.append(a[2:4]) or real(*a)
+            pic = Image.new("RGB", (320, 320), (0, 0, 0))
+            v._shore_into(pic)
+            light = sum(1 for p in pic.getdata() if p == (0xff, 0xf4, 0xc2))
+            self.assertGreater(light, 100)                                # the line is in the picture
+            first = len(worked)
+            v._shore_into(Image.new("RGB", (320, 320)))
+            self.assertEqual(len(worked), first)                          # kept: nothing worked out again
+            v.shore_dirty = {(10, 10)}
+            v._shore_into(Image.new("RGB", (320, 320)))
+            self.assertLessEqual(len(worked) - first, 4)                  # only the blocks round that point
+            self.assertEqual(v.canvas.find_withtag("shore"), ())
+        finally:
+            root.destroy()
+
     def test_region_tags_picked_from_a_drop_down(self):
         """New region / Edit region: the region tags are picked from the mod's own under an arrow (the user,
         2026-10-10: 'click 1, 2, 3, 4 and they are added; a click again takes it out'); the box stays free to type
@@ -17741,49 +17782,6 @@ building smith
             self.assertEqual([n for n, t in m.ticks.items() if t.get()], ["slaves", "italy"])
             v.set("timber, my_own_tag")                            # typed: a new tag too, the ticks follow
             self.assertEqual([n for n, t in m.ticks.items() if t.get()], ["timber"])
-        finally:
-            root.destroy()
-
-    def test_shore_line_redrawn_only_where_the_brush_changed(self):
-        """The Coast & heights brushes lagged (the user, 2026-10-10): every tick drew the whole view's shore line
-        again (thousands of pieces, ~110 ms on Medieval II's map). Now only the blocks round the points a tick changed
-        are drawn again - and the line is the same as a whole new drawing."""
-        try:
-            import tkinter as tk
-            from types import SimpleNamespace
-            from campaign_editor.gui_map import MapView
-            from campaign_editor.tga import Image as Tga
-            root = tk.Tk()
-        except Exception as e:                        # no tkinter / display / Pillow (CI): not tested here
-            self.skipTest("no window: %s" % e)
-        try:
-            W = H = 41
-            img = Tga(W, H)
-            for y in range(H):
-                for x in range(W):
-                    img.set(x, y, (10, 10, 10) if (x - 20) ** 2 + (y - 20) ** 2 < 100 else (0, 0, 200))
-
-            def metres(px, py):
-                if not (0 <= px < W and 0 <= py < H):
-                    return None
-                c = img.get(px, py)
-                return 5.0 if c[0] == c[1] == c[2] else -5.0
-            v = MapView(root)
-            v.cmap, v.z, v.ox, v.oy, v.shore = SimpleNamespace(h=20), 10, 0, 0, (img, metres)
-
-            def lines():
-                return sorted((tuple(round(k, 3) for k in v.canvas.coords(i)), v.canvas.itemcget(i, "fill"))
-                              for i in v.canvas.find_withtag("shore"))
-            v._shore_line(400, 400)
-            changed = [(x, y) for x in range(28, 34) for y in range(18, 23)]      # a cape grows out
-            for p in changed:
-                img.set(p[0], p[1], (10, 10, 10))
-            v._shore_line(400, 400, changed)
-            part = lines()
-            v.canvas.delete("shore")
-            v._shore_line(400, 400)
-            self.assertEqual(part, lines())
-            self.assertTrue(part)
         finally:
             root.destroy()
 
