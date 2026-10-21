@@ -3507,6 +3507,35 @@ building smith
         finally:
             app.destroy()
 
+    def test_mod_from_zero_steps(self):
+        """Tools > A mod from zero, step by step (the user, 2026-10-21): the six steps in order, each saying how far
+        the loaded mod is, each button opening the editor's own work for it."""
+        try:
+            from unittest import mock
+            from campaign_editor import gui, gui_modzero as MZ
+            app = gui.App()
+        except Exception as e:                        # no tkinter / no display
+            self.skipTest("no tkinter window: %s" % e)
+        try:
+            with mock.patch("tkinter.messagebox.showinfo"), mock.patch("tkinter.messagebox.showerror"), \
+                    mock.patch("tkinter.messagebox.askyesno", return_value=False):
+                app.v_path.set(os.path.join(self.root, "data"))
+                app.load()
+                app.update()
+                got = {k: (done, words) for k, done, words in MZ.state(app)}
+                self.assertEqual([k for k, *_ in MZ.STEPS], ["folder", "map", "factions", "units", "check", "game"])
+                self.assertTrue(got["map"][0])
+                self.assertIn("faction(s) in the campaign", got["factions"][1])
+                w = MZ.open_window(app)
+                app.update()
+                MZ.go(app, "units")
+                self.assertEqual(app.v_work.get(), "units")
+                MZ.go(app, "new")
+                self.assertEqual(app.v_work.get(), "new")
+                w.destroy()
+        finally:
+            app.destroy()
+
     def test_faction_form_starts_empty(self):
         """The user, 2026-10-21: 'I made a faction, picked another - the fields were still full; remove it all by
         hand?'. New faction opened after Edit faction, another template, another faction in Edit: nothing of the one

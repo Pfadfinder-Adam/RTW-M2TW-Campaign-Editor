@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### Added
+- Tools > A mod from zero, step by step: your own mod folder, the map, the factions, units and buildings, Check mod files, the game - in order, how far each is, a button for each.
 - Make a card / Make a picture: 'Painted look' - the 3D view turned into flat brush areas with a thin dark line, so the card looks painted, not 3D.
 - Check mod files: a faction with no unit for custom / quick battles is named (a quick battle that picks it stops the game), with what to do.
 - Map from zero (the map's bar): a new small map in place of the campaign's - one island, one region with its town, a port and a resource, one faction (Rome: the Gauls, Medieval II: France) and the rebels; Restore puts the old map back.
