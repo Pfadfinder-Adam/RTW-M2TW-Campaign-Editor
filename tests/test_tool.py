@@ -3024,6 +3024,39 @@ building smith
         finally:
             root.destroy()
 
+    def test_map_draws_while_a_port_waits_for_its_click(self):
+        """R-20261019-9C140E and 10 more: a watchtower / port picked on the Map while a town waited for Apply - the
+        towns waiting were overwritten by the 'something waits for its click' flag, and the map stopped drawing
+        ('bool' object is not iterable in MapView._base)."""
+        try:
+            from unittest import mock
+            from campaign_editor import gui
+            app = gui.App()
+        except Exception as e:                        # no tkinter / no display
+            self.skipTest("no tkinter window: %s" % e)
+        errs = []
+        try:
+            app.report_callback_exception = lambda *a: errs.append(a[1])
+            with mock.patch("tkinter.messagebox.showinfo"), mock.patch("tkinter.messagebox.showwarning"), \
+                    mock.patch("tkinter.messagebox.showerror"), mock.patch("tkinter.messagebox.askyesno",
+                                                                          return_value=False):
+                app.v_path.set(os.path.join(self.root, "data"))
+                app.load()
+                app.update()
+                app.v_work.set("map")
+                app.work_changed()
+                orig = app.sides_on_map
+                app.sides_on_map = lambda o, c, caps: (orig(o, c, caps) or set()) | {"A_R"}
+                app._port_tool = True
+                app.show_map()
+                for _ in range(20):
+                    app.update()
+            self.assertIsInstance(app.map_view.waiting_towns, set)
+            self.assertTrue(app.map_view.waiting)
+            self.assertEqual(errs, [])
+        finally:
+            app.destroy()
+
     def test_answers_come_after_the_report_window_closed(self):
         """R-20261014-D5B6A6: the Report window closed while the answers were still being fetched - the late answer
         touched its gone button ('invalid command name ...!button'). Now it is dropped quietly."""
