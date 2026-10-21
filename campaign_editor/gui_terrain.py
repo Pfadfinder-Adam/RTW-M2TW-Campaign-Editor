@@ -299,7 +299,7 @@ class TerrainEditor(ttk.Frame):
         self._spray_hook()
 
     def _shore(self):
-        """(map_heights picture, metres) for the map's shore line (MapView._shore_line)."""
+        """(map_heights picture, metres) for the map's shore line (MapView._shore_into)."""
         sc = self._shape_coast()
         return (self._img("map_heights.tga"), sc.metres) if sc is not None else None
 
@@ -590,7 +590,7 @@ class TerrainEditor(ttk.Frame):
 
     def _shore_dirty(self, points):
         """The heights points a brush tick changed, told to the map: only the shore line round them is drawn again
-        (MapView._shore_line points=), not the whole view's."""
+        (MapView._shore_into's blocks), not the whole view's."""
         v = self.view
         v.shore_dirty = (getattr(v, "shore_dirty", None) or set()) | {tuple(p) for p in points}
 
@@ -928,6 +928,9 @@ class TerrainEditor(ttk.Frame):
         self.heights = dict(heights or {})
         self._hvals = {p: float(v) for p, v in self.heights.items()}
         self._apply_memory()
+        self.view._shore_cache = None               # the shore line worked out again (heights back as they were)
+        if self.view.shore is not None:
+            self.view.shore = self._shore()
         self.view.render()
         self.app._mark_work()
 
