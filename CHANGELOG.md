@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### Added
+- Map from zero (the map's bar): a new small map in place of the campaign's - one island, one region with its town, a port and a resource, one faction (Rome: the Gauls, Medieval II: France) and the rebels; Restore puts the old map back.
 - Interface > Campaign HUD: the campaign map's bottom panel as the game draws it (both games, the engines' own places), from the mod's pictures; right click a piece to replace its picture or set its place and size; preview on bigger screens; save as PNG.
 - Interface > Campaign HUD: a screenshot of the game over it to compare - how much of it shows (slider, [ ]), O shows / hides it.
 - Interface > Sprite sheets: right click a sprite to replace its picture (stretched, kept in shape or filling its box) or the whole page's; Undo, back to the files; written by Apply into the mod's own copy of the page, the click mask follows.
