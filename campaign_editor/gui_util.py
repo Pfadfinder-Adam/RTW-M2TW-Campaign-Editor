@@ -1717,6 +1717,8 @@ class Page(ttk.Frame):
 
     # the window manager's calls of a window: nothing to do in the main window
     def title(self, *a):
+        if a and a[0]:
+            self.title_text = a[0]           # what Apply names when nothing waits (make_plan)
         if a and a[0] and self.page_heading:
             head = getattr(self, "_page_head", None)
             if head is None:
@@ -1767,7 +1769,11 @@ class Page(ttk.Frame):
         return 0
 
     def make_plan(self):
-        raise ValueError("its changes are kept by themselves - Apply changes writes them")
+        # nothing kept to write (R-20261020-F7AA90: the old words 'its changes are kept by themselves' read as a
+        # refusal): what to do, in plain words
+        name = getattr(self, "title_text", None) or type(self).__name__
+        raise ValueError("Nothing to write yet from %s: no change was made there (or it is written already). Make "
+                         "the change - it is kept at once - then Apply changes writes it." % name)
 
     def rebind(self, mod):
         return 0                         # another mod: the main window makes it again on that mod (App.editor)
