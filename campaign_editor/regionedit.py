@@ -40,7 +40,8 @@ def sea_colour(mod, campaign):
     seas = [c for c in img.colours() if tuple(c[:3]) not in taken]
     if (41, 140, 233) in seas or not seas:
         return (41, 140, 233)
-    return max(seas, key=lambda c: len(img.find(c)))
+    from .terrain import sea_colour as most_common_sea   # the one counter (R-20261021-05D38C: find() is a generator)
+    return most_common_sea(img, taken)
 
 
 def free_colour(mod, campaign, taken=()):
