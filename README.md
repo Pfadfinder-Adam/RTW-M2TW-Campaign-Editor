@@ -278,7 +278,7 @@ Tested on the plain games - Rome: Total War (with REX), Barbarian Invasion, Medi
 
 1. **Close the game** and press **Browse...** to pick the mod's `data` folder (for example `...\Rome Total War Gold\HLR\data`).
 2. Pick the **campaign** (usually `imperial_campaign`).
-3. Pick a **template**. The new faction gets its culture, units, buildings, character models, name lists, trait triggers and art.
+3. Pick a **template**. The new faction gets its culture, units, buildings, character models, name lists and art - a clean clone: none of the template's trait / ancillary triggers or events.
 4. Fill in:
    - **Internal name:** lower case, no spaces, for example `saba`.
    - **Name (full)**, **Name (short)** and **Adjective**, for example `Sabaean Kingdom`, `Saba`, `Sabaean`. The copied strings use them ("Sabaean Spy", "Your forces attack an army of Saba").
@@ -400,7 +400,7 @@ Tested on the plain games - Rome: Total War (with REX), Barbarian Invasion, Medi
 | `export_descr_buildings.txt` | Adds the faction to every `factions { }` list that has the template |
 | `descr_model_battle.txt`, `descr_model_strat.txt` | Copies the template's `texture` lines |
 | `descr_banners.txt`, `descr_lbc_db.txt`, `descr_offmap_models.txt`, `descr_building_battle.txt` | Copies the template's entries |
-| `export_descr_character_traits.txt`, `export_descr_ancillaries.txt` | Copies every trigger that tests `FactionType <template>` (optional) |
+| `export_descr_character_traits.txt`, `export_descr_ancillaries.txt` | Not touched by a new faction (a clean clone takes none of the template's triggers) |
 | `data/text/*.txt` | Copies every string whose key names the template (`{PARTHIA}`, `{EMT_PARTHIA_SPY}`, ...) and rewrites the name. The **tooltip** goes to `{<FACTION>_DESCR}` (over the faction icon), the **full description** to `{<CAMPAIGN>_<FACTION>_DESCR}` in `campaign_descriptions.txt` (the campaign screen) |
 | `descr_strat.txt` | Adds the playable/nonplayable entry, a new faction block, the diplomacy lines and the leader and heir, and moves the chosen towns (details below) |
 | `descr_win_conditions.txt` | Copies the template's conditions; edit them by hand afterwards |
