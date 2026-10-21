@@ -2720,7 +2720,7 @@ class App(tk.Tk):
         ttk.Spinbox(f, from_=0, to=40, textvariable=v_oth, width=6).grid(row=6, column=1, sticky="w")
         ttk.Label(f, text="each faction gets its own capital's region and its leader; the regions left over are the "
                          "rebels' towns. Rome: with fewer than 5 factions the Faction Rankings 'Top 5' view crashes "
-                         "- 4 other factions avoid it. Medieval II: modders say 10 regions or more.",
+                         "- 4 other factions avoid it. No region count is needed by either game's loader.",
                   foreground="#666", wraplength=420, justify="left").grid(row=7, column=1, columnspan=2, sticky="w")
 
         def go():
