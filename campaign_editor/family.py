@@ -94,7 +94,9 @@ def _parse_relative(line):
         parts = parts[:-1]
     if not parts:
         return None
-    return [parts[0], parts[1] if len(parts) > 1 else "", parts[2:]]
+    wife = parts[1] if len(parts) > 1 else ""
+    # 'none' for a father without a wife (Rome's sons_of_mars: 'relative Berdic of Arausio, none, Vellocatus ...')
+    return [parts[0], "" if wife.lower() == "none" else wife, parts[2:]]
 
 
 def read(f, faction):
@@ -131,6 +133,11 @@ def read(f, faction):
         h = tokens(texts[i])[:1]
         if h == ["character_record"]:
             parts = _parts(texts[i], "character_record")
+            # the name and the sex with no comma between ('character_record  Anabella  female, age 22' - the
+            # Medieval II norman prologue): the sex word is not the name's
+            sx = re.match(r"^(.*\S)\s+(male|female)$", parts[0]) if parts else None
+            if sx:
+                parts = [sx.group(1), sx.group(2)] + parts[1:]
             m = RE_AGE.search(texts[i])
             status = [p for p in parts[1:] if p and not p.startswith(("age", "command", "influence", "management",
                                                                         "subterfuge")) and p not in ("male", "female")]
@@ -320,7 +327,7 @@ def dropped_records(fam):
 
 
 def relative_line(father, wife, kids):
-    return "relative \t%s, \t%s,\t\t%s" % (father, wife, "".join("%s,\t" % k for k in kids) + "end")
+    return "relative \t%s, \t%s,\t\t%s" % (father, wife or "none", "".join("%s,\t" % k for k in kids) + "end")
 
 
 def record_line(texts, name, sex, age, m2, dead=False):

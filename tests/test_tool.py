@@ -3221,6 +3221,24 @@ building smith
         plan = edit(mod, "test", "alpha", {"garrisons": {"A_R": ["rebel spear"]}})
         self.assertTrue(any("A_R: no garrison - the map has no town" in w for _, w in plan.warnings), plan.warnings)
 
+    def test_family_tree_reads_the_games_own_record_and_none_forms(self):
+        """R-20261018-DF74BD (a family edit refused: 'X is on the family tree but is no character'): the games' own
+        files write a record's name and sex with no comma between (Medieval II's norman prologue 'character_record
+        Anabella female, age 22') and a wifeless father's wife as 'none' (Rome's sons_of_mars). Both read now; a
+        wifeless couple is written back with 'none'."""
+        from campaign_editor import family as FM
+        f = TextFile.from_bytes("descr_strat.txt", (
+            "faction\talpha, balanced smith\ncharacter\tRufus, named character, male, leader, age 40, , x 1, y 1\n"
+            "army\nunit\t\talpha general\t\texp 1 armour 0 weapon_lvl 0\n"
+            "character_record\t\tAnabella\tfemale, age 22, alive, never_a_leader\n"
+            "character_record\t\tBerdic, male, age 50, dead 10, never_a_leader\n"
+            "relative \tRufus, \t\tAnabella,\tend\nrelative \tBerdic, \t none, \tRufus,\tend\n").encode("latin-1"))
+        fam = FM.read(f, "alpha")
+        self.assertIn("Anabella", [p.name for p in fam["people"]])
+        self.assertEqual(fam["tree"][1][:2], ["Berdic", ""])
+        self.assertEqual(FM.tree_problems(fam["tree"], [p.as_dict() for p in fam["people"]]), [])
+        self.assertIn("\tnone,", FM.relative_line("Berdic", "", ["Rufus"]))
+
     def test_answers_come_after_the_report_window_closed(self):
         """R-20261014-D5B6A6: the Report window closed while the answers were still being fetched - the late answer
         touched its gone button ('invalid command name ...!button'). Now it is dropped quietly."""
