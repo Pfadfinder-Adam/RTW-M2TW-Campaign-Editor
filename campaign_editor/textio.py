@@ -235,12 +235,49 @@ class TextFile:
 
     # ---- output ----
     def dump(self):
-        return self.bom + "\n".join(self.raw).encode(self.encoding)
+        text = "\n".join(self.raw)
+        try:
+            return self.bom + text.encode(self.encoding)
+        except UnicodeEncodeError:
+            # a single-byte file (descr_strat, descr_names...) given a letter it cannot hold ('ė', 'ā' typed in a
+            # name - reports R-20261018-308C60, R-20261020-6718BB): the nearest plain letter, as the game reads it
+            return self.bom + plain_letters(text).encode(self.encoding, "replace")
+
+    def unplain(self):
+        """The letters this file cannot hold as typed (written as their nearest plain letter) - '' when none."""
+        try:
+            "\n".join(self.raw).encode(self.encoding)
+            return ""
+        except UnicodeEncodeError:
+            return "".join(sorted({c for c in "\n".join(self.raw) if not _fits(c, self.encoding)}))
 
     def save(self, path=None):
         # a new file replaces the old one, never written into it: in a mod made
         # of hard links the old file may be shared with the base mod
         replace_file(path or self.path, self.dump())
+
+
+def _fits(c, encoding):
+    try:
+        c.encode(encoding)
+        return True
+    except UnicodeEncodeError:
+        return False
+
+
+def plain_letters(text, encoding="latin-1"):
+    """text with each letter a single-byte file cannot hold taken back to its plain letter ('ė' -> 'e', 'ā' -> 'a',
+    'ł' -> 'l'); one with no plain form stays (encode then puts '?')."""
+    import unicodedata
+    extra = {"ł": "l", "Ł": "L", "đ": "d", "Đ": "D", "ı": "i", "ø": "o", "Ø": "O", "œ": "oe", "Œ": "OE", "ß": "ss"}
+    out = []
+    for c in text:
+        if ord(c) < 128 or _fits(c, encoding):
+            out.append(c)
+            continue
+        base = extra.get(c) or "".join(ch for ch in unicodedata.normalize("NFKD", c) if not unicodedata.combining(ch))
+        out.append(base if base and all(_fits(ch, encoding) for ch in base) else c)
+    return "".join(out)
 
 
 def strip_comment(line):
