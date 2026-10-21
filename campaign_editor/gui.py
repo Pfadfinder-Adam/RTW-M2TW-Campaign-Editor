@@ -2712,14 +2712,23 @@ class App(tk.Tk):
         ttk.Spinbox(sz, from_=26, to=1000, textvariable=v_w, width=6).pack(side="left")
         ttk.Label(sz, text=" x ").pack(side="left")
         ttk.Spinbox(sz, from_=21, to=1000, textvariable=v_h, width=6).pack(side="left")
-        ttk.Label(f, text="the island stays its size in the middle; more tiles = more sea round it",
+        ttk.Label(f, text="more tiles = more sea round the island (a map too small for the regions grows itself)",
                   foreground="#666").grid(row=3, column=1, columnspan=2, sticky="w")
+        v_reg, v_oth = tk.StringVar(value="1"), tk.StringVar(value="0")
+        ttk.Label(f, text="Regions").grid(row=5, column=0, sticky="w", pady=(8, 2))
+        ttk.Spinbox(f, from_=1, to=60, textvariable=v_reg, width=6).grid(row=5, column=1, sticky="w", pady=(8, 2))
+        ttk.Label(f, text="Other factions").grid(row=6, column=0, sticky="w", pady=2)
+        ttk.Spinbox(f, from_=0, to=40, textvariable=v_oth, width=6).grid(row=6, column=1, sticky="w")
+        ttk.Label(f, text="each faction gets its own capital's region and its leader; the regions left over are the "
+                         "rebels' towns. Rome: with fewer than 5 factions the Faction Rankings 'Top 5' view crashes "
+                         "- 4 other factions avoid it. Medieval II: modders say 10 regions or more.",
+                  foreground="#666", wraplength=420, justify="left").grid(row=7, column=1, columnspan=2, sticky="w")
 
         def go():
             try:
                 size = (int(v_w.get()), int(v_h.get()))
                 plan = Plan(self.mod, "mapzero", v_fac.get(), {})
-                region = mapzero.make(plan, camp, v_fac.get(), size)
+                region = mapzero.make(plan, camp, v_fac.get(), size, int(v_reg.get()), int(v_oth.get()))
             except (ValueError, KeyError) as e:
                 messagebox.showerror(APP, "Not made: %s" % e, parent=w)
                 return
@@ -2735,7 +2744,7 @@ class App(tk.Tk):
             self.status.set("A new map from zero: %s, %s's - start a NEW campaign in the game (the game builds the "
                             "map anew). Restore puts the old map back." % (region, v_fac.get()))
         b = ttk.Frame(f)
-        b.grid(row=4, column=0, columnspan=3, sticky="e", pady=(12, 0))
+        b.grid(row=8, column=0, columnspan=3, sticky="e", pady=(12, 0))
         ttk.Button(b, text="Make it", command=go).pack(side="left", padx=4)
         ttk.Button(b, text="Cancel", command=w.destroy).pack(side="left")
         return w

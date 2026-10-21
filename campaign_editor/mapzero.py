@@ -23,6 +23,49 @@ SEA_BLUE, SHALLOW, DEEP = (0, 0, 253), (196, 0, 0), (128, 0, 0)
 DEFAULT_FACTION = {"rome": "gauls", "medieval2": "france"}
 
 
+def layout(W, H, n=1):
+    """Where everything stands: {'land': (x0, y0, x1, y1), 'cells': [{'rect', 'town'}] (one a region - the first is
+    the main faction's, with the port), 'port', 'resource', 'rebels'}. One region: the island above; more: the
+    island cut into rows of regions, each 5 x 5 tiles or more, its town in its middle (a town needs its own land all
+    round - Medieval II stops when a town or port touches another region, even at a corner)."""
+    import math
+    if n <= 1:
+        cells = [{"rect": LAND, "town": TOWN}]
+        out = {"land": LAND, "cells": cells, "port": PORT, "resource": RESOURCE, "rebels": REBELS}
+    else:
+        cols = int(math.ceil(math.sqrt(n)))
+        rows = int(math.ceil(n / float(cols)))
+        lw, lh = cols * 5, rows * 5
+        x0, y0 = (W - lw) // 2, (H - lh) // 2
+        land = (x0, y0, x0 + lw - 1, y0 + lh - 1)
+        cells, left = [], n
+        for r in range(rows):                           # from the top row down: the first region top right
+            in_row = min(cols, left - (rows - r - 1)) if r < rows - 1 else left
+            in_row = max(1, min(cols, in_row))
+            ry1 = land[3] - r * 5
+            ry0 = ry1 - 4
+            widths = [lw // in_row] * in_row
+            widths[-1] += lw - sum(widths)
+            x = land[0]
+            row = []
+            for w in widths:
+                rect = (x, ry0, x + w - 1, ry1)
+                row.append({"rect": rect, "town": (x + w // 2, ry0 + 2)})
+                x += w
+            cells += row[::-1]                          # the east-most first: the port's region
+            left -= in_row
+        main = cells[0]
+        tx, ty = main["town"]
+        rx0, ry0, rx1, ry1 = main["rect"]
+        out = {"land": land, "cells": cells, "port": (rx1, ty), "resource": (rx0 + 1, ry0 + 1),
+               "rebels": (tx, ty - 2)}
+    x0, y0, x1, y1 = out["land"]
+    if x0 < 5 or y0 < 5 or x1 > W - 6 or y1 > H - 6:
+        raise ValueError("the map needs at least %d x %d tiles for %d region(s) (sea round the island)" % (
+            x1 - x0 + 11, y1 - y0 + 11, n))
+    return out
+
+
 def _tga(im):
     """24-bit uncompressed TGA bytes, bottom-up rows (the games' own; 0x18 / 0x20 descriptors crashed Medieval II)."""
     buf = io.BytesIO()
@@ -34,20 +77,20 @@ def _text(s):
     return s.replace("\r\n", "\n").replace("\n", "\r\n").encode("latin-1")
 
 
-def _land_tile(x, y):
-    x0, y0, x1, y1 = LAND
+def _land_tile(x, y, land=LAND):
+    x0, y0, x1, y1 = land
     return x0 <= x <= x1 and y0 <= y <= y1
 
 
-def _land_point(px, py):
+def _land_point(px, py, land=LAND):
     """A corner point (map_heights / ground / climates) on the land: inside the land block's corners."""
-    x0, y0, x1, y1 = LAND
+    x0, y0, x1, y1 = land
     return 2 * x0 <= px <= 2 * x1 + 2 and 2 * y0 <= py <= 2 * y1 + 2
 
 
-def _ring(px, py):
+def _ring(px, py, land=LAND):
     """Points in from the land block's edge (0 = its edge)."""
-    x0, y0, x1, y1 = LAND
+    x0, y0, x1, y1 = land
     return min(px - 2 * x0, 2 * x1 + 2 - px, py - 2 * y0, 2 * y1 + 2 - py)
 
 
@@ -66,9 +109,14 @@ def _sample(mod, campaign, name, xy, corners=True):
         return None
 
 
-def pictures(W, H, region, land_ground, land_climate, sea_climate):
-    """{name: Pillow picture} of the new map (rows top-down as Pillow keeps them; written bottom-up)."""
+def pictures(W, H, region, land_ground, land_climate, sea_climate, lay=None):
+    """{name: Pillow picture} of the new map (rows top-down as Pillow keeps them; written bottom-up); region: the one
+    region's colour, or a list of colours, one for each of lay's cells."""
     from PIL import Image
+    lay = lay or layout(W, H, 1)
+    land = lay["land"]
+    colours = region if isinstance(region, list) else [region]
+    towns = {c["town"] for c in lay["cells"]}
     pw, ph = 2 * W + 1, 2 * H + 1
     out = {}
 
@@ -78,37 +126,43 @@ def pictures(W, H, region, land_ground, land_climate, sea_climate):
         return im
 
     def regions(x, y):
-        if (x, y) == TOWN:
+        if (x, y) in towns:
             return TOWN_PX
-        if (x, y) == PORT:
+        if (x, y) == lay["port"]:
             return PORT_PX
-        return region if _land_tile(x, y) else SEA_REGION
+        if not _land_tile(x, y, land):
+            return SEA_REGION
+        for c, colour in zip(lay["cells"], colours):
+            cx0, cy0, cx1, cy1 = c["rect"]
+            if cx0 <= x <= cx1 and cy0 <= y <= cy1:
+                return colour
+        return colours[0]
     out["map_regions.tga"] = tiles(regions)
 
     def heights(px, py):
-        if not _land_point(px, py):
+        if not _land_point(px, py, land):
             return SEA_BLUE
-        g = {0: 4, 1: 8, 2: 12}.get(_ring(px, py), 16)          # a low shore rising inland (grey >= 1: land)
+        g = {0: 4, 1: 8, 2: 12}.get(_ring(px, py, land), 16)          # a low shore rising inland (grey >= 1: land)
         return (g, g, g)
     out["map_heights.tga"] = tiles(heights, pw, ph)
 
     def ground(px, py):
-        if _land_point(px, py):
+        if _land_point(px, py, land):
             return land_ground
-        x0, y0, x1, y1 = LAND
+        x0, y0, x1, y1 = land
         near = 2 * x0 - 3 <= px <= 2 * x1 + 5 and 2 * y0 - 3 <= py <= 2 * y1 + 5
         return SHALLOW if near else DEEP
     out["map_ground_types.tga"] = tiles(ground, pw, ph)
-    out["map_climates.tga"] = tiles(lambda px, py: land_climate if _land_point(px, py) else sea_climate, pw, ph)
+    out["map_climates.tga"] = tiles(lambda px, py: land_climate if _land_point(px, py, land) else sea_climate, pw, ph)
     out["map_fog.tga"] = tiles(lambda px, py: (255, 255, 255), pw, ph)
     out["map_features.tga"] = tiles(lambda x, y: (0, 0, 0))
     out["map_trade_routes.tga"] = tiles(lambda x, y: (0, 0, 0))
 
     def rough(qx, qy):
-        x0, y0, x1, y1 = LAND
+        x0, y0, x1, y1 = land
         return (4, 4, 4) if 2 * x0 <= qx <= 2 * x1 + 1 and 2 * y0 <= qy <= 2 * y1 + 1 else (0, 0, 0)
     out["map_roughness.tga"] = tiles(rough, 2 * W, 2 * H)
-    radar = tiles(lambda x, y: (96, 140, 70) if _land_tile(x, y) else (40, 80, 150))
+    radar = tiles(lambda x, y: (96, 140, 70) if _land_tile(x, y, land) else (40, 80, 150))
     out["radar_map1.tga"] = radar
     out["radar_map2.tga"] = radar.resize((2 * W, 2 * H))
     return out
@@ -128,39 +182,88 @@ def _terrain_text(mod, campaign, W, H):
     return re.sub(r"(\bheight\s+)\d+", lambda m: m.group(1) + str(H), text, count=1)
 
 
-def _region_text(mod, campaign, region, faction):
-    """The faction's capital region's own block (its names are in the text files), the faction its creator."""
+def pick_regions(mod, campaign, main, others=0, n=1):
+    """[(region, owner)] of the new map: the main faction's capital first, then each other faction's capital (the
+    first `others` factions of the campaign with a town and a leader), the rest the rebels' (the campaign's other
+    regions - their names are in the text files). n regions in all."""
+    from .strat import Strat
+    st = Strat(mod.load(mod.campaign_file(campaign, "descr_strat.txt")))
+
+    def leads(fb):
+        return fb is not None and fb.settlements and any(c.named for c in fb.characters)
+    if not leads(st.faction(main)):
+        raise ValueError("%s has no town and leader in this campaign to take its region's names from" % main)
+    owners = [main] + [fb.name for fb in st.factions if fb.name not in (main, "slave") and leads(fb)][:max(0, others)]
+    out, taken = [], set()
+    for f in owners[:max(1, n)]:
+        r = st.faction(f).settlements[0].region
+        out.append((r, f))
+        taken.add(r)
+    sb = st.faction("slave")
+    rebel_owner = "slave" if sb is not None and sb.settlements else main
+    rebel_towns = [st_.region for st_ in sb.settlements] if sb is not None else []
+    for r in rebel_towns + list(mod.regions(campaign)):    # the rebels' own towns first
+        if len(out) >= n:
+            break
+        if r not in taken and not mod.regions(campaign)[r].get("wasteland"):
+            out.append((r, rebel_owner))
+            taken.add(r)
+    return out
+
+
+def _region_text(mod, campaign, picked, main):
+    """The picked regions' own blocks (their names are in the text files), each its owner its creator (the rebels'
+    the main faction - the rebels may not create a region)."""
     from .moddata import region_entries
     f = mod.load(mod.campaign_file(campaign, "descr_regions.txt"))
-    e = region_entries(f)[region]
+    entries = region_entries(f)
     keys = ["settlement", "creator", "rebels", "colour", "resources", "triumph", "farming"]
-    vals = {k: v for k, (_, v) in e.items()}
-    vals["creator"] = faction
-    lines = [region] + ["\t" + vals[k] for k in keys if vals.get(k)]
-    for k in ("religions", "beliefs"):
-        if vals.get(k):
-            lines.append("\t" + (vals[k] if vals[k].lstrip().startswith(k) else "%s %s" % (k, vals[k])))
-    return "\n".join(lines) + "\n"
+    blocks = []
+    for region, owner in picked:
+        vals = {k: v for k, (_, v) in entries[region].items()}
+        vals["creator"] = owner if owner != "slave" else main
+        lines = [region] + ["\t" + vals[k] for k in keys if vals.get(k)]
+        for k in ("religions", "beliefs"):
+            if vals.get(k):
+                lines.append("\t" + (vals[k] if vals[k].lstrip().startswith(k) else "%s %s" % (k, vals[k])))
+        blocks.append("\n".join(lines))
+    return "\n\n".join(blocks) + "\n"
 
 
 def _swap_xy(line, xy):
     return re.sub(r"x\s*\d+\s*,\s*y\s*\d+", "x %d, y %d" % xy, line, count=1)
 
 
-def _strat_text(mod, campaign, faction, region, resource, rome):
+def _settlement(lines, st, region, creator):
+    """A settlement block copied with its region and its creator changed."""
+    out = []
+    for l in lines[st.start:st.end]:
+        t = tokens(strip_comment(l))
+        if t[:1] == ["region"]:
+            l = re.sub(r"(\bregion\s+)\S+", lambda m: m.group(1) + region, l)
+        elif t[:1] == ["faction_creator"]:
+            l = re.sub(r"(\bfaction_creator\s+)\S+", lambda m: m.group(1) + creator, l)
+        out.append(l)
+    return out
+
+
+def _strat_text(mod, campaign, main, picked, lay, resource, rome):
     from .strat import Strat
     old = Strat(mod.load(mod.campaign_file(campaign, "descr_strat.txt")))
     lines = old.lines
-    fb, sb = old.faction(faction), old.faction("slave")
-    if fb is None:
-        raise ValueError("%s is not in this campaign's descr_strat.txt" % faction)
+    sb = old.faction("slave")
+    factions = []
+    for _, owner in picked:
+        if owner != "slave" and owner not in factions:
+            factions.append(owner)
     first = min(x.start for x in old.factions)
     head, skip = [], None
-    for i, l in enumerate(lines[:first]):
+    for l in lines[:first]:
         h = (tokens(strip_comment(l)) or [""])[0]
         if h in ("playable", "unlockable", "nonplayable"):
             head.append(l)
-            head += ["\t%s" % faction] if h == "playable" else (["\tslave"] if h == "nonplayable" else [])
+            head += (["\t%s" % main] if h == "playable" else
+                     ["\t%s" % f for f in factions[1:]] + ["\tslave"] if h == "nonplayable" else [])
             skip = h
             continue
         if skip:
@@ -171,45 +274,63 @@ def _strat_text(mod, campaign, faction, region, resource, rome):
         if h in ("resource", "landmark", "fort", "watchtower"):
             continue
         head.append(l)
-    head.append("resource\t%s,\t%d,\t%d" % ((resource,) + RESOURCE))
+    head.append("resource\t%s,\t%d,\t%d" % ((resource,) + lay["resource"]))
     head.append("")
 
     def block_top(b):
         stop = min([s.start for s in b.settlements] + [c.start for c in b.characters] + [b.end])
         return [l for l in lines[b.start:stop] if (tokens(strip_comment(l)) or [""])[0] not in ("fort", "watchtower")]
-    out = head + block_top(fb)
-    st = fb.settlements[0]
-    for l in lines[st.start:st.end]:
-        t = tokens(strip_comment(l))
-        out.append(re.sub(r"(\bregion\s+)\S+", lambda m: m.group(1) + region, l) if t[:1] == ["region"] else l)
-    leader = next((c for c in fb.characters if c.role == "leader"), None) or next(
-        (c for c in fb.characters if c.named), None) or (fb.characters[0] if fb.characters else None)
-    if leader is None:
-        raise ValueError("%s has no character in descr_strat.txt to lead it" % faction)
-    out.append(_swap_xy(lines[leader.start], TOWN))
-    out += _first_units(lines[leader.start + 1:leader.end], 4)
-    out.append("")
-    other = next((c for c in fb.characters if c is not leader and c.named), None)
-    rebel_name = (other.name if other else leader.name).replace("sub_faction", "").strip()
+    towns = {r: c["town"] for (r, _), c in zip(picked, lay["cells"])}
+    out = list(head)
+    for f in factions:
+        fb = old.faction(f)
+        out += block_top(fb)
+        mine = [r for r, o in picked if o == f]
+        for r in mine:
+            out += _settlement(lines, fb.settlements[0], r, f)
+        leader = next((c for c in fb.characters if c.role == "leader"), None) or next(
+            (c for c in fb.characters if c.named), None)
+        out.append(_swap_xy(lines[leader.start], towns[mine[0]]))
+        out += _first_units(lines[leader.start + 1:leader.end], 4)
+        out.append("")
     if sb is not None:
+        mfb = old.faction(main)
+        leader = next((c for c in mfb.characters if c.role == "leader"), None) or next(
+            (c for c in mfb.characters if c.named), None)
+        other = next((c for c in mfb.characters if c is not leader and c.named), None)
+        rebel_name = (other.name if other else leader.name).replace("sub_faction", "").strip()
         out += block_top(sb)
+        for r in [r for r, o in picked if o == "slave"]:
+            out += _settlement(lines, sb.settlements[0], r, main)
         rc = next((c for c in sb.characters if any(tokens(l)[:1] == ["army"] for l in lines[c.start:c.end])),
                   sb.characters[0] if sb.characters else None)
         if rc is not None:
-            line = _swap_xy(lines[rc.start], REBELS)
-            line = re.sub(r"(sub_faction\s+)\w+(\s*,\s*)[^,]+", lambda m: m.group(1) + faction + m.group(2) +
+            line = _swap_xy(lines[rc.start], lay["rebels"])
+            line = re.sub(r"(sub_faction\s+)\w+(\s*,\s*)[^,]+", lambda m: m.group(1) + main + m.group(2) +
                           rebel_name, line, count=1)
             out.append(line)
             out += _first_units(lines[rc.start + 1:rc.end], 2)
         out.append("")
-    if rome:
-        out += ["core_attitudes\t%s,\t600\t\tslave" % faction,
-                "faction_relationships\t%s,\t600\t\tslave" % faction,
-                "faction_relationships\tslave,\t600\t\t%s" % faction]
-    else:
-        out += ["faction_standings\t%s,\t\t-1.0\tslave" % faction,
-                "faction_relationships\t%s, at_war_with\tslave" % faction]
+    for f in factions:
+        if rome:
+            out += ["core_attitudes\t%s,\t600\t\tslave" % f,
+                    "faction_relationships\t%s,\t600\t\tslave" % f,
+                    "faction_relationships\tslave,\t600\t\t%s" % f]
+        else:
+            out += ["faction_standings\t%s,\t\t-1.0\tslave" % f,
+                    "faction_relationships\t%s, at_war_with\tslave" % f]
     return "\n".join(out) + "\n"
+
+
+def _wins_text(picked, rome):
+    """Each faction: hold its own regions, take them all (one region: 2 - never won at the start)."""
+    out, n = [], len(picked)
+    for f in [o for i, (_, o) in enumerate(picked) if o != "slave" and o not in [x for _, x in picked[:i]]]:
+        hold = " ".join(r for r, o in picked if o == f)
+        take = max(2, n)
+        out.append("%s\nhold_regions %s\ntake_regions %d\n%s" % (
+            f, hold, take, "" if rome else "short_campaign hold_regions %s\ntake_regions %d\n" % (hold, take)))
+    return "\n".join(out)
 
 
 def _first_units(block, most):
@@ -238,8 +359,8 @@ def _resource(mod, campaign):
     return "wine"
 
 
-def _mercenaries(mod, campaign, region):
-    """One pool for the region: the units of the pool it was in (else the file's first unit)."""
+def _mercenaries(mod, campaign, region, regions=None):
+    """One pool for the map's regions: the units of the pool the main region was in (else the file's first unit)."""
     path = mod.campaign_file(campaign, "descr_mercenaries.txt")
     units, first, mine = [], None, False
     if path:
@@ -256,26 +377,28 @@ def _mercenaries(mod, campaign, region):
                 units.append(strip_comment(l).strip())
     if not mine:
         units = [first] if first else []
-    return "pool New_Map\n\tregions %s\n" % region + "".join("\t%s\n" % u for u in units)
+    return "pool New_Map\n\tregions %s\n" % " ".join(regions or [region]) + "".join("\t%s\n" % u for u in units)
 
 
-def _music_text(lines, region):
-    """descr_sounds_music_types.txt with every 'regions' line keeping only the map's region (a line left with none
-    is taken out); the music types themselves stay."""
-    out, given = [], False
+def _music_text(lines, regions):
+    """descr_sounds_music_types.txt with every 'regions' line keeping only the map's regions, each once (a line left
+    with none is taken out); the music types themselves stay."""
+    out, given = [], set()
     for l in lines:
         t = tokens(strip_comment(l))
         if t[:1] == ["regions"]:
-            if region in t[1:] and not given:
-                out.append(l[:len(l) - len(l.lstrip())] + "regions " + region)
-                given = True
+            keep = [r for r in t[1:] if r in regions and r not in given]
+            if keep:
+                out.append(l[:len(l) - len(l.lstrip())] + "regions " + " ".join(keep))
+                given.update(keep)
             continue
         out.append(l)
     return "\n".join(out) + "\n"
 
 
-def make(plan, campaign, faction=None, size=SIZE):
-    """The new map into plan (its mod's campaign folder). Returns the region's name."""
+def make(plan, campaign, faction=None, size=SIZE, regions=1, others=0):
+    """The new map into plan (its mod's campaign folder): `regions` regions, the main faction's and `others` other
+    factions' capitals among them, the rest the rebels'. Returns the main region's name."""
     from .limits import game_kind
     from .upscale import hgt_from_picture
     from . import terrain
@@ -283,14 +406,21 @@ def make(plan, campaign, faction=None, size=SIZE):
     rome = game_kind(mod) == "rome"
     faction = faction or DEFAULT_FACTION["rome" if rome else "medieval2"]
     W, H = size
-    if W < LAND[2] + 5 or H < LAND[3] + 5:
-        raise ValueError("the map needs at least %d x %d tiles (sea round the island)" % (LAND[2] + 5, LAND[3] + 5))
-    from .strat import Strat
-    fb = Strat(mod.load(mod.campaign_file(campaign, "descr_strat.txt"))).faction(faction)
-    if fb is None or not fb.settlements:
-        raise ValueError("%s has no town in this campaign to take its region's names from" % faction)
-    region = fb.settlements[0].region
-    info = mod.regions(campaign)[region]
+    regions = max(1, int(regions))
+    grown = False
+    for _ in range(200):                                # a map too small for the regions grows to fit (sea round)
+        try:
+            lay = layout(W, H, regions)
+            break
+        except ValueError:
+            if regions == 1:
+                raise
+            W, H, grown = W + 1, H + 1, True
+    picked = pick_regions(mod, campaign, faction, others, regions)
+    if len(picked) < regions:
+        raise ValueError("the campaign has %d region(s) to take names from, %d asked" % (len(picked), regions))
+    info = mod.regions(campaign)
+    region = picked[0][0]
     try:
         old_town = mod.city_tiles(campaign).get(region)
     except Exception:
@@ -302,7 +432,7 @@ def make(plan, campaign, faction=None, size=SIZE):
         next((c for _, c, _ in terrain.climates(mod)), (237, 20, 91))
     sea_climate = _sample(mod, campaign, "map_climates.tga", (0, 0)) or land_climate
     folder = mod.own(mod.campaign_dir(campaign)) if hasattr(mod, "own") else mod.campaign_dir(campaign)
-    pics = pictures(W, H, info["colour"], land_ground, land_climate, sea_climate)
+    pics = pictures(W, H, [info[r]["colour"] for r, _ in picked], land_ground, land_climate, sea_climate, lay)
     for name, im in pics.items():
         if name == "map_fog.tga" and rome:
             continue                                    # Rome has no fog picture
@@ -311,37 +441,42 @@ def make(plan, campaign, faction=None, size=SIZE):
         plan.binary(os.path.join(folder, name), _tga(im))
     top, low = terrain.max_land_height(mod, campaign), terrain.min_sea_height(mod, campaign)
     plan.binary(os.path.join(folder, "map_heights.hgt"), hgt_from_picture(_tga(pics["map_heights.tga"]), top, low))
+    names = [r for r, _ in picked]
+    resource = _resource(mod, campaign)
     texts = {
         "descr_terrain.txt": _terrain_text(mod, campaign, W, H),
-        "descr_regions.txt": _region_text(mod, campaign, region, faction),
-        "descr_strat.txt": _strat_text(mod, campaign, faction, region, _resource(mod, campaign), rome),
-        "descr_win_conditions.txt": "%s\nhold_regions %s\ntake_regions 2\n%s" % (
-            faction, region, "" if rome else "short_campaign hold_regions %s\ntake_regions 2\n" % region),
+        "descr_regions.txt": _region_text(mod, campaign, picked, faction),
+        "descr_strat.txt": _strat_text(mod, campaign, faction, picked, lay, resource, rome),
+        "descr_win_conditions.txt": _wins_text(picked, rome),
         "descr_events.txt": "",
-        "descr_mercenaries.txt": _mercenaries(mod, campaign, region),
+        "descr_mercenaries.txt": _mercenaries(mod, campaign, region, names),
     }
     music = mod.campaign_file(campaign, "descr_sounds_music_types.txt")
-    if music:                                           # Medieval II: its regions lines name only this map's region
-        texts["descr_sounds_music_types.txt"] = _music_text(mod.load(music).texts(), region)
+    if music:                                           # Medieval II: its regions lines name only this map's regions
+        texts["descr_sounds_music_types.txt"] = _music_text(mod.load(music).texts(), set(names))
     if mod.campaign_file(campaign, "descr_regions_and_settlement_name_lookup.txt"):
-        texts["descr_regions_and_settlement_name_lookup.txt"] = "%s\n%s\n" % (region, info["settlement"])
+        texts["descr_regions_and_settlement_name_lookup.txt"] = "".join(
+            "%s\n%s\n" % (r, info[r]["settlement"]) for r in names)
     for name, text in texts.items():
         plan.binary(os.path.join(folder, name), _text(text))
     for d in (folder, os.path.join(mod.data, "world", "maps", "base")):
         rwm = os.path.join(d, "map.rwm")
         if os.path.exists(rwm):
             plan.delete(rwm, "the game builds the map anew from the new pictures")
-    plan.note(None, "a new map from zero: %d x %d tiles, one region %s (town %s at %d, %d, a port at %d, %d, %s at "
-                    "%d, %d), %s's, the rebels with one army; the campaign's other factions are not in it" % (
-                        W, H, region, info["settlement"], TOWN[0], TOWN[1], PORT[0], PORT[1],
-                        _resource(mod, campaign), RESOURCE[0], RESOURCE[1], faction))
-    if rome:
+    owners = sorted({o for _, o in picked if o != "slave"})
+    if grown:
+        plan.note(None, "the map made %d x %d tiles: room for %d regions with sea round them" % (W, H, regions))
+    plan.note(None, "a new map from zero: %d x %d tiles, %d region(s) (%s), factions %s and the rebels; a port at "
+                    "%d, %d, %s at %d, %d; the campaign's other factions are not in it" % (
+                        W, H, len(picked), ", ".join("%s (%s)" % p for p in picked), ", ".join(owners),
+                        lay["port"][0], lay["port"][1], resource, lay["resource"][0], lay["resource"][1]))
+    if rome and len(owners) < 5:
         plan.warn(None, "Rome: with fewer than 5 factions alive the Faction Rankings 'Top 5' view crashes the game "
-                        "(the engine's own loop) - do not pick it until the map has 5 factions")
-    else:
+                        "(the engine's own loop) - do not pick it, or make the map with 5 factions")
+    if not rome and len(picked) < 10:
         plan.warn(None, "Medieval II: modders say the game wants 10 regions or more (not found in the engine's "
-                        "code) - try it; if it does not load, add regions")
+                        "code) - try it; if it does not load, make the map with 10 regions")
     return region
 
 
-__all__ = ["make", "pictures", "SIZE"]
+__all__ = ["make", "pictures", "layout", "pick_regions", "SIZE"]
