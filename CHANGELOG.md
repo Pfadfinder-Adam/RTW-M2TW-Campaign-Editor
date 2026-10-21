@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### Added
+- Make a card / Make a picture: 'Painted look' - the 3D view turned into flat brush areas with a thin dark line, so the card looks painted, not 3D.
 - Check mod files: a faction with no unit for custom / quick battles is named (a quick battle that picks it stops the game), with what to do.
 - Map from zero (the map's bar): a new small map in place of the campaign's - one island, one region with its town, a port and a resource, one faction (Rome: the Gauls, Medieval II: France) and the rebels; Restore puts the old map back.
 - Interface > Campaign HUD: the campaign map's bottom panel as the game draws it (both games, the engines' own places), from the mod's pictures; right click a piece to replace its picture or set its place and size; preview on bigger screens; save as PNG.

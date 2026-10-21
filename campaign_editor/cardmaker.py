@@ -113,6 +113,77 @@ def on_ground(picture, ground=None):
     return base
 
 
+def _kuwahara(rgb, r):
+    """The Kuwahara filter (the painters' filter: each pixel takes the mean colour of the calmest of the four squares
+    round it - flat brush areas, the edges kept), on a NumPy array h x w x 3."""
+    import numpy as np
+    a = rgb.astype(np.float64)
+    lum = a @ np.array([0.299, 0.587, 0.114])
+    h, w = lum.shape
+    n = r + 1
+
+    def box_sum(x):
+        c = np.pad(x, [(1, 0), (1, 0)] + [(0, 0)] * (x.ndim - 2)).cumsum(0).cumsum(1)
+        return c
+    S1, S2, SC = box_sum(lum), box_sum(lum * lum), box_sum(a)
+    best_var = np.full((h, w), np.inf)
+    out = np.zeros_like(a)
+    ys, xs = np.mgrid[0:h, 0:w]
+    for dy in (-r, 0):
+        for dx in (-r, 0):
+            y0 = np.clip(ys + dy, 0, h - n)
+            x0 = np.clip(xs + dx, 0, w - n)
+            y1, x1 = y0 + n, x0 + n
+
+            def take(c):
+                return c[y1, x1] - c[y0, x1] - c[y1, x0] + c[y0, x0]
+            k = n * n
+            m = take(S1) / k
+            var = take(S2) / k - m * m
+            mean = take(SC) / k
+            better = var < best_var
+            best_var = np.where(better, var, best_var)
+            out[better] = mean[better]
+    return np.clip(out, 0, 255).astype(np.uint8)
+
+
+def painted(figure, strength=1.0, seed=7):
+    """The 3D figure made to look painted (a Discord modder, 2026-10-21: 'unit card art that does not look 3D, like
+    Rome 2 or Shogun 2'): flat brush areas with the edges kept (the Kuwahara filter), the light a little warmer and
+    softer, a canvas grain, a thin dark line round the man; the see-through parts kept. A filter over the 3D view - it
+    paints nothing new. strength 0..2 (the brush's size)."""
+    from PIL import Image, ImageChops, ImageEnhance, ImageFilter
+    import random
+    k = max(0.0, float(strength))
+    if k <= 0:
+        return figure
+    rgba = figure.convert("RGBA")
+    alpha = rgba.getchannel("A")
+    # the clear parts a mid colour, so the brush does not drag a dark fringe in
+    rgb = Image.new("RGB", rgba.size, (150, 135, 110))
+    rgb.paste(rgba.convert("RGB"), mask=alpha)
+    r = max(2, int(round(min(rgba.size) / 160.0 * k)) + 1)
+    try:
+        import numpy as np
+        flat = Image.fromarray(_kuwahara(np.asarray(rgb), r))
+        flat = Image.fromarray(_kuwahara(np.asarray(flat), max(1, r // 2)))
+    except ImportError:                                 # no NumPy: a softer picture only
+        flat = rgb.filter(ImageFilter.ModeFilter(3)).filter(ImageFilter.SMOOTH_MORE)
+    flat = ImageEnhance.Color(flat).enhance(1.0 + 0.12 * k)
+    flat = ImageChops.multiply(flat, Image.new("RGB", flat.size, (255, 244, 226)))
+    flat = ImageEnhance.Brightness(flat).enhance(1.05)
+    rnd = random.Random(seed)                           # canvas: a light grain, only in the light, never a colour
+    small = Image.new("L", (max(8, rgba.width // 3), max(8, rgba.height // 3)))
+    small.putdata([rnd.randint(236, 255) for _ in range(small.width * small.height)])
+    grain = small.resize(rgba.size, Image.BICUBIC).filter(ImageFilter.GaussianBlur(0.7))
+    flat = ImageChops.multiply(flat, Image.merge("RGB", (grain,) * 3))
+    outline = ImageChops.subtract(alpha.filter(ImageFilter.MaxFilter(3)), alpha).filter(ImageFilter.GaussianBlur(0.5))
+    flat.paste((52, 40, 30), mask=outline.point(lambda v: int(v * 0.8)))
+    out = flat.convert("RGBA")
+    out.putalpha(alpha.filter(ImageFilter.MaxFilter(3)))
+    return out
+
+
 # the games' interface sheets (data/ui/*.sd.xml: each page a picture in ui/<culture>/interface/, each sprite a box on it)
 SHEETS = ("shared.sd.xml", "battle.sd.xml", "strategy.sd.xml", "shared2.sd.xml", "battle3.sd.xml", "strat3.sd.xml")
 CARD_GROUNDS = (("STRAT_CARD_BACKGROUND", "the game's card ground (campaign)"),
