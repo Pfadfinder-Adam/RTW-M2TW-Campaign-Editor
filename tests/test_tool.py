@@ -3189,6 +3189,19 @@ building smith
         self.assertEqual((got["display_name"], got["short_name"], got["adjective"]),
                          ("The Arverni Confederation", "Arverni", "Arvernian"))
 
+    def test_sea_colour_of_a_map_without_the_vanilla_sea(self):
+        """R-20261021-05D38C: a map_regions.tga whose sea is not 41 140 233 stopped the region brush ("object of type
+        'generator' has no len()"). Now its most common other colour is the sea."""
+        from campaign_editor import regionedit
+        mod = ModData(self.root)
+        p = mod.campaign_file("test", "map_regions.tga")
+        from campaign_editor.tga import read_tga
+        img = read_tga(p)
+        sea = (10, 60, 200)
+        pix = [[sea if y < 2 else img.get(x, y) for x in range(img.width)] for y in range(img.height)]
+        write_tga(p, img.width, img.height, pix)
+        self.assertEqual(regionedit.sea_colour(ModData(self.root), "test"), sea)
+
     def test_answers_come_after_the_report_window_closed(self):
         """R-20261014-D5B6A6: the Report window closed while the answers were still being fetched - the late answer
         touched its gone button ('invalid command name ...!button'). Now it is dropped quietly."""
