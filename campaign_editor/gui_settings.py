@@ -230,6 +230,11 @@ class SettingsWindow(tk.Toplevel):
                         "starts (every few hours; asks only by the reports' numbers)",
                         command=lambda: settings.put("reports_check", bool(self.v_answers.get()))).pack(
             anchor="w", pady=(6, 0))
+        self.v_crash = tk.BooleanVar(value=settings.get("crash_offer", True) is not False)
+        ttk.Checkbutton(lf, variable=self.v_crash, text="When the game has stopped (crashed), ask once whether to send "
+                        "a report (looked at after Start the game and when the editor starts; nothing is sent "
+                        "without your click)",
+                        command=lambda: settings.put("crash_offer", bool(self.v_crash.get()))).pack(anchor="w")
 
     def _updates(self, body):
         lf, _ = self._box(body, "New versions", "Only the number of the newest release is asked for - nothing is "

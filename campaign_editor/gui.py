@@ -1073,6 +1073,7 @@ class App(tk.Tk):
         self.after(900, self.offer_own_folder)
         self.after(4000, self.check_report_answers)
         self.after(6000, self.check_new_version)
+        self.after(8000, self.check_game_crash)        # a crash of the game since the editor last asked: offered once
 
     def _fit_status(self):
         """The message's place: the widest gap of the bottom bar's one row, or its own line under the bar."""
@@ -1167,6 +1168,52 @@ class App(tk.Tk):
             check_on_start(self)
         except Exception as e:
             log.write("Answers to my reports not checked: %s" % e)
+
+    def _game_and_mod(self):
+        """The game folder and the loaded mod's folder (the crash watch's), or the exe's game / the one used last."""
+        from . import settings
+        if self.mod:
+            from .newmod import game_of
+            return game_of(self.mod.data), os.path.dirname(os.path.abspath(self.mod.data))
+        return log.exe_game() or settings.get("game") or None, None
+
+    def check_game_crash(self, c=None):
+        """A crash of the game the editor has not asked about (crashwatch): 'The game stopped: <why>. Send a
+        report?' - once; Send opens Report a bug with the game's log and crash report (nothing goes unseen)."""
+        from . import crashwatch
+        try:
+            if c is None:
+                c = crashwatch.unseen(*self._game_and_mod())
+            if not c:
+                return
+            crashwatch.mark_seen(c)
+            log.write("The game stopped (offered as a report): %s" % c["why"])
+            if ask(APP, crashwatch.question(c), yes="Send a report...", no="Not now"):
+                self.send_report("The game stopped: %s" % c["why"])
+        except Exception as e:
+            log.write("The game's crash not looked at: %s" % e)
+
+    def _watch_game(self):
+        """After Start the game: the game's files looked at every 5 s (crashwatch.Watch) - a crash is offered as a
+        report at once; stops after a crash offered or 8 hours. Nothing runs once the editor is closed."""
+        from . import crashwatch
+        game, mod_dir = self._game_and_mod()
+        if not game:
+            return
+        w = self._crash_watch = crashwatch.Watch(game, mod_dir)
+
+        def tick():
+            if getattr(self, "_crash_watch", None) is not w or w.done:
+                return
+            try:
+                c = w.step()
+            except Exception:
+                c = None
+            if c:
+                self.check_game_crash(c)
+            if not w.done:
+                self.after(5000, tick)
+        self.after(5000, tick)
 
     def offer_own_folder(self):
         """Once a version, when an older version's files lie right beside the exe among the game's files: move them
@@ -2436,6 +2483,7 @@ class App(tk.Tk):
                     APP, "The game may not start as it should:\n\n%s\n\nStart it anyway?" % "\n\n".join(maybe), yes='Start it anyway', no='Not now'):
                 return
             launch.start(how)
+            self._watch_game()                          # a crash of this run offered as a report
         except (ValueError, OSError) as e:
             log.write("Start the game: not started - %s" % e)
             messagebox.showerror(APP, "The game did not start: %s" % e)
