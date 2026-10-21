@@ -3216,6 +3216,36 @@ building smith
         restore(mod, bdir)
         self.assertEqual({f: read(f) for f in (rsd, page)}, before)
 
+    def test_sprite_box_moved_and_sized(self):
+        """A sprite's place and size: the binary sheet's box moved; the .sd.xml twin follows (its x / y, w / h the
+        size shown, tw / th the picture's box only when they differ), every other byte as it was; Restore."""
+        from campaign_editor import spriteedit as SE, spritesheet as SS, symbols as SY
+        mod = ModData(self.root)
+        ui = os.path.join(mod.data, "ui")
+        os.makedirs(ui, exist_ok=True)
+        sh = SS.Sheet(5, "T", [{"guide": "g", "file": "p.tga", "flag": 0, "w": 64, "h": 64, "mask": bytes(513)}],
+                      [{"name": "A", "page": 0, "x0": 1, "x1": 2, "y0": 0, "y1": 3, "flag": 1, "tail": 0}])
+        rsd, xml = os.path.join(ui, "strat3.rsd"), os.path.join(ui, "strat3.sd.xml")
+        with open(rsd, "wb") as fh:
+            fh.write(SS.write(sh))
+        text = ('<sprite_definitions>\r\n <page file="p.tga" w="64" h="64">\r\n'
+                '  <sprite name="A" x="1" y="0" w="2" h="4" alpha="1"/>\r\n'
+                '  <sprite name="B" x="9" y="9" w="5" h="5"/>\r\n </page>\r\n</sprite_definitions>\r\n')
+        with open(xml, "wb") as fh:
+            fh.write(text.encode("latin-1"))
+        sheet = next(x for x in SY.all_sheets(mod) if x["name"] == "strat3")
+        plan = SE.set_box(Plan(mod, "x", "x", {}), mod, sheet, "A", (10, 12, 20, 16), (10, 8))
+        bdir = plan.apply()
+        self.assertEqual(SS.read(open(rsd, "rb").read()).find("A")["box"], (10, 12, 20, 16))
+        got = open(xml, "rb").read().decode("latin-1")
+        self.assertIn('<sprite name="A" x="10" y="12" w="10" h="8" alpha="1" tw="20" th="16"/>', got)
+        self.assertIn('<sprite name="B" x="9" y="9" w="5" h="5"/>\r\n', got)
+        self.assertEqual(SY.xml_boxes(got)[0][1][0], ("A", (10, 12, 20, 16)))
+        restore(mod, bdir)
+        self.assertEqual(open(xml, "rb").read().decode("latin-1"), text)
+        with self.assertRaises(ValueError):
+            SE.set_box(Plan(mod, "x", "x", {}), mod, sheet, "NONE", (0, 0, 1, 1))
+
     def test_sprite_change_waits_for_apply_in_the_interface_work(self):
         """A sprite's picture replaced on the Sprite sheets tab is a change of the Interface work: counted for Apply,
         in its plan, undone by Undo on that tab."""
@@ -3255,6 +3285,12 @@ building smith
                 self.assertGreaterEqual(ed.pending(), 1)
                 files = [os.path.basename(f) for f in ed.make_plan().changed_files()]
                 self.assertIn("p.tga", files)
+                ed.undo_step()
+                self.assertFalse(ed.dirty())
+                sp.undo.append(("box", ("strat3", "A"), None))
+                sp.box_changes[("strat3", "A")] = ((0, 0, 2, 2), None)        # as the Place and size window keeps it
+                self.assertEqual(dict(sp.boxes())["A"], (0, 0, 2, 2))
+                self.assertIn("strat3.rsd", [os.path.basename(f) for f in ed.make_plan().changed_files()])
                 ed.undo_step()
                 self.assertFalse(ed.dirty())
         finally:
