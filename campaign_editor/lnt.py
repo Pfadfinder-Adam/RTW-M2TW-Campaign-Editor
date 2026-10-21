@@ -853,7 +853,7 @@ def keep_up(plan):
         from .strat import Strat
         want = 0
         for path, f in plan.files.items():
-            if os.path.basename(path).lower() == "descr_strat.txt":
+            if os.path.basename(path).lower() == "descr_strat.txt" and plan.touched(path):
                 st = Strat(f)
                 want = max(want, sum(len(x["items"]) for x in (st.playable, st.unlockable) if x))
         if not want:

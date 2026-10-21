@@ -319,8 +319,8 @@ def keep_up(plan):
     try:
         from .strat import Strat
         for path, f in list(plan.files.items()):
-            if os.path.basename(path).lower() != "descr_strat.txt":
-                continue
+            if os.path.basename(path).lower() != "descr_strat.txt" or not plan.touched(path):
+                continue                        # a game's campaign only read stays the game's
             while True:
                 s = Strat(f)
                 hit = None

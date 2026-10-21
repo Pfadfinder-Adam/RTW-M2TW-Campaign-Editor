@@ -219,8 +219,28 @@ class Plan:
 
     def changed_files(self):
         return [p for p, f in self.files.items() if f.dump() != self.originals[p]] + \
-            [p for p, d in self.binaries.items() if not os.path.exists(p) or _read(p) != d] + \
+            [p for p, d in self.binaries.items() if not os.path.exists(self.source_of(p)) or _read(self.source_of(p)) != d] + \
             list(self.deletions)
+
+    def source_of(self, path):
+        """What a file is now: the mod's own, else - a thin mod's file not copied yet - the game's it would be copied
+        from (a picture written with the game's very bytes is no change: never copied into the mod)."""
+        if os.path.exists(path) or not getattr(self.mod, "under", None):
+            return path
+        rel = os.path.relpath(os.path.abspath(path), os.path.abspath(self.mod.data))
+        return os.path.join(self.mod.under, rel) if not rel.startswith("..") else path
+
+    def touched(self, path):
+        """A file this plan really changes, or one the mod already holds as its own - the only files the keep-ups
+        (lnt / eventimages / emergence) may put right: a game's file the plan only read stays the game's (the user,
+        2026-10-20: copies of untouched game files shadow a modder's own)."""
+        mine = self.mod.own(path) if hasattr(self.mod, "own") else path
+        if mine not in self.borrowed:
+            return True
+        f = self.files.get(path)
+        if f is not None:
+            return f.dump() != self.originals[path]
+        return path in self.binaries
 
     # ---- display names for the string tables ----
     def display_replacements(self):
@@ -380,7 +400,8 @@ class Plan:
         self.stale_sounds()
         self._whole_map_folders()
         sm = self.mod.file("sm_factions")
-        if sm and sm in self.files:         # Rome: a 'faction destroyed' picture for every faction (eventimages.py)
+        if sm and sm in self.files and self.touched(sm):   # Rome: a 'faction destroyed' picture for every faction
+            # (eventimages.py) - only when the faction list is really changed or the mod's own
             from . import eventimages
             eventimages.keep_up(self)
         # every path this run touches lies in the mod's or its game's folder (guard.py) - checked before anything

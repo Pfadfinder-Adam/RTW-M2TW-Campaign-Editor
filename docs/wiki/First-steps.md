@@ -42,7 +42,9 @@ character's name that no list of `descr_names.txt` has any more) are found on Lo
 instead: nothing is copied (made at once, no disk space) - the mod holds only what you change and the game reads every
 other file from its own `data`; the editor puts a game file into it the first time you change it (the map's own files -
 pictures, heights, `descr_regions`, `descr_terrain`, not `map.rwm` - the first time you change the map; the game then
-builds its map again there; a campaign's `descr_strat`, events and scripts only when you change them). Before the first
+builds its map again there; a campaign's `descr_strat`, events and scripts only when you change them). Copies of
+the game's files a thin mod still holds unchanged (an older version made them) are named by Check mod files, with
+*Take them out* (backed up). Before the first
 write into the game's own data or a mod it did not make, the editor asks once: *Make my own mod folder* or *Write
 here*.
 
