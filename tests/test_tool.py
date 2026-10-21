@@ -3295,6 +3295,20 @@ building smith
         finally:
             root.destroy()
 
+    def test_medieval2_custom_campaigns_are_listed_and_edited(self):
+        """R-20261018-281207 (Tamriel Enhanced): the custom campaigns in world/maps/campaign/custom/<name>/ did not
+        appear in the Campaign list - only the Imperial Campaign could be edited. They are listed now and edit."""
+        from campaign_editor import edit
+        c = os.path.join(self.root, "data", "world", "maps", "campaign")
+        shutil.copytree(os.path.join(c, "test"), os.path.join(c, "custom", "Crisis"))
+        mod = ModData(self.root)
+        self.assertEqual(mod.campaigns(), ["test", "custom/Crisis"])
+        edit.edit(mod, "custom/Crisis", "alpha", {"denari": 4321}).apply()
+        with open(os.path.join(c, "custom", "Crisis", "descr_strat.txt"), encoding="latin-1") as fh:
+            self.assertIn("denari\t4321", fh.read().replace(" ", "\t"))
+        with open(os.path.join(c, "test", "descr_strat.txt"), encoding="latin-1") as fh:
+            self.assertNotIn("4321", fh.read())
+
     def test_answers_come_after_the_report_window_closed(self):
         """R-20261014-D5B6A6: the Report window closed while the answers were still being fetched - the late answer
         touched its gone button ('invalid command name ...!button'). Now it is dropped quietly."""
