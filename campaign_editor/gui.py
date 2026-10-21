@@ -1023,6 +1023,8 @@ class App(tk.Tk):
         menu.add_command(label="Edit the editor's look (move, rename, hide its buttons)...",
                          command=lambda: self.look.edit(True))
         menu.add_command(label="Help", command=self.once("show_help", self.show_help))
+        menu.add_command(label="A mod from zero, step by step...", command=self.once(
+            "mod_zero", lambda: __import__("campaign_editor.gui_modzero", fromlist=["x"]).open_window(self)))
         head("Find what is wrong")
         menu.add_command(label="Check mod files (what the game would stumble on)", command=self.once("check", self.check))
         menu.add_command(label="The game's log in plain words (what went wrong in the game)...",

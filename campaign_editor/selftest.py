@@ -2938,6 +2938,7 @@ COVERAGE = {
     "Report a bug / Suggest, Answers to my reports": "sends to the internet - tried by hand",
     "Start the game (the bottom bar)": "starts the game - tried by hand: start CE_Test with it",
     "Credits": LOOK,
+    "A mod from zero, step by step": "unit test test_mod_from_zero_steps (it only opens the editor's own works)",
     "Interface: Sprite sheets (every sprite of the sheets the game reads)": LOOK,
     "Delete this mod's folder": "deletes for good - tried by hand on a copy (the unit test checks what it refuses)",
     "Test mod": "this run",
@@ -2986,6 +2987,7 @@ UI = {
     "Settings": "Settings, Help, the log, Save logs, Game manifest",
     "Edit the editor's look": "Settings, Help, the log, Save logs, Game manifest",
     "Help": "Settings, Help, the log, Save logs, Game manifest",
+    "A mod from zero": "A mod from zero, step by step",
 }
 
 
