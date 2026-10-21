@@ -467,6 +467,15 @@ class SpriteSheetsPanel(ttk.Frame):
     def dirty(self):
         return bool(self.changes or self.box_changes)
 
+    def changed_page(self, page):
+        """The page's picture changed here (its base culture's - the one the game falls back to), or None."""
+        got = SY.page_cultures(self.mod, page) if self.mod else []
+        return self.changes.get((page, got[0][0])) if got else None
+
+    def changed_boxes(self):
+        """{(sheet, sprite): (x, y, w, h)} of the boxes moved / sized here."""
+        return {k: v[0] for k, v in self.box_changes.items()}
+
     def pending(self):
         return len(self.changes) + len(self.box_changes)
 
@@ -492,7 +501,7 @@ class SpriteSheetsPanel(ttk.Frame):
         size the game shows it at (an engine stretches the picture to it) - kept for Apply changes."""
         box = self._crop()
         if not self.sheet or not box:
-            return
+            return None
         key = (self.sheet["name"], self.picked)
         xml = self.sheet["kind"] == "text"
         shown = (self.box_changes.get(key) or (None, None))[1] or next(
@@ -541,6 +550,7 @@ class SpriteSheetsPanel(ttk.Frame):
         b.grid(row=len(rows) + 1, column=0, columnspan=3, sticky="e", pady=(10, 0))
         ttk.Button(b, text="OK", command=ok).pack(side="left", padx=4)
         ttk.Button(b, text="Cancel", command=w.destroy).pack(side="left")
+        return w
 
     def _xml_sprites(self):
         try:
