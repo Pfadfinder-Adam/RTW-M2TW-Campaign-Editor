@@ -3327,6 +3327,23 @@ building smith
         self.assertEqual(picture_words({"label": "Logo", "rel": "a.tga", "size": None}, {"a.tga": Pic()}),
                          "Logo\n48 x 48")
 
+    def test_view_in_3d_parts_picked_by_hand(self):
+        """A modder (R-20261020-4B454C): pick a man's head by hand for his card. A picked part stays as picked while
+        'Another man' changes the others; the parts to pick are those with several variants (weapons left to their
+        own tick)."""
+        from campaign_editor.meshview import Group, Mesh
+        groups = [Group(n, n, (0, 1, 2), True) for n in ("Head", "Head", "Head", "Body", "Body", "primaryactive0",
+                                                           "primaryactive0")]
+        m = Mesh(groups, [(0, 0, 0)] * 3, None)
+        self.assertEqual(m.choices(), [("Head", 3), ("Body", 2)])
+        heads = [g for g in groups if g.name == "Head"]
+        bodies = [g for g in groups if g.name == "Body"]
+        for look in range(4):
+            got = m.shown(look, picks={"Head": 2})
+            self.assertIn(heads[2], got)                         # the head picked, whatever the look
+            self.assertIn(bodies[look % 2], got)                 # the body as 'Another man' shows
+        self.assertIn(("Head", 3, 3), m.variants(0, picks={"Head": 2}))
+
     def test_map_from_zero(self):
         """The user, 2026-10-21: a map from zero - one island, one region with its town (black pixel), a port (white,
         on the coast, sea beside it), a resource, one faction and the rebels; every picture at its size for W x H

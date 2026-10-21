@@ -105,11 +105,14 @@ class Mesh:
             out.setdefault(name, []).append(g)
         return out
 
-    def shown(self, look=0, weapons=True, secondary=False):
+    def shown(self, look=0, weapons=True, secondary=False, picks=None):
         """The groups one man shows: variant `look` (mod the count) of every part; weapons and shields when asked.
         A man holding his primary weapon shows no secondary one (the game swaps them); secondary: he holds his
         second weapon (his model's second skeleton - a knight's sword) - the 'secondaryactive' parts instead of the
-        'primaryactive' ones (both shown, his lance hung in the air beside the sword - the user)."""
+        'primaryactive' ones (both shown, his lance hung in the air beside the sword - the user). picks: {part name:
+        variant index} - a part chosen by hand (View in 3D's Face and parts, a modder's report R-20261020-4B454C), the
+        rest by look."""
+        picks = picks or {}
         parts = self.parts()
         if self.one_texture:           # Rome: parts of one name are all worn (three shoulder pads), not variants
             parts = {id(g): [g] for g in self.groups}
@@ -139,10 +142,10 @@ class Mesh:
                     continue
                 if both and low.startswith("shieldactive" if not secondary else "shieldpassive"):
                     continue
-            out.append(gs[look % len(gs)])
+            out.append(gs[picks.get(name, look) % len(gs)])
         return out
 
-    def variants(self, look=0, weapons=True):
+    def variants(self, look=0, weapons=True, picks=None):
         """[(part, which, of)] of the parts that come in several variants, as `look` shows them - e.g. Head 2 of 4,
         shield 5 of 8 (the game picks each part per man; there is no fixed number of men). Rome: []."""
         if self.one_texture:
@@ -154,13 +157,21 @@ class Mesh:
                 continue
             label = ("shield" if low.startswith("shield") else "weapon" if low.startswith(("primary", "secondary"))
                      else name.strip())
-            out.append((label, look % len(gs) + 1, len(gs)))
+            out.append((label, (picks or {}).get(name, look) % len(gs) + 1, len(gs)))
         for label in {l for l, _, _ in out}:           # two weapons: first weapon / second weapon
             same = [i for i, (l, _, _) in enumerate(out) if l == label]
             if len(same) > 1:
                 for k, i in enumerate(same):
                     out[i] = ("%s %s" % (("first", "second", "third", "fourth")[min(k, 3)], label),) + out[i][1:]
         return out
+
+    def choices(self, weapons=False):
+        """[(part name, how many variants)] of the parts a man may wear one of several (heads, bodies...; weapons and
+        shields only with weapons=True) - what View in 3D lets you pick by hand. Rome: []."""
+        if self.one_texture:
+            return []
+        return [(n, len(gs)) for n, gs in self.parts().items()
+                if len(gs) > 1 and (weapons or not n.lower().startswith(WEAPON_PARTS))]
 
     def looks(self):
         """How many looks 'Another man' steps through before all repeat (the most variants of one part; Rome:

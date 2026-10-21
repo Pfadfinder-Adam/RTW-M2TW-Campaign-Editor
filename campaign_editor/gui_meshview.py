@@ -3,6 +3,7 @@ with the mouse, zoom with the wheel, see it in each faction's texture, one man a
 model's heads, arms, legs ...), and in any of its skeleton's animations from the game's packs (animations.py):
 Play / Pause, a frame at a time."""
 
+import os
 import tkinter as tk
 from tkinter import ttk
 
@@ -133,8 +134,15 @@ class ModelViewer(tk.Toplevel):
                             command=self.reframe).pack(anchor="w")
         self.b_look = ttk.Button(side, text="Another man", command=self.next_look)
         self.b_look.pack(anchor="w", pady=(8, 0))
-        ttk.Button(side, text="Front", command=lambda: self.turn_to(0)).pack(anchor="w", pady=(8, 0))
-        ttk.Button(side, text="Back", command=lambda: self.turn_to(180)).pack(anchor="w")
+        # Face and parts, the mount's colour (a modder, R-20261020-4B454C: 'a face tab to change between the head
+        # models; a mount tab to change the colour of the horse'); Front / Back gone - the model turns with the mouse
+        # (the user, 2026-10-21)
+        self.picks, self.mount_pick = {}, None
+        self.parts_box = ttk.Frame(side)
+        self.parts_box.pack(anchor="w", fill="x")
+        self.mount_box = ttk.Frame(side)
+        self.mount_box.pack(anchor="w", fill="x")
+        self._mount_colours()
         if make is not None:             # the unit's own card and description picture from this view
             mk = ttk.Frame(side)
             mk.pack(anchor="w", pady=(8, 0))
@@ -583,6 +591,7 @@ class ModelViewer(tk.Toplevel):
                 msg = "cannot read %s: %s" % (rel, e)
         if self.mesh is not None:
             self.b_look.state(["!disabled"] if self.mesh.looks() > 1 else ["disabled"])
+        self._parts_choice()
         self.mount_mesh = None
         if self.mount:                                  # the mount's mesh at the same detail (or its closest)
             ms = self.mount[0].meshes
@@ -609,6 +618,73 @@ class ModelViewer(tk.Toplevel):
             return
         self.draw()
 
+    # ---- Face and parts, the mount's colour ----
+    ANY = "as 'Another man' shows"
+
+    def _parts_choice(self):
+        """A list for each part a man wears one of several of (his head, his body...): pick one by hand, or leave it
+        to 'Another man'. Medieval II models (Rome's have none)."""
+        for w in self.parts_box.winfo_children():
+            w.destroy()
+        choices = self.mesh.choices() if self.mesh is not None else []
+        self.picks = {k: v for k, v in self.picks.items() if k in dict(choices)}
+        if not choices:
+            return
+        ttk.Label(self.parts_box, text="Face and parts").pack(anchor="w", pady=(8, 0))
+        for name, n in choices:
+            row = ttk.Frame(self.parts_box)
+            row.pack(anchor="w", fill="x")
+            ttk.Label(row, text=name.strip()[:16], width=12).pack(side="left")
+            values = [self.ANY] + ["%d of %d" % (k + 1, n) for k in range(n)]
+            var = tk.StringVar(value=values[self.picks[name] + 1] if name in self.picks else self.ANY)
+            cb = ttk.Combobox(row, textvariable=var, values=values, state="readonly", width=20)
+            cb.pack(side="left")
+            cb.bind("<<ComboboxSelected>>", lambda e, nm=name, v=var, vals=values: self._part_picked(nm, v, vals))
+
+    def _part_picked(self, name, var, values):
+        k = values.index(var.get())
+        if k == 0:
+            self.picks.pop(name, None)
+        else:
+            self.picks[name] = k - 1
+        self.draw()
+
+    def mount_textures(self):
+        """[(label, texture)] of the mount's own textures (one a colour: the game gives each faction one), the
+        same file once."""
+        if not self.mount or not self.mount[0].textures:
+            return []
+        seen = {}
+        for fac, rel in self.mount[0].textures.items():
+            if rel:
+                seen.setdefault(rel, []).append(fac or "everyone")
+        return [("%s (%s)" % (os.path.splitext(os.path.basename(rel))[0], ", ".join(f[:12] for f in facs[:3]) +
+                                ("..." if len(facs) > 3 else "")), rel) for rel, facs in seen.items()]
+
+    def _mount_colours(self):
+        """The mount's colour: one of its own textures, else the one of the faction picked above."""
+        for w in self.mount_box.winfo_children():
+            w.destroy()
+        texs = self.mount_textures()
+        if len(texs) < 2:
+            return
+        ttk.Label(self.mount_box, text="Mount's colour").pack(anchor="w", pady=(8, 0))
+        values = ["as the faction above"] + [label for label, _ in texs]
+        var = tk.StringVar(value=values[0])
+        cb = ttk.Combobox(self.mount_box, textvariable=var, values=values, state="readonly", width=26)
+        cb.pack(anchor="w")
+
+        def picked(e=None):
+            k = values.index(var.get())
+            self.mount_pick = None if k == 0 else texs[k - 1][1]
+            self.draw()
+        cb.bind("<<ComboboxSelected>>", picked)
+
+    def _mount_texture(self, mi):
+        if self.mount_pick and mi is (self.mount[0] if self.mount else None):
+            return self._texture({"": self.mount_pick})
+        return self._texture(mi.textures)
+
     def _pose(self):
         return MV.POSES[POSE_WORDS.index(self.v_pose.get())] if self.v_pose.get() in POSE_WORDS else "t"
 
@@ -623,7 +699,7 @@ class ModelViewer(tk.Toplevel):
         man posed in the animation's frame, on his mount when that is ticked; weapons False: without his weapons and
         shield whatever the tick says."""
         groups = self.mesh.shown(self.look, self.v_weapons.get() if weapons is None else weapons,
-                                 secondary=self._secondary())
+                                 secondary=self._secondary(), picks=self.picks)
         tex, att = self._texture(self.info.textures), self._texture(self.info.attach)
         if tex is None and self.mesh.texture_ref:       # Rome: no texture line - the one the .cas names
             tex = self._texture({"": self.mesh.texture_ref})
@@ -653,7 +729,7 @@ class ModelViewer(tk.Toplevel):
                              MO.root_node_height(self.mod, self.mount[1]), seats, turn,
                              mount_one=True if not mi.attach else None)
             groups = mesh.groups
-            more = {2: self._texture(mi.textures) if mi.textures else None,
+            more = {2: self._mount_texture(mi) if mi.textures else None,
                     3: self._texture(mi.attach) if mi.attach else None}
             if more[2] is None and self.mount_mesh.texture_ref:
                 more[2] = self._texture({"": self.mount_mesh.texture_ref})
@@ -674,7 +750,7 @@ class ModelViewer(tk.Toplevel):
                 mesh = MV.combine(man, groups, horse, horse.shown(0, True),
                                   mount_one=True if not mi.attach else None, seat=seat, turn=turn)
             groups = mesh.groups
-            more = {2: self._texture(mi.textures) if mi.textures else None,
+            more = {2: self._mount_texture(mi) if mi.textures else None,
                     3: self._texture(mi.attach) if mi.attach else None}
             if more[2] is None and self.mount_mesh.texture_ref:
                 more[2] = self._texture({"": self.mount_mesh.texture_ref})
@@ -743,7 +819,7 @@ class ModelViewer(tk.Toplevel):
             if self.mount and self.v_mount.get() and self.mount_mesh is None:
                 self.info_lbl.configure(text="the mount's mesh file is not in this mod or the game")
                 return
-            parts = self.mesh.variants(self.look, self.v_weapons.get())
+            parts = self.mesh.variants(self.look, self.v_weapons.get(), self.picks)
             said = [w for w in (why, None if tex is not None else "no texture file found for the man",
                                 None if att is not None or not self.v_weapons.get() or self.mesh.one_texture or
                                 whole else "no attachment texture found: weapons in grey") if w]
@@ -768,11 +844,6 @@ class ModelViewer(tk.Toplevel):
 
     def next_look(self):
         self.look += 1
-        self.draw()
-
-    def turn_to(self, yaw):
-        self.yaw, self.pitch = float(yaw), 8.0
-        self.pan = [0.0, 0.0]                   # Front / Back: the model in the middle again
         self.draw()
 
     def _pan(self, e):
