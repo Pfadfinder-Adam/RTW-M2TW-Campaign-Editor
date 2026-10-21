@@ -282,6 +282,12 @@ class ModData:
             croot = os.path.join(root, "world", "maps", "campaign")
             out = [n for n in sorted(os.listdir(croot)) if _ci(os.path.join(croot, n), "descr_strat.txt")] \
                 if os.path.isdir(croot) else []
+            # Medieval II's custom campaigns: campaign/custom/<name>/ (the game's Custom campaign menu - Tamriel
+            # Enhanced's eight, report R-20261018-281207: 'only the Imperial Campaign appears')
+            custom = _ci(croot, "custom") if os.path.isdir(croot) else None
+            if custom and os.path.isdir(custom):
+                out += ["%s/%s" % (os.path.basename(custom), n) for n in sorted(os.listdir(custom))
+                        if _ci(os.path.join(custom, n), "descr_strat.txt")]
             if out:
                 return out
         return []

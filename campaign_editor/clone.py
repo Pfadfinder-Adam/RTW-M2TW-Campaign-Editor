@@ -1056,7 +1056,7 @@ FE_NAMES = {"romans_julii": "JULII", "romans_brutii": "BRUTII", "romans_scipii":
 def description_key(faction, campaign, keys=()):
     """The campaign-screen key the game reads for a faction: <CAMPAIGN>_<NAME>,
     with the front end's own name for the vanilla factions that have one."""
-    camp = campaign.upper()
+    camp = campaign.replace("\\", "/").split("/")[-1].upper()     # a custom campaign: its own folder's name
     own = "%s_%s" % (camp, faction.upper())
     fe = FE_NAMES.get(faction)
     if fe and own + "_DESCR" not in keys and "%s_%s_DESCR" % (camp, fe) in keys:
@@ -1078,7 +1078,7 @@ def campaign_description(plan, campaign):
         m = RE_KEY.match(l)
         if m:
             keys[m.group(2).upper()] = i
-    new_key = "%s_%s" % (campaign.upper(), plan.new.upper())
+    new_key = "%s_%s" % (campaign.replace("\\", "/").split("/")[-1].upper(), plan.new.upper())
     src = description_key(plan.template, campaign, keys)
     added = []
     for suffix in ("_TITLE", "_DESCR"):
