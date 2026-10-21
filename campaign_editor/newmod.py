@@ -9,9 +9,9 @@ default), or, asked for, everything but the text files (what the tool edits)
 is a hard link - the same file on disk under a second name, no extra space.
 A mod built on the plain game holds only what changes (a THIN mod): nothing is
 copied, the editor writes the mod's own copy of a game file at its first
-change (ModData.under, Plan.borrowed) and the whole map folder at the first
-change of the map (Plan._whole_map_folders - the game then builds map.rwm
-there). slim() still takes a whole older copy back to the files that differ.
+change (ModData.under, Plan.borrowed) and the map's other layers at the
+first change of the map (Plan._whole_map_folders - the game then builds
+map.rwm there; never a campaign's texts or scripts). slim() still takes a whole older copy back to the files that differ.
 
 Hard links need the new folder on the same drive (NTFS); otherwise, or with
 copy_all, every file is copied."""

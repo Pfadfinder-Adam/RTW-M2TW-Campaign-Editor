@@ -40,8 +40,9 @@ character's name that no list of `descr_names.txt` has any more) are found on Lo
 **New mod folder...** after loading the mod you build on makes a copy of it next to it (for example
 `HLR_Saba`) with its own start file. Your base mod is never touched. On the **plain game** it makes a **thin** mod
 instead: nothing is copied (made at once, no disk space) - the mod holds only what you change and the game reads every
-other file from its own `data`; the editor puts a game file into it the first time you change it (the whole map folder,
-all but `map.rwm`, the first time you change the map - the game then builds its map again there). Before the first
+other file from its own `data`; the editor puts a game file into it the first time you change it (the map's own files -
+pictures, heights, `descr_regions`, `descr_terrain`, not `map.rwm` - the first time you change the map; the game then
+builds its map again there; a campaign's `descr_strat`, events and scripts only when you change them). Before the first
 write into the game's own data or a mod it did not make, the editor asks once: *Make my own mod folder* or *Write
 here*.
 
