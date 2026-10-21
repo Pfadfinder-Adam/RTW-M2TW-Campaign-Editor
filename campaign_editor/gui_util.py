@@ -2060,6 +2060,12 @@ class DropPanel:
             self.show()                                  # Windows: a second press opened it again, R-20261014-5B69BC)
 
     def show(self):
+        try:
+            gone = self.top is not None and not self.top.winfo_exists()
+        except tk.TclError:
+            gone = True
+        if gone:                            # its window went with a rebuilt bar (R-20261019-FE24AB: 'bad window path
+            self.top, self._open = None, False  # name ...!button.!toplevel'): made again
         if self.top is None:
             self.top = tk.Toplevel(self.button)
             self.top.overrideredirect(True)

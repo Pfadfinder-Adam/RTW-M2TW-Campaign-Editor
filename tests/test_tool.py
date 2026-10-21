@@ -3157,6 +3157,31 @@ building smith
         self.assertEqual(FM.tree_problems(fam["tree"], [p.as_dict() for p in fam["people"]]), [])
         self.assertIn("\tnone,", FM.relative_line("Berdic", "", ["Rufus"]))
 
+    def test_drop_panel_opens_again_after_its_window_went(self):
+        """R-20261019-FE24AB: the drop-down's own window was destroyed with the bar around it (editing region
+        borders), the next press stopped with 'bad window path name ...!toplevel'. It is made again now."""
+        try:
+            import tkinter as tk
+            from tkinter import ttk
+            root = tk.Tk()
+        except Exception as e:                        # no tkinter / no display
+            self.skipTest("no window: %s" % e)
+        from campaign_editor.gui_util import DropPanel
+        try:
+            b = ttk.Button(root, text="Layers")
+            b.pack()
+            p = DropPanel(b, lambda f: ttk.Label(f, text="x").pack())
+            root.update()
+            p.show()
+            root.update()
+            p.top.destroy()                           # gone under it
+            p._open = False
+            p.show()
+            root.update()
+            self.assertTrue(p.shown())
+        finally:
+            root.destroy()
+
     def test_answers_come_after_the_report_window_closed(self):
         """R-20261014-D5B6A6: the Report window closed while the answers were still being fetched - the late answer
         touched its gone button ('invalid command name ...!button'). Now it is dropped quietly."""
