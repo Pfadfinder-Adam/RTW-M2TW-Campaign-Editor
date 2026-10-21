@@ -290,7 +290,7 @@ def _add_missing(plan, campaign, missing):
         plan.warn(None, "%s not written: the mod has no string table to hold them" % ", ".join(sorted(missing)))
         return
     descr = next((p for p in files if os.path.basename(p).lower() == "campaign_descriptions.txt"), None)
-    camp = campaign.upper() + "_"
+    camp = campaign.replace("\\", "/").split("/")[-1].upper() + "_"
     for key in sorted(missing):
         path = descr if descr and key.startswith(camp) else files[0]
         f = plan.edit(path)
