@@ -9,7 +9,7 @@ from . import titles
 from .build import template_display, validate
 from .clone import FE_NAMES, description_key, entry_end
 from .plan import Plan
-from .start import MAX_UNITS, _has_army, _units, unit_name
+from .start import _has_army, army_cap, _units, unit_name
 from .strat import first_names, RE_XY, Character, Settlement, Strat, character_line, entry_type, unit_line, village_block
 from .textio import tokens
 
@@ -748,7 +748,7 @@ def _army_edits(plan, f, faction=None, units=None, remove=None):
             take_off_map(plan, f, faction, c)
             plan.note(f, "%s (%s): no unit left - the army left the map with its last unit" % (c.name, c.kind))
             continue
-        room = MAX_UNITS - len(keep)
+        room = army_cap(plan.mod) - len(keep)
         lines = [unit_line(t) for t in m["units"]][:room]
         new = [l for i, l in enumerate(chunk) if i not in units or i in keep]
         at = units[0] + len(keep)
@@ -908,18 +908,18 @@ def _garrisons(plan, f, s, campaign, faction=None, picked=None, add=False):
         if holder is None and st.garrison_at is not None:
             holder = st                                 # the town's own garrison (garrisoned_army, no captain)
         if add and isinstance(holder, Settlement):
-            room = MAX_UNITS - len(holder.garrison)
+            room = army_cap(plan.mod) - len(holder.garrison)
         elif add and holder is not None:
-            room = MAX_UNITS - len(_units(s.lines[holder.start:holder.end]))
+            room = army_cap(plan.mod) - len(_units(s.lines[holder.start:holder.end]))
         else:
-            room = MAX_UNITS - (1 if isinstance(holder, Character) and holder.named else 0)
+            room = army_cap(plan.mod) - (1 if isinstance(holder, Character) and holder.named else 0)
         if xy is None and holder is None:           # a captain stands on the town's tile - the map shows none
             plan.warn(f, "%s: no garrison - the map has no town for it (no black town pixel in map_regions.tga), "
                          "so a captain has no tile to stand on; place the town on the map first" % region)
             continue                                # (R-20261020-0A520D: 'NoneType' object is not subscriptable)
         if len(types) > room:
             plan.warn(f, "%s: only %d of the %d unit(s) fit - an army holds %d at most" % (
-                region, max(room, 0), len(types), MAX_UNITS))
+                region, max(room, 0), len(types), army_cap(plan.mod)))
         lines = [unit_line(t) for t in types][:room]
         jobs.append((region, holder, lines, xy))
     def at(job):                                        # bottom up: every line above keeps its place

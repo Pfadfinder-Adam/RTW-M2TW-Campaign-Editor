@@ -9,7 +9,7 @@ import re
 
 from .buildings import (available, castles_allowed, population_of, ranks_ok, read_buildings, set_buildings, settlement_info,
                         settlement_kind, SETTLEMENT_LEVELS)
-from .start import MAX_UNITS, _has_army, _units, unit_entry, unit_name
+from .start import MAX_UNITS, _has_army, army_cap, _units, unit_entry, unit_name
 from .strat import Strat, entry_type
 
 PORT = re.compile(r"(^|_)port(_|$)", re.I)
@@ -438,4 +438,4 @@ def apply(plan, campaign, opts):
 
 __all__ = ["towns", "building_fit", "town_fit", "random_garrison", "garrison_pool", "rebel_pool", "town_pool",
            "recruitable_here", "rebel_types", "level_sizes", "nearest_rebels", "VANILLA_SIZES", "apply", "known_buildings", "is_core",
-           "MAX_UNITS", "SETTLEMENT_LEVELS"]
+           "MAX_UNITS", "army_cap", "SETTLEMENT_LEVELS"]

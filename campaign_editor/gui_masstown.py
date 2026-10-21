@@ -239,9 +239,9 @@ class MassTownWindow(tk.Toplevel):
         row = ttk.Frame(f)
         row.pack(fill="x")
         ttk.Label(row, text="Units per town: from").pack(side="left")
-        ttk.Spinbox(row, from_=1, to=M.MAX_UNITS, textvariable=self.v_lo, width=4).pack(side="left", padx=2)
+        ttk.Spinbox(row, from_=1, to=M.army_cap(self.mod), textvariable=self.v_lo, width=4).pack(side="left", padx=2)
         ttk.Label(row, text="to").pack(side="left")
-        ttk.Spinbox(row, from_=1, to=M.MAX_UNITS, textvariable=self.v_hi, width=4).pack(side="left", padx=2)
+        ttk.Spinbox(row, from_=1, to=M.army_cap(self.mod), textvariable=self.v_hi, width=4).pack(side="left", padx=2)
         ttk.Label(row, text="   their upkeep together at most").pack(side="left")
         ttk.Entry(row, textvariable=self.v_cap, width=7).pack(side="left", padx=2)
         ttk.Label(row, text="per town (empty = no limit)").pack(side="left")
@@ -277,8 +277,8 @@ class MassTownWindow(tk.Toplevel):
         row.pack(fill="x", pady=(6, 0))
         tip(ttk.Button(row, text="Draw the garrisons", command=self.draw), "Pick the units for every chosen town "
             "(again: other units). The column 'What happens' shows them; nothing is written yet.").pack(side="left")
-        ttk.Label(row, text="A town nobody holds gets a captain who leads its garrison. An army holds 20 units "
-                            "at most.", foreground="#666").pack(side="left", padx=10)
+        ttk.Label(row, text="A town nobody holds gets a captain who leads its garrison. An army holds %d units "
+                            "at most." % M.army_cap(self.mod), foreground="#666").pack(side="left", padx=10)
         return f
 
     # ---- the lists ----
@@ -417,8 +417,8 @@ class MassTownWindow(tk.Toplevel):
             cap = int(cap) if cap else None
         except ValueError:
             raise ValueError("The upkeep limit must be a whole number (or empty for no limit)")
-        if not 1 <= min(lo, hi) or max(lo, hi) > M.MAX_UNITS:
-            raise ValueError("Units per town: 1 to %d" % M.MAX_UNITS)
+        if not 1 <= min(lo, hi) or max(lo, hi) > M.army_cap(self.mod):
+            raise ValueError("Units per town: 1 to %d" % M.army_cap(self.mod))
         return lo, hi, cap
 
     def draw(self):
@@ -439,7 +439,7 @@ class MassTownWindow(tk.Toplevel):
             if self.v_gamesize.get():
                 if t["owner"] not in sizes:
                     sizes[t["owner"]] = M.level_sizes(self.mod, self.camp, t["owner"])
-                a = b = max(1, min(M.MAX_UNITS, sizes[t["owner"]].get(t["level"], lo)))
+                a = b = max(1, min(M.army_cap(self.mod), sizes[t["owner"]].get(t["level"], lo)))
             self.garrisons[r] = M.random_garrison(self._town_pool(t), a, b, cap, self.rng)
         self.fill_chosen()
         self.status.configure(text="garrisons drawn - 'Do it for the chosen towns' takes them")

@@ -3157,6 +3157,23 @@ building smith
         loose = SY.loose_sprites(text)[0]
         self.assertEqual((loose["cursor"], loose["hotspot"]), (True, (3, 0)))
 
+    def test_forty_unit_stacks_with_an_engine(self):
+        """REX / M2EX's 'ARMY SIZE = 40 UNITS' (the engines' army_mode.h, shared by both): a stack holds 40 with an
+        engine, 20 in the original games; Check mod files names the stacks over 20 (kept only with that option)."""
+        from unittest import mock
+        from campaign_editor import check, start
+        mod = ModData(self.root)
+        with mock.patch("campaign_editor.limits.engine_of", return_value=None):
+            self.assertEqual(start.army_cap(mod), 20)
+        with mock.patch("campaign_editor.limits.engine_of", return_value="M2EX.exe"):
+            self.assertEqual(start.army_cap(mod), 40)
+        p = mod.campaign_file("test", "descr_strat.txt")
+        text = open(p, encoding="latin-1").read()
+        i = text.index("army\n")
+        unit = next(l for l in text[i:].split("\n") if l.strip().startswith("unit"))
+        write(p, text[:i + 5] + (unit + "\n") * 25 + text[i + 5:])
+        self.assertTrue(any(n >= 25 for n in check.big_stacks(ModData(self.root), "test")))
+
     def test_faction_form_starts_empty(self):
         """The user, 2026-10-21: 'I made a faction, picked another - the fields were still full; remove it all by
         hand?'. New faction opened after Edit faction, another template, another faction in Edit: nothing of the one

@@ -13,7 +13,8 @@ try:                                   # pictures need Pillow; without it the ca
 except ImportError:                    # pragma: no cover - the exe always has it
     Image = ImageTk = None
 
-MAX_UNITS = 20
+from .start import ENGINE_UNITS, army_cap
+
 CARD = (48, 64)                        # RTW unit cards are 48 x 64
 
 
@@ -139,7 +140,7 @@ class GarrisonEditor(ttk.Frame):
         self.sugg.pack(side="right", padx=4)
         ttk.Label(self.sugg, text="units").pack(side="left")
         for v, w in ((self.v_lo, 3), (self.v_hi, 3)):
-            ttk.Spinbox(self.sugg, from_=1, to=MAX_UNITS, textvariable=v, width=w).pack(side="left", padx=(2, 0))
+            ttk.Spinbox(self.sugg, from_=1, to=ENGINE_UNITS, textvariable=v, width=w).pack(side="left", padx=(2, 0))
             if v is self.v_lo:
                 ttk.Label(self.sugg, text="to").pack(side="left", padx=(2, 0))
         ttk.Label(self.sugg, text="  upkeep up to").pack(side="left")
@@ -152,6 +153,10 @@ class GarrisonEditor(ttk.Frame):
                "together at most this much (0: no limit). Press again for another.")
         tip(self.b_auto, "Back to the garrison as it stands in the game's files now (your changes to it dropped).")
         first(self.b_auto, self.sugg)             # As it was, Suggest before the total
+
+    def cap(self):
+        """Units a stack holds here: 20, 40 with REX / M2EX (start.army_cap)."""
+        return army_cap(self.mod) if self.mod is not None else 20
 
     def load(self, mod, faction, region, units, current, on_change, auto=None, held=False, unchanged=False,
              as_was=False, general=None):
@@ -287,7 +292,7 @@ class GarrisonEditor(ttk.Frame):
             self.total.configure(text=getattr(self, "auto_text", None) or
                                  "empty - the tool picks one (or press Suggest)")
             return
-        room = MAX_UNITS - (1 if self.held else 0)
+        room = self.cap() - (1 if self.held else 0)
         cost = sum(self.by_type[entry_type(t)].price for t in self.garrison)
         upkeep = sum(self.by_type[entry_type(t)].upkeep for t in self.garrison)
         self.total.configure(text="%s%d / %d units%s   cost %d   upkeep %d" % (
@@ -302,7 +307,7 @@ class GarrisonEditor(ttk.Frame):
             self.on_change(list(self.garrison))
 
     def room(self):
-        return MAX_UNITS - (1 if self.held else 0) - len(self.garrison)
+        return self.cap() - (1 if self.held else 0) - len(self.garrison)
 
     def add(self, unit, n=1, exp=0):
         if self.replacing is not None:               # 'Replace with...' picked: this card takes its place
@@ -455,7 +460,7 @@ class GarrisonEditor(ttk.Frame):
                 return max(0, int(float(v.get())))
             except (ValueError, tk.TclError):
                 return default
-        room = MAX_UNITS - (1 if self.held else 0)
+        room = self.cap() - (1 if self.held else 0)
         lo, hi, cap = num(self.v_lo, 3), num(self.v_hi, 6), num(self.v_cap, 2000)
         hi = max(1, min(hi, room))
         lo = max(1, min(lo, hi))
