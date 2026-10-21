@@ -25,6 +25,7 @@
 - New mod folder puts no switched-off engine settings files (descr_ex, descr_caps_ex) in: the mod runs on the engine's defaults as before; the editor writes the line a change needs, Check mod files' Copy them in brings the whole list.
 
 ### Fixed
+- A faction brought from another mod showed the template's leader's face and select map on the faction tab -> it shows its own (or says the face is left empty on Apply).
 - Emblem everywhere stopped on a picture whose size could not be read -> it shows 'size unknown'.
 - HD sprite sheets (made with M2EX's own packer) showed the wrong part of the picture -> sprite sheets are read as the game reads them.
 - New / Edit faction kept the fields of the faction shown before (names, texts, colours, pictures picked) -> the form starts empty when New faction opens, a template is picked, a faction is brought or another faction is edited.
