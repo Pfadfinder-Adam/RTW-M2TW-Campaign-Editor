@@ -109,7 +109,7 @@ class InterfacePanel(ttk.Frame):
 
     def pending(self):
         return ((max(1, len(self.undo)) if self._menus_dirty() else 0) +
-                (len(self.sprites.changes) if self._sprites_dirty() else 0))
+                (self.sprites.pending() if self._sprites_dirty() else 0))
 
     def path(self):
         return self._path

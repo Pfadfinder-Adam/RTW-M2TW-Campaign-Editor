@@ -23,6 +23,7 @@ class SpriteSheetsPanel(ttk.Frame):
         self.picked, self.hover = None, None
         self._img, self._shown, self._photo, self._cultures = None, None, None, []
         self.changes, self.undo, self.redo = {}, [], []     # {(page, culture): new page picture}; steps back / on
+        self.box_changes = {}                               # {(sheet, sprite): ((x, y, w, h), shown (w, h) or None)}
         self._build()
 
     # ---- reading ----
@@ -33,6 +34,7 @@ class SpriteSheetsPanel(ttk.Frame):
             return
         if self.mod is None or mod is None or mod.data != self.mod.data:
             self.changes, self.undo, self.redo = {}, [], []     # another mod: its pages are others
+            self.box_changes = {}
         self.mod = mod
         self.sheets = SY.all_sheets(mod) if mod else []
         self.cb_sheet.configure(values=[self._sheet_label(s) for s in self.sheets])
@@ -100,7 +102,12 @@ class SpriteSheetsPanel(ttk.Frame):
             self._img = self._shown = None
 
     def boxes(self):
-        return dict(self.sheet["pages"]).get(self.page, []) if self.sheet else []
+        """[(sprite, (x, y, w, h))] of the page on show, with the boxes moved / sized here."""
+        if not self.sheet:
+            return []
+        got = dict(self.sheet["pages"]).get(self.page, [])
+        mine = self.box_changes
+        return [(n, mine[(self.sheet["name"], n)][0] if (self.sheet["name"], n) in mine else b) for n, b in got]
 
     # ---- the window ----
     def _build(self):
@@ -325,6 +332,7 @@ class SpriteSheetsPanel(ttk.Frame):
         m.add_separator()
         if self.picked:
             m.add_command(label="Replace this sprite's picture...", command=self.replace_sprite)
+            m.add_command(label="Place and size of this sprite...", command=self.place_window)
         m.add_command(label="Replace the whole page's picture...", command=self.replace_page)
         if (self.page, self.culture) in self.changes:
             m.add_command(label="Back to the page as it is in the files", command=self.page_back)
@@ -374,7 +382,7 @@ class SpriteSheetsPanel(ttk.Frame):
     # ---- changes (kept for Apply changes) ----
     def _set(self, im):
         key = (self.page, self.culture)
-        self.undo.append((key, self.changes.get(key)))
+        self.undo.append(("pic", key, self.changes.get(key)))
         self.redo = []
         if im is None:
             self.changes.pop(key, None)
@@ -442,23 +450,30 @@ class SpriteSheetsPanel(ttk.Frame):
         src, dst = (self.undo, self.redo) if back else (self.redo, self.undo)
         if not src:
             return False
-        key, im = src.pop()
-        dst.append((key, self.changes.get(key)))
-        if im is None:
-            self.changes.pop(key, None)
+        kind, key, was = src.pop()
+        held = self.changes if kind == "pic" else self.box_changes
+        dst.append((kind, key, held.get(key)))
+        if was is None:
+            held.pop(key, None)
         else:
-            self.changes[key] = im
-        if key[0] == self.page:
+            held[key] = was
+        if kind == "pic":
             self._read_picture()
-            self.draw()
+        self.fill_sprites()
+        self.say()
+        self.draw()
         return True
 
     def dirty(self):
-        return bool(self.changes)
+        return bool(self.changes or self.box_changes)
+
+    def pending(self):
+        return len(self.changes) + len(self.box_changes)
 
     def forget(self):
         """The changes written (or thrown away): the sheets read again the next time they are shown."""
         self.changes, self.undo, self.redo = {}, [], []
+        self.box_changes = {}
         self.mod = None
 
     def plan_into(self, plan):
@@ -468,3 +483,68 @@ class SpriteSheetsPanel(ttk.Frame):
             mine = {k: v for k, v in self.changes.items() if k[0] in dict(sh["pages"])}
             if mine:
                 spriteedit.write(plan, self.mod, sh, mine)
+            for (name, sprite), (box, shown) in sorted(self.box_changes.items()):
+                if name == sh["name"]:
+                    spriteedit.set_box(plan, self.mod, sh, sprite, box, shown)
+
+    def place_window(self):
+        """The sprite's place and size on its page (its box: the picture it shows) and, on an .sd.xml sheet, the
+        size the game shows it at (an engine stretches the picture to it) - kept for Apply changes."""
+        box = self._crop()
+        if not self.sheet or not box:
+            return
+        key = (self.sheet["name"], self.picked)
+        xml = self.sheet["kind"] == "text"
+        shown = (self.box_changes.get(key) or (None, None))[1] or next(
+            (sp["shown"] for sp in self._xml_sprites() if sp["name"] == self.picked), None) if xml else None
+        w = tk.Toplevel(self)
+        w.title("%s - place and size" % self.picked)
+        w.transient(self)
+        f = ttk.Frame(w, padding=12)
+        f.pack(fill="both", expand=True)
+        vs = {}
+        rows = [("x", box[0], "from the page's left edge, pixels"), ("y", box[1], "from its top"),
+                ("w", box[2], "the picture's width on the page"), ("h", box[3], "its height")]
+        if xml:
+            rows += [("shown w", (shown or box[2:])[0], "the width the game shows it at (the engine stretches it)"),
+                     ("shown h", (shown or box[2:])[1], "the height the game shows it at")]
+        for r, (k, val, why) in enumerate(rows):
+            ttk.Label(f, text=k).grid(row=r, column=0, sticky="w", pady=2)
+            vs[k] = tk.StringVar(value=str(val))
+            ttk.Spinbox(f, from_=0, to=8192, textvariable=vs[k], width=7).grid(row=r, column=1, padx=6, pady=2)
+            ttk.Label(f, text=why, foreground=theme.palette()["muted"]).grid(row=r, column=2, sticky="w")
+        size = self._img.size if self._img is not None else None
+        ttk.Label(f, text=("The page is %d x %d." % size) if size else "", foreground=theme.palette()["muted"]
+                  ).grid(row=len(rows), column=0, columnspan=3, sticky="w", pady=(6, 0))
+
+        def ok():
+            try:
+                nb = tuple(int(vs[k].get()) for k in ("x", "y", "w", "h"))
+                ns = (int(vs["shown w"].get()), int(vs["shown h"].get())) if xml else None
+            except ValueError:
+                messagebox.showerror(TITLE, "Whole numbers only.", parent=w)
+                return
+            if nb[2] < 1 or nb[3] < 1 or (size and (nb[0] + nb[2] > size[0] or nb[1] + nb[3] > size[1])):
+                messagebox.showerror(TITLE, "The box must lie on the page (%d x %d) and be at least 1 x 1." % size
+                                     if size else "The box must be at least 1 x 1.", parent=w)
+                return
+            self.undo.append(("box", key, self.box_changes.get(key)))
+            self.redo = []
+            self.box_changes[key] = (nb, ns)
+            w.destroy()
+            self.fill_sprites()
+            self.say()
+            self.draw()
+            self.lbl_info.configure(text="%s: at %d, %d, %d x %d - Apply changes writes it" % ((self.picked,) + nb))
+            self.app.update_actions() if hasattr(self.app, "update_actions") else None
+        b = ttk.Frame(f)
+        b.grid(row=len(rows) + 1, column=0, columnspan=3, sticky="e", pady=(10, 0))
+        ttk.Button(b, text="OK", command=ok).pack(side="left", padx=4)
+        ttk.Button(b, text="Cancel", command=w.destroy).pack(side="left")
+
+    def _xml_sprites(self):
+        try:
+            with open(self.sheet["path"], "rb") as fh:
+                return SY.sprite_list(fh.read().decode("latin-1"))
+        except OSError:
+            return []
