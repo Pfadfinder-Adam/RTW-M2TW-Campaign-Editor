@@ -821,38 +821,36 @@ class MapView(ttk.Frame):
 
     SHORE_BLOCK = 8                                     # the shore line is drawn and redrawn in blocks of 8 x 8 points
 
-    def _shore_into(self, pic):
+    def _shore_lines(self, cw, ch):
         """The shore as the game draws it (the Terrain editor, close up): each square of four map_heights points cut
-        into two triangles, the water under height 0 (terrain.shore_segments) - a light line with a dark edge, so
-        what the tiles and points show can be told from what the game will draw. Drawn INTO the map's picture (the
-        user, 2026-10-21: thousands of canvas lines made the coast and climate brushes lag on a big map - valp,
-        Discord: 'turning off shore lines helps'); the pieces are worked out once per block of 8 x 8 points and kept
-        (_shore_cache) - a brush's tick (shore_dirty) works out only its blocks again, while the brush is held too."""
+        into two triangles, the water under height 0 (terrain.shore_segments) - [((ax, ay), (bx, by))] in map_heights
+        points for the view cw x ch. The pieces are worked out once per block of 8 x 8 points and kept (_shore_cache)
+        - a brush's tick (shore_dirty) works out only its blocks again, while the brush is held too (the user,
+        2026-10-21: thousands of canvas lines made the coast and climate brushes lag on a big map - valp, Discord:
+        'turning off shore lines helps'; 'he sees nothing while he drags?')."""
         if self.shore is None or self.z < SHORE_ZOOM:
-            return
+            return []
         img, metres = self.shore
         if img is None:
-            return
+            return []
         cache = getattr(self, "_shore_cache", None)
         if cache is None or cache[0] is not img or cache[1] is not metres:
             cache = self._shore_cache = (img, metres, {})
         blocks, B = cache[2], self.SHORE_BLOCK
         dirty = getattr(self, "shore_dirty", None)
-        if dirty:                                       # what the brush changed: its blocks worked out again - while
-            # it is held too, so the line follows the brush (the user, 2026-10-21: 'he sees nothing while he drags?')
+        if dirty:                                       # what the brush changed: its blocks worked out again
             for x, y in dirty:
                 for dx in (-1, 0):
                     for dy in (-1, 0):
                         blocks.pop(((x + dx) // B, (y + dy) // B), None)
             self.shore_dirty = None
-        cw, ch = pic.size
         z, h = self.z, self.cmap.h
         px0 = max(0, int(2 * self.ox) - 1)
         px1 = min(img.width - 1, int(2 * (self.ox + cw / z)) + 2)
         py0 = max(0, int(2 * (h - self.oy - ch / z)) - 1)
         py1 = min(img.height - 1, int(2 * (h - self.oy)) + 2)
         if px1 <= px0 or py1 <= py0:
-            return
+            return []
         lines = []
         for by in range(py0 // B, (py1 - 1) // B + 1):
             for bx in range(px0 // B, (px1 - 1) // B + 1):
@@ -860,16 +858,113 @@ class MapView(ttk.Frame):
                 if got is None:
                     got = blocks[(bx, by)] = self._shore_block(img, metres, bx * B, bx * B + B, by * B, by * B + B)
                 lines += got
+        return lines
+
+    SHORE_DARK, SHORE_LIGHT = (0x1b, 0x24, 0x30), (0xff, 0xf4, 0xc2)    # the dark edge under the light line
+
+    def _shore_into(self, pic):
+        """The shore line drawn INTO the map's picture (the canvas way; the card's: _gl_show)."""
+        lines = self._shore_lines(*pic.size)
         if not lines:
             return
         from PIL import ImageDraw
         d = ImageDraw.Draw(pic)
-        ox, oy = self.ox, self.oy
+        z, h, ox, oy = self.z, self.cmap.h, self.ox, self.oy
         pts = [((ax / 2.0 - ox) * z, (h - ay / 2.0 - oy) * z, (bx / 2.0 - ox) * z, (h - by / 2.0 - oy) * z)
                for (ax, ay), (bx, by) in lines]
-        for wid, col in ((4, (0x1b, 0x24, 0x30)), (2, (0xff, 0xf4, 0xc2))):     # the dark edge under the light line
+        for wid, col in ((4, self.SHORE_DARK), (2, self.SHORE_LIGHT)):
             for q in pts:
                 d.line(q, fill=col, width=wid)
+
+    # ---- Coast & heights drawn by the graphics card (glflat + glwindow; Windows) ----
+    gl_wanted = False                                   # set by the Terrain editor's Coast & heights tab
+
+    def _gl(self):
+        """The card drawing this map straight into the window, made once; None where it cannot or is not wanted
+        (the map is then drawn as before - a picture on the canvas)."""
+        if not self.gl_wanted:
+            return None
+        st = getattr(self, "_glstate", None)
+        if st is None:
+            st = self._glstate = False
+            try:
+                from . import glflat, glmap, glwindow
+                ctx = glmap.context()
+                if ctx is not None and glflat.np is not None:
+                    win = glwindow.WindowGL(ctx)
+                    fr = tk.Frame(self.canvas.master, background="", takefocus=1)
+                    fr.update_idletasks()
+                    if win.attach(fr.winfo_id()):
+                        fr.bind("<Expose>", lambda e: self._gl_soon(), add="+")
+                        st = self._glstate = {"win": win, "frame": fr, "flat": glflat.FlatGL(ctx), "binds": None,
+                                              "ms": []}
+                    else:
+                        fr.destroy()
+            except Exception:
+                st = self._glstate = False
+        if not st:
+            return None
+        c, fr = self.canvas, st["frame"]
+        seqs = tuple(c.bind())
+        if seqs != st["binds"]:                        # the canvas's mouse and keys, the same handlers, then shown
+            for seq in seqs:
+                fr.bind(seq, c.bind(seq))
+                fr.bind(seq, lambda e: self._gl_soon(), add="+")
+            st["binds"] = seqs
+        if not fr.winfo_ismapped():
+            fr.place(in_=c, x=0, y=0, relwidth=1, relheight=1)
+        return st
+
+    def gl_off(self):
+        """Back to the canvas way (another tab of the Terrain editor; the card failed)."""
+        st = getattr(self, "_glstate", None)
+        if st:
+            st["frame"].place_forget()
+
+    def _gl_failed(self):
+        self.gl_off()
+        self._glstate = False                           # drawn as before from now on
+        self.render()
+
+    def _gl_soon(self):
+        if getattr(self, "_gl_pending", None) is None:
+            self._gl_pending = self.after_idle(self._gl_show)
+
+    def _gl_show(self):
+        """The view by the card: the map's picture where the view puts it, the shore line, the canvas's own lines
+        (the brush's outline, the grid, marks, the selection box) - then shown in the window."""
+        import time
+        self._gl_pending = None
+        st = self._gl() if self.cmap else None
+        if not st:
+            return
+        try:
+            from .glflat import canvas_rows, segments_rows
+            import numpy as np
+            c = self.canvas
+            cw, ch = max(c.winfo_width(), 1), max(c.winfo_height(), 1)
+            t = time.perf_counter()
+            base = self._base()
+            st["flat"].set_picture(base)
+            rows = []
+            lines = self._shore_lines(cw, ch)
+            if lines:
+                a = np.asarray(lines, np.float32).reshape(-1, 4)
+                z, h = self.z, self.cmap.h
+                seg = np.stack([(a[:, 0] / 2 - self.ox) * z, (h - a[:, 1] / 2 - self.oy) * z,
+                                (a[:, 2] / 2 - self.ox) * z, (h - a[:, 3] / 2 - self.oy) * z], 1)
+                for wid, col in ((4, self.SHORE_DARK), (2, self.SHORE_LIGHT)):
+                    rows.append(segments_rows(seg, wid, tuple(v / 255.0 for v in col) + (1.0,)))
+            rows.append(canvas_rows(c))
+            rows = np.concatenate(rows) if rows else np.zeros((0, 6), np.float32)
+            st["flat"].frame(cw, ch, (self.ox, self.oy, self.z, self.cmap.w, self.cmap.h), self._field(),
+                             self._per_tile(base), rows)
+            st["win"].present(st["flat"].fbo, cw, ch)
+            st["frame"].configure(cursor=c.cget("cursor"))
+            st["ms"] = (st["ms"] + [1000 * (time.perf_counter() - t)])[-10:]
+            self._zoom_label()
+        except Exception:
+            self._gl_failed()
 
     def _shore_block(self, img, metres, px0, px1, py0, py1):
         """The shore pieces [((ax, ay), (bx, by))] in map_heights points of the squares whose lower-left points lie in
@@ -1268,7 +1363,10 @@ class MapView(ttk.Frame):
             return
         cw, ch = max(self.canvas.winfo_width(), 200), max(self.canvas.winfo_height(), 200)
         fit = min(cw / self.cmap.w, ch / self.cmap.h)
-        lab.configure(text="%d%%" % round(100 * self.z / fit) if fit else "")
+        st = getattr(self, "_glstate", None)
+        ms = st["ms"] if st and self.gl_wanted and st["ms"] else None
+        lab.configure(text=("%d%%" % round(100 * self.z / fit) if fit else "") +
+                      (" | card %.0f ms" % (sum(ms) / len(ms)) if ms else ""))
 
     def render(self):
         """The whole map drawn again (soon, once for many asks). A drag's _pan still waiting gives way to it: it only
@@ -1296,10 +1394,14 @@ class MapView(ttk.Frame):
         base = self._base()                                           # 2 px per tile, colours laid on once
         # sharp tiles always, still or dragged: the smoothed picture at rest looked blurred beside the sharp one while
         # dragging (report #100) - the map is by tiles, as the game's files are
-        pic = view_of(base, box, (cw, ch), Image.NEAREST, self._field(), self._per_tile(base))
-        self._shore_into(pic)
-        self._photo = ImageTk.PhotoImage(pic)
-        c.create_image(0, 0, anchor="nw", image=self._photo, tags=("bg",))
+        gl = self._gl()
+        if gl:                                          # the card draws the map: the canvas keeps only its lines
+            c.create_rectangle(0, 0, 0, 0, state="hidden", tags=("bg",))
+        else:
+            pic = view_of(base, box, (cw, ch), Image.NEAREST, self._field(), self._per_tile(base))
+            self._shore_into(pic)
+            self._photo = ImageTk.PhotoImage(pic)
+            c.create_image(0, 0, anchor="nw", image=self._photo, tags=("bg",))
         self._drawn_at = (self.ox, self.oy)
         if self.v_grid.get() and self.z >= 10:
             self._grid(cw, ch)
@@ -1310,6 +1412,8 @@ class MapView(ttk.Frame):
             self._draw_edges()
         if self.v_pick.get() and (self.sel_chars or self.sel_res):
             self._sel_marks()
+        if gl:
+            self._gl_soon()
         key = (tuple(sorted({r["kind"] for r in self.resources})), self.v_res.get(), self.v_forts.get(),
                tuple(self.tint_legend) if self.tint is not None else None, tuple(sorted(self.tools)), self.tool,
                tuple(self.res_types))
@@ -1327,15 +1431,19 @@ class MapView(ttk.Frame):
         self._clamp()
         cw, ch = c.winfo_width(), c.winfo_height()
         box = (self.ox, self.oy, self.ox + cw / self.z, self.oy + ch / self.z)
-        base = self._base()
-        pic = view_of(base, box, (cw, ch), Image.NEAREST, self._field(), self._per_tile(base))
-        self._shore_into(pic)
-        self._put_bg(pic)
+        gl = self._gl()
+        if not gl:
+            base = self._base()
+            pic = view_of(base, box, (cw, ch), Image.NEAREST, self._field(), self._per_tile(base))
+            self._shore_into(pic)
+            self._put_bg(pic)
         ox, oy = self._drawn_at
         dx, dy = (ox - self.ox) * self.z, (oy - self.oy) * self.z
         c.move("all", dx, dy)
         c.move("bg", -dx, -dy)
         self._drawn_at = (self.ox, self.oy)
+        if gl:
+            self._gl_show()
 
     def _put_bg(self, pic):
         """The background's new pixels into the picture the canvas shows (the same size: painted over in place - a
@@ -2653,6 +2761,9 @@ class MapView(ttk.Frame):
             return self.render()
         cw, ch = c.winfo_width(), c.winfo_height()
         box = (self.ox, self.oy, self.ox + cw / self.z, self.oy + ch / self.z)
+        if self._gl():                                  # the card: the new picture and line, nothing else
+            self._gl_show()
+            return
         base = self._base()
         pic = view_of(base, box, (cw, ch), Image.NEAREST, self._field(), self._per_tile(base))
         self._shore_into(pic)                           # in the picture: the brush's blocks again, live
