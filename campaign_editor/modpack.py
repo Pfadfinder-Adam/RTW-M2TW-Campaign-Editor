@@ -137,17 +137,17 @@ def _sprite_sheets(mod):
 
 def sprites_outside(mod, rel, size):
     """[(sheet, sprite)] of sprite pages named like rel's file whose sprites would not fit a picture of size."""
-    from .symbols import RE_PAGE, RE_SPRITE
+    from .symbols import RE_PAGE, sprite_list
     base = rel.split("/")[-1].lower()
     out = []
     for sheet, text in _sprite_sheets(mod):
         for m in RE_PAGE.finditer(text):
             if m.group(1).lower() != base:
                 continue
-            for s in RE_SPRITE.finditer(m.group(2)):
-                x, y, w, h = (int(v) for v in s.groups()[1:])
+            for sp in sprite_list(m.group(2)):
+                x, y, w, h = sp["box"]
                 if x + w > size[0] or y + h > size[1]:
-                    out.append((sheet, s.group(1)))
+                    out.append((sheet, sp["name"]))
     return out
 
 
