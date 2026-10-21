@@ -3313,6 +3313,17 @@ building smith
                                                      "copy_triggers": True})          # still there for the CLI
         self.assertTrue(any("FactionType beta" in t for t in plan.files[mod.file("traits")].texts()))
 
+    def test_emblem_window_says_a_picture_of_no_known_size(self):
+        """R-20261021-BFEE56: Emblem everywhere stopped on a picture whose size could not be read (size None)."""
+        from campaign_editor.gui_art import picture_words
+        self.assertEqual(picture_words({"label": "Logo", "rel": "a.tga", "size": (64, 32, 32)}), "Logo\n64 x 32")
+        self.assertEqual(picture_words({"label": "Logo", "rel": "a.tga", "size": None}), "Logo\nsize unknown")
+
+        class Pic:
+            size = (48, 48)
+        self.assertEqual(picture_words({"label": "Logo", "rel": "a.tga", "size": None}, {"a.tga": Pic()}),
+                         "Logo\n48 x 48")
+
     def test_map_from_zero(self):
         """The user, 2026-10-21: a map from zero - one island, one region with its town (black pixel), a port (white,
         on the coast, sea beside it), a resource, one faction and the rebels; every picture at its size for W x H
