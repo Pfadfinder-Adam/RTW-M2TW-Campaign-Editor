@@ -3085,6 +3085,28 @@ building smith
         self.assertEqual(edit.read_faction(ModData(self.root), "test", "alpha")["long_description"],
                          "Brave Alphans\nof the hills")
 
+    def test_names_sharing_one_old_word_are_set_each_on_its_own(self):
+        """R-20261020-704A13: name, short name and adjective were all 'Arverni'; a new full name 'The Arverni
+        Confederation' became the short name and the adjective too (the old word swapped everywhere). Now each name's
+        own string is set, the labels follow the adjective alone."""
+        from campaign_editor import edit
+        p = os.path.join(self.root, "data", "text", "expanded_bi.txt")
+        write(p, "{ALPHA}\tArverni\n{ST_ALPHA}\tArverni\n{ALPHA_DESCR}\tArverni ride\n"
+                 "{EMT_ALPHA_SPY}\tArverni Spy\n{EMT_ALPHA_CITY}\tArverni City\n{EMT_ALPHA_GENERAL}\tArverni General\n"
+                 "{TEST_ALPHA_DESCR}\tThe long story\n", utf16=True)
+        mod = ModData(self.root)
+        now = edit.read_faction(mod, "test", "alpha")
+        self.assertEqual((now["display_name"], now["short_name"], now["adjective"]), ("Arverni",) * 3)
+        edit.edit(mod, "test", "alpha", {"display_name": "The Arverni Confederation", "short_name": "Arverni",
+                                         "adjective": "Arverni"}).apply()
+        got = edit.read_faction(ModData(self.root), "test", "alpha")
+        self.assertEqual((got["display_name"], got["short_name"], got["adjective"]),
+                         ("The Arverni Confederation", "Arverni", "Arverni"))
+        edit.edit(ModData(self.root), "test", "alpha", {"adjective": "Arvernian"}).apply()
+        got = edit.read_faction(ModData(self.root), "test", "alpha")
+        self.assertEqual((got["display_name"], got["short_name"], got["adjective"]),
+                         ("The Arverni Confederation", "Arverni", "Arvernian"))
+
     def test_answers_come_after_the_report_window_closed(self):
         """R-20261014-D5B6A6: the Report window closed while the answers were still being fetched - the late answer
         touched its gone button ('invalid command name ...!button'). Now it is dropped quietly."""
