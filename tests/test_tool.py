@@ -3246,6 +3246,28 @@ building smith
         with self.assertRaises(ValueError):
             SE.set_box(Plan(mod, "x", "x", {}), mod, sheet, "NONE", (0, 0, 1, 1))
 
+    def test_faction_with_no_custom_battle_unit(self):
+        """A Discord player's REX crash (2026-10-21, a quick battle): a faction open to custom battles with no unit it
+        may field there - every unit no_custom or none in its ownership - makes an empty army and the game stops.
+        Check mod files names it; 'custom_battle_availability no' takes it out of the check."""
+        import re
+        from campaign_editor import check
+        from campaign_editor.units import read_units
+        mod = ModData(self.root)
+        units = read_units(mod.load(mod.file("edu")))
+        self.assertEqual(check.custom_battle_problems(mod, units), [])
+        for u in units:
+            u.attributes = list(u.attributes) + ["no_custom"]
+        got = check.custom_battle_problems(mod, units)
+        self.assertTrue(got and all("custom / quick battles" in g for g in got))
+        p = mod.file("sm_factions")
+        text = open(p, encoding="latin-1").read()
+        fac = got[0].split()[0]
+        i = re.search(r"faction\s+%s\b" % re.escape(fac), text).start()
+        write(p, text[:i] + text[i:].replace("\n", "\ncustom_battle_availability no\n", 1))
+        mod = ModData(self.root)
+        self.assertFalse(any(g.startswith(fac + " ") for g in check.custom_battle_problems(mod, units)))
+
     def test_map_from_zero(self):
         """The user, 2026-10-21: a map from zero - one island, one region with its town (black pixel), a port (white,
         on the coast, sea beside it), a resource, one faction and the rebels; every picture at its size for W x H
