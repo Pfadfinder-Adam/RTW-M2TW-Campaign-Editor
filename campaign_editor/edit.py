@@ -913,6 +913,10 @@ def _garrisons(plan, f, s, campaign, faction=None, picked=None, add=False):
             room = MAX_UNITS - len(_units(s.lines[holder.start:holder.end]))
         else:
             room = MAX_UNITS - (1 if isinstance(holder, Character) and holder.named else 0)
+        if xy is None and holder is None:           # a captain stands on the town's tile - the map shows none
+            plan.warn(f, "%s: no garrison - the map has no town for it (no black town pixel in map_regions.tga), "
+                         "so a captain has no tile to stand on; place the town on the map first" % region)
+            continue                                # (R-20261020-0A520D: 'NoneType' object is not subscriptable)
         if len(types) > room:
             plan.warn(f, "%s: only %d of the %d unit(s) fit - an army holds %d at most" % (
                 region, max(room, 0), len(types), MAX_UNITS))
