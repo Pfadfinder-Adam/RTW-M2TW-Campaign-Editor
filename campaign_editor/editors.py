@@ -945,6 +945,8 @@ def check_text(mod, kind, text, chain=None, levels=()):
         if key in RECRUIT_KEYS:
             m = re.match(r'(\w+)\s+"([^"]+)"\s*(.*)$', s)
             nums = (m.group(3).split(" requires")[0].split() if m else [])
+            if len(nums) >= 2 and nums[-2] == "bonus":       # the last number may be 'bonus N' (the engine reads both)
+                nums = nums[:-2] + [nums[-1].lstrip("-")]
             pool = key.endswith("_pool")
             if not m:
                 out.append((True, RECRUIT_FORMS[key]))
@@ -969,6 +971,11 @@ def check_text(mod, kind, text, chain=None, levels=()):
                 out.append((True, "no building chain '%s'" % m.group(1)))
             elif m.group(2) and "_min_level" in m.group(0) and m.group(2) not in chains[m.group(1)]:
                 out.append((True, "%s has no level '%s'" % (m.group(1), m.group(2))))
+    if kind == "unit":
+        from .edufields import NOTE, NOTE_ONLY
+        key = s.split()[0] if s.split() else ""
+        if key in NOTE_ONLY:
+            out.append((True, NOTE % key))
     from .roster import factions_in
     names = factions_in(s)
     if names:
