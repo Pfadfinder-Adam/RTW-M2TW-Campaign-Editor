@@ -307,11 +307,17 @@ def apply_regions(plan, campaign, painted, new_regions):
         lines = [r["name"], "\t" + r["settlement"], "\t" + creator, "\t" + rebels,
                  "\t%d %d %d" % c, "\t" + res,
                  "\t%d" % int(r.get("triumph", 5)), "\t%d" % int(r.get("farming", 3))]
+        m2 = any("religions" in v for v in regions.values())
         if any("legion" in v for v in regions.values()):
-            # Barbarian Invasion: a legion line after the name and a beliefs line after farming, as the
-            # region most of its land came from (every region of BI's own file has both)
+            # a legion line after the name, as the region most of its land came from (every region of BI's own
+            # file has one; a Medieval II mod may give them too - 'legion: LLewis', Mekkermann's 1000-region map)
             legion = d.get("legion") or next(v["legion"] for v in regions.values() if v.get("legion"))
             lines.insert(1, "\t" + legion)
+        if any("legion" in v for v in regions.values()) and not m2:
+            # Barbarian Invasion: a beliefs line after farming (never in Medieval II: its ninth line is the
+            # religions { } one - a 'pagan 100' line there shifted every later region, the game found none of
+            # them: 'cannot find this pixel colour ... in the region_db', Discord 2026-10-20)
+            legion = lines[1].strip()
             beliefs = religions_for(regions, r.get("religions"), donor)          # given, else the donor's
             if beliefs:
                 lines.append("\t" + " ".join("%s %d" % (k, n) for k, n in beliefs.items() if n))
