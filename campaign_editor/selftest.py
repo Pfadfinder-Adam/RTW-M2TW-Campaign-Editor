@@ -3120,7 +3120,7 @@ SEEN_IN_GAME = {
     "s_later": {"m2tw": "0.29.2"}, "s_later_way": {"m2tw": "0.29.2"},
     "s_shadow": {"m2tw": "0.29.2", "bi": "0.29.2"}, "s_split": {"m2tw": "0.29.2", "bi": "0.29.2"},
     "s_forts": {"rome": "0.29.2"},
-    "s_region": {"m2tw": "0.29.2", "rome": "0.29.2"}, "s_region_garrison": {"m2tw": "0.29.2", "rome": "0.29.2"},
+    "s_region": {"m2tw": "0.29.2", "rome": "0.29.2", "bi": "0.29.2"}, "s_region_garrison": {"m2tw": "0.29.2", "rome": "0.29.2"},
     "s_rename": {"m2tw": "0.29.2", "rome": "0.29.2"},
     "s_events": {"m2tw": "0.29.2", "rome": "0.29.2", "bi": "0.29.2"},
     "s_rules": {"m2tw": "0.29.2", "rome": "0.29.2"}, "s_campaign_start": {"m2tw": "0.29.2", "rome": "0.29.2"},
@@ -3133,6 +3133,9 @@ SEEN_IN_GAME = {
     "s_aboard": {"m2tw": "0.29.2", "rome": "0.32.0"},
     "s_special_type": {"m2tw": "0.29.2", "rome": "0.29.2", "bi": "0.29.2"},
     "s_special": {"m2tw": "0.29.2", "rome": "0.29.2", "bi": "0.29.2"},
+    # from the tester runs' summaries, read again 2026-10-21
+    "s_town": {"m2tw": "0.29.2", "rome": "0.32.0", "bi": "0.29.2"}, "s_split_town": {"m2tw": "0.29.2"},
+    "s_rename_faction": {"rome": "0.32.0"}, "s_addon_growth": {"m2tw": "0.29.2", "bi": "0.29.2"},
 }
 # changed after it was seen: {step: the version that changed it}
 CHANGED_SINCE = {"s_addon": "0.33.0", "s_addon_growth": "0.33.0", "s_module": "0.32.0", "s_delete_region": "0.34.0",
