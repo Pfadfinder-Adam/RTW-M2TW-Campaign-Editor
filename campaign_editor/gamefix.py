@@ -105,6 +105,9 @@ def problems(mod, on_load=False):
     edb = _building_conditions(mod)
     if edb:
         out.append(edb)
+    stray = m2_beliefs_lines(mod)
+    if stray:
+        out.append(stray)
     missing = [] if on_load else missing_engine_files(mod)
     if missing:
         from .limits import engine_of
@@ -373,6 +376,32 @@ def _building_conditions(mod):
                 "each line stays.")}
 
 
+def m2_beliefs_lines(mod):
+    """Medieval II's descr_regions.txt with a Barbarian Invasion beliefs line ('pagan 100') just before a region's
+    religions { } line - older editors wrote one into a Medieval II map whose regions have 'legion:' lines: every later
+    region shifts and the game finds none of them ('cannot find this pixel colour ... in the region_db', Discord
+    2026-10-20). -> the problem (id 'm2_beliefs_lines', rows) or None."""
+    seen = set()
+    for camp in mod.campaigns() or [None]:
+        path = mod.campaign_file(camp, "descr_regions.txt") if camp else None
+        if not path or path in seen:
+            continue
+        seen.add(path)
+        f = mod.load(path)
+        texts = [strip_comment(t).strip() for t in f.texts()]
+        rows = [i - 1 for i, t in enumerate(texts) if i and t.startswith("religions") and "{" in t
+                and re.match(r"^[A-Za-z_]+\s+\d+(\s+[A-Za-z_]+\s+\d+)*$", texts[i - 1])
+                and not re.match(r"^\d+\s+\d+\s+\d+$", texts[i - 1])]
+        if rows:
+            return {"id": "m2_beliefs_lines", "file": path, "rows": rows, "line": rows[0],
+                    "why": "descr_regions.txt: %d region(s) carry a Barbarian Invasion beliefs line ('%s') before "
+                           "their religions { } line - Medieval II reads it as the next region, so every region after "
+                           "it is lost and the game stops ('cannot find this pixel colour ... in the region_db'). "
+                           "Older versions of this tool wrote it for new regions. The fix: those lines taken out, "
+                           "nothing else changed." % (len(rows), texts[rows[0]])}
+    return None
+
+
 def fix_plan(mod, found):
     """A Plan that puts the problems found right."""
     plan = Plan(mod, "setup", "setup_fix")
@@ -409,6 +438,12 @@ def fix_plan(mod, found):
             f = plan.edit(p["file"])
             got = open_factions(f, p["names"])
             plan.note(f, "%d faction(s) opened to play: %s" % (len(got), ", ".join(got)))
+            continue
+        if p["id"] == "m2_beliefs_lines":
+            f = plan.edit(p["file"])
+            for i in reversed(p["rows"]):
+                f.delete(i, i + 1)
+            plan.note(f, "%d Barbarian Invasion beliefs line(s) taken out of Medieval II regions" % len(p["rows"]))
             continue
         if p["id"] == "rome_dead":
             f = plan.edit(p["file"])
