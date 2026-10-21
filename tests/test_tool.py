@@ -3246,6 +3246,45 @@ building smith
         with self.assertRaises(ValueError):
             SE.set_box(Plan(mod, "x", "x", {}), mod, sheet, "NONE", (0, 0, 1, 1))
 
+    def test_campaign_hud_laid_out_as_the_engine(self):
+        """Interface > Campaign HUD (the engines' places, hudlayout): the HUD's bottom at 768, its top 768 - the LEFT
+        panel's height, the MIDDLE panel on the bottom, the pieces from the mod's own sheet; a changed page shows."""
+        try:
+            from PIL import Image
+        except ImportError:
+            self.skipTest("no Pillow")
+        from campaign_editor import hudlayout as H
+        from campaign_editor.factionart import image_tga
+        from unittest import mock
+        mod = ModData(self.root)
+        ui = os.path.join(mod.data, "ui")
+        os.makedirs(os.path.join(ui, "roman", "interface"), exist_ok=True)
+        xml = ('<sprite_definitions>\n <page file="hud.tga" w="1024" h="512">\n'
+               '  <sprite name="STRAT_HUD_LEFT" x="0" y="0" w="281" h="200"/>\n'
+               '  <sprite name="STRAT_HUD_MIDDLE" x="281" y="0" w="462" h="147"/>\n'
+               '  <sprite name="STRAT_HUD_RIGHT" x="743" y="0" w="281" h="181"/>\n'
+               '  <sprite name="BUILD_BUTTON_IMAGE" x="0" y="300" w="76" h="76"/>\n </page>\n</sprite_definitions>\n')
+        with open(os.path.join(ui, "strat3.sd.xml"), "w") as fh:
+            fh.write(xml)
+        page = Image.new("RGBA", (1024, 512), (0, 0, 255, 255))
+        page.paste((255, 0, 0, 255), (0, 300, 76, 376))
+        with open(os.path.join(ui, "roman", "interface", "hud.tga"), "wb") as fh:
+            fh.write(image_tga(page))
+        with mock.patch("campaign_editor.limits.game_kind", return_value="rome"):
+            got = {p["piece"]: p for p in H.pieces(mod)}
+            self.assertEqual(got["left panel"]["box"], (0, 568, 281, 200))          # a taller LEFT: the top moves
+            self.assertEqual(got["middle panel"]["box"], (281, 621, 462, 147))      # on the bottom
+            self.assertEqual(got["build button"]["box"], (774, 608 - 19, 76, 76))  # moved with the top
+            im = H.compose(mod)
+            self.assertEqual(im.size, (1024, 768))
+            self.assertEqual(im.getpixel((800, 620))[:3], (255, 0, 0))
+            red = page.copy()
+            red.paste((0, 255, 0, 255), (0, 300, 76, 376))
+            im = H.compose(mod, page_picture=lambda p: red if p == "hud.tga" else None, screen=(1920, 1080))
+            self.assertEqual(im.size, (1920, 1080))
+            self.assertEqual(im.getpixel((int(800 * 1.875), int(620 * 1080 / 768)))[:3], (0, 255, 0))
+            self.assertIn(("strat3", "END_TURN_BUTTON_IMAGE"), H.missing(mod))
+
     def test_sprite_change_waits_for_apply_in_the_interface_work(self):
         """A sprite's picture replaced on the Sprite sheets tab is a change of the Interface work: counted for Apply,
         in its plan, undone by Undo on that tab."""
@@ -3293,6 +3332,10 @@ building smith
                 self.assertIn("strat3.rsd", [os.path.basename(f) for f in ed.make_plan().changed_files()])
                 ed.undo_step()
                 self.assertFalse(ed.dirty())
+                ed.nb.select(2)                                  # the Campaign HUD tab: drawn through the same panel
+                ed._tab_changed()
+                app.update()
+                self.assertIs(ed.hud.interface.sprites, sp)
         finally:
             app.destroy()
 

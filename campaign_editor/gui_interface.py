@@ -93,6 +93,8 @@ class InterfacePanel(ttk.Frame):
         self.load()
         if self.sprites is not None and self.nb.index(self.nb.select()) == 1:
             self.sprites.load()
+        if self.hud is not None and self.nb.index(self.nb.select()) == 2:
+            self.hud.load()
         return lost
 
     kind = "Interface"
@@ -146,7 +148,7 @@ class InterfacePanel(ttk.Frame):
         return plan
 
     def _on_sprites(self):
-        return self.sprites is not None and self.nb.index(self.nb.select()) == 1
+        return self.sprites is not None and self.nb.index(self.nb.select()) in (1, 2)    # the HUD works through it
 
     def undo_step(self):
         """The main window's Undo (and Ctrl+Z) on this work - on the tab on show."""
@@ -186,6 +188,9 @@ class InterfacePanel(ttk.Frame):
         self.sprites = None
         self._sprite_tab = ttk.Frame(self.nb)
         self.nb.add(self._sprite_tab, text="Sprite sheets")
+        self.hud = None                                 # the campaign map's bottom panel (gui_hud), on its own tab
+        self._hud_tab = ttk.Frame(self.nb)
+        self.nb.add(self._hud_tab, text="Campaign HUD")
         self.nb.bind("<<NotebookTabChanged>>", lambda e: self._tab_changed())
         # no title, hint line or bottom bar of its own (the user, 2026-10-16, #296: their room goes to the screen; the
         # main window's Preview changes / Apply changes / Undo / Redo act on this work): the help sits in a '?'
@@ -287,14 +292,26 @@ class InterfacePanel(ttk.Frame):
         self.tv.bind("<Button-3>", self._tree_menu)
 
     def _tab_changed(self):
-        """Sprite sheets read when their tab is first opened (and again for another mod)."""
-        if self.nb.index(self.nb.select()) != 1:
-            return
+        """Sprite sheets / the campaign HUD read when their tab is first opened (and again for another mod)."""
+        tab = self.nb.index(self.nb.select())
+        if tab == 1:
+            self.ensure_sprites()
+        elif tab == 2:
+            if self.hud is None:
+                from .gui_hud import HudPanel
+                self.hud = HudPanel(self._hud_tab, self.app, self)
+                self.hud.pack(fill="both", expand=True)
+            self.hud.load()
+
+    def ensure_sprites(self):
+        """The Sprite sheets tab's panel, made and read for the mod loaded now (the HUD tab works through it: one
+        place for the pictures' changes)."""
         if self.sprites is None:
             from .gui_sprites import SpriteSheetsPanel
             self.sprites = SpriteSheetsPanel(self._sprite_tab, self.app)
             self.sprites.pack(fill="both", expand=True)
         self.sprites.load()
+        return self.sprites
 
     # ---- pages and pieces ----
     def fill_pages(self):
