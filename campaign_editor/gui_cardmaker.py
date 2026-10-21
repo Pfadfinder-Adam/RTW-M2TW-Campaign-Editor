@@ -111,6 +111,14 @@ class CardMaker(tk.Toplevel):
             ttk.Scale(side, from_=lo, to=hi, variable=var, orient="horizontal", length=200,
                       command=lambda v: self._slid()).pack(anchor="w")
         ttk.Button(side, text="Back to the start", command=self.reset).pack(anchor="w", pady=(4, 0))
+        # a painted look over the 3D view (a Discord modder: 'card art that does not look 3D, like Rome 2 / Shogun 2')
+        self.v_paint = tk.BooleanVar(value=bool(settings.get("card_painted", False)))
+        self._painted = (None, None)                    # (the figure it was made from, the painted figure)
+        from .gui_util import tip
+        tip(ttk.Checkbutton(side, text="Painted look", variable=self.v_paint, command=self.show),
+            "Flat brush areas with the edges kept, a little warmer light, a canvas grain and a thin dark line round the "
+            "man - so the card looks painted, not 3D. A filter over the 3D view: it paints nothing new.").pack(
+            anchor="w", pady=(8, 0))
         ttk.Label(side, text="Ground").pack(anchor="w", pady=(8, 0))
         grounds = list(GROUNDS) + [("game:" + key, words) for key, words in (
                                    CM.PICTURE_GROUNDS if self.info else CM.CARD_GROUNDS)
@@ -320,7 +328,13 @@ class CardMaker(tk.Toplevel):
         """The picture as it will be given (RGBA, the mod's own size), or None."""
         if self.figure is None:
             return None
-        pic = CM.cut(self.figure, self.current(), self.size)
+        fig = self.figure
+        settings.put("card_painted", bool(self.v_paint.get()))
+        if self.v_paint.get():
+            if self._painted[0] is not self.figure:
+                self._painted = (self.figure, CM.painted(self.figure))
+            fig = self._painted[1]
+        pic = CM.cut(fig, self.current(), self.size)
         g = self.v_ground.get()
         settings.put(self._ground_key, g)
         if g == "colour":
