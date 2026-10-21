@@ -3120,6 +3120,25 @@ building smith
         write_tga(p, img.width, img.height, pix)
         self.assertEqual(regionedit.sea_colour(ModData(self.root), "test"), sea)
 
+    def test_garrison_for_a_town_the_map_does_not_show(self):
+        """R-20261020-0A520D: a garrison asked for a town with no town pixel on map_regions.tga stopped the write
+        ('NoneType' object is not subscriptable - the captain had no tile). Now that town is left without one and
+        the write says why; the other towns get theirs."""
+        from campaign_editor.edit import edit
+        from campaign_editor.tga import read_tga
+        mod = ModData(self.root)
+        p = mod.campaign_file("test", "map_regions.tga")
+        img = read_tga(p)
+        x, y = mod.city_tiles("test")["A_R"]
+        pix = [[img.get(i, j) for i in range(img.width)] for j in range(img.height)]
+        pix = [[(255, 0, 0) if px == (0, 0, 0) and (i, j) == (x, y) else px for i, px in enumerate(row)]
+               for j, row in enumerate(pix)]
+        write_tga(p, img.width, img.height, pix)
+        mod = ModData(self.root)
+        self.assertNotIn("A_R", mod.city_tiles("test"))
+        plan = edit(mod, "test", "alpha", {"garrisons": {"A_R": ["rebel spear"]}})
+        self.assertTrue(any("A_R: no garrison - the map has no town" in w for _, w in plan.warnings), plan.warnings)
+
     def test_answers_come_after_the_report_window_closed(self):
         """R-20261014-D5B6A6: the Report window closed while the answers were still being fetched - the late answer
         touched its gone button ('invalid command name ...!button'). Now it is dropped quietly."""
