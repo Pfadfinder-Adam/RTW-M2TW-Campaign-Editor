@@ -558,7 +558,7 @@ class ArtEditor(ttk.Frame):
                 ph = ImageTk.PhotoImage(bg)
                 photos.append(ph)
                 tk.Label(cell, image=ph).grid(row=0, column=j, padx=1)
-            ttk.Label(cell, text="%s\n%d x %d" % (p["label"], p["size"][0], p["size"][1]), wraplength=200,
+            ttk.Label(cell, text=picture_words(p, made), wraplength=200,
                       justify="center", foreground="#444").grid(row=1, column=0, columnspan=2)
             if E.is_banner(p) or E.is_m2_banner(p):
                 if p["rel"] not in made:
@@ -855,3 +855,10 @@ def _same(a, b):
             return x.read() == y.read()
     except OSError:
         return False
+
+
+def picture_words(p, made=None):
+    """A picture's label and size for its card - the made picture's size when the file's own could not be read
+    (report R-20261021-BFEE56: the emblem window stopped on a picture of no known size)."""
+    size = p.get("size") or (made.get(p["rel"]).size if made and made.get(p["rel"]) is not None else None)
+    return "%s\n%s" % (p.get("label") or p.get("rel", ""), "%d x %d" % tuple(size[:2]) if size else "size unknown")
