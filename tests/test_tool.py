@@ -3174,6 +3174,92 @@ building smith
         write(p, text[:i + 5] + (unit + "\n") * 25 + text[i + 5:])
         self.assertTrue(any(n >= 25 for n in check.big_stacks(ModData(self.root), "test")))
 
+    def test_sprite_picture_replaced_on_its_page(self):
+        """Sprite sheets made editable (from Wholesome Queen's campaign UI editor): a sprite's picture goes into its
+        box on the page, the rest of the page as it was; the page keeps its size; a binary sheet's click mask
+        follows the new picture; written with a backup, Restore puts every byte back."""
+        try:
+            from PIL import Image
+        except ImportError:
+            self.skipTest("no Pillow")
+        from campaign_editor import spriteedit as SE, spritesheet as SS, symbols as SY
+        from campaign_editor.factionart import image_tga
+        mod = ModData(self.root)
+        ui = os.path.join(mod.data, "ui")
+        os.makedirs(os.path.join(ui, "roman", "interface"), exist_ok=True)
+        sh = SS.Sheet(5, "T", [{"guide": "g", "file": "p.tga", "flag": 0, "w": 4, "h": 4, "mask": bytes(3)}],
+                      [{"name": "A", "page": 0, "x0": 1, "x1": 2, "y0": 0, "y1": 3, "flag": 1, "tail": 0}])
+        rsd = os.path.join(ui, "strat3.rsd")
+        with open(rsd, "wb") as fh:
+            fh.write(SS.write(sh))
+        page = os.path.join(ui, "roman", "interface", "p.tga")
+        with open(page, "wb") as fh:
+            fh.write(image_tga(Image.new("RGBA", (4, 4), (10, 20, 30, 0))))
+        def read(f):
+            with open(f, "rb") as fh:
+                return fh.read()
+        before = {f: read(f) for f in (rsd, page)}
+        sheet = next(x for x in SY.all_sheets(mod) if x["name"] == "strat3")
+        with Image.open(page) as im:
+            old = im.convert("RGBA")
+        new = SE.put_sprite(old, (1, 0, 2, 4), Image.new("RGB", (8, 8), (255, 0, 0)))
+        self.assertEqual(new.getpixel((1, 2)), (255, 0, 0, 255))
+        self.assertEqual(new.getpixel((0, 0)), (10, 20, 30, 0))              # the rest of the page as it was
+        with self.assertRaises(ValueError):
+            SE.write(Plan(mod, "x", "x", {}), mod, sheet, {("p.tga", "roman"): Image.new("RGBA", (8, 8))})
+        plan = SE.write(Plan(mod, "x", "x", {}), mod, sheet, {("p.tga", "roman"): new})
+        bdir = plan.apply()
+        with Image.open(page) as im:
+            self.assertEqual(im.convert("RGBA").getpixel((2, 3)), (255, 0, 0, 255))
+        got = SS.read(read(rsd))
+        self.assertEqual(got.pages[0]["mask"], SS.mask(new))                 # the click mask follows the picture
+        restore(mod, bdir)
+        self.assertEqual({f: read(f) for f in (rsd, page)}, before)
+
+    def test_sprite_change_waits_for_apply_in_the_interface_work(self):
+        """A sprite's picture replaced on the Sprite sheets tab is a change of the Interface work: counted for Apply,
+        in its plan, undone by Undo on that tab."""
+        try:
+            from PIL import Image
+            from unittest import mock
+            from campaign_editor import gui
+            app = gui.App()
+        except Exception as e:                        # no tkinter / no display / no Pillow
+            self.skipTest("no tkinter window: %s" % e)
+        from campaign_editor import spriteedit as SE, spritesheet as SS
+        from campaign_editor.factionart import image_tga
+        ui = os.path.join(self.root, "data", "ui")
+        os.makedirs(os.path.join(ui, "roman", "interface"), exist_ok=True)
+        sh = SS.Sheet(5, "T", [{"guide": "g", "file": "p.tga", "flag": 0, "w": 4, "h": 4, "mask": bytes(3)}],
+                      [{"name": "A", "page": 0, "x0": 1, "x1": 2, "y0": 0, "y1": 3, "flag": 1, "tail": 0}])
+        with open(os.path.join(ui, "strat3.rsd"), "wb") as fh:
+            fh.write(SS.write(sh))
+        with open(os.path.join(ui, "roman", "interface", "p.tga"), "wb") as fh:
+            fh.write(image_tga(Image.new("RGBA", (4, 4), (10, 20, 30, 0))))
+        try:
+            with mock.patch("tkinter.messagebox.showinfo"), mock.patch("tkinter.messagebox.showerror"), \
+                    mock.patch("tkinter.messagebox.askyesno", return_value=False):
+                app.v_path.set(os.path.join(self.root, "data"))
+                app.load()
+                app.update()
+                app.v_work.set("interface")
+                app.work_changed()
+                ed = app.editor()
+                ed.nb.select(1)
+                ed._tab_changed()
+                sp = ed.sprites
+                self.assertEqual((sp.sheet["name"], sp.page), ("strat3", "p.tga"))
+                sp.picked = "A"
+                sp._set(SE.put_sprite(sp._img, sp._crop(), Image.new("RGB", (2, 4), (255, 0, 0))))
+                self.assertTrue(ed.dirty())
+                self.assertGreaterEqual(ed.pending(), 1)
+                files = [os.path.basename(f) for f in ed.make_plan().changed_files()]
+                self.assertIn("p.tga", files)
+                ed.undo_step()
+                self.assertFalse(ed.dirty())
+        finally:
+            app.destroy()
+
     def test_faction_form_starts_empty(self):
         """The user, 2026-10-21: 'I made a faction, picked another - the fields were still full; remove it all by
         hand?'. New faction opened after Edit faction, another template, another faction in Edit: nothing of the one

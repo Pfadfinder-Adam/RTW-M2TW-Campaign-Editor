@@ -83,6 +83,8 @@ class InterfacePanel(ttk.Frame):
     def rebind(self, mod):
         """The mod loaded again: changes waiting here stay while their file is unchanged (another work written
         meanwhile); else its menus are read again and the changes go (said). After its own write it reads afresh."""
+        if self.mod is None and self.sprites is not None:     # its own write (App._write): the pictures are in
+            self.sprites.forget()
         if self.mod is not None and self.dirty() and self._path and mod.data == self.mod.data and \
                 self._signature() == self._sig:
             self.mod = mod
@@ -96,11 +98,18 @@ class InterfacePanel(ttk.Frame):
     kind = "Interface"
 
     def dirty(self):
-        """Changes wait for Apply changes (the main window's)."""
+        """Changes wait for Apply changes (the main window's): the menu screens' or the sprite sheets' pictures."""
+        return self._menus_dirty() or self._sprites_dirty()
+
+    def _menus_dirty(self):
         return bool(self.doc) and self.doc.dump() != self.saved
 
+    def _sprites_dirty(self):
+        return self.sprites is not None and self.sprites.dirty()
+
     def pending(self):
-        return max(1, len(self.undo)) if self.dirty() else 0
+        return ((max(1, len(self.undo)) if self._menus_dirty() else 0) +
+                (len(self.sprites.changes) if self._sprites_dirty() else 0))
 
     def path(self):
         return self._path
@@ -115,10 +124,14 @@ class InterfacePanel(ttk.Frame):
             return None
 
     def make_plan(self):
-        if not self.doc:
+        if not self.doc and not self._sprites_dirty():
             raise ValueError("Interface: this game / mod has no menu layout file.")
         from .plan import Plan
         plan = Plan(self.mod, "interface", "interface", {})
+        if self._sprites_dirty():
+            self.sprites.plan_into(plan)
+        if not self.doc:
+            return plan
         L.plan_write(plan, self._path, self.doc)
         used = {os.path.normcase(self.own_path(t)) for t in self.doc.textures()}
         for path, data in self.own_files.items():          # the own pictures the layout names now
@@ -132,11 +145,20 @@ class InterfacePanel(ttk.Frame):
                     plan.delete(p, "an own menu picture no piece shows any more")
         return plan
 
+    def _on_sprites(self):
+        return self.sprites is not None and self.nb.index(self.nb.select()) == 1
+
     def undo_step(self):
-        """The main window's Undo (and Ctrl+Z) on this work."""
+        """The main window's Undo (and Ctrl+Z) on this work - on the tab on show."""
+        if self._on_sprites():
+            self._said(self.sprites.step(True), "Undone.", "Nothing to undo here.", None)
+            return
         self._said(self.do_undo(), "Undone (%d more step(s) back).", "Nothing to undo here.", len(self.undo))
 
     def redo_step(self):
+        if self._on_sprites():
+            self._said(self.sprites.step(False), "Redone.", "Nothing to redo here.", None)
+            return
         self._said(self.do_redo(), "Redone.", "Nothing to redo here.", None)
 
     def _said(self, done, yes, no, n):
