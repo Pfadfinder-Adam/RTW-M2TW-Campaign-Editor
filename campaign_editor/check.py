@@ -956,7 +956,7 @@ def custom_battle_availability(mod):
 
 def custom_battle_problems(mod, units):
     """A faction open to custom / quick battles with no land unit it may field there (none in its ownership, by name,
-    culture or 'all', without no_custom): a quick battle that picks it makes an army of nothing and the game stops
+    culture or 'all' - a unit with no ownership line is everyone's, the games' 'using all' - without no_custom): a quick battle that picks it makes an army of nothing and the game stops
     (a Discord player's REX log, 2026-10-21: 'there are no units in this army', then the general's unit)."""
     out = []
     cultures = dict(mod.factions())
@@ -964,7 +964,7 @@ def custom_battle_problems(mod, units):
         if not open_ or fac == "slave":
             continue
         owners = {fac, "all", cultures.get(fac) or fac}
-        if not any(owners & set(u.ownership) and u.category not in ("ship", "non_combatant") and
+        if not any((not u.ownership or owners & set(u.ownership)) and u.category not in ("ship", "non_combatant") and
                    "no_custom" not in u.attributes for u in units):
             out.append("%s has no unit for custom / quick battles (none in its ownership without no_custom) - a quick "
                        "battle that picks it stops the game; give it a unit (Units: ownership, take no_custom out) or "
