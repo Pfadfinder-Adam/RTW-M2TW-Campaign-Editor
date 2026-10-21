@@ -128,6 +128,10 @@ def problems(mod, on_load=False):
             shut = locked_factions(mod, camp)
         except Exception:
             shut = []
+        sp = mod.campaign_file(camp, "descr_strat.txt")
+        if on_load and shut and hasattr(mod, "own") and sp and mod.own(sp) != sp:
+            shut = []           # Load asks only about the mod's own campaigns: a 'yes' over the game's would copy its
+            #                     descr_strat into a thin mod, shadowing the modder's own (Check mod files still says it)
         if shut:
             out.append({"id": "locked_factions:%s" % camp, "file": mod.campaign_file(camp, "descr_strat.txt"),
                         "names": shut, "line": 0,
@@ -135,7 +139,6 @@ def problems(mod, on_load=False):
                                "list (the Roman Senate, the Pope, the rebels and factions that start with no town "
                                "stay as they are); Edit faction's Playable tick changes one at a time."
                                % (camp, len(shut), ", ".join(shut))})
-        sp = mod.campaign_file(camp, "descr_strat.txt")
         bad = headers_out_of_order(mod.load(sp)) if sp else []
         if bad:
             out.append({"id": "faction_header", "file": sp, "blocks": bad,

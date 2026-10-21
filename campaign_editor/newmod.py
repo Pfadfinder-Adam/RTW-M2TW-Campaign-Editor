@@ -261,24 +261,56 @@ def _put(src, dst, link_ok, stats):
 def slim(data_dir):
     """For a mod built on the plain game: remove every file still identical to
     the game's own (the game falls back to those anyway). Returns the count."""
-    target = os.path.dirname(os.path.abspath(data_dir))
-    m = marker(target)
-    if not m or m.get("base") != "(game)":
-        return 0
-    game = os.path.dirname(target)
-    if os.path.basename(game).lower() == "mods" and is_game(os.path.dirname(game)):
-        game = os.path.dirname(game)                  # Medieval II: <game>/mods/<name>
     removed = 0
+    for p in untouched_copies(data_dir):
+        os.remove(p)
+        removed += 1
     for dirpath, dirnames, filenames in os.walk(data_dir, topdown=False):
-        for n in filenames:
-            p = os.path.join(dirpath, n)
-            orig = os.path.join(game, "data", os.path.relpath(p, data_dir))
-            if os.path.isfile(orig) and _same(p, orig):
-                os.remove(p)
-                removed += 1
         if dirpath != data_dir and not os.listdir(dirpath):
             os.rmdir(dirpath)
     return removed
+
+
+def untouched_copies(data_dir):
+    """The files of a mod built on the plain game that are the game's own, byte
+    for byte - copies nobody changed (an older editor put whole campaign folders
+    in): the game reads them from its own data anyway, and a copy in the mod
+    only shadows what the modder puts elsewhere (the user, 2026-10-20). Kept:
+    the map layers beside a changed one (Plan.MAP_LAYERS - the game builds
+    map.rwm from the mod's whole map). [] for any other mod (a copy of a mod
+    holds its base on purpose)."""
+    from .plan import Plan
+    target = os.path.dirname(os.path.abspath(data_dir))
+    m = marker(target)
+    if not m or m.get("base") != "(game)":
+        return []
+    game = os.path.dirname(target)
+    if os.path.basename(game).lower() == "mods" and is_game(os.path.dirname(game)):
+        game = os.path.dirname(game)                  # Medieval II: <game>/mods/<name>
+    layer = lambda n: n.lower() in Plan.MAP_LAYERS or n.lower().endswith(".hgt")    # noqa: E731
+    out = []
+    for dirpath, dirnames, filenames in os.walk(data_dir):
+        dirnames.sort()
+        same, changed_map = [], False
+        for n in sorted(filenames):
+            p = os.path.join(dirpath, n)
+            orig = os.path.join(game, "data", os.path.relpath(p, data_dir))
+            if os.path.isfile(orig) and _same(p, orig):
+                same.append(n)
+            elif layer(n):
+                changed_map = True
+        out += [os.path.join(dirpath, n) for n in same if not (changed_map and layer(n))]
+    return out
+
+
+def untouched_plan(mod, found=None):
+    """A Plan taking the untouched copies out of the mod (Check mod files' 'Take them out'): each one backed up,
+    Restore puts them back."""
+    from .plan import Plan
+    plan = Plan(mod, "(check)", "untouched_copies")
+    for p in untouched_copies(mod.data) if found is None else found:
+        plan.delete(p, "the game's own file byte for byte - the game reads its own")
+    return plan
 
 
 def _same(a, b):

@@ -24,7 +24,7 @@ WHEN = [
       "rehearsal for", "town pixel", "no such region", "wasteland region")),
     ("load", "the campaign loads, but something is lost or the game stops on it",
      ("descr_strat", "the game stops", "core building", "governor's building", "without its towns", "temples",
-      "off the map", "txt lacks", "children", "relative line")),
+      "off the map", "txt lacks", "children", "relative line", "byte for byte")),
     ("battle", "in battle", ("battle", "skeleton", "modeldb", "texture")),
     ("play", "while playing (later turns, events, winning)", ()),
 ]
@@ -49,6 +49,7 @@ def when_of(msg):
 FIXES = [
     (("load offers",), "Load the mod again (it offers the fix)", "load"),
     (("copy them in to set this mod's own engine settings",), "Copy them in", "engine_files"),
+    (("untouched copies of the game's files",), "Take them out", "untouched_copies"),
     (("campaign rules", "max_number_of_children", "age of manhood"), "Open Campaign rules", "rules"),
     (("family tree", "children", "character_record"), "Open Characters (family tree)", "characters"),
     (("nonplayable lists",), "Open Edit faction (tick Playable)", "edit"),
@@ -565,6 +566,9 @@ def check_mod(mod, campaign, deep=False, progress=None, found=None):
         say("MODEL TEXTURES: %d campaign-map model(s) that take their texture from the model - %s" % (
             len(models), "%d texture(s) not found" % len(lost) if lost else "every texture found"))
 
+    for p in untouched_problems(mod):
+        bad(p)
+
     # ---- deep: rehearse the tool's work for every faction ----
     if deep:
         say("")
@@ -589,6 +593,24 @@ def check_mod(mod, campaign, deep=False, progress=None, found=None):
         say("No problems found.")
     say("(%.1f s)" % (time.time() - t0))
     return "\n".join(out)
+
+
+def untouched_problems(mod):
+    """A mod built on the plain game holding files that are the game's own, byte for byte (newmod.untouched_copies):
+    one line naming the folders, with its 'Take them out' button (the user, 2026-10-20: copies shadow a modder's own)."""
+    try:
+        from .newmod import untouched_copies
+        found = untouched_copies(mod.data)
+    except Exception:
+        return []
+    if not found:
+        return []
+    folders = sorted({os.path.relpath(os.path.dirname(p), mod.data).replace("\\", "/") for p in found})
+    return ["%d untouched copies of the game's files in this mod, byte for byte the game's own (%s%s) - nobody changed "
+            "them, the game reads them from its own data anyway, and here they hide what you put in elsewhere (a "
+            "campaign of your own, another mod's files). Take them out (backed up: Restore puts them back)."
+            % (len(found), ", ".join(folders[:4]), " and %d more folder(s)" % (len(folders) - 4) if len(folders) > 4
+               else "")]
 
 
 def guild_buildings(mod):

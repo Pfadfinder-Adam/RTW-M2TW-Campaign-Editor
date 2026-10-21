@@ -2796,6 +2796,17 @@ def s_select_map_drawn(c, mod):
     return plan
 
 
+@step("Untouched copies: the mod's files that are the game's own byte for byte taken out, as Check mod files' 'Take "
+      "them out' does (a thin mod holds only what was changed)",
+      "nothing to see: the campaign plays as before - every file the editor did not change is the game's own")
+def s_untouched_copies(c, mod):
+    from .newmod import untouched_plan
+    plan = untouched_plan(mod)
+    if not plan.deletions:
+        raise Skip("none - every file in the mod was changed by the steps (as it should be)")
+    return plan
+
+
 @step("Map size: the map grown by 2 tiles of deep sea at the right and at the top (the last step - grown at the "
       "left or the bottom every place would move, and the test mod's engine scripts name tiles by number)",
       "the campaign map is 2 tiles wider and higher: open water at its right and top edges; every town, army and "
@@ -2919,6 +2930,7 @@ COVERAGE = {
                                                             "own script out is the modder's to try in the game",
     "Make the campaign map 3 x bigger": RUN + " (the x3 copy, when asked)",
     "Check mod files": RUN + " (after every step)",
+    "Check mod files: Take them out (untouched copies)": ["s_untouched_copies"],
     "Restore a backup": RUN + " (check-scripts/testmod.py restores every step byte for byte)",
     "The game's log in plain words": LOOK,
     "View in 3D, play a sound": LOOK,
