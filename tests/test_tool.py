@@ -3336,6 +3336,12 @@ building smith
                 ed._tab_changed()
                 app.update()
                 self.assertIs(ed.hud.interface.sprites, sp)
+                shot = os.path.join(self.root, "shot.png")
+                Image.new("RGB", (1600, 900), (0, 0, 255)).save(shot)
+                with mock.patch("tkinter.filedialog.askopenfilename", return_value=shot):
+                    ed.hud.pick_shot()                           # a screenshot over it, the HUD stretched to it
+                self.assertEqual(ed.hud._img.size, (1600, 900))
+                self.assertTrue(ed.hud.v_shot.get())
         finally:
             app.destroy()
 
