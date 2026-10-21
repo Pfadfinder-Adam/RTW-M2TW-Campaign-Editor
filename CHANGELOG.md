@@ -18,6 +18,7 @@
 - The editor's own look: Tools > Edit the editor's look - drag any button, tick or label anywhere, rename it, give it a hover text or a width, hide it, take it back; kept for every start. The editor's language from a language file (Settings), and Words to translate writes every word for translators.
 
 ### Changed
+- A new faction is a clean clone: its colours, units, buildings, models and cards - none of the template's trait / ancillary triggers (the tick for them is gone).
 - With REX or M2EX an army, garrison or fleet may hold 40 units (the engines' 'ARMY SIZE = 40 UNITS' option); Check mod files says which stacks need that option.
 - New mod folder puts no switched-off engine settings files (descr_ex, descr_caps_ex) in: the mod runs on the engine's defaults as before; the editor writes the line a change needs, Check mod files' Copy them in brings the whole list.
 

@@ -131,7 +131,8 @@ def build(mod, campaign, template, new, opts):
     clone.faction_blocks(plan, "offmap", braced=True)
     clone.medieval_lists(plan, campaign)          # Medieval II: banners, accents, one-liners, movies, music
     clone.building_battle(plan)
-    if opts.get("copy_triggers", True):
+    if opts.get("copy_triggers", False):         # a clone is clean: none of the template's triggers (the user,
+        # 2026-10-21: 'a clone is its colour, units, buildings, models, cards - no events, no triggers, nothing')
         clone.triggers(plan, "traits")
         clone.triggers(plan, "ancillaries")
     clone.win_conditions(plan, campaign)

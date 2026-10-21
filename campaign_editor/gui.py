@@ -644,13 +644,10 @@ class App(tk.Tk):
             "backup. The same as the Art tab's 'Faction emblem' button.").pack(side="left")
         field("Colours", cf)
         self.v_playable = tk.BooleanVar(value=True)
-        self.v_triggers = tk.BooleanVar(value=True)
         self.v_art = tk.BooleanVar(value=True)
         self.v_dip = tk.StringVar(value="neutral")
         self.chk_playable = ttk.Checkbutton(lf, text="Playable", variable=self.v_playable)
         self.chk_playable.grid(row=row, column=0, sticky="w", padx=4)
-        self.chk_triggers = ttk.Checkbutton(lf, text="Copy trait / ancillary triggers", variable=self.v_triggers)
-        self.chk_triggers.grid(row=row, column=1, sticky="w")
         row += 1
         self.chk_art = ttk.Checkbutton(lf, text="Copy art named after the template", variable=self.v_art)
         self.chk_art.grid(row=row, column=1, sticky="w")
@@ -1803,7 +1800,7 @@ class App(tk.Tk):
     SIDE_KEYS = ("chosen", "garrisons", "buildings_picked", "sizes", "kinds", "char_moves", "field", "removed_existing",
                  "dip_set", "name_list", "art_replace", "sel_map", "figures", "figures_like", "roster_set",
                  "family_set")
-    SIDE_VARS = ("v_give", "v_playable", "v_triggers", "v_art", "v_dip", "v_way", "v_way_of", "v_way_date",
+    SIDE_VARS = ("v_give", "v_playable", "v_art", "v_dip", "v_way", "v_way_of", "v_way_date",
                  "v_way_region", "v_way_back", "v_army", "v_garrison")
 
     def _side_state(self):
@@ -2099,7 +2096,7 @@ class App(tk.Tk):
             for w in ws:
                 w.grid_remove()
         # cloning-only options are hidden in Edit (diplomacy gets its own editor later)
-        for w in [self.chk_triggers, self.chk_art] + self.dip_row + self.way_row:
+        for w in [self.chk_art] + self.dip_row + self.way_row:
             if edit:
                 w.grid_remove()
             else:
@@ -5405,7 +5402,6 @@ class App(tk.Tk):
                 setattr(self, k, [] if isinstance(getattr(self, k, None), list) else {})
         self._auto_titles, self._auto_denari, self._auto_religion = {}, None, None
         self.v_playable.set(True)
-        self.v_triggers.set(True)
         self.v_art.set(True)
         self.v_dip.set("neutral")
         for ed in (getattr(self, "roster_editor", None), getattr(self, "family_editor", None)):
@@ -6524,7 +6520,7 @@ class App(tk.Tk):
             "culture": v.get("culture") or None,
             "leader_title": v["leader_title"] or None, "heir_title": v["heir_title"] or None,
             "primary_colour": self.colours["primary"], "secondary_colour": self.colours["secondary"],
-            "copy_triggers": self.v_triggers.get(), "copy_art": self.v_art.get(),
+            "copy_art": self.v_art.get(),       # no triggers / events of the template: a clean clone (2026-10-21)
             "start": {"regions": list(self.chosen) if way == "map" else [], "capital": v["capital"], "leader": leader,
                       "way": way, "of": self.v_way_of.get() or None, "re_emergent": self.v_way_back.get(),
                       "date": self.v_way_date.get().strip(), "region": self.v_way_region.get() or None,

@@ -3294,6 +3294,25 @@ building smith
         self.assertLess(sum(out.getpixel((29, 80))[:3]), 300)                            # the dark line round him
         self.assertIs(CM.painted(fig, 0), fig)
 
+    def test_clone_takes_no_triggers_of_its_template(self):
+        """The user, 2026-10-21: a clone is its colour, units, buildings, models and cards - none of the template's
+        triggers (traits / ancillaries naming 'FactionType <template>'); no tick for it any more."""
+        mod = ModData(self.root)
+        p = mod.file("traits")
+        if not p:
+            p = os.path.join(mod.data, "export_descr_character_traits.txt")
+        write(p, ";------\nTrigger alpha_born\n    WhenToTest CharacterComesOfAge\n    Condition FactionType alpha\n"
+                 "    Affects GoodCommander 1 Chance 100\n")
+        mod = ModData(self.root)
+        if not mod.file("traits"):
+            self.skipTest("the test mod has no traits file")
+        plan = build(mod, "test", "alpha", "beta", {"start": {"regions": ["B_R"], "leader": {"name": "Boris"}}})
+        f = plan.files.get(mod.file("traits"))
+        self.assertFalse(f is not None and any("FactionType beta" in t for t in f.texts()))
+        plan = build(mod, "test", "alpha", "beta", {"start": {"regions": ["B_R"], "leader": {"name": "Boris"}},
+                                                     "copy_triggers": True})          # still there for the CLI
+        self.assertTrue(any("FactionType beta" in t for t in plan.files[mod.file("traits")].texts()))
+
     def test_map_from_zero(self):
         """The user, 2026-10-21: a map from zero - one island, one region with its town (black pixel), a port (white,
         on the coast, sea beside it), a resource, one faction and the rebels; every picture at its size for W x H
