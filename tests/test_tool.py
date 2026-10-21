@@ -3152,6 +3152,21 @@ building smith
             self.assertIn(b"character\tVytaute Gedimina,", fh.read())
         self.assertTrue(any("nearest plain letter" in m for _, m in plan.notes))
 
+    def test_full_description_typed_for_a_faction_without_one_is_written(self):
+        """R-20261018-E852BD / R-20261020-BE821D: a full description typed for a faction whose campaign has no such
+        string yet went away on Apply ('nothing to change'). Now the string is added and read back."""
+        from campaign_editor import edit
+        mod = ModData(self.root)
+        p = os.path.join(self.root, "data", "text", "expanded_bi.txt")
+        f = TextFile.load(p)
+        f.raw = [l for l in f.raw if "TEST_ALPHA_DESCR" not in l.upper()]
+        f.save()
+        self.assertIsNone(edit.read_faction(mod, "test", "alpha").get("long_description"))
+        plan = edit.edit(mod, "test", "alpha", {"long_description": "Brave Alphans\nof the hills"})
+        plan.apply()
+        self.assertEqual(edit.read_faction(ModData(self.root), "test", "alpha")["long_description"],
+                         "Brave Alphans\nof the hills")
+
     def test_answers_come_after_the_report_window_closed(self):
         """R-20261014-D5B6A6: the Report window closed while the answers were still being fetched - the late answer
         touched its gone button ('invalid command name ...!button'). Now it is dropped quietly."""

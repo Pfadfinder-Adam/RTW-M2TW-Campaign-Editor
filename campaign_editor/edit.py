@@ -2,6 +2,7 @@
 treasury, playability, and the garrisons and buildings of its towns. The same
 Plan as a new faction, so preview, backup and restore work alike."""
 
+import os
 import re
 
 from . import titles
@@ -225,6 +226,7 @@ def _texts(plan, now, campaign):
         return
     fe = FE_NAMES.get(plan.new)
     word = re.compile(r"(?<![A-Z0-9])(%s)(?![A-Z0-9])" % "|".join(re.escape(x) for x in (F, fe) if x))
+    found = set()
     for path in plan.mod.campaign_text_files(campaign):
         # region labels, and the rebels' names: {Gauls} there is a rebel type, not the faction
         if "regions_and_settlement_names" in path.lower() or "rebel_faction_descr" in path.lower():
@@ -258,6 +260,29 @@ def _texts(plan, now, campaign):
             for a, b, lines in reversed(edits):
                 f.raw[a:b] = [f.make(x) for x in lines]
             plan.note(f, "%d string(s) changed" % len(edits))
+        found.update(RE_KEY.match(texts[a]).group(2).upper() for a, _, _ in edits)
+        found.update(m.group(2).upper() for t in texts for m in [RE_KEY.match(t)] if m and m.group(2).upper() in set_to)
+    _add_missing(plan, campaign, {k: v for k, v in set_to.items() if k not in found})
+
+
+def _add_missing(plan, campaign, missing):
+    """A text typed in the window whose string the mod's text files lack (a campaign's full description of a faction
+    with none yet - reports R-20261018-E852BD, R-20261020-BE821D: 'the text goes away on Apply'): added - the
+    campaign-screen strings to campaign_descriptions.txt as New faction does, the rest to the first string table."""
+    if not missing:
+        return
+    files = plan.mod.campaign_text_files(campaign)
+    if not files:
+        plan.warn(None, "%s not written: the mod has no string table to hold them" % ", ".join(sorted(missing)))
+        return
+    descr = next((p for p in files if os.path.basename(p).lower() == "campaign_descriptions.txt"), None)
+    camp = campaign.upper() + "_"
+    for key in sorted(missing):
+        path = descr if descr and key.startswith(camp) else files[0]
+        f = plan.edit(path)
+        at = len(f) - 1 if len(f) and f.raw[-1] == "" else len(f)     # before the file's last line end
+        f.insert(at, ["{%s}\t%s" % (key, missing[key].replace("\n", "\\n"))])
+        plan.note(f, "string %s added (the mod had none for it)" % key)
 
 
 def _colours(plan):
