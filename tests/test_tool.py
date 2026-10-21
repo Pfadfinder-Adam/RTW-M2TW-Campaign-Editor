@@ -8483,6 +8483,27 @@ building smith
                 self.assertEqual(im.convert("RGBA").getextrema()[3], (0, 0))          # clear: nothing of the frame
         self.assertEqual(plan.opts["art"]["loading_screen/symbols/symbol128_picts.tga"], "/mine.png")
 
+    def test_brought_faction_select_screen_shows_its_own_face(self):
+        """A tester, 2026-10-18: a brought faction's leader's face on the faction tab was still the template's. The
+        select-screen pictures are read from the brought faction's own mod; the frame's leader_pic (emptied on Apply
+        when the brought faction has none) is said, so its leader's portrait from the other mod is not promised."""
+        from unittest import mock
+        from campaign_editor import factionart as FA
+        from campaign_editor import factionbring as FB
+        here = object()
+        self.assertEqual(FB.select_screen_source(here, "c", "gauls", None), (here, "c", "gauls", False))
+        face = [{"rel": "world/maps/campaign/c/leader_pic_gauls.tga", "path": "/x/l"}]
+        with tempfile.TemporaryDirectory() as src:
+            open(os.path.join(src, "descr_sm_factions.txt"), "w").close()
+            bring = {"src": src, "faction": "macedon", "campaign": "imperial"}
+            with mock.patch.object(FA, "start_pictures", return_value=face), \
+                    mock.patch.object(FA, "start_kind", return_value=FA.START_KINDS[1]):
+                mod, camp, faction, frame_face = FB.select_screen_source(here, "c", "gauls", bring)
+            self.assertEqual((os.path.abspath(mod.data), camp, faction, frame_face),
+                             (os.path.abspath(src), "imperial", "macedon", True))
+            with mock.patch.object(FA, "start_pictures", return_value=[]):
+                self.assertFalse(FB.select_screen_source(here, "c", "gauls", bring)[3])
+
     def test_brought_faction_pictures_and_figures(self):
         # its own pictures come even when the new faction keeps its name; a strat model this mod lacks comes with
         # only its own texture line (renamed), paths as this mod writes them, and its files

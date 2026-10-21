@@ -5405,6 +5405,7 @@ class App(tk.Tk):
                         "drawn from "
                         "this map. Pick its towns on the map - its family stands by the capital, the garrisons are "
                         "its own units.%s" % (picked["faction"], where, culture_note))
+        self.art_editor.load_start()                    # its own select-screen pictures, under its own name
 
     def _bring_victory(self, cond):
         """The brought faction's victory conditions with only the regions and factions this campaign has - never the
