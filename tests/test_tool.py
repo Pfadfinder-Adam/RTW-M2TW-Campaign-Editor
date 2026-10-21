@@ -17580,7 +17580,7 @@ building smith
     def test_shore_line_drawn_into_the_map_picture(self):
         """Coast & heights: the shore line is drawn INTO the map's picture (Discord, valp: thousands of canvas lines
         made the brushes lag on a big map - 'turning off shore lines helps'); its pieces are worked out once per block
-        and kept - a brush's tick works out only the blocks round the points it changed."""
+        and kept - a brush's tick works out only the blocks round the points it changed, while it is held too."""
         try:
             import tkinter as tk
             from PIL import Image
@@ -17611,8 +17611,10 @@ building smith
             first = len(worked)
             v._shore_into(Image.new("RGB", (320, 320)))
             self.assertEqual(len(worked), first)                          # kept: nothing worked out again
+            v._spray = (5, 5)                                             # the brush held down: the line follows
             v.shore_dirty = {(10, 10)}
             v._shore_into(Image.new("RGB", (320, 320)))
+            self.assertGreater(len(worked), first)
             self.assertLessEqual(len(worked) - first, 4)                  # only the blocks round that point
             self.assertEqual(v.canvas.find_withtag("shore"), ())
         finally:
