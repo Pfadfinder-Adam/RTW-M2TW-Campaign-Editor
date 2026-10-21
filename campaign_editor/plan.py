@@ -372,6 +372,12 @@ class Plan:
         if sm and sm in self.files:         # Rome: a 'faction destroyed' picture for every faction (eventimages.py)
             from . import eventimages
             eventimages.keep_up(self)
+        for f in self.files.values():           # a single-byte file given letters it cannot hold: said, not a stop
+            odd = f.unplain()
+            if odd and f.dump() != self.originals.get(f.path):
+                self.note(f, "letters this file cannot hold (%s) written as their nearest plain letter - the game "
+                             "reads this file in a one-byte code page; the names players read can carry them in the "
+                             "text files" % " ".join(odd))
         # every path this run touches lies in the mod's or its game's folder (guard.py) - checked before anything
         from . import guard
         guard.check(list(self.changed_files()) + [dst for _, dst in self.copies], guard.roots_of(self.mod))

@@ -3057,6 +3057,19 @@ building smith
         finally:
             app.destroy()
 
+    def test_a_letter_a_one_byte_file_cannot_hold_is_written_plain(self):
+        """R-20261018-308C60 / R-20261020-6718BB: a name with 'ė' / 'ā' in descr_strat.txt (a one-byte file) stopped
+        the write ('latin-1' codec can't encode). Now the nearest plain letter is written and the write says so."""
+        mod = ModData(self.root)
+        plan = Plan(mod, "x", "alpha", {})
+        f = plan.edit(mod.campaign_file("test", "descr_strat.txt"))
+        i = next(i for i, t in enumerate(f.texts()) if t.startswith("character\tAaron"))
+        f.set(i, f.text(i).replace("Aaron Alphid", "Vytautė Gediminā"))
+        plan.apply()
+        with open(mod.campaign_file("test", "descr_strat.txt"), "rb") as fh:
+            self.assertIn(b"character\tVytaute Gedimina,", fh.read())
+        self.assertTrue(any("nearest plain letter" in m for _, m in plan.notes))
+
     def test_answers_come_after_the_report_window_closed(self):
         """R-20261014-D5B6A6: the Report window closed while the answers were still being fetched - the late answer
         touched its gone button ('invalid command name ...!button'). Now it is dropped quietly."""
