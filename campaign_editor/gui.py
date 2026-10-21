@@ -4137,10 +4137,13 @@ class App(tk.Tk):
             on_place = res_kw.pop("on_place")
             region_kw.pop("ghost", None)
         region_kw.update(res_kw)
-        waiting = bool(getattr(self, "_map_add", None) or getattr(self, "_res_placing", None) or
+        # something picked waits for its click - its own name: 'waiting' above is the towns waiting for Apply (reports
+        # R-20261019-9C140E and 10 more: a watchtower / port picked turned those towns into a bool -> MapView._base
+        # "'bool' object is not iterable")
+        placing = bool(getattr(self, "_map_add", None) or getattr(self, "_res_placing", None) or
                        getattr(self, "_port_tool", False) or getattr(self, "_region_point", None))
-        self.map_view.waiting = waiting
-        if waiting and self.map_view.on_place_stop is None:
+        self.map_view.waiting = placing
+        if placing and self.map_view.on_place_stop is None:
 
             def stop_placing():                         # a right click / Esc: what hangs under the mouse is put back
                 self._map_add = None                    # (only what is not on the map yet - nothing is deleted):
