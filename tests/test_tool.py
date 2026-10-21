@@ -3182,6 +3182,19 @@ building smith
         finally:
             root.destroy()
 
+    def test_game_set_to_run_as_administrator_is_started_through_windows(self):
+        """R-20261019-2AF742: an exe set to 'run as administrator' stopped Start the game ('[WinError 740] The
+        requested operation requires elevation'). Windows is asked to start it so (its own prompt)."""
+        from unittest import mock
+        from campaign_editor import launch
+        err = OSError("The requested operation requires elevation")
+        err.winerror = 740
+        with mock.patch.object(launch.sys, "platform", "win32"), \
+                mock.patch.object(launch.subprocess, "Popen", side_effect=err), \
+                mock.patch.object(launch.os, "startfile", create=True) as sf:
+            launch.start({"exe": "C:\\G\\REX.exe", "args": ["-mod:My Mod", "-nm"], "cwd": "C:\\G"})
+        sf.assert_called_once_with("C:\\G\\REX.exe", "runas", '"-mod:My Mod" -nm', "C:\\G")
+
     def test_answers_come_after_the_report_window_closed(self):
         """R-20261014-D5B6A6: the Report window closed while the answers were still being fetched - the late answer
         touched its gone button ('invalid command name ...!button'). Now it is dropped quietly."""

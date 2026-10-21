@@ -223,4 +223,12 @@ def start(how):
     hidden = getattr(subprocess, "CREATE_NO_WINDOW", 0)
     if "bat" in how:                              # the script goes to the game folder itself (cd /d %~dp0..)
         return subprocess.Popen(["cmd", "/c", how["bat"]], cwd=os.path.dirname(how["bat"]), creationflags=hidden)
-    return subprocess.Popen([how["exe"]] + how["args"], cwd=how["cwd"])
+    try:
+        return subprocess.Popen([how["exe"]] + how["args"], cwd=how["cwd"])
+    except OSError as e:
+        if getattr(e, "winerror", None) != 740:
+            raise
+        # 'The requested operation requires elevation' (R-20261019-2AF742): the exe is set to run as administrator -
+        # Windows asks the player for that, as a double click on it would
+        os.startfile(how["exe"], "runas", subprocess.list2cmdline(how["args"]), how["cwd"])
+        return None
