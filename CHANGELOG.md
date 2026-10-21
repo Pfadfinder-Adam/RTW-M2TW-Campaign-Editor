@@ -18,7 +18,7 @@
 - A garrison for a town the map shows no town for stopped the write -> that town is skipped with a warning.
 - Mercenaries: a pool naming a region the map lacks refused any edit -> only the regions a pool gains are checked.
 - A family edit was refused for records and 'none' wives written the games' own way -> they read right.
-- Coast & heights lagged on a big map with the shore line on (thousands of lines in the window) -> the shore line is drawn into the map's picture and worked out once; the brushes and moving the map are quicker.
+- Coast & heights lagged on a big map with the shore line on (thousands of lines in the window) -> the shore line is drawn into the map's picture and worked out once; the brushes and moving the map are quicker, and the line follows the brush while it is held.
 - Medieval II maps whose regions carry 'legion:' lines: new regions got a stray line, and the game found none of them -> written right, and Load offers to take the stray lines out of an older file.
 - A drop-down (the map's Layers...) stopped the editor when its bar had been rebuilt -> it opens again.
 - Start the game refused an exe set to run as administrator -> Windows is asked to start it so.
