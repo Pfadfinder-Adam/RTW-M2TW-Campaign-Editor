@@ -1621,9 +1621,10 @@ building smith
         self.assertEqual(len([it for it in after if R.plain_rel(it["rel"]) in want]), len(after))
 
     def test_thin_mod_gets_its_whole_map_folder_on_a_map_change(self):
-        """A thin mod's first map change (a town deleted with its region) brings the game's whole map folder into the
-        mod - but map.rwm, which the game builds again from the mod's map; the game's files are never written; Restore
-        takes the mod back to nothing."""
+        """A thin mod's first map change (a town deleted with its region) brings the game's other map layers into the
+        mod - but map.rwm, which the game builds again from the mod's map, and never the campaign's untouched texts
+        (the user, 2026-10-20: copies of the game's files shadow a modder's own); the game's files are never written;
+        Restore takes the mod back to nothing."""
         from campaign_editor import regiondelete as RD
         game, _ = self._game()
         camp_game = os.path.join(game, "data", "world", "maps", "campaign", "test")
@@ -1637,15 +1638,32 @@ building smith
         plan.apply()
         camp = os.path.join(data, "world", "maps", "campaign", "test")
         have = sorted(os.listdir(camp))
-        for name in ("map_regions.tga", "descr_regions.txt", "descr_strat.txt", "descr_events.txt",
-                     "descr_win_conditions.txt"):
+        for name in ("map_regions.tga", "descr_regions.txt", "descr_strat.txt"):
             self.assertIn(name, have)
         self.assertNotIn("map.rwm", have)                               # built again by the game from the mod's map
+        for name in ("descr_events.txt", "descr_win_conditions.txt"):  # never changed: still read from the game
+            self.assertNotIn(name, have)
         self.assertEqual(tree_hash(os.path.join(game, "data")), game_before)     # the game's own files untouched
         self.assertNotIn("B_R", ModData(data).regions("test"))
         for b in backups(ModData(data)):
             restore(ModData(data), b)
         self.assertEqual([n for _, _, fs in os.walk(data) for n in fs], [])
+
+    def test_thin_mod_redrawn_faction_map_brings_no_campaign_files(self):
+        """A redrawn faction-select map (map_<faction>.tga) is a picture of the campaign, not a map layer: the thin mod
+        gets that one picture, never the campaign's descr_strat, events or other files (they would shadow the modder's
+        own - the user, 2026-10-20)."""
+        game, _ = self._game()
+        camp_game = os.path.join(game, "data", "world", "maps", "campaign", "test")
+        write(os.path.join(camp_game, "map_alpha.tga"), "picture")
+        write(os.path.join(camp_game, "descr_events.txt"), "; no events\n")
+        data, _ = create_mod(os.path.join(game, "data"), "Beta")
+        mod = ModData(data)
+        plan = Plan(mod, "art", "alpha", {})
+        plan.binary(os.path.join(camp_game, "map_alpha.tga"), b"new picture")
+        plan.apply()
+        camp = os.path.join(data, "world", "maps", "campaign", "test")
+        self.assertEqual(sorted(os.listdir(camp)), ["map_alpha.tga"])
 
     def test_new_mod_under_m2ex_starts_with_features_mod(self):
         # M2EX's own Teutonic.bat: start "" "%~dp0M2EX.exe" --features.mod=mods/teutonic

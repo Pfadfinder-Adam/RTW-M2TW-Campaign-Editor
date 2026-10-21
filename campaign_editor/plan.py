@@ -104,13 +104,24 @@ class Plan:
         self.warnings.append((self.mod.rel(f.path) if f is not None else "", msg))
 
     MAP_FILES = ("descr_regions.txt", "descr_terrain.txt")
+    # the files the game builds map.rwm from (RomeTW.exe FUN_0046e313: descr_regions, descr_terrain, the heights, then
+    # the layer pictures) - never a faction's select map (map_<faction>.tga), the radar map or a campaign's texts
+    MAP_LAYERS = frozenset(MAP_FILES + (
+        "map_regions.tga", "map_heights.tga", "map_heights.hgt", "map_ground_types.tga", "map_climates.tga",
+        "map_features.tga", "map_fog.tga", "map_roughness.tga", "map_trade_routes.tga", "map_fe.tga",
+        "water_surface.tga"))
+
+    def _is_map_layer(self, name):
+        name = name.lower()
+        return name in self.MAP_LAYERS or name.endswith(".hgt")
 
     def _whole_map_folders(self):
         """A mod that holds only its changes (ModData.under, a thin New mod folder): the first time it gets its own
-        copy of a map file (map_*.tga, descr_regions, descr_terrain, .hgt), every other file of that map folder of the
-        game comes into the mod with it - but map.rwm - as the mod's own copies (Restore removes them). The game then
-        reads the whole changed map from the mod and builds map.rwm there, as for a mod made whole (the editor's test
-        mod in the game) - never the mod's new map with the game's old map.rwm."""
+        copy of a map layer (map_regions.tga, the heights, descr_regions, descr_terrain... MAP_LAYERS), the other map
+        layers of that folder of the game come into the mod with it - but map.rwm - as the mod's own copies (Restore
+        removes them). The game then builds map.rwm from the mod's whole map - never the mod's new map with the game's
+        old map.rwm. Nothing else of the folder comes: a campaign's descr_strat, events, scripts, texts and pictures
+        (a redrawn map_<faction>.tga too) stay the game's, read from there, so they never shadow the modder's own."""
         under = getattr(self.mod, "under", None)
         if not under:
             return
@@ -121,8 +132,7 @@ class Plan:
                 continue                            # read for the change but left as it is: still the game's
             rel = os.path.relpath(mine, self.mod.data).replace("\\", "/").lower()
             name = os.path.basename(rel)
-            if rel.startswith("world/maps/") and (name.startswith("map_") or name in self.MAP_FILES or
-                                                  name.endswith(".hgt")):
+            if rel.startswith("world/maps/") and self._is_map_layer(name):
                 folders.add(os.path.dirname(mine))
         taken = written | {os.path.normcase(os.path.abspath(d)) for _, d in self.copies}
         for folder in sorted(folders):
@@ -132,14 +142,15 @@ class Plan:
             n = 0
             for name in sorted(os.listdir(src)):
                 s, d = os.path.join(src, name), os.path.join(folder, name)
-                if not os.path.isfile(s) or name.lower() == "map.rwm" or os.path.exists(d) or \
+                if not os.path.isfile(s) or not self._is_map_layer(name) or os.path.exists(d) or \
                         os.path.normcase(os.path.abspath(d)) in taken:
                     continue
                 self.copies.append((s, d))
                 n += 1
             if n:
-                self.notes.append((self.mod.rel(folder), "%d more file(s) of the game's map folder copied into the mod "
-                                   "with it (all but map.rwm - the game builds that again from the mod's map)" % n))
+                self.notes.append((self.mod.rel(folder), "%d more map layer(s) of the game copied into the mod with it "
+                                   "(the game builds map.rwm again from the mod's whole map; the rest stays the game's)"
+                                   % n))
 
     def binary(self, path, data):
         """A whole new content for a (binary) file, backed up like any edit (a file of the game's data under a mod
