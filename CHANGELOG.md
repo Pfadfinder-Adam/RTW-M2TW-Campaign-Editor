@@ -13,6 +13,9 @@
 - New mod folder puts no switched-off engine settings files (descr_ex, descr_caps_ex) in: the mod runs on the engine's defaults as before; the editor writes the line a change needs, Check mod files' Copy them in brings the whole list.
 
 ### Fixed
+- Building '?' hints mislabelled half the vanilla lines (a level and 'bonus N' are both allowed on every effect) -> both forms explained; free_upkeep, religion, settlement sizes (castles too) and Rome's weapon levels said right; Medieval II level lines, hidden_resources and Barbarian Invasion's religious_belief get hints.
+- Unit '?' hints checked against the games' files: class skirmish, voice words, banner, animal (wardogs, pigs), berserker discipline, formations, weapon sounds and types, era number, soldier radius / height corrected; lines that are only notes in Medieval II's file (stat_pri_ex, stat_armour_ex, unit_info) are said as not read and refused when typed into a unit.
+- A recruit line ending in 'bonus N' is no longer called a mistake.
 - The map stopped drawing when a watchtower, port, army or region point was picked while a town waited for Apply -> it draws on.
 - A name with a letter like 'ė' or 'ā' stopped the write -> the nearest plain letter is written, and the write says so.
 - A full description typed for a faction whose campaign had none was lost on Apply -> it is written.

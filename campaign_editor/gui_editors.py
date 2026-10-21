@@ -424,8 +424,8 @@ class RecordEditor(ttk.Frame):
             sub = tk.Menu(m, tearoff=0)
             for w, meaning in info["words"][:60]:
                 sub.add_command(label="%s%s" % (w, " - " + meaning[:70] if meaning else ""),
-                                command=lambda w=w: put(lineinfo.with_word(line, w)))
-            m.add_cascade(label="Add a word to this line", menu=sub)
+                                command=lambda w=w: put(lineinfo.with_word(line, w, info["one"])))
+            m.add_cascade(label="Put this word in" if info["one"] else "Add a word to this line", menu=sub)
         if info["form"]:
             m.add_command(label="Put the line's form in (to fill)", command=lambda: put(lineinfo.template(line, info)))
         m.add_separator()

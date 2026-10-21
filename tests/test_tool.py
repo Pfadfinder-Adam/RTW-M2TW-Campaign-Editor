@@ -17183,6 +17183,36 @@ building smith
         self.assertIn("turns", b["form"])
         self.assertEqual(lineinfo.template("\tcost 100", lineinfo.about("building", "\tcost 100")), "\tcost\tmoney")
 
+    def test_hints_as_the_game_reads_the_lines(self):
+        """The '?' audit (2026-10-21, the games' files and the engine's readers): every building capability may be
+        'N' (a level, the highest counts) or 'bonus N' (added) - both said; free_upkeep has no word 'bunch'; a
+        Medieval II level line (city / castle) and the new keys get a hint; the unit lines only noted in Medieval
+        II's file are said as not read and refused; recruit '... bonus 1' is not a mistake; a one-word line's word
+        replaces its value."""
+        from campaign_editor import edbfields as BF, edufields as EF, lineinfo
+        from campaign_editor import editors as E
+        self.assertIn("2. level = 1", BF.explain("weapon_simple", "bonus 1"))
+        self.assertIn("ADDED", BF.explain("weapon_simple", "bonus 1"))
+        self.assertIn("1. level = 0 (a level", BF.explain("weapon_simple", "0"))
+        self.assertIn("2. units = 2", BF.explain("free_upkeep", "bonus 2"))
+        self.assertNotIn("bunch", BF.explain("free_upkeep", "bonus 2"))
+        self.assertIn("town kind = castle", BF.explain("motte", "castle requires factions { england, }"))
+        self.assertIn("2. strength = 3", BF.explain("religious_belief", "pagan 3"))
+        self.assertIsNotNone(BF.explain("hidden_resources", "rome sparta"))
+        self.assertIn("bonus", lineinfo.about("building", "\tlaw_bonus bonus 1")["form"])
+        self.assertIn("not read", EF.explain("stat_pri_ex", "0, 0, 0"))
+        self.assertIn("multiplayer era 0", EF.explain("era", "0 england, france"))
+        self.assertIn("skirmish", EF.ONE["class"])
+        mod = ModData(self.root)
+        self.assertTrue(any(err for err, _ in E.check_text(mod, "unit", "stat_armour_ex 1, 2, 3, 4, 5, 6, 7, metal")))
+        unit = E.unit_names(mod)[0]
+        self.assertFalse(any(err for err, _ in E.check_text(mod, "building", 'recruit "%s" bonus 1' % unit)))
+        info = lineinfo.about("unit", "\tclass light")
+        self.assertTrue(info["one"])
+        self.assertEqual(lineinfo.with_word("\tclass light", "heavy", info["one"]), "\tclass\theavy")
+        self.assertEqual(lineinfo.with_word("agent spy 0 requires factions { all, }", "priest", True),
+                         "agent\tpriest 0 requires factions { all, }")
+
     def test_notepad_command_opens_at_the_line(self):
         """Open in Notepad++: Notepad++ opens at the line (-n), Notepad without one."""
         from unittest import mock
