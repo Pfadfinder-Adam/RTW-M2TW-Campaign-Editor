@@ -3157,6 +3157,276 @@ building smith
         loose = SY.loose_sprites(text)[0]
         self.assertEqual((loose["cursor"], loose["hotspot"]), (True, (3, 0)))
 
+    def test_forty_unit_stacks_with_an_engine(self):
+        """REX / M2EX's 'ARMY SIZE = 40 UNITS' (the engines' army_mode.h, shared by both): a stack holds 40 with an
+        engine, 20 in the original games; Check mod files names the stacks over 20 (kept only with that option)."""
+        from unittest import mock
+        from campaign_editor import check, start
+        mod = ModData(self.root)
+        with mock.patch("campaign_editor.limits.engine_of", return_value=None):
+            self.assertEqual(start.army_cap(mod), 20)
+        with mock.patch("campaign_editor.limits.engine_of", return_value="M2EX.exe"):
+            self.assertEqual(start.army_cap(mod), 40)
+        p = mod.campaign_file("test", "descr_strat.txt")
+        text = open(p, encoding="latin-1").read()
+        i = text.index("army\n")
+        unit = next(l for l in text[i:].split("\n") if l.strip().startswith("unit"))
+        write(p, text[:i + 5] + (unit + "\n") * 25 + text[i + 5:])
+        self.assertTrue(any(n >= 25 for n in check.big_stacks(ModData(self.root), "test")))
+
+    def test_sprite_picture_replaced_on_its_page(self):
+        """Sprite sheets made editable (from Wholesome Queen's campaign UI editor): a sprite's picture goes into its
+        box on the page, the rest of the page as it was; the page keeps its size; a binary sheet's click mask
+        follows the new picture; written with a backup, Restore puts every byte back."""
+        try:
+            from PIL import Image
+        except ImportError:
+            self.skipTest("no Pillow")
+        from campaign_editor import spriteedit as SE, spritesheet as SS, symbols as SY
+        from campaign_editor.factionart import image_tga
+        mod = ModData(self.root)
+        ui = os.path.join(mod.data, "ui")
+        os.makedirs(os.path.join(ui, "roman", "interface"), exist_ok=True)
+        sh = SS.Sheet(5, "T", [{"guide": "g", "file": "p.tga", "flag": 0, "w": 4, "h": 4, "mask": bytes(3)}],
+                      [{"name": "A", "page": 0, "x0": 1, "x1": 2, "y0": 0, "y1": 3, "flag": 1, "tail": 0}])
+        rsd = os.path.join(ui, "strat3.rsd")
+        with open(rsd, "wb") as fh:
+            fh.write(SS.write(sh))
+        page = os.path.join(ui, "roman", "interface", "p.tga")
+        with open(page, "wb") as fh:
+            fh.write(image_tga(Image.new("RGBA", (4, 4), (10, 20, 30, 0))))
+        def read(f):
+            with open(f, "rb") as fh:
+                return fh.read()
+        before = {f: read(f) for f in (rsd, page)}
+        sheet = next(x for x in SY.all_sheets(mod) if x["name"] == "strat3")
+        with Image.open(page) as im:
+            old = im.convert("RGBA")
+        new = SE.put_sprite(old, (1, 0, 2, 4), Image.new("RGB", (8, 8), (255, 0, 0)))
+        self.assertEqual(new.getpixel((1, 2)), (255, 0, 0, 255))
+        self.assertEqual(new.getpixel((0, 0)), (10, 20, 30, 0))              # the rest of the page as it was
+        with self.assertRaises(ValueError):
+            SE.write(Plan(mod, "x", "x", {}), mod, sheet, {("p.tga", "roman"): Image.new("RGBA", (8, 8))})
+        plan = SE.write(Plan(mod, "x", "x", {}), mod, sheet, {("p.tga", "roman"): new})
+        bdir = plan.apply()
+        with Image.open(page) as im:
+            self.assertEqual(im.convert("RGBA").getpixel((2, 3)), (255, 0, 0, 255))
+        got = SS.read(read(rsd))
+        self.assertEqual(got.pages[0]["mask"], SS.mask(new))                 # the click mask follows the picture
+        restore(mod, bdir)
+        self.assertEqual({f: read(f) for f in (rsd, page)}, before)
+
+    def test_sprite_box_moved_and_sized(self):
+        """A sprite's place and size: the binary sheet's box moved; the .sd.xml twin follows (its x / y, w / h the
+        size shown, tw / th the picture's box only when they differ), every other byte as it was; Restore."""
+        from campaign_editor import spriteedit as SE, spritesheet as SS, symbols as SY
+        mod = ModData(self.root)
+        ui = os.path.join(mod.data, "ui")
+        os.makedirs(ui, exist_ok=True)
+        sh = SS.Sheet(5, "T", [{"guide": "g", "file": "p.tga", "flag": 0, "w": 64, "h": 64, "mask": bytes(513)}],
+                      [{"name": "A", "page": 0, "x0": 1, "x1": 2, "y0": 0, "y1": 3, "flag": 1, "tail": 0}])
+        rsd, xml = os.path.join(ui, "strat3.rsd"), os.path.join(ui, "strat3.sd.xml")
+        with open(rsd, "wb") as fh:
+            fh.write(SS.write(sh))
+        text = ('<sprite_definitions>\r\n <page file="p.tga" w="64" h="64">\r\n'
+                '  <sprite name="A" x="1" y="0" w="2" h="4" alpha="1"/>\r\n'
+                '  <sprite name="B" x="9" y="9" w="5" h="5"/>\r\n </page>\r\n</sprite_definitions>\r\n')
+        with open(xml, "wb") as fh:
+            fh.write(text.encode("latin-1"))
+        sheet = next(x for x in SY.all_sheets(mod) if x["name"] == "strat3")
+        plan = SE.set_box(Plan(mod, "x", "x", {}), mod, sheet, "A", (10, 12, 20, 16), (10, 8))
+        bdir = plan.apply()
+        self.assertEqual(SS.read(open(rsd, "rb").read()).find("A")["box"], (10, 12, 20, 16))
+        got = open(xml, "rb").read().decode("latin-1")
+        self.assertIn('<sprite name="A" x="10" y="12" w="10" h="8" alpha="1" tw="20" th="16"/>', got)
+        self.assertIn('<sprite name="B" x="9" y="9" w="5" h="5"/>\r\n', got)
+        self.assertEqual(SY.xml_boxes(got)[0][1][0], ("A", (10, 12, 20, 16)))
+        restore(mod, bdir)
+        self.assertEqual(open(xml, "rb").read().decode("latin-1"), text)
+        with self.assertRaises(ValueError):
+            SE.set_box(Plan(mod, "x", "x", {}), mod, sheet, "NONE", (0, 0, 1, 1))
+
+    def test_faction_with_no_custom_battle_unit(self):
+        """A Discord player's REX crash (2026-10-21, a quick battle): a faction open to custom battles with no unit it
+        may field there - every unit no_custom or none in its ownership - makes an empty army and the game stops.
+        Check mod files names it; 'custom_battle_availability no' takes it out of the check."""
+        import re
+        from campaign_editor import check
+        from campaign_editor.units import read_units
+        mod = ModData(self.root)
+        units = read_units(mod.load(mod.file("edu")))
+        self.assertEqual(check.custom_battle_problems(mod, units), [])
+        for u in units:
+            u.attributes = list(u.attributes) + ["no_custom"]
+        got = check.custom_battle_problems(mod, units)
+        self.assertTrue(got and all("custom / quick battles" in g for g in got))
+        p = mod.file("sm_factions")
+        text = open(p, encoding="latin-1").read()
+        fac = got[0].split()[0]
+        i = re.search(r"faction\s+%s\b" % re.escape(fac), text).start()
+        write(p, text[:i] + text[i:].replace("\n", "\ncustom_battle_availability no\n", 1))
+        mod = ModData(self.root)
+        self.assertFalse(any(g.startswith(fac + " ") for g in check.custom_battle_problems(mod, units)))
+
+    def test_map_from_zero(self):
+        """The user, 2026-10-21: a map from zero - one island, one region with its town (black pixel), a port (white,
+        on the coast, sea beside it), a resource, one faction and the rebels; every picture at its size for W x H
+        (tiles / corners / double), the heights land >= 1 and sea blue, descr_terrain's size, the region keeps the
+        faction's capital names; a map too small refused; Restore puts every byte back."""
+        try:
+            import PIL  # noqa: F401
+        except ImportError:
+            self.skipTest("no Pillow")
+        from campaign_editor import mapzero as MZ
+        from campaign_editor.strat import Strat
+        from campaign_editor.tga import read_tga
+        mod = ModData(self.root)
+        camp = mod.campaign_dir("test")
+        before = {}
+        for d, _, fs in os.walk(self.root):
+            for n in fs:
+                with open(os.path.join(d, n), "rb") as fh:
+                    before[os.path.join(d, n)] = fh.read()
+        with self.assertRaises(ValueError):
+            MZ.make(Plan(mod, "z", "alpha", {}), "test", "alpha", (10, 10))
+        plan = Plan(mod, "z", "alpha", {})
+        region = MZ.make(plan, "test", "alpha", (32, 24))
+        bdir = plan.apply()
+        mod = ModData(self.root)
+        regions = mod.regions("test")
+        self.assertEqual(list(regions), [region])
+        self.assertEqual(regions[region]["creator"], "alpha")
+        im = read_tga(os.path.join(camp, "map_regions.tga"))
+        self.assertEqual((im.width, im.height), (32, 24))
+        px = lambda xy: tuple(im.get(xy[0], xy[1])[:3])              # tga rows from the bottom, as the map
+        self.assertEqual(px(MZ.TOWN), (0, 0, 0))
+        self.assertEqual(px(MZ.PORT), (255, 255, 255))
+        self.assertEqual(px((MZ.PORT[0] + 1, MZ.PORT[1])), MZ.SEA_REGION)
+        self.assertEqual(px((MZ.TOWN[0] - 1, MZ.TOWN[1])), regions[region]["colour"])
+        h = read_tga(os.path.join(camp, "map_heights.tga"))
+        self.assertEqual((h.width, h.height), (65, 49))
+        self.assertGreaterEqual(h.get(2 * MZ.PORT[0] + 1, 2 * MZ.PORT[1] + 1)[0], 1)       # the port's tile: land
+        self.assertEqual(tuple(h.get(1, 1)[:3]), MZ.SEA_BLUE)
+        self.assertEqual(read_tga(os.path.join(camp, "map_roughness.tga")).width, 64)
+        with open(os.path.join(camp, "descr_terrain.txt"), encoding="latin-1") as fh:
+            t = fh.read()
+        self.assertRegex(t, r"width\s+32")
+        self.assertRegex(t, r"height\s+24")
+        st = Strat(mod.load(os.path.join(camp, "descr_strat.txt")))
+        self.assertEqual([fb.name for fb in st.factions], ["alpha", "slave"])
+        self.assertEqual(st.factions[0].settlements[0].region, region)
+        self.assertEqual(st.factions[0].characters[0].xy, MZ.TOWN)
+        restore(mod, bdir)
+        after = {}
+        for d, _, fs in os.walk(self.root):
+            for n in fs:
+                p = os.path.join(d, n)
+                if "CampaignEditor" not in p and "backup" not in p.lower():
+                    with open(p, "rb") as fh:
+                        after[p] = fh.read()
+        self.assertEqual({k: v for k, v in after.items() if k in before}, {k: v for k, v in before.items()
+                                                                          if "CampaignEditor" not in k})
+        self.assertEqual([k for k in after if k not in before], [])
+
+    def test_campaign_hud_laid_out_as_the_engine(self):
+        """Interface > Campaign HUD (the engines' places, hudlayout): the HUD's bottom at 768, its top 768 - the LEFT
+        panel's height, the MIDDLE panel on the bottom, the pieces from the mod's own sheet; a changed page shows."""
+        try:
+            from PIL import Image
+        except ImportError:
+            self.skipTest("no Pillow")
+        from campaign_editor import hudlayout as H
+        from campaign_editor.factionart import image_tga
+        from unittest import mock
+        mod = ModData(self.root)
+        ui = os.path.join(mod.data, "ui")
+        os.makedirs(os.path.join(ui, "roman", "interface"), exist_ok=True)
+        xml = ('<sprite_definitions>\n <page file="hud.tga" w="1024" h="512">\n'
+               '  <sprite name="STRAT_HUD_LEFT" x="0" y="0" w="281" h="200"/>\n'
+               '  <sprite name="STRAT_HUD_MIDDLE" x="281" y="0" w="462" h="147"/>\n'
+               '  <sprite name="STRAT_HUD_RIGHT" x="743" y="0" w="281" h="181"/>\n'
+               '  <sprite name="BUILD_BUTTON_IMAGE" x="0" y="300" w="76" h="76"/>\n </page>\n</sprite_definitions>\n')
+        with open(os.path.join(ui, "strat3.sd.xml"), "w") as fh:
+            fh.write(xml)
+        page = Image.new("RGBA", (1024, 512), (0, 0, 255, 255))
+        page.paste((255, 0, 0, 255), (0, 300, 76, 376))
+        with open(os.path.join(ui, "roman", "interface", "hud.tga"), "wb") as fh:
+            fh.write(image_tga(page))
+        with mock.patch("campaign_editor.limits.game_kind", return_value="rome"):
+            got = {p["piece"]: p for p in H.pieces(mod)}
+            self.assertEqual(got["left panel"]["box"], (0, 568, 281, 200))          # a taller LEFT: the top moves
+            self.assertEqual(got["middle panel"]["box"], (281, 621, 462, 147))      # on the bottom
+            self.assertEqual(got["build button"]["box"], (774, 608 - 19, 76, 76))  # moved with the top
+            im = H.compose(mod)
+            self.assertEqual(im.size, (1024, 768))
+            self.assertEqual(im.getpixel((800, 620))[:3], (255, 0, 0))
+            red = page.copy()
+            red.paste((0, 255, 0, 255), (0, 300, 76, 376))
+            im = H.compose(mod, page_picture=lambda p: red if p == "hud.tga" else None, screen=(1920, 1080))
+            self.assertEqual(im.size, (1920, 1080))
+            self.assertEqual(im.getpixel((int(800 * 1.875), int(620 * 1080 / 768)))[:3], (0, 255, 0))
+            self.assertIn(("strat3", "END_TURN_BUTTON_IMAGE"), H.missing(mod))
+
+    def test_sprite_change_waits_for_apply_in_the_interface_work(self):
+        """A sprite's picture replaced on the Sprite sheets tab is a change of the Interface work: counted for Apply,
+        in its plan, undone by Undo on that tab."""
+        try:
+            from PIL import Image
+            from unittest import mock
+            from campaign_editor import gui
+            app = gui.App()
+        except Exception as e:                        # no tkinter / no display / no Pillow
+            self.skipTest("no tkinter window: %s" % e)
+        from campaign_editor import spriteedit as SE, spritesheet as SS
+        from campaign_editor.factionart import image_tga
+        ui = os.path.join(self.root, "data", "ui")
+        os.makedirs(os.path.join(ui, "roman", "interface"), exist_ok=True)
+        sh = SS.Sheet(5, "T", [{"guide": "g", "file": "p.tga", "flag": 0, "w": 4, "h": 4, "mask": bytes(3)}],
+                      [{"name": "A", "page": 0, "x0": 1, "x1": 2, "y0": 0, "y1": 3, "flag": 1, "tail": 0}])
+        with open(os.path.join(ui, "strat3.rsd"), "wb") as fh:
+            fh.write(SS.write(sh))
+        with open(os.path.join(ui, "roman", "interface", "p.tga"), "wb") as fh:
+            fh.write(image_tga(Image.new("RGBA", (4, 4), (10, 20, 30, 0))))
+        try:
+            with mock.patch("tkinter.messagebox.showinfo"), mock.patch("tkinter.messagebox.showerror"), \
+                    mock.patch("tkinter.messagebox.askyesno", return_value=False):
+                app.v_path.set(os.path.join(self.root, "data"))
+                app.load()
+                app.update()
+                app.v_work.set("interface")
+                app.work_changed()
+                ed = app.editor()
+                ed.nb.select(1)
+                ed._tab_changed()
+                sp = ed.sprites
+                self.assertEqual((sp.sheet["name"], sp.page), ("strat3", "p.tga"))
+                sp.picked = "A"
+                sp._set(SE.put_sprite(sp._img, sp._crop(), Image.new("RGB", (2, 4), (255, 0, 0))))
+                self.assertTrue(ed.dirty())
+                self.assertGreaterEqual(ed.pending(), 1)
+                files = [os.path.basename(f) for f in ed.make_plan().changed_files()]
+                self.assertIn("p.tga", files)
+                ed.undo_step()
+                self.assertFalse(ed.dirty())
+                sp.undo.append(("box", ("strat3", "A"), None))
+                sp.box_changes[("strat3", "A")] = ((0, 0, 2, 2), None)        # as the Place and size window keeps it
+                self.assertEqual(dict(sp.boxes())["A"], (0, 0, 2, 2))
+                self.assertIn("strat3.rsd", [os.path.basename(f) for f in ed.make_plan().changed_files()])
+                ed.undo_step()
+                self.assertFalse(ed.dirty())
+                ed.nb.select(2)                                  # the Campaign HUD tab: drawn through the same panel
+                ed._tab_changed()
+                app.update()
+                self.assertIs(ed.hud.interface.sprites, sp)
+                shot = os.path.join(self.root, "shot.png")
+                Image.new("RGB", (1600, 900), (0, 0, 255)).save(shot)
+                with mock.patch("tkinter.filedialog.askopenfilename", return_value=shot):
+                    ed.hud.pick_shot()                           # a screenshot over it, the HUD stretched to it
+                self.assertEqual(ed.hud._img.size, (1600, 900))
+                self.assertTrue(ed.hud.v_shot.get())
+        finally:
+            app.destroy()
+
     def test_faction_form_starts_empty(self):
         """The user, 2026-10-21: 'I made a faction, picked another - the fields were still full; remove it all by
         hand?'. New faction opened after Edit faction, another template, another faction in Edit: nothing of the one
