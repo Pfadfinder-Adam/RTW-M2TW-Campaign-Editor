@@ -883,6 +883,11 @@ def engine_limits(mod, campaign, regions, units, blds, img):
     if engine:                  # the user's rule: REX / M2EX = no limits at all - no fault, no warning, no count
         out = [("LIMITS: none - %s beside the game (factions, regions, religions, cultures, units, buildings: no "
                 "limit; max_factions follows the factions on every Apply)" % engine[:-4], False)]
+        big = big_stacks(mod, campaign)
+        if big:
+            out.append(("%d stack(s) hold more than 20 units (the most: %d) - the game keeps them only with 'ARMY SIZE = "
+                        "40 UNITS' picked in its options; with 20 the units past 20 are left out (a line in the log, "
+                        "no crash)" % (len(big), max(big)), False))
         from .gamefix import engine_files_words
         words = engine_files_words(mod)
         if words:                               # a problem line, so Check mod files gives it its button
@@ -904,6 +909,25 @@ def engine_limits(mod, campaign, regions, units, blds, img):
         if over:
             out.append(("%s: %d, the original game stops at %d - it may crash or refuse to load"
                         % (LIMIT_WORDS[key], n, most), True))
+    return out
+
+
+def big_stacks(mod, campaign):
+    """[units] of every stack (an army's, a garrison's) in descr_strat.txt with more than 20 unit lines - REX / M2EX
+    hold 40 with their 'ARMY SIZE = 40 UNITS' option (start.army_cap)."""
+    try:
+        f = mod.load(mod.campaign_file(campaign, "descr_strat.txt"))
+    except Exception:
+        return []
+    out, run = [], 0
+    for line in f.texts() + ["end"]:
+        t = tokens(strip_comment(line))
+        if t[:1] == ["unit"]:
+            run += 1
+        elif t:                                         # blank and comment lines stay inside the stack
+            if run > 20:
+                out.append(run)
+            run = 0
     return out
 
 

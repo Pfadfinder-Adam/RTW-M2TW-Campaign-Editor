@@ -10,9 +10,11 @@
 - The editor's own look: Tools > Edit the editor's look - drag any button, tick or label anywhere, rename it, give it a hover text or a width, hide it, take it back; kept for every start. The editor's language from a language file (Settings), and Words to translate writes every word for translators.
 
 ### Changed
+- With REX or M2EX an army, garrison or fleet may hold 40 units (the engines' 'ARMY SIZE = 40 UNITS' option); Check mod files says which stacks need that option.
 - New mod folder puts no switched-off engine settings files (descr_ex, descr_caps_ex) in: the mod runs on the engine's defaults as before; the editor writes the line a change needs, Check mod files' Copy them in brings the whole list.
 
 ### Fixed
+- HD sprite sheets (made with M2EX's own packer) showed the wrong part of the picture -> sprite sheets are read as the game reads them.
 - New / Edit faction kept the fields of the faction shown before (names, texts, colours, pictures picked) -> the form starts empty when New faction opens, a template is picked, a faction is brought or another faction is edited.
 - A faction brought from another mod got its template's flags and icons where it had none of its own -> those pictures are left empty now (give your own on the Art tab).
 - Building '?' hints mislabelled half the vanilla lines (a level and 'bonus N' are both allowed on every effect) -> both forms explained; free_upkeep, religion, settlement sizes (castles too) and Rome's weapon levels said right; Medieval II level lines, hidden_resources and Barbarian Invasion's religious_belief get hints.

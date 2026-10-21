@@ -29,7 +29,20 @@ def default_army(strat, template):
     return [l for l in strat.lines[c.start:c.end] if tokens(l)[:1] == ["unit"]]
 
 
-MAX_UNITS = 20
+MAX_UNITS = 20          # the original games' stack; REX / M2EX: army_cap
+ENGINE_UNITS = 40
+
+
+def army_cap(mod):
+    """The most units a stack (army, garrison, navy) may hold in this mod: 20 in the original games; with REX / M2EX
+    40 - their 'ARMY SIZE = 40 UNITS' option (the engines' army_mode.h, shared by both: 'HD_40_40'; the player picks
+    it in the game's options; with 20 picked the units past 20 are left out with a line in the log, no crash -
+    Check mod files says so). Wholesome Queen's campaign UI editor (40-card rack) pointed to it."""
+    from .limits import engine_of
+    try:
+        return ENGINE_UNITS if engine_of(mod) else MAX_UNITS
+    except Exception:
+        return MAX_UNITS
 
 
 def unit_upkeep(edu):
@@ -76,7 +89,7 @@ def _own_garrison(plan, f, s, template, region, st, block_raw, start, own_held):
     pad = next((u[:len(u) - len(u.lstrip())] for u in old if tokens(u)[:1] == ["unit"]), "\t")
     picked = (start.get("garrisons") or {}).get(region)
     if picked is not None:
-        lines = [unit_line(u, "\t", "\t\t\t") for u in picked][:MAX_UNITS]
+        lines = [unit_line(u, "\t", "\t\t\t") for u in picked][:army_cap(plan.mod)]
         why = "your garrison of %d unit(s) holds the town (its own garrison, no captain)" % len(lines)
     elif start.get("garrison", "replace") == "keep":
         own_held.add(region)
@@ -434,13 +447,13 @@ def build_start(plan, campaign, start):
             if not _has_army(chunk):
                 continue
             extra = _units(chunk)
-            room = MAX_UNITS - len(units)
+            room = army_cap(plan.mod) - len(units)
             units.extend(extra[:max(room, 0)])
             plan.note(f, "%s: %s (%s) hands his %d unit(s) to %s"
                       % (region, name, kind, min(len(extra), max(room, 0)), into))
             if len(extra) > room:
                 plan.warn(f, "%s: %d unit(s) of %s's garrison dropped - an army holds %d"
-                          % (region, len(extra) - max(room, 0), name, MAX_UNITS))
+                          % (region, len(extra) - max(room, 0), name, army_cap(plan.mod)))
         joined[region] = [j for j in joined.get(region, []) if not _has_army(j[2])]
         return units
 
@@ -494,10 +507,10 @@ def build_start(plan, campaign, start):
     for r, types in (start.get("garrisons") or {}).items():
         if r not in regions:
             continue
-        room = MAX_UNITS - (1 if r in held else 0)
+        room = army_cap(plan.mod) - (1 if r in held else 0)
         custom[r] = [unit_line(tp) for tp in types][:room]
         if len(types) > room:
-            plan.warn(f, "%s: %d unit(s) over the %d an army holds were left out" % (r, len(types) - room, MAX_UNITS))
+            plan.warn(f, "%s: %d unit(s) over the %d an army holds were left out" % (r, len(types) - room, army_cap(plan.mod)))
     captains = first_names(pool, "general")
     used = {c.name.split()[0] for fb in s.factions for c in fb.characters if c.name}
     used |= {start[r]["name"].split()[0] for r in ("leader", "heir") if start.get(r) and start[r].get("name")}
@@ -623,11 +636,11 @@ def build_start(plan, campaign, start):
                 continue
             if lead and chunk is lead[2]:
                 extra = [u for _, _, c in group if c is not chunk and _has_army(c) for u in _units(c)]
-                room = max(MAX_UNITS - len(_units(chunk)), 0)
+                room = max(army_cap(plan.mod) - len(_units(chunk)), 0)
                 chunk = chunk + extra[:room]
                 if len(extra) > room:
                     plan.warn(f, "%s: %d garrison unit(s) dropped - an army holds %d"
-                              % (r, len(extra) - room, MAX_UNITS))
+                              % (r, len(extra) - room, army_cap(plan.mod)))
             # its own name list: a name of another list is renamed - a clone too (report #292: captain Acamus
             # joined epiros with Bruttium, his name not in its list, and Rome crashed as the campaign loaded)
             chunk, name = _own_name(plan, f, chunk, name, kind, pool, used)
@@ -820,8 +833,8 @@ def extra_characters(plan, f, campaign, chars, pool, armies_at, owner=None):
         out.append(character_line(f, name, rtw_kind, c.get("age") or 30, xy, sub_faction=sub))
         if army:
             out.append("army")
-            out += [unit_line(u) for u in units[:MAX_UNITS]]
+            out += [unit_line(u) for u in units[:army_cap(plan.mod)]]
         out.append("")
         plan.note(f, "%s %s at %d, %d%s" % (kind, name, xy[0], xy[1],
-                                              " with %d unit(s)" % min(len(units), MAX_UNITS) if army else ""))
+                                              " with %d unit(s)" % min(len(units), army_cap(plan.mod)) if army else ""))
     return [f.make(l) for l in out]
