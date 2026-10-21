@@ -18,6 +18,11 @@
 - A garrison for a town the map shows no town for stopped the write -> that town is skipped with a warning.
 - Mercenaries: a pool naming a region the map lacks refused any edit -> only the regions a pool gains are checked.
 - A family edit was refused for records and 'none' wives written the games' own way -> they read right.
+- A drop-down (the map's Layers...) stopped the editor when its bar had been rebuilt -> it opens again.
+- Start the game refused an exe set to run as administrator -> Windows is asked to start it so.
+- Medieval II's custom campaigns (campaign/custom/...) did not appear in Campaign -> they are listed and can be edited.
+- Apply on a page with nothing to write (Recolour, Events...) said 'its changes are kept by themselves' -> it says what to do.
+- A .zip picked instead of a picture gave a technical error -> it says to unpack it first.
 - A mod built on the plain game got the game's whole campaign folder (descr_strat, events, scripts, texts) when a faction's map picture was redrawn, and those copies hid the modder's own files -> now only the changed picture goes in, and a map change brings only the map's own files.
 - The editor's automatic fixes (faction-select slots, 'faction destroyed' pictures, a later faction holding a town) put the game's own campaign files into a mod built on the plain game though nothing in them was changed -> they touch only files you changed; a picture written with the game's very bytes is not copied in.
 - Load offered to open the locked factions of the game's own campaigns in a mod built on the plain game, which copied the game's campaign file in -> it asks only about the mod's own campaigns (Check mod files still names them).
