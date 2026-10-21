@@ -3268,6 +3268,62 @@ building smith
         mod = ModData(self.root)
         self.assertFalse(any(g.startswith(fac + " ") for g in check.custom_battle_problems(mod, units)))
 
+    def test_painted_look_keeps_the_figure(self):
+        """Make a card's 'Painted look' (a Discord modder): the figure's see-through parts stay, its size stays, the
+        colours become flat brush areas (fewer colours than the 3D view), a dark line round it."""
+        try:
+            from PIL import Image, ImageDraw
+        except ImportError:
+            self.skipTest("no Pillow")
+        from campaign_editor import cardmaker as CM
+        import random
+        from PIL import ImageStat
+        rnd = random.Random(1)
+        fig = Image.new("RGBA", (120, 160), (0, 0, 0, 0))
+        d = ImageDraw.Draw(fig)
+        for y in range(20, 141):                                                         # a busy 3D texture
+            for x in range(30, 70):
+                v = rnd.randint(60, 200)
+                d.point((x, y), fill=(v, v // 2, 30, 255))
+        out = CM.painted(fig)
+        self.assertEqual(out.size, fig.size)
+        self.assertEqual(out.getpixel((5, 5))[3], 0)                                     # clear stays clear
+        self.assertEqual(out.getpixel((50, 80))[3], 255)
+        busy = lambda im: ImageStat.Stat(im.convert("L").crop((36, 30, 64, 130))).stddev[0]
+        self.assertLess(busy(out), busy(fig) / 2)                                        # flat brush areas
+        self.assertLess(sum(out.getpixel((29, 80))[:3]), 300)                            # the dark line round him
+        self.assertIs(CM.painted(fig, 0), fig)
+
+    def test_clone_takes_no_triggers_of_its_template(self):
+        """The user, 2026-10-21: a clone is its colour, units, buildings, models and cards - none of the template's
+        triggers (traits / ancillaries naming 'FactionType <template>'); no tick for it any more."""
+        mod = ModData(self.root)
+        p = mod.file("traits")
+        if not p:
+            p = os.path.join(mod.data, "export_descr_character_traits.txt")
+        write(p, ";------\nTrigger alpha_born\n    WhenToTest CharacterComesOfAge\n    Condition FactionType alpha\n"
+                 "    Affects GoodCommander 1 Chance 100\n")
+        mod = ModData(self.root)
+        if not mod.file("traits"):
+            self.skipTest("the test mod has no traits file")
+        plan = build(mod, "test", "alpha", "beta", {"start": {"regions": ["B_R"], "leader": {"name": "Boris"}}})
+        f = plan.files.get(mod.file("traits"))
+        self.assertFalse(f is not None and any("FactionType beta" in t for t in f.texts()))
+        plan = build(mod, "test", "alpha", "beta", {"start": {"regions": ["B_R"], "leader": {"name": "Boris"}},
+                                                     "copy_triggers": True})          # still there for the CLI
+        self.assertTrue(any("FactionType beta" in t for t in plan.files[mod.file("traits")].texts()))
+
+    def test_emblem_window_says_a_picture_of_no_known_size(self):
+        """R-20261021-BFEE56: Emblem everywhere stopped on a picture whose size could not be read (size None)."""
+        from campaign_editor.gui_art import picture_words
+        self.assertEqual(picture_words({"label": "Logo", "rel": "a.tga", "size": (64, 32, 32)}), "Logo\n64 x 32")
+        self.assertEqual(picture_words({"label": "Logo", "rel": "a.tga", "size": None}), "Logo\nsize unknown")
+
+        class Pic:
+            size = (48, 48)
+        self.assertEqual(picture_words({"label": "Logo", "rel": "a.tga", "size": None}, {"a.tga": Pic()}),
+                         "Logo\n48 x 48")
+
     def test_map_from_zero(self):
         """The user, 2026-10-21: a map from zero - one island, one region with its town (black pixel), a port (white,
         on the coast, sea beside it), a resource, one faction and the rebels; every picture at its size for W x H
