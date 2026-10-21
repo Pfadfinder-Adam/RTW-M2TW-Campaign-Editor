@@ -441,7 +441,10 @@ class ArtEditor(ttk.Frame):
             with Image.open(src) as im:
                 got = im.size
         except Exception as e:
-            messagebox.showerror("Replace", "Cannot read %s: %s" % (src, e))
+            # a .zip picked in the box (R-20261019-C56BC1): said in plain words
+            why = ("it is a .zip archive, not a picture - unpack it first and pick the picture inside"
+                   if src.lower().endswith((".zip", ".7z", ".rar")) else str(e))
+            messagebox.showerror("Replace", "Cannot read %s: %s" % (os.path.basename(src), why))
             return
         if size and tuple(got) != tuple(size[:2]):
             if not ask("Replace", "%s is %d x %d; the game's picture is %d x %d.\n\n"
