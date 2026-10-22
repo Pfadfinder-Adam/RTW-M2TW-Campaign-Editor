@@ -84,7 +84,9 @@ and climate while you paint (the climate most land round it has, with *New land:
 is made again when the stroke ends.
 **Paint** (the tick; it was called Heights brush) paints more than the heights: **brush** picks what - **Heights**
 as above, or tile by tile **Ground**, **Rivers, cliffs, volcanoes...**, **Climates** (each with the Terrain tab's own
-palette), **Land (tiles)** or **Sea (tiles)** (the Land and sea tile brushes). A white square on the ground shows the
+palette), **Regions** (the Map's Edit regions brush: the tiles go to the region picked in *paint with*, kept for
+Apply), **Land (tiles)** or **Sea (tiles)** (the Land and sea tile brushes); **Alt + click** picks the tile's own
+region, ground, mark or climate. A white square on the ground shows the
 tiles it paints (size 1 one tile, 2 a square of 3 x 3...); the ground and climate show at once, the mountains,
 rivers, trees and borders a moment after the stroke. The Terrain editor's Undo, Preview and Apply are shared.
 **Layers > colours over the map** lays each tile's climate colour (the sea's too - what land raised there will

@@ -262,10 +262,11 @@ class MapData:
             out[..., 3] = np.where(self.heights[1::2, 1::2][:H, :W] > 0, 255, 0)
         return out
 
-    def refresh_ground(self, mod, campaign):
+    def refresh_ground(self, mod, campaign, painted=None):
         """The brushes changed the ground, climates or regions in memory (land raised out of the water, land sunk
         under it): what the tile models, trees and borders stand on read again, each point's picture made again -
-        returned, for the card to take on the main thread. No new build of the map (the user, 2026-10-22: the map
+        returned, for the card to take on the main thread. painted: {tile: region} the Map's Edit regions gave and
+        Apply will write (the borders drawn as it will leave them). No new build of the map (the user, 2026-10-22: the map
         made again at a stroke's end lagged, and the new land's texture came in after)."""
         from . import mapnet as N
         from . import tilemodels as TM
@@ -283,7 +284,13 @@ class MapData:
             self._tree_src = (ground, ci[1::2, 1::2][:H, :W][::-1]) + tuple(self._tree_src[2:])
         src = getattr(self, "_net_src", None)
         if src:
+            from .regionedit import SEA
             src["grid"], src["names"] = N.region_grid(mod, campaign)
+            index = {n: i for i, n in enumerate(src["names"])}
+            gh, gw = src["grid"].shape
+            for (x, y), name in (painted or {}).items():
+                if 0 <= x < gw and 0 <= y < gh and (name in index or name == SEA):
+                    src["grid"][y, x] = index.get(name, -1)
             H, W = src["grid"].shape
             src["mountains"] = TM.tile_types(ground)[TM.MOUNTAINS_HIGH] if ground is not None and \
                 ground.shape[:2] == self.heights.shape else np.zeros((H, W), bool)
