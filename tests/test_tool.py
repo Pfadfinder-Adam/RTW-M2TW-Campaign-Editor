@@ -1512,6 +1512,14 @@ building smith
         self.assertIn("Condition FactionType alpha_ce", mine)
         self.assertIn("Trait Fearsalpha", mine)                            # a trait's own name stays
 
+    def test_recolour_faction_with_no_secondary_colour(self):
+        """Report R-20261022-46D767 (Rome with REX): Recolour of a faction with no secondary colour stopped at
+        Preview and Apply - the colours were compared as if both were always there."""
+        from campaign_editor import recolour as R
+        self.assertEqual(R.colour_pair([(10, 20, 30), None]), ((10, 20, 30), None))
+        self.assertEqual(R.colour_pair([[1, 2, 3], [4, 5, 6]]), ((1, 2, 3), (4, 5, 6)))
+        self.assertNotEqual(R.colour_pair([(1, 2, 3), None]), R.colour_pair([(1, 2, 3), (4, 5, 6)]))
+
     def test_recolour_finds_the_templates_cards_under_a_thin_mod(self):
         """Report R-20261009-4D53CB (the test mod on Rome with REX): a clone's cards stayed its template's red after
         Recolour - in a thin mod the template's cards lie in the game's data only, so none was found to compare with
