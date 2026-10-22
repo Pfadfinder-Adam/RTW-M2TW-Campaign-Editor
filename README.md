@@ -72,7 +72,6 @@ Every version: [CHANGELOG.md](CHANGELOG.md).
 | ❓ [FAQ and known limits](../../wiki/FAQ-and-known-limits) | common questions, what does not work yet |
 | 🗺️ [Bigger map (x3)](../../wiki/Bigger-map-x3) | how the 3 x map works |
 | 📂 [What it changes](../../wiki/What-it-changes) | which game files are written, the command line |
-| 🗺️ [Roadmap](ROADMAP.md) | what works, what is being tested (🧪), what comes next |
 | 📝 [Changelog](CHANGELOG.md) | what changed in each version |
 | 🙏 [Credits](CREDITS.md) | the testers and everyone who helped |
 | 💬 [Discord](https://discord.gg/uqA9MEn4Z) | questions, ideas, news |
