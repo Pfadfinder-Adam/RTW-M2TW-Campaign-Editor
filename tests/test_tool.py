@@ -11273,8 +11273,9 @@ building smith
         # the Ground brush over the sea: every tile it turns into land goes to the Land and sea brush in ONE call
         # (the shore risen and smoothed once - tile by tile a big brush lagged), then gets its ground
         try:
+            from campaign_editor import mapdata  # noqa: F401 - the brush names its tiles' looks there (Pillow)
             from campaign_editor.gui_terrain import TerrainEditor
-        except ImportError:
+        except ImportError:                              # CI's test job: no Pillow
             TerrainEditor = None
         if TerrainEditor is not None:
             from unittest import mock
