@@ -6155,6 +6155,60 @@ building smith
         m.show_sea_climates = True
         self.assertNotEqual(m._climates(base).getpixel((4, 0)), (0, 0, 0))  # tinted like the land
 
+
+    def test_climate_passport(self):
+        """Climate library: what a climate gives, file by file - descr_climates (slot, colour, heat, winter, trees,
+        battle plants), the campaign ground textures (the 'default' block where it has none), every other file's
+        block or line naming it (a text file's {TAG} lines are not blocks); the engine's slot name counts only as a
+        block's own header ('x modifies y' is x's); free slots up to 32."""
+        from campaign_editor import climatelib as L
+        d = os.path.join(self.root, "data")
+        write(os.path.join(d, "descr_climates.txt"),
+              "climates\n{\n\tmediterranean\n\tsandy_desert\n}\n\nclimate mediterranean\n{\n\tcolour 236 0 140\n"
+              "\theat 1\n}\n\nclimate sandy_desert\n{\n\tcolour 102 45 145\n\theat 4\n\twinter\n"
+              "\tstrategy summer sparse_tree palm_a.cas 8\n\n\tbattle_vegetation\n\tdense_forest dense_pine\n"
+              "\tbattle_winter_vegetation\n\tdense_forest winter_dense_pine\n\tenv_map data/battlefield/e.dds\n}\n")
+        write(os.path.join(d, "descr_aerial_map_ground_types.txt"),
+              "climate default\n{\n\thills a_hills.tga\n\tswamp a_swamp.tga\n}\nclimate sandy_desert\n{\n"
+              "\thills sand_hills.tga snow.tga\n}\n")
+        write(os.path.join(d, "descr_geography.txt"),
+              "sandy_desert modifies default\n{\n\ttexture sand terrain/battlefield/sandy_desert/sand.tga\n}\n"
+              "rocky_desert modifies sandy_desert\n{\n\ttexture rock none\n}\n")
+        write(os.path.join(d, "descr_daytypes.txt"),
+              "daytype desert_summer\n\n\tclimates\t\tsandy_desert rocky_desert\n\tseasons summer\n")
+        write(os.path.join(d, "text", "climates.txt"), "{SANDY_DESERT}Sandy desert\n{ROCKY_DESERT}Rocky\n")
+        mod = ModData(self.root)
+        rows = L.passport(mod, "sandy_desert", "rome")
+        got = {(r.file, r.what, r.value) for r in rows}
+        self.assertIn(("descr_climates.txt", "slot", "2 of 32 (engine name sandy_desert)"), got)
+        self.assertIn(("descr_climates.txt", "colour", "102 45 145"), got)
+        self.assertIn(("descr_climates.txt", "winter", "snow in winter"), got)
+        self.assertIn(("descr_climates.txt", "trees summer sparse tree", "palm_a.cas (sprite 8)"), got)
+        self.assertIn(("descr_climates.txt", "winter dense forest", "winter_dense_pine"), got)
+        hills = [r for r in rows if r.what == "ground hills"][0]
+        self.assertEqual((hills.value, hills.note, hills.picture),
+                         ("sand_hills.tga  /  winter snow.tga", "", "terrain/aerial_map/ground_types/sand_hills.tga"))
+        swamp = [r for r in rows if r.what == "ground swamp"][0]
+        self.assertEqual((swamp.value, swamp.note), ("a_swamp.tga", "from default"))
+        geo = [r for r in rows if r.file == "descr_geography.txt"]
+        self.assertEqual([(r.what, r.value, r.line) for r in geo],
+                         [("sandy_desert modifies default", "texture sand terrain/battlefield/sandy_desert/sand.tga", 3),
+                          ("built on it", "rocky_desert modifies sandy_desert", 5)])
+        self.assertEqual(geo[0].picture, "terrain/battlefield/sandy_desert/sand.tga")
+        self.assertIn(("descr_daytypes.txt", "daytype desert_summer", "climates\t\tsandy_desert rocky_desert"), got)
+        self.assertEqual([r.value for r in rows if r.file == "text/climates.txt"], ["{SANDY_DESERT}Sandy desert"])
+        self.assertEqual(L.slot_name(0, "rome"), "default")
+        self.assertEqual(L.slot_name(12, "medieval2"), "custom_1")
+        self.assertIsNone(L.slot_name(32, "rome"))
+        lines = mod.load(mod.find("descr_climates.txt")).texts()
+        self.assertEqual(L.listed(lines), ["mediterranean", "sandy_desert"])
+        free = L.free_slots(lines, "medieval2")
+        self.assertEqual((len(free), free[0], free[-1]), (30, (2, "rocky_desert"), (31, "custom_20")))
+        # Rome's slot 0 'default' is every file's base block: not taken for the first climate's own
+        self.assertEqual(L.scan(["sea default", "{", "\tx 1", "}", "parent sea default"], ["test_climate"],
+                                ["default"]), [(2, "sea default", "x 1")])
+        self.assertEqual(L.scan(["a modifies default", "{", "\tx 1", "}"], ["test_climate"], ["default"]), [])
+
     def test_land_brush_coast_is_smooth_not_in_steps(self):
         """A report ('where is the smoothing?'): the land brush made land tile by tile, its coast ran in tile-sized
         steps. The coast round the brush's tiles now follows a smooth curve at half-tile level, as the games' own

@@ -197,6 +197,15 @@ class TerrainEditor(ttk.Frame):
         if self.cmap is not None:
             self.show()
 
+    def climate_library(self):
+        """Terrain > Climates > Climate library... (gui_climatelib), the picked climate shown first."""
+        if self.mod is None:
+            return
+        from . import terrain as T
+        from .gui_climatelib import open_library
+        names = {"%d,%d,%d" % c: n for n, c, _ in T.climates(self.mod)}
+        open_library(self.app, self.mod, self.app.v_campaign.get(), names.get(self.v_colour.get()))
+
     def _rivers_toggled(self):
         """The rivers, fords and cliffs over the ground, on or off (the same switch as Layers > Rivers, kept)."""
         from . import settings
@@ -1046,6 +1055,12 @@ class TerrainEditor(ttk.Frame):
                 "there. The game shows nothing of it on the water, but land made there (Land and sea) starts with "
                 "it - paint it here first, or let new land take its neighbours' climate (Land and sea).").pack(
                 side="top", anchor="w", padx=(4, 2))
+            if found:
+                tip(ttk.Button(self.palette, text="Climate library...", command=self.climate_library),
+                    "Every climate of the mod, how many tiles of this map it covers, and what it gives the game - "
+                    "the campaign map's trees and ground textures, the mountains, the battle map's ground, plants "
+                    "and water, the weather and sounds - file by file, line by line, pictures shown.").pack(
+                    side="top", anchor="w", padx=(4, 2), pady=(2, 4))
             self.hint.configure(text=(
                 "Left drag paints the picked climate, right click picks a tile's own. The climate decides the trees "
                 "and plants on the campaign and battle maps, the snow in winter and the heat (tiring in battle). "
