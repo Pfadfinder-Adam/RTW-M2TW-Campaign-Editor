@@ -891,12 +891,12 @@ class App(tk.Tk):
         # saying what it does (once on the top row; a tester: 'not between the zoom's plus and minus')
         from .gui_util import hint as _hint, tip as _tip
         from .gui_upscale import WHAT_HAPPENS
-        # its '?' BEFORE it, a gap, then - 100% + Fit and the zoom's '?' (a tester, R-20261014-7D5272)
+        # its '?' AFTER it (the author, 2026-10-22: not beside the zoom's '?'; once before it, R-20261014-7D5272)
         up = _tip(ttk.Button(self.map_view.zoom_bar, text="Bigger map (x3)...", command=self.once(
             "upscale_map", lambda: self.upscale_map())), "make the campaign map 3 x bigger (beta)")
-        q = _hint(self.map_view.zoom_bar, WHAT_HAPPENS, width=520)
-        q.pack(side="left", padx=(0, 2))
         up.pack(side="left")
+        q = _hint(self.map_view.zoom_bar, WHAT_HAPPENS, width=520)
+        q.pack(side="left", padx=(2, 0))
         _tip(ttk.Button(self.map_view.zoom_bar, text="Map from zero...", command=self.once(
             "map_zero", lambda: self.map_from_zero())),
             "a new small map in place of this campaign's: one island, one region with its town, a port and a "
