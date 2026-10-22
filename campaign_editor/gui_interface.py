@@ -117,6 +117,9 @@ class InterfacePanel(ttk.Frame):
     def make_plan(self):
         if not self.doc:
             raise ValueError("Interface: this game / mod has no menu layout file.")
+        if not self.dirty():                # the tester, 2026-10-22: Apply with no change gave an empty backup + 'Done'
+            raise ValueError("Nothing to write yet from Interface: no picture, sprite or box was changed (or it is "
+                             "written already). Make the change - it is kept at once - then Apply changes writes it.")
         from .plan import Plan
         plan = Plan(self.mod, "interface", "interface", {})
         L.plan_write(plan, self._path, self.doc)
