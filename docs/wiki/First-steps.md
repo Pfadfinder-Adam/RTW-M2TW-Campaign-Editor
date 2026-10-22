@@ -42,7 +42,12 @@ them, **Undo** / **Redo** step through them; after Accept, **Undo** and **Back t
 Light or Dark, a font and size for every window, and a swatch for each colour - background, words, fields and lists,
 buttons, tabs, the picked line, links... - and, folded under them, for each button with a colour of its own (Play,
 Report a bug...). Click a swatch to pick a new colour: every window takes it at once and keeps it for every start;
-its arrow gives the look's own colour back, **All back to the look as it comes** all of them. The questions and file pickers Windows draws itself are not on the board.
+its arrow gives the look's own colour back, **All back to the look as it comes** all of them.
+**Themes...** (there, or in **Settings > Look**) shows every theme as a card with a picture: the editor's own (Light,
+Dark, Roman parchment, Medieval night, Byzantine purple) and yours. **Use** puts one on the whole editor; **Save the
+look now as a theme...** keeps the colours and font now in force, with a picture of the editor, under a name;
+**Export...** writes a theme into one .zip to send (Discord, a friend) and **Import a theme...** takes one sent to
+you. Your themes are kept in `CampaignEditor_themes/`. The questions and file pickers Windows draws itself are not on the board.
 
 **Settings > Language of the window** puts a language on every window, the hover texts and the menus; **Add a
 language file...** puts one in. **Words to translate...** writes every word of the windows into a file - fill in the
