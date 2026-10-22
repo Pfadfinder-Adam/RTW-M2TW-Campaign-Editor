@@ -323,6 +323,21 @@ def of_skeleton(mod, skeleton):
     return out
 
 
+def why_none(mod, skeleton):
+    """Why of_skeleton finds no animation for this skeleton, in plain words - View in 3D says it where the Animation
+    list would be."""
+    listed = list(dict.fromkeys(key(f) for f in [f for _, f in skeleton_anims(mod, skeleton)] +
+                                _set_record_anims(mod, skeleton)))
+    if not listed:
+        return ("the skeleton %s is neither in descr_skeleton.txt nor in the animation set (data/animations/"
+                "skeletons.dat)" % skeleton)
+    if packs(mod):
+        return "%s: none of its %d animation files is in the animation packs or loose (the first: %s)" % (
+            skeleton, len(listed), listed[0])
+    return ("%s: there is no animation pack (data/animations/pack.idx, pack.dat) and none of its %d animation "
+            "files is loose (the first: %s)" % (skeleton, len(listed), listed[0]))
+
+
 _SETS = {}
 
 
@@ -479,4 +494,4 @@ def skeleton(mod, name):
 
 
 __all__ = ["FPS", "Anim", "Pack", "read_index", "key", "packs", "find", "skeletons", "skeleton_anims", "of_skeleton",
-           "Skeleton", "skeleton", "world", "moved_bones"]
+           "why_none", "Skeleton", "skeleton", "world", "moved_bones"]

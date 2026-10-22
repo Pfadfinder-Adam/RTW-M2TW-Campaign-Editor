@@ -63,6 +63,7 @@
 - Map (Medieval II): a resource moved or added onto a wasteland's land went in without a word, though the game refuses it - now Apply's list says so (the resource is still written: your choice).
 - Terrain > Climates: on a big map every stroke stopped the map for about a second while the climate colours were drawn again - now they are drawn at once.
 - Terrain / Coast & heights / Maps > 3D: after picking another campaign the brushes still worked on the old campaign's map (its land, sea and regions) and Apply wrote the old strokes into the new one - now another campaign starts the Terrain editor clean on its own map.
+- View in 3D: the Animation list sometimes vanished without a word -> where a model has none, the window now says why (its skeleton is in neither descr_skeleton.txt nor the animation set, or its animation files are in no pack and not loose, the first one named); picking another Armour level whose model has other skeletons gives that model's own animations (it kept the first model's).
 - Roster: the green / red rows of a given / taken unit or level were glaring light ones in the dark look - now dark green / red there.
 - Terrain / Maps > 3D: a big Ground brush over the sea lagged (each tile turned into land one at a time) -> the brush's tiles turn together, about three times faster.
 - Maps > 3D: land raised out of the water with the heights brush made the map stall at the stroke's end, then its ground texture changed to the new climate -> the new land shows its own ground and climate while you paint, and nothing is made again after.
