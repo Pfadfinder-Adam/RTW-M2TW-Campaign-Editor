@@ -110,6 +110,10 @@ ammunition..., stat_cost's turns, price, upkeep..., every word of attributes - f
   put in - each faction has its own (the game reads ui/units/<faction> and ui/unit_info/<faction>); the other
   owners keep theirs. Pick **all owners (the same picture)** to put one card / description picture in for every
   owner at once.
+  **Texts players read** (under the pictures): the unit's name, short and long description from export_units.txt,
+  changed here and written on Apply. **Delete this unit...** (beside New unit step by step) takes the unit out on
+  Apply with its recruit lines, its men in every army and garrison, the mercenary pools, the rebels' lists and its
+  cards (a backup first; Restore puts it back).
   The window stands beside the 3D view and follows it: turn the man or pick another frame there and the card is
   taken again by itself (**Take the 3D view again** does it at once and says what it took). How much of him and
   nearer / up / right are kept for the next unit (cards and pictures apart).

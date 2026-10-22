@@ -1037,6 +1037,77 @@ def rename_unit(plan, old, new):
             plan.note(f, "%d line(s) follow the unit's new name %s" % (n, new))
 
 
+def delete_unit(plan, name):
+    """A unit taken out of the mod (#375 - 'every action has its opposite': New unit <-> Delete), with everything that
+    names it: its block in export_descr_unit.txt, its recruit lines, its men in every campaign's armies and
+    garrisons, the mercenary pools, the rebels' lists, and its cards / description pictures in the mod's own folders
+    when no other unit shows them. Its names in export_units.txt stay (nothing reads them; a unit made again with
+    the same dictionary finds them). An army left with no unit is refused on Apply in plain words (the game stops
+    reading the campaign there). -> the lines taken out."""
+    mod = plan.mod
+    edu = plan.edit(mod.file("edu"))
+    blk = next((b for b in unit_blocks(edu) if b[0] == name), None)
+    if blk is None:
+        raise ValueError("no unit '%s' in export_descr_unit.txt" % name)
+    dic = next((tokens(strip_comment(edu.text(i)))[1] for i in range(blk[1], blk[2])
+                if tokens(strip_comment(edu.text(i)))[:1] == ["dictionary"]
+                and len(tokens(strip_comment(edu.text(i)))) > 1), None)
+    end = blk[2]
+    while end > blk[1] + 1 and not edu.text(end - 1).strip():
+        end -= 1                                     # the blank line before the next block stays
+    edu.delete(blk[1], end)
+    taken = end - blk[1]
+    plan.note(edu, "unit %s taken out" % name)
+    edb = mod.file("edb")
+    if edb:
+        from .roster import recruit_of
+        e = plan.edit(edb)
+        gone = [i for i in range(len(e.raw)) if (recruit_of(e.text(i)) or ("", ""))[1] == name]
+        for i in reversed(gone):
+            e.delete(i, i + 1)
+        if gone:
+            plan.note(e, "%d recruit line(s) of %s taken out" % (len(gone), name))
+        taken += len(gone)
+    files = [mod.campaign_file(c, "descr_strat.txt") for c in mod.campaigns()] + \
+        [mod.campaign_file(c, "descr_mercenaries.txt") for c in mod.campaigns()] + \
+        [os.path.join(mod.data, "descr_rebel_factions.txt")]
+    seen = set()
+    for p in files:
+        if not p or not os.path.isfile(p) or p in seen:
+            continue
+        seen.add(p)
+        f = plan.edit(p)
+        gone = []
+        for i in range(len(f.raw)):
+            t = f.text(i)
+            sp = _unit_span(t)
+            if sp and t[sp[0]:sp[1]].strip() == name:
+                gone.append(i)
+        for i in reversed(gone):
+            f.delete(i, i + 1)
+        if gone:
+            plan.note(f, "%d line(s) of %s taken out" % (len(gone), name))
+        taken += len(gone)
+    if dic and not any(dic == d for d in _dictionaries(edu)):
+        from .moddata import _ci
+        for sub, pattern in (("units", "#%s.tga"), ("unit_info", "%s_info.tga")):
+            for fac, _ in mod.listing("ui/" + sub):
+                for d in mod.dirs("ui/%s/%s" % (sub, fac)):
+                    src = _ci(d, pattern % dic)
+                    if src:
+                        plan.delete(src, "the card of %s, a unit taken out" % name)
+    return taken
+
+
+def _dictionaries(f):
+    """Every dictionary named in export_descr_unit.txt (as it is in the plan)."""
+    return [tokens(strip_comment(f.text(i)))[1] for i in range(len(f.raw))
+            if tokens(strip_comment(f.text(i)))[:1] == ["dictionary"] and len(tokens(strip_comment(f.text(i)))) > 1]
+
+
+UNIT_TEXT_PARTS = (("", "name"), ("_descr_short", "short description"), ("_descr", "description"))
+
+
 def rename_dictionary(plan, old, new):
     """A unit's dictionary renamed: its names and descriptions and its cards are
     copied under the new name (the old ones stay; nothing else reads them)."""

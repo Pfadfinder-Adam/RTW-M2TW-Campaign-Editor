@@ -3,6 +3,8 @@
 ## Unreleased
 
 ### Added
+- Units: Delete this unit... (beside New unit) takes a unit out on Apply with its recruit lines, its men in the armies and garrisons, the mercenary pools, the rebels' lists and its cards; Restore puts it back.
+- Units: Texts players read - the unit's name, short and long description are changed right in the Units editor.
 - Units: 'Pictures for' can be 'all owners (the same picture)' - Import or Make a card puts one card / description picture in for every faction that has the unit.
 - View in 3D: Face and parts - pick each head, body ... variant by hand (Medieval II); Mount's colour - each of the mount's own textures; Units > Battle models lists every armour upgrade's model with its own View in 3D. Front / Back buttons gone (the model turns with the mouse).
 - Tools > A mod from zero, step by step: your own mod folder, the map, the factions, units and buildings, Check mod files, the game - in order, how far each is, a button for each.
