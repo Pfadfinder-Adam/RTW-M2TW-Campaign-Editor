@@ -153,16 +153,24 @@ class InterfacePanel(ttk.Frame):
     def _on_sprites(self):
         return self.sprites is not None and self.nb.index(self.nb.select()) in (1, 2)    # the HUD works through it
 
+    def _hud_again(self):
+        """The Campaign HUD on show drawn again after an Undo / Redo (the tester, 2026-10-22: the replaced picture
+        stayed in sight after Undo)."""
+        if getattr(self, "hud", None) is not None and self.nb.index(self.nb.select()) == 2:
+            self.hud.redraw()
+
     def undo_step(self):
         """The main window's Undo (and Ctrl+Z) on this work - on the tab on show."""
         if self._on_sprites():
             self._said(self.sprites.step(True), "Undone.", "Nothing to undo here.", None)
+            self._hud_again()
             return
         self._said(self.do_undo(), "Undone (%d more step(s) back).", "Nothing to undo here.", len(self.undo))
 
     def redo_step(self):
         if self._on_sprites():
             self._said(self.sprites.step(False), "Redone.", "Nothing to redo here.", None)
+            self._hud_again()
             return
         self._said(self.do_redo(), "Redone.", "Nothing to redo here.", None)
 

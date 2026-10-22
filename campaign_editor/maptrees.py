@@ -23,7 +23,7 @@ from . import tilemodels as TM
 
 KINDS = ("sparse_tree", "dense_tree", "canopy")
 SHEERS = 20
-FOREST_SPARSE, FOREST_DENSE = (0, 128, 128), (0, 64, 0)       # map_ground_types.tga (terrain3d.GROUND_KEYS)
+FOREST_SPARSE, FOREST_DENSE = (0, 128, 0), (0, 64, 0)       # map_ground_types.tga (terrain3d.GROUND_KEYS)
 
 # the dense forest's lattice spots, by (left dense, right dense, below dense) - letters into SPOTS
 LATTICE = ("EFKLIH", "EFGAHIJD", "EFKCD", "EFGA", "ABLIH", "HIJD", "ABCD", "")

@@ -2,13 +2,20 @@
 both games), from the mod's own pictures and with the changes waiting on the Sprite sheets tab. Hover names a piece;
 its right click replaces its picture or sets its place and size (the Sprite sheets tab's own ways - one place for
 the changes, Apply writes them), shows it on its sheet, or saves the whole HUD as a PNG. 'Screen' stretches the
-1024 x 768 layout as the game does on a bigger screen (x and y apart)."""
+1024 x 768 layout as the game does on a bigger screen (x and y apart).
+The HUD lies on an endless board as on Obsidian Canvas (the user, 2026-10-22; gui_board): the wheel zooms at the
+mouse, the middle or right button (or Space + left) drags the board, Shift+1 shows it all; a screenshot is a card of
+its own - laid exactly over the HUD first, dragged aside to compare, sticking to the grid and the HUD's edges (Alt:
+anywhere)."""
 
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
+from . import board as B
 from . import hudlayout as H
 from . import theme
+from .gui_board import Board, alt_held
+from .gui_util import tip
 
 TITLE = "Campaign HUD"
 SCREENS = ["1024 x 768 (the layout)", "1280 x 1024", "1600 x 900", "1920 x 1080", "2560 x 1440"]
@@ -19,7 +26,7 @@ class HudPanel(ttk.Frame):
         super().__init__(master)
         self.app, self.interface = app, interface
         self.mod, self.items, self.picked, self.hover = None, [], None, None
-        self._img, self._photo, self._scale = None, None, 1.0
+        self._img = None
         self._shot = None                               # the screenshot laid over (Pillow RGBA), or None
         bar = ttk.Frame(self, padding=(10, 8, 10, 4))
         bar.pack(fill="x")
@@ -45,19 +52,36 @@ class HudPanel(ttk.Frame):
                   "the whole of it is stretched to the screen - 'Screen' shows how it looks on a bigger one. Right "
                   "click a piece: replace its picture, set its place and size on its sheet, show it on the Sprite "
                   "sheets tab, save the whole HUD as a PNG. Unit cards, the radar map and the words are shown "
-                  "as examples.", width=560).pack(side="left", padx=6)
+                  "as examples. It lies on a board: the wheel zooms, the middle or right button (or Space + left) "
+                  "moves it, Shift+1 shows everything; a screenshot can be dragged aside to compare.", width=560).pack(side="left", padx=6)
         self.lbl = ttk.Label(self, foreground=theme.palette()["muted"], padding=(10, 0))
         self.lbl.pack(fill="x")
-        self.c = tk.Canvas(self, background="#202020", highlightthickness=0)
+        self.c = Board(self, pan_right=True, on_view=self.show, on_right_click=self._menu,
+                       content_box=self._everything, selection_box=self._picked_box)
         self.c.pack(fill="both", expand=True)
-        self.c.bind("<Configure>", lambda e: self.show())
+        self.c.on_press, self.c.on_drag, self.c.on_release = self._press, self._drag, self._release
         self.c.bind("<Motion>", self._motion)
-        self.c.bind("<Button-1>", self._click)
-        self.c.bind("<Button-3>", self._menu)
-        self.c.bind("<Enter>", lambda e: self.c.focus_set())
         self.c.bind("o", lambda e: (self.v_shot.set(not self.v_shot.get()), self.show()))
         self.c.bind("[", lambda e: self._nudge_alpha(-10))
         self.c.bind("]", lambda e: self._nudge_alpha(10))
+        self._shot_xy, self._dragging, self._stuck = (0, 0), None, []
+        # the zoom's own buttons in the board's corner, as on Obsidian Canvas; 'snap to grid' as its settings
+        zb = ttk.Frame(self.c, padding=2)
+        zb.place(relx=1.0, x=-8, y=8, anchor="ne")
+        for text, fn, about in (("+", lambda: self.c.zoom_step(True), "Zoom in (the wheel, + )"),
+                              ("-", lambda: self.c.zoom_step(False), "Zoom out (the wheel, - )"),
+                              ("1:1", self.c.actual_size, "100 %: one screen pixel = one HUD pixel (Shift+0)"),
+                              ("Fit", self.c.fit_content, "Everything in view (Shift+1)")):
+            btn = ttk.Button(zb, text=text, width=len(text) + 2, command=lambda fn=fn: (fn(), self.c.focus_set()))
+            btn.pack(side="left")
+            tip(btn, about)
+        self.lbl_zoom = ttk.Label(zb, width=6, anchor="center")
+        self.lbl_zoom.pack(side="left", padx=(4, 0))
+        self.v_snap = tk.BooleanVar(value=True)
+        chk = ttk.Checkbutton(zb, text="Snap to grid", variable=self.v_snap)
+        chk.pack(side="left", padx=(6, 0))
+        tip(chk, "A screenshot dragged on the board lands on the grid's dots and sticks to the HUD's edges and "
+                     "middle. Hold Alt while dragging to put it anywhere.")
 
     # ---- drawing ----
     def load(self):
@@ -89,38 +113,72 @@ class HudPanel(ttk.Frame):
                            if gone else "Hover over a piece to see what it is; right click for what you can do.")
         self.show()
 
+    def _hud_size(self):
+        """The HUD's card on the board: at (0, 0), as big as the screen picked (one world unit = one screen pixel)."""
+        return self._img.size if self._img is not None else self._screen()
+
+    def _shot_box(self):
+        """(x, y, w, h) of the screenshot's card, None when there is none or it is hidden."""
+        if self._shot is None or not self.v_shot.get():
+            return None
+        return self._shot_xy + self._shot.size
+
+    def _everything(self):
+        w, h = self._hud_size()
+        x0, y0, x1, y1 = 0, 0, w, h
+        sb = self._shot_box()
+        if sb:
+            x0, y0 = min(x0, sb[0]), min(y0, sb[1])
+            x1, y1 = max(x1, sb[0] + sb[2]), max(y1, sb[1] + sb[3])
+        return x0, y0, x1, y1
+
+    def _picked_box(self):
+        p = self.picked or self.hover
+        if p is None:
+            return None
+        fx, fy = self._factor()
+        x, y, w, h = p["box"]
+        return x * fx - 8, y * fy - 8, (x + w) * fx + 8, (y + h) * fy + 8
+
     def show(self):
         c = self.c
-        c.delete("all")
+        c.delete("hud")
+        self.lbl_zoom.configure(text="%d %%" % round(c.zoom * 100))
         if self._img is None:
             return
-        cw, ch = max(1, c.winfo_width()), max(1, c.winfo_height())
-        iw, ih = self._img.size
-        self._scale = min(cw / iw, ch / ih)
-        from PIL import Image, ImageTk
-        base = self._img
-        if self._shot is not None and self.v_shot.get():
-            base = Image.blend(base.convert("RGBA"), self._shot.resize(base.size).convert("RGBA"),
-                               max(0, min(100, self.v_alpha.get())) / 100.0)
-        shown = base.resize((max(1, int(iw * self._scale)), max(1, int(ih * self._scale))))
-        self._photo = ImageTk.PhotoImage(shown)
-        c.create_image(0, 0, image=self._photo, anchor="nw")
-        sx, sy = self._factor()
+        w, h = self._img.size
+        c.picture(self._img, 0, 0, "hud")
+        sb = self._shot_box()
+        if sb:
+            x, y, sw, sh = sb
+            over = x < w and y < h and x + sw > 0 and y + sh > 0     # over the HUD: see-through; beside it: whole
+            c.picture(self._shot, x, y, "hud", alpha=max(0, min(100, self.v_alpha.get())) / 100.0 if over else None)
+            c.box(x, y, sw, sh, outline="#6fa8dc", width=1, tags="hud")
+        fx, fy = self._factor()
         for p, colour in ((self.hover, "#ffffff"), (self.picked, "#ffd24a")):
             if p is not None:
-                x, y, w, h = p["box"]
-                c.create_rectangle(x * sx, y * sy, (x + w) * sx, (y + h) * sy, outline=colour, width=2)
+                x, y, pw, ph = p["box"]
+                c.box(x * fx, y * fy, pw * fx, ph * fy, outline=colour, width=2, tags="hud")
+        for o in self._stuck:                                  # the guide lines of what the screenshot stuck to
+            c.box(*o, outline="#ff5ec4", width=1, dash=(4, 3), tags="hud")
 
     def _factor(self):
-        """Canvas pixels per layout pixel, x and y (the screen stretches them apart)."""
-        sw, sh = self._screen()
-        return sw / H.CANVAS[0] * self._scale, sh / H.CANVAS[1] * self._scale
+        """World units (screen pixels) per layout pixel, x and y (the screen stretches them apart)."""
+        sw, sh = self._hud_size()
+        return sw / H.CANVAS[0], sh / H.CANVAS[1]
+
+    def _layout(self, e):
+        """The 1024 x 768 layout point under the mouse, None off the HUD."""
+        wx, wy = self.c.to_world(e.x, e.y)
+        w, h = self._hud_size()
+        if not (0 <= wx < w and 0 <= wy < h):
+            return None
+        fx, fy = self._factor()
+        return wx / fx, wy / fy
 
     def _at(self, e):
-        sx, sy = self._factor()
-        if not sx or not sy:
-            return None
-        return H.piece_at(self.mod, e.x / sx, e.y / sy, self.items)
+        at = self._layout(e)
+        return H.piece_at(self.mod, at[0], at[1], self.items) if at and self.mod else None
 
     def _motion(self, e):
         p = self._at(e)
@@ -131,8 +189,38 @@ class HudPanel(ttk.Frame):
                                                   if p.get("sprite") else ""))
             self.show()
 
-    def _click(self, e):
-        self.picked = self._at(e)
+    def _press(self, e):
+        """A press on the screenshot may become its drag; a click (no move) picks the piece under it."""
+        sb = self._shot_box()
+        wx, wy = self.c.to_world(e.x, e.y)
+        on_shot = sb and sb[0] <= wx < sb[0] + sb[2] and sb[1] <= wy < sb[1] + sb[3]
+        self._dragging = (e.x, e.y, self._shot_xy, False) if on_shot else None
+
+    def _drag(self, e):
+        if self._dragging is None:
+            return
+        x0, y0, (sx, sy), moved = self._dragging
+        if not moved and abs(e.x - x0) + abs(e.y - y0) < 4:
+            return
+        z = self.c.zoom
+        x, y = sx + (e.x - x0) / z, sy + (e.y - y0) / z
+        if alt_held(e):
+            self._stuck = []
+        else:
+            hud = (0, 0) + self._hud_size()
+            x, y, stuck = B.snap_box((x, y) + self._shot.size, [hud], zoom=z, to_grid=self.v_snap.get())
+            self._stuck = stuck
+        self._shot_xy = (round(x), round(y))
+        self._dragging = (x0, y0, (sx, sy), True)
+        self.c.configure(cursor="fleur")
+        self.show()
+
+    def _release(self, e):
+        moved = self._dragging is not None and self._dragging[3]
+        self._dragging, self._stuck = None, []
+        self.c.configure(cursor="")
+        if not moved:
+            self.picked = self._at(e)
         self.show()
 
     # ---- a screenshot over it ----
@@ -153,9 +241,21 @@ class HudPanel(ttk.Frame):
         w, h = self._shot.size
         self.v_screen.set("%d x %d" % (w, h))           # the HUD stretched to the screenshot's own screen
         self.v_shot.set(True)
+        self._shot_xy = (0, 0)                          # laid exactly over the HUD; dragged aside to compare
         self.redraw()
+        self.c.fit_content()
         self.lbl.configure(text="Your screenshot (%d x %d) over the HUD - O shows / hides it, [ ] or the slider: how "
-                                "much of it shows" % (w, h))
+                                "much of it shows; drag it aside to compare them side by side" % (w, h))
+
+    def _shot_back(self):
+        self._shot_xy = (0, 0)
+        self.v_shot.set(True)
+        self.show()
+
+    def _shot_away(self):
+        self._shot = None
+        self.v_shot.set(False)
+        self.show()
 
     def _nudge_alpha(self, step):
         self.v_alpha.set(max(0, min(100, self.v_alpha.get() + step)))
@@ -167,16 +267,25 @@ class HudPanel(ttk.Frame):
         self.show()
         m = tk.Menu(self, tearoff=False)
         p = self.picked
-        if p and p.get("sprite"):
-            m.add_command(label=p["piece"], state="disabled")
+        at = self._layout(e)
+        under = [q for q in (H.pieces_at(self.mod, at[0], at[1], self.items) if at and self.mod else [])
+                 if q.get("sprite")]
+        for q in under:                     # the piece on top and those under it (a ring over its button's picture)
+            also = H.sharing(q, self.items)
+            m.add_command(label=q["piece"] + ("  (also the %s - a new picture changes both)" % ", ".join(
+                x["piece"] for x in also) if also else ""), state="disabled")
+            m.add_command(label="    Replace its picture...", command=lambda q=q: self._on_sheet(q, "replace"))
+            m.add_command(label="    Place and size on its sheet...", command=lambda q=q: self._on_sheet(q, "place"))
+            m.add_command(label="    Show it on the Sprite sheets tab", command=lambda q=q: self._on_sheet(q, "show"))
             m.add_separator()
-            m.add_command(label="Replace its picture...", command=lambda: self._on_sheet(p, "replace"))
-            m.add_command(label="Place and size on its sheet...", command=lambda: self._on_sheet(p, "place"))
-            m.add_command(label="Show it on the Sprite sheets tab", command=lambda: self._on_sheet(p, "show"))
-            m.add_separator()
-        elif p:
+        if p and not under:
             m.add_command(label="%s - drawn by the game, not a sprite" % p["piece"], state="disabled")
             m.add_separator()
+        if self._shot is not None:
+            m.add_command(label="Screenshot: back over the HUD", command=self._shot_back)
+            m.add_command(label="Screenshot: take it away", command=self._shot_away)
+            m.add_separator()
+        m.add_command(label="Everything in view (Shift+1)", command=self.c.fit_content)
         m.add_command(label="Save the whole HUD as PNG...", command=self.save_png)
         try:
             m.tk_popup(e.x_root, e.y_root)

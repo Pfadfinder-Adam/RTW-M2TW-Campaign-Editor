@@ -34,9 +34,9 @@ def tree_hash(root):
     return out
 
 
-def _make_anim_set(folder, skels, anims):
+def _make_anim_set(folder, skels, anims, shape=(2, 3, 1)):
     """A game animation set (pack.idx / .dat, skeletons.idx / .dat) in folder: skels {name: [anim path]}, anims
-    {path: [(scale, bytes)]}."""
+    {path: [(scale, bytes)]}; shape: each animation's (frames, bones, kind) in the index."""
     import struct as _st
     os.makedirs(folder, exist_ok=True)
     head = lambda magic, stamp, ver, n: magic + stamp + _st.pack("<II", ver, n)  # noqa: E731
@@ -45,7 +45,7 @@ def _make_anim_set(folder, skels, anims):
     for path, scales in anims.items():
         for scale, body in scales:
             raw = path.encode()
-            pidx += _st.pack("<IIIfHHB", len(raw) + 10, len(pdat), len(body), scale, 2, 3, 1) + raw + b"\0"
+            pidx += _st.pack("<IIIfHHB", len(raw) + 10, len(pdat), len(body), scale, *shape) + raw + b"\0"
             pdat += body
             n += 1
     for b in (pidx, pdat):
@@ -3368,6 +3368,8 @@ building smith
         from campaign_editor.tga import read_tga
         mod = ModData(self.root)
         camp = mod.campaign_dir("test")
+        write(os.path.join(camp, "campaign_script.txt"), "script\n\tfreeze_faction_ai aztecs\nend_script\n")
+        mod = ModData(self.root)
         before = {}
         for d, _, fs in os.walk(self.root):
             for n in fs:
@@ -3394,6 +3396,9 @@ building smith
         self.assertGreaterEqual(h.get(2 * MZ.PORT[0] + 1, 2 * MZ.PORT[1] + 1)[0], 1)       # the port's tile: land
         self.assertEqual(tuple(h.get(1, 1)[:3]), MZ.SEA_BLUE)
         self.assertEqual(read_tga(os.path.join(camp, "map_roughness.tga")).width, 64)
+        w = read_tga(os.path.join(camp, "water_surface.tga"))           # one sea colour: no old coasts in the water
+        self.assertEqual((w.width, w.height), MZ.WATER_SIZE)
+        self.assertEqual(len({tuple(w.get(x, y)[:3]) for x in range(0, w.width, 7) for y in range(0, w.height, 7)}), 1)
         with open(os.path.join(camp, "descr_terrain.txt"), encoding="latin-1") as fh:
             t = fh.read()
         self.assertRegex(t, r"width\s+32")
@@ -3402,7 +3407,13 @@ building smith
         self.assertEqual([fb.name for fb in st.factions], ["alpha", "slave"])
         self.assertEqual(st.factions[0].settlements[0].region, region)
         self.assertEqual(st.factions[0].characters[0].xy, MZ.TOWN)
+        # the tester, 2026-10-22: the old campaign_script ran on the new map (161 720 error lines); the map.rwm the
+        # game built for the island stayed after Undo
+        with open(os.path.join(camp, "campaign_script.txt")) as fh:
+            self.assertEqual(fh.read().split(), ["script", "end_script"])
+        write(os.path.join(camp, "map.rwm"), "built by the game")
         restore(mod, bdir)
+        self.assertFalse(os.path.exists(os.path.join(camp, "map.rwm")))
         after = {}
         for d, _, fs in os.walk(self.root):
             for n in fs:
@@ -3448,6 +3459,30 @@ building smith
         self.assertIn("slave", names)
         self.assertEqual(sum(len(fb.settlements) for fb in st.factions), n)
         self.assertEqual({s.region for fb in st.factions for s in fb.settlements}, set(regions))
+
+    def test_map_from_zero_sea_takes_the_old_water_surface_colour_only(self):
+        """The user, 2026-10-22 (screenshot, Medieval II): the new island's sea showed the old map's coasts and deeps -
+        water_surface.tga, the sea's colour picture stretched over the whole map, was left as it was. The new map
+        writes its own: the old picture's open-sea colour (its most common) everywhere, none of its shapes."""
+        try:
+            from PIL import Image
+        except ImportError:
+            self.skipTest("no Pillow")
+        from campaign_editor import mapzero as MZ
+        from campaign_editor.tga import read_tga
+        mod = ModData(self.root)
+        camp = mod.campaign_dir("test")
+        old = Image.new("RGB", (64, 64), (97, 227, 255))
+        old.paste((27, 27, 57), (0, 0, 20, 64))                          # an old ocean's deep down one side
+        old.save(os.path.join(camp, "water_surface.tga"), format="TGA", rle=False)
+        self.assertEqual(MZ._open_sea(mod, "test", False), (97, 227, 255))
+        plan = Plan(mod, "z", "alpha", {})
+        MZ.make(plan, "test", "alpha", (32, 24))
+        plan.apply()
+        w = read_tga(os.path.join(camp, "water_surface.tga"))
+        self.assertEqual((w.width, w.height), MZ.WATER_SIZE)
+        self.assertEqual({tuple(w.get(x, y)[:3]) for x in range(0, w.width, 5) for y in range(0, w.height, 5)},
+                         {(97, 227, 255)})
 
     def test_map_from_zero_leaves_port_buildings_where_no_port_is(self):
         """The tester, 2026-10-22 (6 regions): Etruria's and Apulia's towns kept 'type port_buildings port' on the new
@@ -3512,6 +3547,27 @@ building smith
         self.assertEqual(swap_names("Gaulish warriors", repl), "CE Gaulish warriors")
         self.assertEqual(swap_names("Transgaul", repl), "Transgaul")
         self.assertEqual(swap_names("Gauls's", repl), "CE Gaul Clone's")
+
+    def test_clone_short_name_and_grown_words(self):
+        """The tester, 2026-10-22: the Gauls' full and short names are both 'Gaul' ({GAULS}, {ST_GAULS}); a clone
+        'CE Gaul Clone' / 'CEGC' / 'CE Gaulish' got the full name as its short one, and 'the Gaulish Warlord' became
+        'the CE Gaul Cloneish Warlord'. The short name is its own now, a word grown from the name the adjective."""
+        from campaign_editor import edit
+        from campaign_editor.clone import swap_names
+        self.assertEqual(swap_names("the Gaulish Warlord, the Gauls", [("Gaul", "CE Gaul Clone")], "CE Gaulish"),
+                         "the CE Gaulish Warlord, the CE Gaul Clones")
+        self.assertEqual(swap_names("GAULISH", [("Gaul", "X"), ("GAUL", "X")], "Gallic"), "GALLIC")
+        p = os.path.join(self.root, "data", "text", "expanded_bi.txt")
+        write(p, "{ALPHA}\tGaul\n{ST_ALPHA}\tGaul\n{ALPHA_DESCR}\tThe Gaulish Warlord rides\n"
+                 "{EMT_ALPHA_SPY}\tGallic Spy\n", utf16=True)
+        mod = ModData(self.root)
+        build(mod, "test", "alpha", "beta", {"start": {"regions": ["B_R"], "leader": {"name": "Boris"}},
+                                             "display_name": "CE Gaul Clone", "short_name": "CEGC",
+                                             "adjective": "CE Gaulish"}).apply()
+        got = edit.read_faction(ModData(self.root), "test", "beta")
+        self.assertEqual((got["display_name"], got["short_name"], got["adjective"]),
+                         ("CE Gaul Clone", "CEGC", "CE Gaulish"))
+        self.assertEqual(got["description"], "The CE Gaulish Warlord rides")
 
     def test_mod_from_zero_new_faction_button_opens_its_tab(self):
         """The tester, 2026-10-22: Tools > A mod from zero > 'New faction' left the Factions work on its Buildings tab.
@@ -3585,6 +3641,27 @@ building smith
         self.assertEqual(me.text_edits, {"some_unit": "A Brand New Name"})
         self.assertEqual([p for p, _ in E.UNIT_TEXT_PARTS], ["", "_descr_short", "_descr"])
 
+    def test_rome_hud_tabs_as_the_game_shows_them(self):
+        """The tester's game at 1600 x 900, 2026-10-22: Rome's four tabs read 'Army / Town / Agents / (empty)' and
+        span 333 of the 1024 canvas; the editor drew 'Settlement' and a 4th 'Army', 384 wide. A ring shared by two
+        buttons is said; every piece under the click is offered."""
+        from campaign_editor import hudlayout as H
+        g = lambda w: (None, (0, 0, w, 25))
+        sheets = {}
+        from unittest import mock
+        with mock.patch.object(H, "find", lambda sh, sheet, n: g(20)):
+            tabs = H._rome_tabs(sheets, 0)
+        self.assertEqual(sorted(t["word"] for t in tabs), sorted(["Army", "Town", "Agents", ""]))
+        xs = [t["box"][0] for t in tabs]
+        right = max(t["box"][0] + t["box"][2] for t in tabs)
+        self.assertLessEqual(abs((right - min(xs)) - 333), 4)
+        ring = {"piece": "end turn ring", "sprite": "BUTTON_OUTER_RING_MED", "sheet": "strat3", "box": (961, 709, 60, 60)}
+        face = {"piece": "end turn", "sprite": "END_TURN_BUTTON_IMAGE", "sheet": "strat3", "box": (965, 712, 52, 53)}
+        other = {"piece": "faction ring", "sprite": "BUTTON_OUTER_RING_MED", "sheet": "strat3", "box": (900, 709, 60, 60)}
+        items = [face, ring, other]
+        self.assertEqual([p["piece"] for p in H.pieces_at(None, 990, 740, items)], ["end turn ring", "end turn"])
+        self.assertEqual([p["piece"] for p in H.sharing(ring, items)], ["faction ring"])
+
     def test_campaign_hud_laid_out_as_the_engine(self):
         """Interface > Campaign HUD (the engines' places, hudlayout): the HUD's bottom at 768, its top 768 - the LEFT
         panel's height, the MIDDLE panel on the bottom, the pieces from the mod's own sheet; a changed page shows."""
@@ -3623,6 +3700,87 @@ building smith
             self.assertEqual(im.size, (1920, 1080))
             self.assertEqual(im.getpixel((int(800 * 1.875), int(620 * 1080 / 768)))[:3], (0, 255, 0))
             self.assertIn(("strat3", "END_TURN_BUTTON_IMAGE"), H.missing(mod))
+
+    def test_board_pans_zooms_and_snaps_like_a_canvas(self):
+        """The board (Campaign HUD, the editor's layout board - Obsidian Canvas's ways): the point under the mouse
+        stays put when zooming, fit puts a box in the middle, the grid thins out far away, a dragged box sticks to the
+        grid and to another box's edges within 8 screen pixels."""
+        from campaign_editor import board as B
+        v = B.View()
+        wx, wy = v.to_world(300, 200)
+        v.zoom_at(True, (300, 200))
+        self.assertEqual(v.zoom, 1.25)
+        self.assertEqual(tuple(round(c, 6) for c in v.to_world(300, 200)), (wx, wy))
+        for _ in range(40):
+            v.zoom_at(False, (0, 0))
+        self.assertEqual(v.zoom, B.ZOOMS[0])
+        v.fit((0, 0, 1024, 768), 1024, 844, margin=0)
+        self.assertEqual(v.zoom, 1.0)
+        self.assertEqual(v.to_screen(512, 384), (512, 422))
+        self.assertEqual(v.to_screen(*v.to_world(17, 23)), (17, 23))
+        v.set_zoom(0.25)
+        self.assertGreaterEqual(v.grid_step() * v.zoom, 10)
+        self.assertEqual(B.snap(23), 16)
+        hud = (0, 0, 1024, 768)
+        self.assertEqual(B.snap_box((5, -6, 1024, 768), [hud])[:2], (0, 0))           # laid over the HUD: corner on it
+        self.assertEqual(B.snap_box((1030, 100, 200, 100), [hud])[:2], (1024, 96))   # beside it; y on the grid
+        self.assertEqual(B.snap_box((1030, 100, 200, 100), [hud], zoom=0.5)[:2], (1024, 96))
+        self.assertEqual(B.snap_box((1060, 101, 200, 100), [hud])[:2], (1056, 96))   # too far: the grid only
+        self.assertEqual(B.snap_box((1060, 101, 200, 100), [hud], to_grid=False)[:2], (1060, 101))
+
+    def test_campaign_hud_lies_on_a_board_with_a_screenshot_card(self):
+        """Interface > Campaign HUD on the board: everything in view first, a screenshot laid over the HUD is dragged
+        aside onto the grid and back onto the HUD's corner, a click (no move) picks the piece under it, the middle
+        button moves the board."""
+        try:
+            import tkinter as tk
+            from PIL import Image, ImageTk  # noqa: F401
+            root = tk.Tk()
+        except Exception as e:
+            self.skipTest("no window / Pillow: %s" % e)
+        from types import SimpleNamespace as NS
+        from unittest import mock
+        from campaign_editor import hudlayout as H
+        from campaign_editor.gui_hud import HudPanel
+        items = [{"piece": "end turn", "sprite": "END", "sheet": "strat3", "page": "p", "box": (965, 712, 52, 53)}]
+        sp = NS(changed_page=lambda p: None, changed_boxes=lambda: {})
+        root.geometry("1000x700")
+        try:
+            with mock.patch.object(H, "pieces", lambda m: items), mock.patch.object(H, "missing", lambda m: []), \
+                    mock.patch.object(H, "compose", lambda m, c, page_picture=None, boxes=None, screen=None:
+                                      Image.new("RGB", screen, (90, 20, 20))):
+                p = HudPanel(root, NS(mod=object()), NS(ensure_sprites=lambda: sp))
+                p.pack(fill="both", expand=True)
+                p.load()
+                root.update()
+                c = p.c
+                self.assertLess(c.zoom, 1)                                  # 1024 x 768 fitted into the window
+                p._shot, p._shot_xy = Image.new("RGBA", (1024, 768), (0, 200, 0, 255)), (0, 0)
+                p.v_shot.set(True)
+                c.fit_content()
+                root.update()
+                z = c.zoom
+
+                def drag(a, b):
+                    (x0, y0), (x1, y1) = c.to_screen(*a), c.to_screen(*b)
+                    c.event_generate("<ButtonPress-1>", x=int(x0), y=int(y0))
+                    c.event_generate("<B1-Motion>", x=int(x1), y=int(y1))
+                    c.event_generate("<ButtonRelease-1>", x=int(x1), y=int(y1))
+                    root.update()
+                drag((500, 300), (1600, 305))
+                self.assertEqual(p._shot_xy, (1104, 0))                     # aside, on the grid
+                self.assertEqual(p._everything(), (0, 0, 2128, 768))
+                drag((1600, 300), (500 + 3 / z, 303))
+                self.assertEqual(p._shot_xy, (0, 0))                        # back: stuck to the HUD's corner
+                drag((990, 740), (990, 740))
+                self.assertEqual(p.picked["piece"], "end turn")
+                ox, oy = c.view.ox, c.view.oy
+                c.event_generate("<ButtonPress-2>", x=100, y=100)
+                c.event_generate("<B2-Motion>", x=150, y=130)
+                c.event_generate("<ButtonRelease-2>", x=150, y=130)
+                self.assertEqual((c.view.ox - ox, c.view.oy - oy), (50, 30))
+        finally:
+            root.destroy()
 
     def test_sprite_change_waits_for_apply_in_the_interface_work(self):
         """A sprite's picture replaced on the Sprite sheets tab is a change of the Interface work: counted for Apply,
@@ -5275,6 +5433,116 @@ building smith
                 self.assertIn(GL.TAG, save.bindtags())
                 look.edit(False)
                 self.assertNotIn(GL.TAG, save.bindtags())
+        finally:
+            try:
+                root.destroy()
+            except Exception:
+                pass
+
+    def test_layout_board_maths(self):
+        """The layout board (the user, 2026-10-22: every page of the editor laid out on one canvas): the page cards
+        in rows by kind, the piece under the mouse (the smallest), the piece a dropped one stands beside (before /
+        after by the half), the box a free piece goes into (the first round it that holds it), a piece in a row or
+        free - never both."""
+        from campaign_editor import look as LK
+        places, total, tops = LK.lay_cards([[("a", 1000, 800), ("b", 1000, 800), ("c", 1000, 800)], [("d", 500, 400)]],
+                                           row_width=2200, gap=100, head=50)
+        self.assertEqual(places["a"], (0, 100))
+        self.assertEqual(places["b"], (1100, 100))
+        self.assertEqual(places["c"], (0, 1050))                 # wrapped: past the row's width
+        self.assertEqual(tops, [0, 2250])                       # room for the next group's heading
+        self.assertEqual(places["d"], (0, 2350))
+        self.assertEqual(total, (2100, 2750))
+        bar = {"key": "bar", "box": [0, 0, 400, 30]}
+        load = {"key": "load", "box": [10, 5, 50, 20]}
+        save = {"key": "save", "box": [70, 5, 50, 20]}
+        far = {"key": "far", "box": [10, 300, 50, 20]}
+        pieces = [bar, load, save, far]
+        self.assertIs(LK.piece_at(pieces, 20, 10), load)          # the smallest holding the point
+        self.assertIs(LK.piece_at(pieces, 200, 10), bar)
+        self.assertIsNone(LK.piece_at(pieces, 500, 500))
+        t, where = LK.drop_beside(pieces, load, 110, 15)          # bar holds load: skipped
+        self.assertEqual((t["key"], where), ("save", "after"))
+        t, where = LK.drop_beside(pieces, load, 72, 15)
+        self.assertEqual((t["key"], where), ("save", "before"))
+        t, where = LK.drop_beside(pieces, save, 30, 290)
+        self.assertEqual((t["key"], where), ("far", "before"))
+        boxes = [[0, 0, 400, 30], [0, 0, 1000, 800]]             # its bar, the window
+        self.assertEqual(LK.free_spot(boxes, 300, 4, 50, 20), (0, 300, 4))
+        self.assertEqual(LK.free_spot(boxes, 300, 200, 50, 20), (1, 300, 200))
+        self.assertEqual(LK.free_spot(boxes, 990, 200, 50, 20), (1, 990, 200))   # holds it nowhere: the last
+        look = {"pieces": {}, "order": []}
+        LK.set_entry(look, "k", {"xy": [3, 4], "up": 1, "size": [80, 30]})
+        LK.set_entry(look, "k", dict(look["pieces"]["k"], to="other", where="after"))
+        self.assertEqual(look["pieces"]["k"], {"size": [80, 30], "to": "other", "where": "after"})
+        LK.set_entry(look, "k", {"up": 2})
+        self.assertNotIn("k", look["pieces"])                     # 'up' means nothing without 'xy'
+
+    def test_editor_look_free_place_size_and_redo(self):
+        """The look's free place and size (the layout board): a piece put at x, y of its own box, or of a box round
+        it (a copy stands there, the piece hidden); sized in pixels (a wrapping bar gives the size itself, a packed
+        piece grows by inner padding); Undo / Redo; Back to how it was takes it all back; the board reads each
+        piece's box and the boxes round it."""
+        try:
+            import tkinter as tk
+            from tkinter import ttk
+            root = tk.Tk()
+        except Exception as e:
+            self.skipTest("no window: %s" % e)
+        from unittest import mock
+        from campaign_editor import gui_look as GL
+        from campaign_editor import gui_lookboard as GB
+        from campaign_editor import log
+        from campaign_editor.gui_util import flow
+        home = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, home)
+        try:
+            with mock.patch.object(log, "home", lambda: home):
+                root.geometry("600x300")
+                look = GL.install(root)
+                bar = ttk.Frame(root)
+                bar.pack(fill="x")
+                for t in ("Load", "Save"):
+                    ttk.Button(bar, text=t).pack(side="left")
+                flow(bar)
+                box = ttk.Frame(root, height=200)
+                box.pack(fill="both", expand=True)
+                ok = ttk.Button(box, text="OK")
+                ok.pack(side="left")
+                root.update()
+                load, save = look.by_key["main||TButton:Load"], look.by_key["main||TButton:Save"]
+                got, _ = GB.pieces_of(look, root)
+                keys = {p["key"]: p for p in got}
+                self.assertEqual(keys["main||TButton:OK"]["boxes"][0][1], box.winfo_y())    # its own box first
+                look.change_key(ok._look_key, xy=[50, 60])                                 # free in its own box
+                root.update()
+                self.assertEqual(ok.winfo_manager(), "place")
+                self.assertEqual((ok.winfo_x(), ok.winfo_y()), (50, 60))
+                look.change_key(load._look_key, xy=[300, 150], up=1)                       # out of its bar: a copy
+                root.update()
+                copy_ = look.clones[str(load)]
+                self.assertIs(copy_.master, root)
+                self.assertEqual((copy_.winfo_x(), copy_.winfo_y()), (300, 150))
+                self.assertNotIn(load, [it[0] for it in bar._flow_items])
+                look.change_key(save._look_key, size=[140, 40])                            # in a wrapping bar
+                root.update()
+                self.assertEqual((save.winfo_width(), save.winfo_height()), (140, 40))
+                look.change_key(ok._look_key, xy=None, size=[ok.winfo_reqwidth() + 40, 0])  # back in its row, wider
+                root.update()
+                self.assertEqual(ok.winfo_manager(), "pack")
+                self.assertEqual(int(ok.pack_info()["ipadx"]), 20)
+                self.assertTrue(look.do_undo())
+                root.update()
+                self.assertEqual(ok.winfo_manager(), "place")
+                self.assertTrue(look.do_redo())
+                root.update()
+                self.assertEqual(ok.winfo_manager(), "pack")
+                look.back_all()
+                root.update()
+                self.assertEqual(look.clones, {})
+                self.assertEqual([it[0] for it in bar._flow_items], [load, save])
+                self.assertNotEqual(save.winfo_width(), 140)
+                self.assertEqual(int(ok.pack_info()["ipadx"]), 0)
         finally:
             try:
                 root.destroy()
@@ -7812,7 +8080,7 @@ building smith
         3 x it was a wide band of sand)."""
         from campaign_editor import upscale
         from campaign_editor.tga import read_tga
-        sea, beach, farm = (196, 0, 0), (255, 255, 255), (0, 128, 0)
+        sea, beach, farm = (196, 0, 0), (255, 255, 255), (101, 124, 0)
         kind = lambda x: sea if x < 2 else (beach if x < 4 else farm)      # points: tile 0 sea, 1 beach, 2-3 farm
         path = os.path.join(self.root, "ground.tga")
         write_tga(path, 9, 9, [[kind(x) for x in range(9)] for y in range(9)])
@@ -8247,6 +8515,62 @@ building smith
         self.assertIsNone(T.paint_problem(Map(), "ground", (0, 2), T.BEACH, set()))        # inland too
         self.assertIsNotNone(T.paint_problem(Map(), "ground", (2, 2), T.BEACH, set()))     # the sea: no
 
+    def test_two_kept_writes_keep_units_under_their_army(self):
+        """Keapon_Laffin (Rome with REX, 2026-10-22): the Map (a new army and two agents written at the end of aedui's
+        block) and the town's window (a new garrison for the heir standing last in the block) kept for one write -
+        the merge put the garrison's units under the diplomat; the game stopped reading the factions there (carnutes
+        and the rebels lost, a crash when carnutes was played). Now the units stay with their army, and a unit line
+        no army holds is named (Check mod files) and refused when a write would leave a new one."""
+        from campaign_editor.plan import merge_lines
+        from campaign_editor.strat import Strat, stray_units
+        head = ["faction\taedui, religious smith", "denari\t5000", "character\tCasticos, named character, heir, "
+                "age 38, , x 64, y 100", "army"]
+        base = head + ["unit\t\tbarb chieftain cavalry early gaul\texp 1", "unit\t\tbarb infantry gaul\texp 0", "",
+                       "faction\tslave, balanced smith"]
+        at = base.index("")
+        town = head + ["unit\t\tbarb chieftain cavalry early gaul\texp 1", "unit\t\twarband axe german\texp 0",
+                       "unit\t\tbarb infantry gaul\texp 0", "unit\t\tbarb peltast gaul\texp 0"] + base[at:]
+        agents = [";;\tdiplomat placed with the Campaign Editor", "character\tVellocatus, diplomat, age 30, , x 69, "
+                  "y 101", "traits NaturalDiplomatSkill 1", ""]
+        mapped = base[:at] + agents + base[at:]
+        out = merge_lines(base, town, mapped)
+        self.assertLess(out.index("unit\t\tbarb peltast gaul\texp 0"), out.index(agents[1]))
+        f = TextFile("descr_strat.txt", out, "latin-1", False)
+        self.assertEqual(stray_units(Strat(f)), [])
+        # the file as that write left it: three units under the diplomat
+        bad = head + ["unit\t\tbarb chieftain cavalry early gaul\texp 1"] + agents + \
+            ["unit\t\twarband axe german\texp 0", "character_record\t\tKeyne, \tfemale, age 32, alive, never_a_leader",
+             "", "faction\tslave, balanced smith"]
+        got = stray_units(Strat(TextFile("descr_strat.txt", bad, "latin-1", False)))
+        self.assertEqual([i for i, _ in got], [bad.index("unit\t\twarband axe german\texp 0")])
+        self.assertIn("aedui: a unit line no army holds", got[0][1])
+        self.assertIn("under Vellocatus", got[0][1])
+
+    def test_ground_colours_are_the_games_own(self):
+        """map_ground_types.tga colours as the games read them (medieval2.exe / REX.exe / M2EX.exe and the engine
+        source's WORLD_MAP::m_ground_type_colours): teal = low fertility, olive = high fertility, green = sparse
+        forest, (0, 0, 64) = impassable sea - a modder saw high fertility named low and low named sparse forest."""
+        from campaign_editor import terrain as T
+        game = [(0, 128, 128), (96, 160, 64), (101, 124, 0), (0, 0, 0), (196, 128, 128), (98, 65, 65), (128, 128, 64),
+                (0, 64, 0), (0, 128, 0), (0, 255, 128), (64, 0, 0), (128, 0, 0), (196, 0, 0), (255, 255, 255),
+                (64, 64, 64), (0, 0, 64), (32, 32, 32)]
+        names = ["low fertility", "medium fertility", "high fertility", "wilderness", "high mountains", "mountains",
+                 "hills", "dense forest", "sparse forest", "swamp", "ocean", "deep sea", "shallow sea", "beach",
+                 "impassable land", "impassable sea", "impassable land, always black"]
+        self.assertEqual({c: T.GROUND[c] for c in game}, dict(zip(game, names)))
+        self.assertEqual(set(T.GROUND), set(game))
+        self.assertEqual(T.IMPASSABLE_SEA, (0, 0, 64))
+        self.assertEqual(T.LAND_BRUSHES[:3], [(0, 128, 128), (96, 160, 64), (101, 124, 0)])     # low, medium, high
+        try:
+            import numpy  # noqa: F401
+        except ImportError:
+            return
+        from campaign_editor import maptrees as MT
+        from campaign_editor import terrain3d as T3
+        self.assertEqual((T3.GROUND_KEYS[(0, 128, 128)], T3.GROUND_KEYS[(101, 124, 0)], T3.GROUND_KEYS[(0, 128, 0)]),
+                         ("fertility_low", "fertility_high", "forest_sparse"))
+        self.assertEqual(MT.FOREST_SPARSE, (0, 128, 0))
+
     def test_coast_pull_and_push(self):
         """The user (2026-10-09): 'grab a point of the border and pull it - draw shapes that way; push from outside or
         inside to make the line nicer; the relief and the rest follow by itself' (like a painter's liquify). Pull:
@@ -8429,7 +8753,7 @@ building smith
         from campaign_editor import terrain as T
         from campaign_editor.plan import Plan
         from campaign_editor.tga import Image, read_tga
-        farm, hills = (0, 128, 0), (128, 128, 64)
+        farm, hills = (101, 124, 0), (128, 128, 64)
         n = 9                                                           # points: land left of x = 4, water from 4
         heights = Image(n, n, [((5, 5, 5) if x < 4 else (0, 0, 253)) for y in range(n) for x in range(n)])
         ground = Image(n, n, [(farm if x < 4 else T.SHALLOW_SEA) for y in range(n) for x in range(n)])
@@ -8519,6 +8843,26 @@ building smith
         with mock.patch.object(GM, "zoom_setting", lambda key: 100):        # the modder's own zoom
             v.at = 150
             self.assertTrue(GM.MapView._shore_lines(v, 8, 8))
+
+    def test_heights_map_draws_no_signs(self):
+        """The heights map (the Terrain editor's map by points) draws no towns, ports or other signs (the user,
+        2026-10-22: 'no signs at all on the heights map'); every other map view keeps them."""
+        try:
+            import tkinter  # noqa: F401
+            import inspect
+            from campaign_editor import gui_map as GM
+        except ImportError:
+            self.skipTest("no tkinter")
+
+        class View:
+            cmap = type("C", (), {"show_heights": True})()
+
+        self.assertFalse(GM.MapView._signs_wanted(View()))
+        View.cmap.show_heights = False
+        self.assertTrue(GM.MapView._signs_wanted(View()))
+        View.cmap = type("C", (), {})()                       # a map with no heights view at all
+        self.assertTrue(GM.MapView._signs_wanted(View()))
+        self.assertIn("if self._signs_wanted():\n            self._markers(cw, ch)", inspect.getsource(GM.MapView._render))
 
     def test_upkeep_addon_doubles_and_takes_out_exactly(self):
         """Upkeep x 2 as an add-on of its own (the user, 2026-10-09: 'no huge armies - put in and taken out, on any
@@ -9733,7 +10077,7 @@ building smith
         grey = [[(200, 200, 200)] * W for _ in range(H)]
         grey[0][0] = (0, 0, 120)                       # one water point (blue, bottom-left): its depth shows
         write_tga(os.path.join(camp, "map_heights.tga"), W, H, grey)
-        write_tga(os.path.join(camp, "map_ground_types.tga"), W, H, [[(0, 128, 0)] * W for _ in range(H)])
+        write_tga(os.path.join(camp, "map_ground_types.tga"), W, H, [[(101, 124, 0)] * W for _ in range(H)])
         write(os.path.join(d, "descr_aerial_map_ground_types.txt"),
               "climate default\n{\n\tfertility_high\tgreen.tga\tsnow.tga\n}\n")
         tex = os.path.join(d, "terrain", "aerial_map", "ground_types")
@@ -9769,7 +10113,7 @@ building smith
         grey = [[(200, 200, 200)] * W for _ in range(H)]
         grey[0][0] = (0, 0, 120)                       # one sea point
         write_tga(os.path.join(camp, "map_heights.tga"), W, H, grey)
-        write_tga(os.path.join(camp, "map_ground_types.tga"), W, H, [[(0, 128, 0)] * W for _ in range(H)])
+        write_tga(os.path.join(camp, "map_ground_types.tga"), W, H, [[(101, 124, 0)] * W for _ in range(H)])
         write(os.path.join(d, "descr_aerial_map_ground_types.txt"),
               "texture_density 2\nclimate default\n{\n\tfertility_high\tgreen.tga\tsnow.tga\n"
               "\tbeach\tsand.tga\n}\n")
@@ -14918,6 +15262,49 @@ building smith
         for got, want in zip(MV.seat_of(rider, horse, (0, 0, 1)), (1, 0.4, 2)):    # forward turned to straight down
             self.assertAlmostEqual(got, want, places=6)
 
+    def test_skeletons_told_apart_by_letter_case(self):
+        """The games tell skeleton names apart by their letter case (Medieval II's halberdier MTW2_Halberd_Primary and
+        his halberd's MTW2_Halberd_primary): the man keeps his own base pose and moves, not the weapon's two-bone ones
+        (report R-20261022-948516: the man stood in the T pose, 'the animations don't play'); a name in another
+        case still finds its one skeleton."""
+        from campaign_editor import animations as AN
+        write(os.path.join(self.root, "data", "descr_skeleton.txt"),
+              "type MTW2_Halberd_Primary\nanim default data/animations/h/man_base.cas\n"
+              "anim stand_a_idle data/animations/h/man_stand.cas\n"
+              "type MTW2_Halberd_Secondary\nparent MTW2_Halberd_Primary\nanim run data/animations/h/run.cas\n"
+              "type MTW2_Halberd_primary\nanim default data/animations/h/weapon.cas\n"
+              "anim stand_a_idle data/animations/h/weapon.cas\n")
+        mod = ModData(os.path.join(self.root, "data"))
+        self.assertEqual(AN.skeleton_anims(mod, "MTW2_Halberd_Primary"),
+                         [("default", "data/animations/h/man_base.cas"), ("stand_a_idle", "data/animations/h/man_stand.cas")])
+        self.assertEqual(AN.skeleton_anims(mod, "MTW2_Halberd_primary"),
+                         [("default", "data/animations/h/weapon.cas"), ("stand_a_idle", "data/animations/h/weapon.cas")])
+        self.assertEqual([f for _, f in AN.skeleton_anims(mod, "MTW2_Halberd_Secondary")],
+                         ["data/animations/h/man_base.cas", "data/animations/h/man_stand.cas", "data/animations/h/run.cas"])
+        self.assertEqual(AN.skeleton_anims(mod, "mtw2_halberd_secondary")[2], ("run", "data/animations/h/run.cas"))
+        self.assertEqual(AN.skeleton_anims(mod, "no_such"), [])
+        self.assertIn("mtw2_halberd_primary", AN.skeletons(mod))         # the checks' set of names (lower case)
+
+    def test_base_pose_of_a_skeleton_only_in_the_animation_set(self):
+        """A skeleton the mod keeps only in the set the game loads (skeletons.dat, no descr_skeleton.txt line): its
+        base pose is the animation its record names as one (..._basepose / ..._default), else its last - the man is
+        posed, not left in the T pose."""
+        import struct
+        from campaign_editor import animations as AN
+
+        def body(w):            # 2 frames, 3 bones, each bone's offset; each bone turned (0, 0, 0, w)
+            return struct.pack("<HHB", 2, 3, 3) + struct.pack("<4f", 0, 0, 0, w) * 6 + struct.pack("<3f", 0, 1, 0) * 6
+        stand, base, last = ("data/animations/own/Own_Stand_A_idle.cas", "data/animations/own/Own_basepose.cas",
+                             "data/animations/own/Own_run.cas")
+        _make_anim_set(os.path.join(self.root, "data", "animations"),
+                       {"Own_Man": [stand, base, last], "Own_Odd": [stand, last]},
+                       {stand: [(1.0, body(0.5))], base: [(1.0, body(1.0))], last: [(1.0, body(0.25))]}, (2, 3, 3))
+        mod = ModData(os.path.join(self.root, "data"))
+        rot, off = AN.base_pose(mod, "Own_Man")
+        self.assertEqual((rot[0], len(off)), ((0, 0, 0, 1.0), 3))
+        self.assertEqual(AN.base_pose(mod, "Own_Odd")[0][2], (0, 0, 0, 0.25))      # none named so: the last
+        self.assertIsNone(AN.base_pose(mod, "no_such"))
+
     def test_the_3d_view_on_numpy_matches_the_pure_python_one(self):
         """With NumPy (the exe has it) a mesh is posed and drawn on arrays (fastmesh) - the same points to the last
         digit and the same picture as the pure-Python ways a Python without NumPy keeps."""
@@ -16077,6 +16464,41 @@ building smith
         restore(mod, b2)
         restore(mod, bdir)
         self.assertEqual(tree_hash(d), before)
+
+    def test_unit_animal_and_model_texture(self):
+        """A handler unit's animals (EDU 'animal wardogs' -> descr_animals.txt's 'wardog', as the engine maps the
+        word; M2EX's models { } form too) and the texture each model is shown in: its texture line for the faction,
+        else the one its own mesh names (Rome's war dogs, pigs, chariots and siege engines have no texture line)."""
+        from unittest import mock
+        from campaign_editor import models as MO
+        from campaign_editor import meshview as MV
+        d = os.path.join(self.root, "data")
+        write(os.path.join(d, "export_descr_unit.txt"), EDU.replace(
+            "ownership\talpha", "category\thandler\nsoldier\t\talpha_model, 12, 36, 1\nanimal\t\twardogs\n"
+            "ownership\talpha").replace("ownership\tslave", "animal\t\tpigs\nownership\tslave"))
+        write(os.path.join(d, "descr_animals.txt"),
+              "type\t\twardog\nclass\t\twardog\nmodel\t\twardog\nradius\t\t0.75\n\n"
+              "type\t\tpig\nclass\t\tpig\nmodels\n{\n\tskeleton fs_pig\n\tpig_a\n\tpig_b\n}\n")
+        write(os.path.join(d, "descr_model_battle.txt"),
+              "type\t\talpha_model\nskeleton\t\tfs_spearman\ntexture\t\tslave, data/models_unit/textures/s.tga\n"
+              "texture\t\talpha, data/models_unit/textures/a.tga\nmodel_flexi\t\tdata/models_unit/a.cas, max\n\n"
+              "type\t\twardog\nskeleton\t\tfs_dog\nmodel_flexi\t\tdata/models_unit/unit_wardog_high.cas, max\n")
+        write(os.path.join(d, "models_unit", "unit_wardog_high.cas"), "dog")
+        mod = ModData(self.root)
+        self.assertEqual(MO.unit_animal(mod, MO.unit_lines(mod, "alpha general")), ("wardogs", "wardog", "wardog"))
+        self.assertEqual(MO.unit_animal(mod, MO.unit_lines(mod, "rebel spear")), ("pigs", "pig", "pig_a"))
+        self.assertEqual(MO.unit_animal(mod, ["type x", "soldier a, 1, 0, 1"]), (None, None, None))
+        cat = MO.catalogue(mod)
+        self.assertEqual(MO.model_texture(mod, cat["alpha_model"], ("beta", "alpha")),
+                         "data/models_unit/textures/a.tga")
+        self.assertEqual(MO.model_texture(mod, cat["alpha_model"]), "data/models_unit/textures/s.tga")
+        dog = mock.Mock(texture_ref="data/models_unit/textures/wardog.tga")
+        with mock.patch.object(MV, "read_file", return_value=dog):
+            self.assertEqual(MO.model_texture(mod, cat["wardog"], ("alpha",)), "data/models_unit/textures/wardog.tga")
+        self.assertIsNone(MO.model_texture(mod, None))
+        os.remove(os.path.join(d, "descr_animals.txt"))
+        self.assertEqual(MO.unit_animal(ModData(self.root), MO.unit_lines(mod, "alpha general"))[:2],
+                         ("wardogs", "wardog"))
 
     def test_replace_battle_model(self):
         """A unit's soldier model swapped for another of this mod or of another mod (brought with its files, renamed
@@ -20366,3 +20788,169 @@ class RexSoldiersLineTest(unittest.TestCase):
         u = read_units(TextFile.from_bytes("export_descr_unit.txt", text.encode("latin-1")))[0]
         self.assertEqual(u.soldiers, 50)
         self.assertIn("50 men", u.summary())
+
+
+class FactionBuildingsTest(unittest.TestCase):
+    """The Buildings work's 'By faction' tab (a tester's wish, 2026-10-22): a faction's chains, their levels and the
+    units each level recruits for it, both games."""
+
+    EDB = """building barracks
+{
+    levels muster big_barracks
+    {
+        muster requires factions { barbarian, alpha, }
+        {
+            capability
+            {
+                recruit "rebel spear"  0  requires factions { slave, }
+                recruit "alpha general"  2  requires factions { alpha, } and hidden_resource rome
+                recruit "ghost unit"  0  requires factions { eastern, }
+            }
+            construction  2
+            cost  400
+            settlement_min town
+            upgrades
+            {
+                big_barracks
+            }
+        }
+        big_barracks requires factions { barbarian, }
+        {
+            capability
+            {
+                recruit "rebel spear"  1  requires factions { slave, }
+            }
+            construction  3
+            cost  900
+            settlement_min large_town
+        }
+    }
+}
+building temple_of_x
+{
+    levels shrine
+    {
+        shrine requires factions { slave, }
+        {
+            capability
+            {
+            }
+            construction  1
+            cost  50
+            settlement_min village
+        }
+    }
+}
+building castle_port
+{
+    levels dock
+    {
+        dock castle requires factions { alpha, }
+        {
+            capability
+            {
+                recruit_pool "rebel spear"  1   0.5   4  0  requires factions { all, } and building_present_min_level barracks muster
+            }
+            construction  1
+            cost  100
+            settlement_min town
+        }
+    }
+}
+"""
+
+    def setUp(self):
+        self.root = tempfile.mkdtemp()
+        make_minimod(self.root)
+        write(os.path.join(self.root, "data", "export_descr_buildings.txt"), self.EDB)
+        write(os.path.join(self.root, "data", "text", "export_buildings.txt"),
+              "{muster}\tmuster\n{muster_eastern}\tAlpha Drill Yard\n{muster_eastern_desc}\tWhere alphas drill.\n"
+              "{big_barracks}\tBig Barracks\n", utf16=True)
+        self.mod = ModData(self.root)
+
+    def tearDown(self):
+        shutil.rmtree(self.root)
+
+    def test_a_faction_s_chains_levels_and_recruits(self):
+        from campaign_editor import factionbuildings as FB
+        items = {c["chain"]: c for c in FB.faction_chains(self.mod, "alpha")}
+        self.assertEqual(list(items), ["barracks", "temple_of_x", "castle_port"])
+        bar = items["barracks"]
+        self.assertTrue(bar["builds"])
+        self.assertFalse(items["temple_of_x"]["builds"])                # slave's only
+        self.assertTrue(items["castle_port"]["castle"])
+        self.assertFalse(bar["castle"])
+        muster, big = bar["levels"]
+        self.assertEqual((muster["has"], muster["cost"], muster["turns"], muster["town"]), ("own", 400, 2, "town"))
+        self.assertIsNone(big["has"])                                   # barbarian only: not alpha's (eastern)
+        # alpha's own line and its culture's line; the slave's line counted for the others
+        self.assertEqual([(u["unit"], u["has"]) for u in muster["units"]],
+                         [("alpha general", "own"), ("ghost unit", "culture")])
+        self.assertEqual(muster["others"], 1)
+        gen, ghost = muster["units"]
+        self.assertEqual(gen["needs"], "hidden_resource rome")
+        self.assertEqual(gen["numbers"], {"experience": 2})
+        self.assertTrue(gen["known"])
+        self.assertFalse(ghost["known"])                                # export_descr_unit.txt lacks it
+        self.assertIn("Unknown unit type", FB.unit_words(ghost))
+        self.assertIn("only when: hidden_resource rome", FB.unit_words(gen))
+        # Medieval II's pool line: its numbers in plain words, 'all' lets everyone in
+        pool = items["castle_port"]["levels"][0]["units"][0]
+        self.assertEqual(pool["numbers"], {"start": 1, "per_turn": 0.5, "most": 4, "experience": 0})
+        self.assertEqual(pool["has"], "all")
+        self.assertEqual(pool["needs"], "building_present_min_level barracks muster")
+        self.assertIn("starts with 1, grows 0.5 a turn, holds at most 4", FB.unit_words(pool))
+        self.assertEqual(FB.recruited_in(list(items.values()), "alpha general"), [("barracks", "muster")])
+        self.assertEqual(FB.recruited_in(list(items.values()), "rebel spear"), [("castle_port", "dock")])
+        # the slave sees its own lines, not alpha's
+        slave = {c["chain"]: c for c in FB.faction_chains(self.mod, "slave")}
+        self.assertEqual([u["unit"] for u in slave["barracks"]["levels"][0]["units"]], ["rebel spear"])
+        self.assertTrue(slave["temple_of_x"]["builds"])
+
+    def test_grouped_and_named(self):
+        from campaign_editor import factionbuildings as FB
+        items = FB.faction_chains(self.mod, "alpha")
+        self.assertEqual([(g, [c["chain"] for c in cs]) for g, cs in FB.grouped(items)],
+                         [("military", ["barracks", "castle_port"])])
+        everyone = FB.grouped(items, everyone=True)
+        self.assertEqual([g for g, _ in everyone], ["military", "temple"])
+        self.assertEqual(FB.grouped(items, find="PORT")[0][1][0]["chain"], "castle_port")
+        idx = FB.text_index(self.mod, "export_buildings.txt")
+        # the culture's own name first; the plain key that only repeats the level's name is not a name
+        self.assertEqual(FB.level_shown(idx, "muster", "alpha", "eastern"), ("Alpha Drill Yard", "Where alphas drill."))
+        self.assertEqual(FB.level_shown(idx, "muster", "slave", "barbarian"), ("", ""))
+        self.assertEqual(FB.level_shown(idx, "big_barracks", "slave", "barbarian")[0], "Big Barracks")
+        self.assertEqual(FB.conditions("x requires factions { a, } and factions { b, }"), "")
+        self.assertEqual(FB.conditions("x requires factions { a, }  and  event_counter guns 1 ; note"),
+                         "event_counter guns 1")
+
+    def test_the_tab_shows_a_chain_and_a_unit(self):
+        try:
+            import tkinter as tk
+            root = tk.Tk()
+        except Exception as e:
+            self.skipTest("no window: %s" % e)
+        from types import SimpleNamespace
+        from campaign_editor.gui_factionbuildings import FactionBuildings
+        from campaign_editor.gui_garrison import Pictures
+        opened = []
+        try:
+            app = SimpleNamespace(pictures=Pictures(), shown_names=lambda: {}, open_unit=opened.append)
+            v = FactionBuildings(root, app, None)
+            v.load(self.mod)
+            v.refresh()
+            self.assertEqual(v._faction(), "alpha")
+            self.assertEqual(len(v.items), 3)
+            bar = next(c for c in v.items if c["chain"] == "barracks")
+            v.show_chain(bar)
+            self.assertEqual(v.level["name"], "muster")
+            v.show_unit("alpha general")
+            self.assertEqual(v.preview.faction, "alpha")
+            v.open_unit()
+            self.assertEqual(opened, ["alpha general"])
+            v.v_fac.set("slave")
+            v._read()                                          # the picked chain kept for the new faction
+            self.assertEqual(v.chain["chain"], "barracks")
+            self.assertEqual([u["unit"] for u in v.level["units"]], ["rebel spear"])
+        finally:
+            root.destroy()
