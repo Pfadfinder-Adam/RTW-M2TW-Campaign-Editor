@@ -47,7 +47,14 @@ its arrow gives the look's own colour back, **All back to the look as it comes**
 Dark, Roman parchment, Medieval night, Byzantine purple) and yours. **Use** puts one on the whole editor; **Save the
 look now as a theme...** keeps the colours and font now in force, with a picture of the editor, under a name;
 **Export...** writes a theme into one .zip to send (Discord, a friend) and **Import a theme...** takes one sent to
-you. Your themes are kept in `CampaignEditor_themes/`. The questions and file pickers Windows draws itself are not on the board.
+you. Your themes are kept in `CampaignEditor_themes/`.
+**Snippets** (under the colours in Appearance) are sets of button changes, each with its own tick, as Obsidian's CSS
+snippets: **Move my changes into a snippet...** puts every button change you made so far into one under a name
+(nothing changes on the screen), and its tick then switches them all off and on again. **Import...** takes a snippet
+someone sent (or a saved look), **Export...** writes one to send, ✕ deletes it. Changes you make later stay your own,
+over the snippets - a button a snippet hides can be shown again. Snippets are kept in `CampaignEditor_snippets/`.
+With a mod loaded the board also lays out the windows the works open: a town's window, Rebels, Mercenaries, the
+map's size, Authors and sources. The questions and file pickers Windows draws itself are not on the board.
 
 **Settings > Language of the window** puts a language on every window, the hover texts and the menus; **Add a
 language file...** puts one in. **Words to translate...** writes every word of the windows into a file - fill in the
