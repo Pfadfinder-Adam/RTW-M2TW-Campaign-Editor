@@ -7181,7 +7181,7 @@ building smith
         3 x it was a wide band of sand)."""
         from campaign_editor import upscale
         from campaign_editor.tga import read_tga
-        sea, beach, farm = (196, 0, 0), (255, 255, 255), (0, 128, 0)
+        sea, beach, farm = (196, 0, 0), (255, 255, 255), (101, 124, 0)
         kind = lambda x: sea if x < 2 else (beach if x < 4 else farm)      # points: tile 0 sea, 1 beach, 2-3 farm
         path = os.path.join(self.root, "ground.tga")
         write_tga(path, 9, 9, [[kind(x) for x in range(9)] for y in range(9)])
@@ -7616,6 +7616,31 @@ building smith
         self.assertIsNone(T.paint_problem(Map(), "ground", (0, 2), T.BEACH, set()))        # inland too
         self.assertIsNotNone(T.paint_problem(Map(), "ground", (2, 2), T.BEACH, set()))     # the sea: no
 
+    def test_ground_colours_are_the_games_own(self):
+        """map_ground_types.tga colours as the games read them (medieval2.exe / REX.exe / M2EX.exe and the engine
+        source's WORLD_MAP::m_ground_type_colours): teal = low fertility, olive = high fertility, green = sparse
+        forest, (0, 0, 64) = impassable sea - a modder saw high fertility named low and low named sparse forest."""
+        from campaign_editor import terrain as T
+        game = [(0, 128, 128), (96, 160, 64), (101, 124, 0), (0, 0, 0), (196, 128, 128), (98, 65, 65), (128, 128, 64),
+                (0, 64, 0), (0, 128, 0), (0, 255, 128), (64, 0, 0), (128, 0, 0), (196, 0, 0), (255, 255, 255),
+                (64, 64, 64), (0, 0, 64), (32, 32, 32)]
+        names = ["low fertility", "medium fertility", "high fertility", "wilderness", "high mountains", "mountains",
+                 "hills", "dense forest", "sparse forest", "swamp", "ocean", "deep sea", "shallow sea", "beach",
+                 "impassable land", "impassable sea", "impassable land, always black"]
+        self.assertEqual({c: T.GROUND[c] for c in game}, dict(zip(game, names)))
+        self.assertEqual(set(T.GROUND), set(game))
+        self.assertEqual(T.IMPASSABLE_SEA, (0, 0, 64))
+        self.assertEqual(T.LAND_BRUSHES[:3], [(0, 128, 128), (96, 160, 64), (101, 124, 0)])     # low, medium, high
+        try:
+            import numpy  # noqa: F401
+        except ImportError:
+            return
+        from campaign_editor import maptrees as MT
+        from campaign_editor import terrain3d as T3
+        self.assertEqual((T3.GROUND_KEYS[(0, 128, 128)], T3.GROUND_KEYS[(101, 124, 0)], T3.GROUND_KEYS[(0, 128, 0)]),
+                         ("fertility_low", "fertility_high", "forest_sparse"))
+        self.assertEqual(MT.FOREST_SPARSE, (0, 128, 0))
+
     def test_coast_pull_and_push(self):
         """The user (2026-10-09): 'grab a point of the border and pull it - draw shapes that way; push from outside or
         inside to make the line nicer; the relief and the rest follow by itself' (like a painter's liquify). Pull:
@@ -7798,7 +7823,7 @@ building smith
         from campaign_editor import terrain as T
         from campaign_editor.plan import Plan
         from campaign_editor.tga import Image, read_tga
-        farm, hills = (0, 128, 0), (128, 128, 64)
+        farm, hills = (101, 124, 0), (128, 128, 64)
         n = 9                                                           # points: land left of x = 4, water from 4
         heights = Image(n, n, [((5, 5, 5) if x < 4 else (0, 0, 253)) for y in range(n) for x in range(n)])
         ground = Image(n, n, [(farm if x < 4 else T.SHALLOW_SEA) for y in range(n) for x in range(n)])
@@ -9075,7 +9100,7 @@ building smith
         grey = [[(200, 200, 200)] * W for _ in range(H)]
         grey[0][0] = (0, 0, 120)                       # one water point (blue, bottom-left): its depth shows
         write_tga(os.path.join(camp, "map_heights.tga"), W, H, grey)
-        write_tga(os.path.join(camp, "map_ground_types.tga"), W, H, [[(0, 128, 0)] * W for _ in range(H)])
+        write_tga(os.path.join(camp, "map_ground_types.tga"), W, H, [[(101, 124, 0)] * W for _ in range(H)])
         write(os.path.join(d, "descr_aerial_map_ground_types.txt"),
               "climate default\n{\n\tfertility_high\tgreen.tga\tsnow.tga\n}\n")
         tex = os.path.join(d, "terrain", "aerial_map", "ground_types")
@@ -9111,7 +9136,7 @@ building smith
         grey = [[(200, 200, 200)] * W for _ in range(H)]
         grey[0][0] = (0, 0, 120)                       # one sea point
         write_tga(os.path.join(camp, "map_heights.tga"), W, H, grey)
-        write_tga(os.path.join(camp, "map_ground_types.tga"), W, H, [[(0, 128, 0)] * W for _ in range(H)])
+        write_tga(os.path.join(camp, "map_ground_types.tga"), W, H, [[(101, 124, 0)] * W for _ in range(H)])
         write(os.path.join(d, "descr_aerial_map_ground_types.txt"),
               "texture_density 2\nclimate default\n{\n\tfertility_high\tgreen.tga\tsnow.tga\n"
               "\tbeach\tsand.tga\n}\n")
