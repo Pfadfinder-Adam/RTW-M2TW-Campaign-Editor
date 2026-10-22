@@ -194,10 +194,7 @@ class SettingsWindow(tk.Toplevel):
                     return
                 if 0 < n <= most:
                     settings.put(key, n)
-                    try:
-                        self.app.map_view.render()
-                    except Exception as e:
-                        log.write("map render: %s" % e)
+                    self._render_soon()
             v.trace_add("write", keep)
             ttk.Spinbox(z, from_=1, to=most, increment=50 if key in ("map_signs_from", "map_shore_from") else 1, textvariable=v,
                         width=6).pack(side="left", padx=(0, 12))
@@ -207,6 +204,20 @@ class SettingsWindow(tk.Toplevel):
                 "(defaults %d / %d / %d / %d)." % (
                     ZOOM_SETTINGS["map_zoom_step"], ZOOM_SETTINGS["map_zoom_step_fine"],
                     ZOOM_SETTINGS["map_signs_from"], ZOOM_SETTINGS["map_shore_from"])).pack(side="left")
+
+    def _render_soon(self):
+        """The map drawn again once the typing stops, not at each key: a big map's drawing held the window, so the
+        first click on Close was lost (the tester, 2026-10-22)."""
+        if getattr(self, "_render_job", None):
+            self.after_cancel(self._render_job)
+
+        def go():
+            self._render_job = None
+            try:
+                self.app.map_view.render()
+            except Exception as e:
+                log.write("map render: %s" % e)
+        self._render_job = self.after(400, go)
 
     def _map_look(self):
         mv = self.app.map_view
