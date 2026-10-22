@@ -307,6 +307,14 @@ def base_pose(mod, skeleton):
     anims = skeleton_anims(mod, skeleton)
     base = next((find(mod, f) for what, f in anims if what.lower() == "default"), None)
     if base is None:
+        # a skeleton descr_skeleton.txt does not have (only in the set the game loads - skeletons.dat): its record
+        # names the base pose too - by its name (MTW2_Spear_basepose, ..._default), else last, as the game writes it
+        rec = _set_record_anims(mod, skeleton)
+        f = next((f for f in rec if re.search(r"base_?pose|default", os.path.basename(f), re.I)), None) or \
+            (rec[-1] if rec else None)
+        base = find(mod, f) if f else None
+        anims = anims + [(os.path.splitext(os.path.basename(f))[0], f) for f in rec]
+    if base is None:
         return None
     offsets = base.offsets(0)
     if len(offsets) < base.bones:
