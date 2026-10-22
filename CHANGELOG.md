@@ -25,6 +25,8 @@
 - New mod folder puts no switched-off engine settings files (descr_ex, descr_caps_ex) in: the mod runs on the engine's defaults as before; the editor writes the line a change needs, Check mod files' Copy them in brings the whole list.
 
 ### Fixed
+- Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
+- New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
 - Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
 - Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
 - Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
@@ -69,6 +71,8 @@
 - **Changed**: the faction-select map and minimap use the 3D map's picture where a ground's texture was not found; a name given twice in a faction gets a free one instead of a refused write.
 
 ### Fixed
+- Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
+- New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
 - Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
 - Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
 - Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
@@ -342,6 +346,8 @@
   line of the block** in both editors; the editor remembers whether it was open.
 
 ### Fixed
+- Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
+- New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
 - Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
 - Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
 - Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
@@ -773,6 +779,8 @@
   release's page.
 
 ### Fixed
+- Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
+- New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
 - Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
 - Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
 - Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
@@ -1054,6 +1062,8 @@
   test mod.
 
 ### Fixed
+- Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
+- New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
 - Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
 - Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
 - Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
@@ -1145,6 +1155,8 @@
 - Long explanations at the top of Mercenaries, Map size and the 3 x bigger map are one line now; the rest shows on the '?'.
 
 ### Fixed
+- Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
+- New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
 - Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
 - Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
 - Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
@@ -1165,6 +1177,8 @@
 ## 0.30.1 - 2026-10-07
 
 ### Fixed
+- Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
+- New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
 - Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
 - Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
 - Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
@@ -1178,6 +1192,8 @@
 ## 0.30.0 - 2026-10-07
 
 ### Fixed
+- Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
+- New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
 - Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
 - Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
 - Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
@@ -1738,6 +1754,8 @@
   tree), so the pictures, the battle model and the voice have the room; Add line... opens them.
 
 ### Fixed
+- Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
+- New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
 - Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
 - Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
 - Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
@@ -2099,6 +2117,8 @@
   starts from there. 'Not now' asks with the next version, 'Don't ask again' never; Settings > Folders has the button.
 
 ### Fixed
+- Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
+- New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
 - Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
 - Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
 - Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
@@ -2158,6 +2178,8 @@
   list opens on the add-on of the loaded game.
 
 ### Fixed
+- Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
+- New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
 - Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
 - Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
 - Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
@@ -2226,6 +2248,8 @@
   faction a script names that the mod lacks. "Open another log..." reads any other one.
 
 ### Fixed
+- Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
+- New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
 - Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
 - Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
 - Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
@@ -2253,6 +2277,8 @@
   resource, a region's last land, a river tile, or a port's last land. Undo / Redo stroke, Preview, one backup.
 
 ### Fixed
+- Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
+- New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
 - Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
 - Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
 - Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
@@ -2297,6 +2323,8 @@
   one over the armies, agents and fleets (name, tile, or a unit inside the army, e.g. "knight").
 
 ### Fixed
+- Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
+- New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
 - Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
 - Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
 - Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
@@ -2357,6 +2385,8 @@
   and the Victory block.
 
 ### Fixed
+- Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
+- New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
 - Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
 - Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
 - Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
@@ -2436,6 +2466,8 @@
   out (and the names of services in it) scared people off; the wiki page keeps the details.
 
 ### Fixed
+- Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
+- New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
 - Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
 - Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
 - Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
@@ -2497,6 +2529,8 @@
   of its template's); drawing one from the faction's towns comes back in a later release.
 
 ### Fixed
+- Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
+- New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
 - Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
 - Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
 - Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
@@ -2575,6 +2609,8 @@
   mod does not have are refused - as is leaving out the governor's chain.
 
 ### Fixed
+- Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
+- New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
 - Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
 - Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
 - Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
@@ -2615,6 +2651,8 @@
   and New religion. The files keep the internal name.
 
 ### Fixed
+- Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
+- New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
 - Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
 - Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
 - Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
@@ -2638,6 +2676,8 @@
 ## 0.19.0 - 2026-09-30
 
 ### Fixed
+- Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
+- New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
 - Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
 - Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
 - Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
@@ -2686,6 +2726,8 @@
 - **An icon of its own** for the exe and the window: a gear ring round a Roman "R" and a medieval "M" (drawn for the editor, no game pictures).
 
 ### Fixed
+- Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
+- New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
 - Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
 - Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
 - Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
@@ -2697,6 +2739,8 @@
 ## 0.18.1 - 2026-09-30
 
 ### Fixed
+- Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
+- New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
 - Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
 - Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
 - Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
@@ -2712,6 +2756,8 @@
   built from its code must stay open under GPL-3.0 and keep the author's copyright notice.
 
 ### Fixed (from the user's tests)
+- Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
+- New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
 - Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
 - Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
 - Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
@@ -2728,6 +2774,8 @@
   towns list, or more room for the roster cards.
 
 ### Fixed (from the modders' guides, checked on the vanilla files)
+- Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
+- New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
 - Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
 - Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
 - Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
@@ -2792,6 +2840,8 @@ Asked on Discord: where are the rebels?
   and Medieval II (rebels take a town, a captain and a new army written, Restore byte-exact) and in the window.
 
 ### Fixed
+- Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
+- New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
 - Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
 - Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
 - Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
@@ -2805,6 +2855,8 @@ Asked on Discord: where are the rebels?
 REX's new features, read from REX's own notes, and two things the tool got wrong on Medieval II.
 
 ### Fixed
+- Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
+- New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
 - Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
 - Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
 - Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
@@ -2840,6 +2892,8 @@ and ran with the changes, and its own log converts buildings the same way the to
 building not specified ... building will disappear during conversion").
 
 ### Fixed
+- Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
+- New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
 - Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
 - Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
 - Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
@@ -2866,6 +2920,8 @@ building not specified ... building will disappear during conversion").
   warning that one was missing.
 
 ### Fixed
+- Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
+- New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
 - Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
 - Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
 - Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
@@ -2904,6 +2960,8 @@ building not specified ... building will disappear during conversion").
 ## 0.14.1 - 2026-09-29
 
 ### Fixed
+- Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
+- New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
 - Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
 - Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
 - Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
@@ -2956,6 +3014,8 @@ plain Rome copy (the julii taking Mediolanium); not yet tested in the game.
   town has now ("(shown: Medhlan)"). A name set in Names by culture... shows on the map the moment OK is pressed.
 
 ### Fixed
+- Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
+- New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
 - Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
 - Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
 - Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
@@ -2991,6 +3051,8 @@ Medieval II copies, in the window on Linux and with the deep Check; the flag sym
   Two writes made by one Apply are undone in the right order.
 
 ### Fixed
+- Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
+- New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
 - Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
 - Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
 - Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
@@ -3033,6 +3095,8 @@ its own pictures shown everywhere, the painted terrain drawn; the bugs he found 
   `RTW-M2TW-Campaign-Editor-files`; a log an older version left there moves into `logs` by itself.
 
 ### Fixed
+- Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
+- New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
 - Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
 - Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
 - Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
@@ -3082,6 +3146,8 @@ its own pictures shown everywhere, the painted terrain drawn; the bugs he found 
 - The map draws each feature in its own colour (rivers, fords, sources, cliffs, volcanoes).
 
 ### Fixed
+- Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
+- New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
 - Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
 - Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
 - Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
@@ -3090,6 +3156,8 @@ its own pictures shown everywhere, the painted terrain drawn; the bugs he found 
 ## 0.9.4 - 2026-09-29
 
 ### Fixed
+- Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
+- New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
 - Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
 - Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
 - Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
@@ -3129,6 +3197,8 @@ its own pictures shown everywhere, the painted terrain drawn; the bugs he found 
   `descr_regions.txt` lines of a region of the map (builder, rebels, region tags, triumph, farming).
 
 ### Fixed
+- Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
+- New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
 - Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
 - Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
 - Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
@@ -3150,6 +3220,8 @@ its own pictures shown everywhere, the painted terrain drawn; the bugs he found 
 - README: how to install (the exe in a folder of its own) and what the tool does with your own pictures.
 
 ### Fixed
+- Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
+- New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
 - Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
 - Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
 - Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
@@ -3168,6 +3240,8 @@ its own pictures shown everywhere, the painted terrain drawn; the bugs he found 
   Checked on the vanilla files of both games (julii, england): preview, write, Restore byte for byte.
 
 ### Fixed
+- Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
+- New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
 - Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
 - Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
 - Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
@@ -3177,6 +3251,8 @@ its own pictures shown everywhere, the painted terrain drawn; the bugs he found 
 ## 0.7.5 - 2026-09-29
 
 ### Fixed
+- Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
+- New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
 - Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
 - Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
 - Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
@@ -3192,6 +3268,8 @@ its own pictures shown everywhere, the painted terrain drawn; the bugs he found 
 ## 0.7.4 - 2026-09-28
 
 ### Fixed
+- Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
+- New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
 - Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
 - Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
 - Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
@@ -3215,6 +3293,8 @@ its own pictures shown everywhere, the painted terrain drawn; the bugs he found 
 ## 0.7.1 - 2026-09-28
 
 ### Fixed
+- Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
+- New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
 - Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
 - Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
 - Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
@@ -3239,6 +3319,8 @@ The first release since 0.1.2: it holds 0.2.0 - 0.6.0 below (those were test bui
   zeroed dialog cannot break the game.
 
 ### Fixed
+- Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
+- New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
 - Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
 - Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
 - Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
@@ -3379,6 +3461,8 @@ Fixes from a run through every part of the tool as a user (vanilla and HLR).
   texts, pictures).
 
 ### Fixed
+- Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
+- New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
 - Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
 - Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
 - Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
@@ -3401,6 +3485,8 @@ Fixes from a run through every part of the tool as a user (vanilla and HLR).
 - A template fills the new faction's empty fields (money, colours).
 
 ### Fixed
+- Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
+- New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
 - Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
 - Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
 - Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.

@@ -1024,7 +1024,7 @@ class App(tk.Tk):
                          command=lambda: self.look.edit(True))
         menu.add_command(label="Help", command=self.once("show_help", self.show_help))
         menu.add_command(label="A mod from zero, step by step...", command=self.once(
-            "mod_zero", lambda: __import__("campaign_editor.gui_modzero", fromlist=["x"]).open_window(self)))
+            "mod_zero", self.mod_zero_window))
         head("Find what is wrong")
         menu.add_command(label="Check mod files (what the game would stumble on)", command=self.once("check", self.check))
         menu.add_command(label="The game's log in plain words (what went wrong in the game)...",
@@ -5369,24 +5369,25 @@ class App(tk.Tk):
         if now.get("denari") is not None and (not d or d == getattr(self, "_auto_denari", None)):
             self._auto_denari = str(now["denari"])             # the last template's, replaced by the next
             self.v["denari"].set(self._auto_denari)
-        # the leader's / heir's titles start as the template's; one written by hand stays
-        auto = getattr(self, "_auto_titles", {})
-        for k in ("leader_title", "heir_title"):
-            cur = self.v[k].get()
-            if not cur or cur == auto.get(k):
-                self.v[k].set(now.get(k) or "")
-        self._auto_titles = {k: now.get(k) or "" for k in ("leader_title", "heir_title")}
         # the religion starts as the template's (Medieval II); one picked by hand for this faction stays
         r = self.v["religion"].get()
         if now.get("religion") and (not r or r == getattr(self, "_auto_religion", None)):
             self._auto_religion = now["religion"]
             self.v["religion"].set(now["religion"])
+        # the titles and colours stay EMPTY (the user, 2026-10-22: the form shows nothing of the template but what
+        # the game needs - AI, culture, money, religion); left empty, Apply keeps the template's in the files
         for key, b in (("primary", self.b_primary), ("secondary", self.b_secondary)):
-            rgb = self.colours.get(key) or now.get(key + "_colour")
+            rgb = self.colours.get(key)
             if rgb:
                 theme.paint(b, rgb)
-        self.status.set("Template %s: %s. Its units, buildings, names, traits and art are copied." %
-                        (t, disp.get("display_name", t)))
+        self.status.set("Template %s: %s. Its units, buildings, names, traits and art are copied; colours and titles "
+                        "left empty keep the template's." % (t, disp.get("display_name", t)))
+
+    def mod_zero_window(self):
+        # a plain import, so the exe's build finds the module (a name in a string it never saw: the tester,
+        # 2026-10-22, 'No module named campaign_editor.gui_modzero')
+        from .gui_modzero import open_window
+        return open_window(self)
 
     def bring_faction(self):
         """New faction > From another mod...: pick a mod and one of its factions; the window is filled from it."""
