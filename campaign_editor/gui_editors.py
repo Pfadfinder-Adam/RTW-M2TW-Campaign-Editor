@@ -1826,11 +1826,15 @@ class RecordEditor(ttk.Frame):
                                        icon="warning" if serious else "question", parent=w, yes='Write it in', no='Cancel'):
                 return
             bdir = plan.apply()
+            taken = picked()
             from . import log
             log.write("Battle model of %s (%s) replaced (backup %s)\n%s" % (unit, what, bdir, plan.report()))
             w.destroy()
             self.app.load()
             self.app.status.set("%s: %s now use another battle model (backup %s)." % (unit, what, bdir))
+            if st["mod"] is not self.mod:                # from another mod: whose work it is, noted
+                from .gui_sources import noted
+                noted(self.app, st["mod"].data, "battle model %s" % taken)
         bar = ttk.Frame(frm)
         bar.grid(row=4, column=0, columnspan=3, sticky="e", pady=(8, 0))
         ttk.Button(bar, text="Preview", command=preview).pack(side="left")
@@ -2327,6 +2331,8 @@ class RecordEditor(ttk.Frame):
             w.destroy()
             self.app.load()
             self.app.status.set("Pack put in: %d unit(s) (backup %s)." % (len(man["units"]), bdir))
+            from .gui_sources import noted              # whose work it is: noted, the author asked for (no block)
+            noted(self.app, path, "unit pack (%d unit%s)" % (len(man["units"]), "" if len(man["units"]) == 1 else "s"))
         bar = ttk.Frame(frm)
         bar.grid(row=row + 3, column=0, columnspan=3, sticky="e", pady=(8, 0))
         ttk.Button(bar, text="Preview", command=preview).pack(side="left")
