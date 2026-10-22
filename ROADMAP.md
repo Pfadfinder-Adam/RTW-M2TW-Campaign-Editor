@@ -132,6 +132,7 @@ The first nine days (0.1.0 → 0.30.0): from a one-mod faction cloner to a campa
 | 0.35 | A whole faction brought from another mod · The campaign map in 3D, everything on it carried with the mouse · One emblem for every flag and banner · Locked factions opened · Your own pictures in the menus · Every script's places on the map |
 | 0.35.1 | Fixes from the testers' reports · The crash doctor: why the game stopped, in one line |
 | 0.35.2 | Fixes from the testers' and players' reports · Thin mods stay thin · Check mod files: the quick-battle crash |
+| 0.35.3 | Fixes from players' reports: the factions read whole again, the ground colours right |
 
 | Area | Confirmed in game | Released | Being tested | Next |
 |---|---|---|---|---|
@@ -142,7 +143,7 @@ The first nine days (0.1.0 → 0.30.0): from a one-mod faction cloner to a campa
 | Both games | Rome / BI / Alexander, city ↔ castle | Medieval II and Kingdoms | religions, campaign rules, add-ons, module builder | vassals (`client_of`), window in other languages |
 | Safety | - | preview, backup, byte-exact restore, Check mod files, report a bug in one click, settings | pack check | signed exe |
 
-## What it does now (0.35.2)
+## What it does now (0.35.3)
 
 ### Factions
 - ✅ New faction from a template: names, texts, colours, units, buildings, cards, name lists, traits, art *(in-game ✓)*
