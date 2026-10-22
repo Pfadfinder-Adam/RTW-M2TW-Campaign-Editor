@@ -34,9 +34,9 @@ def tree_hash(root):
     return out
 
 
-def _make_anim_set(folder, skels, anims):
+def _make_anim_set(folder, skels, anims, shape=(2, 3, 1)):
     """A game animation set (pack.idx / .dat, skeletons.idx / .dat) in folder: skels {name: [anim path]}, anims
-    {path: [(scale, bytes)]}."""
+    {path: [(scale, bytes)]}; shape: each animation's (frames, bones, kind) in the index."""
     import struct as _st
     os.makedirs(folder, exist_ok=True)
     head = lambda magic, stamp, ver, n: magic + stamp + _st.pack("<II", ver, n)  # noqa: E731
@@ -45,7 +45,7 @@ def _make_anim_set(folder, skels, anims):
     for path, scales in anims.items():
         for scale, body in scales:
             raw = path.encode()
-            pidx += _st.pack("<IIIfHHB", len(raw) + 10, len(pdat), len(body), scale, 2, 3, 1) + raw + b"\0"
+            pidx += _st.pack("<IIIfHHB", len(raw) + 10, len(pdat), len(body), scale, *shape) + raw + b"\0"
             pdat += body
             n += 1
     for b in (pidx, pdat):
@@ -14893,6 +14893,26 @@ building smith
         self.assertEqual(AN.skeleton_anims(mod, "mtw2_halberd_secondary")[2], ("run", "data/animations/h/run.cas"))
         self.assertEqual(AN.skeleton_anims(mod, "no_such"), [])
         self.assertIn("mtw2_halberd_primary", AN.skeletons(mod))         # the checks' set of names (lower case)
+
+    def test_base_pose_of_a_skeleton_only_in_the_animation_set(self):
+        """A skeleton the mod keeps only in the set the game loads (skeletons.dat, no descr_skeleton.txt line): its
+        base pose is the animation its record names as one (..._basepose / ..._default), else its last - the man is
+        posed, not left in the T pose."""
+        import struct
+        from campaign_editor import animations as AN
+
+        def body(w):            # 2 frames, 3 bones, each bone's offset; each bone turned (0, 0, 0, w)
+            return struct.pack("<HHB", 2, 3, 3) + struct.pack("<4f", 0, 0, 0, w) * 6 + struct.pack("<3f", 0, 1, 0) * 6
+        stand, base, last = ("data/animations/own/Own_Stand_A_idle.cas", "data/animations/own/Own_basepose.cas",
+                             "data/animations/own/Own_run.cas")
+        _make_anim_set(os.path.join(self.root, "data", "animations"),
+                       {"Own_Man": [stand, base, last], "Own_Odd": [stand, last]},
+                       {stand: [(1.0, body(0.5))], base: [(1.0, body(1.0))], last: [(1.0, body(0.25))]}, (2, 3, 3))
+        mod = ModData(os.path.join(self.root, "data"))
+        rot, off = AN.base_pose(mod, "Own_Man")
+        self.assertEqual((rot[0], len(off)), ((0, 0, 0, 1.0), 3))
+        self.assertEqual(AN.base_pose(mod, "Own_Odd")[0][2], (0, 0, 0, 0.25))      # none named so: the last
+        self.assertIsNone(AN.base_pose(mod, "no_such"))
 
     def test_the_3d_view_on_numpy_matches_the_pure_python_one(self):
         """With NumPy (the exe has it) a mesh is posed and drawn on arrays (fastmesh) - the same points to the last
