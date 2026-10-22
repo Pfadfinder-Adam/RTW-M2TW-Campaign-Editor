@@ -112,7 +112,10 @@ def save_board(pages, folder=None):
         return False
 
 
-def lay_cards(groups, row_width=8200, gap=80, head=70):
+CARD_HEAD = 70
+
+
+def lay_cards(groups, row_width=8200, gap=80, head=CARD_HEAD):
     """Where each page card stands on the board: groups = [[(id, width, height), ...], ...] (a group = one kind of
     page: the works, the tabs of one work, the windows); each group starts a row of its own under its heading, its
     cards side by side, wrapping at row_width; each card's title in the head above it.
@@ -131,8 +134,8 @@ def lay_cards(groups, row_width=8200, gap=80, head=70):
             line = max(line, h)
             right = max(right, x - gap)
         if group:
-            y += head + line + gap * 2
-    return out, (right, max(y - gap * 2, 0)), tops
+            y += head + line + gap * 4                 # room for the next group's heading
+    return out, (right, max(y - gap * 4, 0)), tops
 
 
 def piece_at(pieces, x, y):

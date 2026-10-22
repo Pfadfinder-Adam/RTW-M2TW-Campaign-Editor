@@ -54,6 +54,28 @@ def _words(key):
     return key.split("|")[-1].partition(":")[2] or key
 
 
+class _quiet:
+    """While a Tools window is opened for its picture, the questions it would ask first are answered 'not now'
+    (nothing picked, nothing written) instead of stopping the board."""
+    NAMES = ((messagebox, ("askyesno", "askokcancel", "askyesnocancel", "showinfo", "showwarning", "showerror")),
+             (filedialog, ("askopenfilename", "askopenfilenames", "asksaveasfilename", "askdirectory")))
+
+    def __enter__(self):
+        from . import gui, gui_util
+        self.kept = []
+        for mod, names in self.NAMES + ((gui_util, ("ask", "ask_choice")), (gui, ("ask", "ask_choice"))):
+            for n in names:
+                if hasattr(mod, n):
+                    self.kept.append((mod, n, getattr(mod, n)))
+                    setattr(mod, n, lambda *a, **k: None)
+        return self
+
+    def __exit__(self, *exc):
+        for mod, n, f in self.kept:
+            setattr(mod, n, f)
+        return False
+
+
 def _pil():
     try:
         from PIL import Image, ImageTk
@@ -341,7 +363,8 @@ class LayoutBoard(tk.Toplevel):
         fn = getattr(app, name, None)
         if fn is None:
             return None
-        app.once(name, fn)()
+        with _quiet():                                   # a window that would ask first (no game log yet): not shown
+            app.once(name, fn)()
         for w in app.winfo_children():
             if isinstance(w, tk.Toplevel) and not w.wm_overrideredirect() and w is not self and \
                     (str(w) not in before or w in app._once.get(name, [])):
@@ -484,8 +507,10 @@ class LayoutBoard(tk.Toplevel):
         self._shown.clear()
         places, total, heads = self._places()
         self.places = places
-        for name, top in heads:
-            cv.create_text(0, top * z, text=name, anchor="nw", fill=self.title_ink,
+        title_px = max(7, min(14, int(36 * z)))
+        for name, top in heads:                          # above its first row's card titles, whatever the zoom
+            first = (top + 2 * LK.CARD_HEAD) * z - title_px * 2 - 8
+            cv.create_text(0, first, text=name, anchor="sw", fill=self.title_ink,
                            font=("", max(9, min(22, int(60 * z))), "bold"))
         cv.configure(scrollregion=(-200 * z, -200 * z, (total[0] + 200) * z, (total[1] + 200) * z))
         changed = self.look.data["pieces"]
@@ -493,7 +518,7 @@ class LayoutBoard(tk.Toplevel):
             x, y = places[p["id"]]
             w, h = p["size"]
             cv.create_text(x * z, y * z - 3, text=p["title"], anchor="sw", fill=self.title_ink, width=max(w * z, 20),
-                           font=("", max(7, min(14, int(36 * z)))))
+                           font=("", title_px))
             cv.create_rectangle(x * z, y * z, (x + w) * z, (y + h) * z, fill="#f0f0f0", outline="#777777",
                                 tags=("card", "card:" + p["id"]))
             if p["id"] not in self.pictures or self.pictures[p["id"]] is None:

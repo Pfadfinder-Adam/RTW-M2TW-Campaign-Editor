@@ -5334,9 +5334,9 @@ building smith
         self.assertEqual(places["a"], (0, 100))
         self.assertEqual(places["b"], (1100, 100))
         self.assertEqual(places["c"], (0, 1050))                 # wrapped: past the row's width
-        self.assertEqual(tops, [0, 2050])
-        self.assertEqual(places["d"], (0, 2150))
-        self.assertEqual(total, (2100, 2550))
+        self.assertEqual(tops, [0, 2250])                       # room for the next group's heading
+        self.assertEqual(places["d"], (0, 2350))
+        self.assertEqual(total, (2100, 2750))
         bar = {"key": "bar", "box": [0, 0, 400, 30]}
         load = {"key": "load", "box": [10, 5, 50, 20]}
         save = {"key": "save", "box": [70, 5, 50, 20]}
