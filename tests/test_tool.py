@@ -3502,6 +3502,32 @@ building smith
         got = E.unit_picture_targets(mod, "knights", ["england", "france"])
         self.assertEqual([os.path.basename(os.path.dirname(p)) for p in got], ["england", "france"])
 
+    def test_clone_names_swapped_once(self):
+        """The tester, 2026-10-22: a clone of the Gauls named 'CE Gaul Clone' / 'CEGC' / 'CE Gaulish' got 'CE CEGC
+        Clone' and 'CE CE CEGC Cloneish Spy' - each name swapped again over the one put in before. One pass now."""
+        from campaign_editor.clone import swap_names
+        repl = [("Gaulish", "CE Gaulish"), ("Gauls", "CE Gaul Clone"), ("Gaul", "CEGC")]
+        self.assertEqual(swap_names("Gaulish Spy", repl), "CE Gaulish Spy")
+        self.assertEqual(swap_names("The Gauls rule; a Gaul warlord", repl), "The CE Gaul Clone rule; a CEGC warlord")
+        self.assertEqual(swap_names("Gaulish warriors", repl), "CE Gaulish warriors")
+        self.assertEqual(swap_names("Transgaul", repl), "Transgaul")
+        self.assertEqual(swap_names("Gauls's", repl), "CE Gaul Clone's")
+
+    def test_mod_from_zero_new_faction_button_opens_its_tab(self):
+        """The tester, 2026-10-22: Tools > A mod from zero > 'New faction' left the Factions work on its Buildings tab.
+        The step's button picks the New faction tab itself."""
+        try:
+            from campaign_editor import gui_modzero as MZ
+        except Exception as e:
+            self.skipTest("no tkinter: %s" % e)
+        import types
+        done = []
+        app = types.SimpleNamespace(SIDE_TABS={"edit": "Edit faction", "new": "New faction"},
+                                    v_work=types.SimpleNamespace(set=lambda k: done.append(("work", k))),
+                                    work_changed=lambda: None, select_tab=lambda n: done.append(("tab", n)))
+        MZ.go(app, "new")
+        self.assertEqual(done, [("work", "new"), ("tab", "New faction")])
+
     def test_campaign_hud_laid_out_as_the_engine(self):
         """Interface > Campaign HUD (the engines' places, hudlayout): the HUD's bottom at 768, its top 768 - the LEFT
         panel's height, the MIDDLE panel on the bottom, the pieces from the mod's own sheet; a changed page shows."""

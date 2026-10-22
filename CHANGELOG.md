@@ -26,6 +26,9 @@
 - New mod folder puts no switched-off engine settings files (descr_ex, descr_caps_ex) in: the mod runs on the engine's defaults as before; the editor writes the line a change needs, Check mod files' Copy them in brings the whole list.
 
 ### Fixed
+- New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
+- Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
+- New faction: the form jumped a line when the template hint came or went -> it stays put.
 - Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
 - New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
 - Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
@@ -72,6 +75,9 @@
 - **Changed**: the faction-select map and minimap use the 3D map's picture where a ground's texture was not found; a name given twice in a faction gets a free one instead of a refused write.
 
 ### Fixed
+- New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
+- Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
+- New faction: the form jumped a line when the template hint came or went -> it stays put.
 - Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
 - New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
 - Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
@@ -347,6 +353,9 @@
   line of the block** in both editors; the editor remembers whether it was open.
 
 ### Fixed
+- New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
+- Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
+- New faction: the form jumped a line when the template hint came or went -> it stays put.
 - Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
 - New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
 - Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
@@ -780,6 +789,9 @@
   release's page.
 
 ### Fixed
+- New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
+- Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
+- New faction: the form jumped a line when the template hint came or went -> it stays put.
 - Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
 - New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
 - Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
@@ -1063,6 +1075,9 @@
   test mod.
 
 ### Fixed
+- New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
+- Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
+- New faction: the form jumped a line when the template hint came or went -> it stays put.
 - Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
 - New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
 - Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
@@ -1156,6 +1171,9 @@
 - Long explanations at the top of Mercenaries, Map size and the 3 x bigger map are one line now; the rest shows on the '?'.
 
 ### Fixed
+- New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
+- Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
+- New faction: the form jumped a line when the template hint came or went -> it stays put.
 - Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
 - New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
 - Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
@@ -1178,6 +1196,9 @@
 ## 0.30.1 - 2026-10-07
 
 ### Fixed
+- New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
+- Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
+- New faction: the form jumped a line when the template hint came or went -> it stays put.
 - Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
 - New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
 - Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
@@ -1193,6 +1214,9 @@
 ## 0.30.0 - 2026-10-07
 
 ### Fixed
+- New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
+- Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
+- New faction: the form jumped a line when the template hint came or went -> it stays put.
 - Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
 - New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
 - Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
@@ -1755,6 +1779,9 @@
   tree), so the pictures, the battle model and the voice have the room; Add line... opens them.
 
 ### Fixed
+- New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
+- Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
+- New faction: the form jumped a line when the template hint came or went -> it stays put.
 - Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
 - New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
 - Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
@@ -2118,6 +2145,9 @@
   starts from there. 'Not now' asks with the next version, 'Don't ask again' never; Settings > Folders has the button.
 
 ### Fixed
+- New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
+- Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
+- New faction: the form jumped a line when the template hint came or went -> it stays put.
 - Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
 - New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
 - Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
@@ -2179,6 +2209,9 @@
   list opens on the add-on of the loaded game.
 
 ### Fixed
+- New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
+- Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
+- New faction: the form jumped a line when the template hint came or went -> it stays put.
 - Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
 - New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
 - Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
@@ -2249,6 +2282,9 @@
   faction a script names that the mod lacks. "Open another log..." reads any other one.
 
 ### Fixed
+- New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
+- Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
+- New faction: the form jumped a line when the template hint came or went -> it stays put.
 - Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
 - New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
 - Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
@@ -2278,6 +2314,9 @@
   resource, a region's last land, a river tile, or a port's last land. Undo / Redo stroke, Preview, one backup.
 
 ### Fixed
+- New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
+- Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
+- New faction: the form jumped a line when the template hint came or went -> it stays put.
 - Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
 - New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
 - Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
@@ -2324,6 +2363,9 @@
   one over the armies, agents and fleets (name, tile, or a unit inside the army, e.g. "knight").
 
 ### Fixed
+- New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
+- Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
+- New faction: the form jumped a line when the template hint came or went -> it stays put.
 - Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
 - New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
 - Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
@@ -2386,6 +2428,9 @@
   and the Victory block.
 
 ### Fixed
+- New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
+- Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
+- New faction: the form jumped a line when the template hint came or went -> it stays put.
 - Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
 - New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
 - Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
@@ -2467,6 +2512,9 @@
   out (and the names of services in it) scared people off; the wiki page keeps the details.
 
 ### Fixed
+- New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
+- Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
+- New faction: the form jumped a line when the template hint came or went -> it stays put.
 - Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
 - New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
 - Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
@@ -2530,6 +2578,9 @@
   of its template's); drawing one from the faction's towns comes back in a later release.
 
 ### Fixed
+- New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
+- Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
+- New faction: the form jumped a line when the template hint came or went -> it stays put.
 - Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
 - New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
 - Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
@@ -2610,6 +2661,9 @@
   mod does not have are refused - as is leaving out the governor's chain.
 
 ### Fixed
+- New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
+- Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
+- New faction: the form jumped a line when the template hint came or went -> it stays put.
 - Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
 - New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
 - Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
@@ -2652,6 +2706,9 @@
   and New religion. The files keep the internal name.
 
 ### Fixed
+- New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
+- Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
+- New faction: the form jumped a line when the template hint came or went -> it stays put.
 - Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
 - New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
 - Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
@@ -2677,6 +2734,9 @@
 ## 0.19.0 - 2026-09-30
 
 ### Fixed
+- New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
+- Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
+- New faction: the form jumped a line when the template hint came or went -> it stays put.
 - Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
 - New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
 - Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
@@ -2727,6 +2787,9 @@
 - **An icon of its own** for the exe and the window: a gear ring round a Roman "R" and a medieval "M" (drawn for the editor, no game pictures).
 
 ### Fixed
+- New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
+- Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
+- New faction: the form jumped a line when the template hint came or went -> it stays put.
 - Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
 - New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
 - Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
@@ -2740,6 +2803,9 @@
 ## 0.18.1 - 2026-09-30
 
 ### Fixed
+- New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
+- Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
+- New faction: the form jumped a line when the template hint came or went -> it stays put.
 - Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
 - New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
 - Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
@@ -2757,6 +2823,9 @@
   built from its code must stay open under GPL-3.0 and keep the author's copyright notice.
 
 ### Fixed (from the user's tests)
+- New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
+- Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
+- New faction: the form jumped a line when the template hint came or went -> it stays put.
 - Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
 - New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
 - Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
@@ -2775,6 +2844,9 @@
   towns list, or more room for the roster cards.
 
 ### Fixed (from the modders' guides, checked on the vanilla files)
+- New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
+- Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
+- New faction: the form jumped a line when the template hint came or went -> it stays put.
 - Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
 - New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
 - Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
@@ -2841,6 +2913,9 @@ Asked on Discord: where are the rebels?
   and Medieval II (rebels take a town, a captain and a new army written, Restore byte-exact) and in the window.
 
 ### Fixed
+- New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
+- Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
+- New faction: the form jumped a line when the template hint came or went -> it stays put.
 - Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
 - New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
 - Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
@@ -2856,6 +2931,9 @@ Asked on Discord: where are the rebels?
 REX's new features, read from REX's own notes, and two things the tool got wrong on Medieval II.
 
 ### Fixed
+- New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
+- Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
+- New faction: the form jumped a line when the template hint came or went -> it stays put.
 - Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
 - New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
 - Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
@@ -2893,6 +2971,9 @@ and ran with the changes, and its own log converts buildings the same way the to
 building not specified ... building will disappear during conversion").
 
 ### Fixed
+- New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
+- Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
+- New faction: the form jumped a line when the template hint came or went -> it stays put.
 - Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
 - New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
 - Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
@@ -2921,6 +3002,9 @@ building not specified ... building will disappear during conversion").
   warning that one was missing.
 
 ### Fixed
+- New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
+- Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
+- New faction: the form jumped a line when the template hint came or went -> it stays put.
 - Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
 - New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
 - Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
@@ -2961,6 +3045,9 @@ building not specified ... building will disappear during conversion").
 ## 0.14.1 - 2026-09-29
 
 ### Fixed
+- New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
+- Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
+- New faction: the form jumped a line when the template hint came or went -> it stays put.
 - Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
 - New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
 - Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
@@ -3015,6 +3102,9 @@ plain Rome copy (the julii taking Mediolanium); not yet tested in the game.
   town has now ("(shown: Medhlan)"). A name set in Names by culture... shows on the map the moment OK is pressed.
 
 ### Fixed
+- New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
+- Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
+- New faction: the form jumped a line when the template hint came or went -> it stays put.
 - Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
 - New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
 - Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
@@ -3052,6 +3142,9 @@ Medieval II copies, in the window on Linux and with the deep Check; the flag sym
   Two writes made by one Apply are undone in the right order.
 
 ### Fixed
+- New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
+- Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
+- New faction: the form jumped a line when the template hint came or went -> it stays put.
 - Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
 - New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
 - Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
@@ -3096,6 +3189,9 @@ its own pictures shown everywhere, the painted terrain drawn; the bugs he found 
   `RTW-M2TW-Campaign-Editor-files`; a log an older version left there moves into `logs` by itself.
 
 ### Fixed
+- New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
+- Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
+- New faction: the form jumped a line when the template hint came or went -> it stays put.
 - Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
 - New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
 - Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
@@ -3147,6 +3243,9 @@ its own pictures shown everywhere, the painted terrain drawn; the bugs he found 
 - The map draws each feature in its own colour (rivers, fords, sources, cliffs, volcanoes).
 
 ### Fixed
+- New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
+- Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
+- New faction: the form jumped a line when the template hint came or went -> it stays put.
 - Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
 - New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
 - Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
@@ -3157,6 +3256,9 @@ its own pictures shown everywhere, the painted terrain drawn; the bugs he found 
 ## 0.9.4 - 2026-09-29
 
 ### Fixed
+- New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
+- Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
+- New faction: the form jumped a line when the template hint came or went -> it stays put.
 - Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
 - New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
 - Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
@@ -3198,6 +3300,9 @@ its own pictures shown everywhere, the painted terrain drawn; the bugs he found 
   `descr_regions.txt` lines of a region of the map (builder, rebels, region tags, triumph, farming).
 
 ### Fixed
+- New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
+- Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
+- New faction: the form jumped a line when the template hint came or went -> it stays put.
 - Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
 - New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
 - Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
@@ -3221,6 +3326,9 @@ its own pictures shown everywhere, the painted terrain drawn; the bugs he found 
 - README: how to install (the exe in a folder of its own) and what the tool does with your own pictures.
 
 ### Fixed
+- New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
+- Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
+- New faction: the form jumped a line when the template hint came or went -> it stays put.
 - Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
 - New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
 - Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
@@ -3241,6 +3349,9 @@ its own pictures shown everywhere, the painted terrain drawn; the bugs he found 
   Checked on the vanilla files of both games (julii, england): preview, write, Restore byte for byte.
 
 ### Fixed
+- New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
+- Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
+- New faction: the form jumped a line when the template hint came or went -> it stays put.
 - Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
 - New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
 - Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
@@ -3252,6 +3363,9 @@ its own pictures shown everywhere, the painted terrain drawn; the bugs he found 
 ## 0.7.5 - 2026-09-29
 
 ### Fixed
+- New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
+- Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
+- New faction: the form jumped a line when the template hint came or went -> it stays put.
 - Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
 - New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
 - Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
@@ -3269,6 +3383,9 @@ its own pictures shown everywhere, the painted terrain drawn; the bugs he found 
 ## 0.7.4 - 2026-09-28
 
 ### Fixed
+- New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
+- Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
+- New faction: the form jumped a line when the template hint came or went -> it stays put.
 - Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
 - New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
 - Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
@@ -3294,6 +3411,9 @@ its own pictures shown everywhere, the painted terrain drawn; the bugs he found 
 ## 0.7.1 - 2026-09-28
 
 ### Fixed
+- New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
+- Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
+- New faction: the form jumped a line when the template hint came or went -> it stays put.
 - Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
 - New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
 - Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
@@ -3320,6 +3440,9 @@ The first release since 0.1.2: it holds 0.2.0 - 0.6.0 below (those were test bui
   zeroed dialog cannot break the game.
 
 ### Fixed
+- New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
+- Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
+- New faction: the form jumped a line when the template hint came or went -> it stays put.
 - Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
 - New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
 - Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
@@ -3462,6 +3585,9 @@ Fixes from a run through every part of the tool as a user (vanilla and HLR).
   texts, pictures).
 
 ### Fixed
+- New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
+- Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
+- New faction: the form jumped a line when the template hint came or went -> it stays put.
 - Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
 - New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
 - Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
@@ -3486,6 +3612,9 @@ Fixes from a run through every part of the tool as a user (vanilla and HLR).
 - A template fills the new faction's empty fields (money, colours).
 
 ### Fixed
+- New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
+- Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
+- New faction: the form jumped a line when the template hint came or went -> it stays put.
 - Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
 - New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
 - Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
