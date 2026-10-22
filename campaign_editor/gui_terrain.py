@@ -243,10 +243,13 @@ class TerrainEditor(ttk.Frame):
 
     def rebind(self, mod):
         lost = 0
-        fresh = self.mod is None or mod.data != self.mod.data
-        if self.mod is not None and self.dirty() and mod.data == self.mod.data and self._signature() != self._sig:
+        camp = self.app.v_campaign.get()
+        # another campaign is another map: the strokes (made on the old one's pictures - the App asked to drop them)
+        # and every count of its tiles go, as with another mod (they stayed and Apply wrote them into this one)
+        fresh = self.mod is None or mod.data != self.mod.data or camp != getattr(self, "_camp", camp)
+        if not fresh and self.dirty() and self._signature() != self._sig:
             lost = self.pending()
-        if lost or self.mod is None or mod.data != self.mod.data or not self.dirty():
+        if lost or fresh or not self.dirty():
             self.ground, self.features, self.climate, self.base = {}, {}, {}, {}
             self.heights, self._hvals, self.hbase = {}, {}, {}
             self.coast, self.cbase = {}, {}
@@ -255,6 +258,10 @@ class TerrainEditor(ttk.Frame):
             self._waste = None                          # the common wasteland: asked again (made on the last Apply?)
         self._off_said = ""                             # a check's finding belongs to the files it looked at
         self._sc = self._shape_ctx = None
+        self._rtiles = None                             # the regions' land tiles counted again on these files
+        self._last_river = None
+        self.__dict__.pop("_sea", None)                 # the sea's colour read again from this map_regions
+        self._camp = camp
         if getattr(self, "view", None) is not None:
             self.view.point_marks = []
         from .moddata import ModData
@@ -389,6 +396,9 @@ class TerrainEditor(ttk.Frame):
         stroke then went into nothing: "'NoneType' object has no attribute '_optional_map'", report #141)."""
         if self.mod is None and self.app.mod is not None:
             self.app.open_terrain()
+        elif self.mod is not None and self.app.mod is not None and \
+                getattr(self, "_camp", None) != self.app.v_campaign.get():
+            self.rebind(self.app.mod)                   # another campaign picked since: its map, not the old one's
         return self.mod is not None and self.cmap is not None
 
     def _img(self, name):
