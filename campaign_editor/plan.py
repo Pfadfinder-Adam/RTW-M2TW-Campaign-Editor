@@ -264,6 +264,16 @@ class Plan:
                             pairs.append((lead + old, nw))
                         nw = core
                 pairs.append((old, nw))
+        old = self.opts.get("template_people")
+        if old and not any(o == old for o, _ in pairs):
+            # the template's people ('The Scots are Victorious'): its own word, else the short name + s
+            nw = self.opts.get("people") or ""
+            if not nw:
+                base = (self.opts.get("short_name") or (self.opts.get("display_name") or "").split(" of ")[-1]).strip()
+                base = base.split()[0] if base.split() else base        # 'Zorgan Realm': the Zorgans
+                nw = base if not base or base.lower().endswith("s") else base + "s"
+            if nw:
+                pairs.append((old, nw))
         out = []
         for old, nw in pairs:
             out.append((old, nw))
