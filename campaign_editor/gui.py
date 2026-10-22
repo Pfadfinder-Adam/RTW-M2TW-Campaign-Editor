@@ -1034,6 +1034,7 @@ class App(tk.Tk):
         menu.add_command(label="Restore a backup...", command=self.restore)
         menu.add_command(label="Check and install a pack...", command=self.once("install_pack", self.install_pack))
         menu.add_command(label="Game manifest...", command=self.once("game_manifest", self.game_manifest))
+        menu.add_command(label="Authors and sources of this mod...", command=self.once("sources", self.sources_window))
         head("About the editor")
         menu.add_command(label="Log", command=self.once("show_log", self.show_log))
         menu.add_command(label="Save logs (zip)...", command=self.once("save_logs", self.save_logs))
@@ -2526,6 +2527,11 @@ class App(tk.Tk):
         """Tools > Credits...: the author, who helped, the testers, the supporters (CREDITS.md - gui_credits)."""
         from .gui_credits import open_credits
         return open_credits(self)
+
+    def sources_window(self):
+        """Tools > Authors and sources of this mod...: whose work the mod holds (gui_sources)."""
+        from .gui_sources import open_sources
+        return open_sources(self)
 
     def _brush_changed(self):
         try:
@@ -7210,7 +7216,11 @@ class App(tk.Tk):
             self.show_text("Done" if not failed else "Written in part", text)
             self.load()
             if new_made and applied & {"faction", "current"}:
+                brought = self.bring
                 self._new_faction_made(new_made)
+                if brought:                             # a faction of another mod: whose work it is, noted
+                    from .gui_sources import noted
+                    noted(self, brought["src"], "faction %s" % brought["faction"])
         if len(bdirs) > 1:                              # Undo this write: the last part, or the whole write
             self.after_idle(lambda: self._written(bdirs[0][0], None, group=list(bdirs)))
         self._mark_work()
@@ -7246,6 +7256,9 @@ class App(tk.Tk):
                             "questions, where the editor keeps its files.")
         elif label == "Help":
             self.status.set("A short guide to the editor (also F1).")
+        elif label.startswith("Authors and sources"):
+            self.status.set("Whose work is in this mod: what was taken from other mods, the authors, links - kept in "
+                            "Authors_and_sources.txt in the mod folder.")
 
     def delete_mod(self):
         """Tools > Delete this mod's folder...: the loaded mod's folder with everything in it, after two questions

@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### Added
+- Tools > Authors and sources of this mod: whose work is in your mod - what was taken, from which mod or pack, the author, a link, whether you asked; kept in Authors_and_sources.txt in the mod folder for players. Taking units, buildings, a faction, a battle model or a pack from another mod notes it by itself and asks for the author and link (nothing checked or blocked; 'Later' keeps it as it is).
 - Units: Delete this unit... (beside New unit) takes a unit out on Apply with its recruit lines, its men in the armies and garrisons, the mercenary pools, the rebels' lists and its cards; Restore puts it back.
 - Units: Texts players read - the unit's name, short and long description are changed right in the Units editor.
 - Units: 'Pictures for' can be 'all owners (the same picture)' - Import or Make a card puts one card / description picture in for every faction that has the unit.

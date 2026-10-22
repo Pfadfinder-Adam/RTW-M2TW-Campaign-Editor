@@ -92,4 +92,8 @@ that points at a building your mod has not - change those lines in Buildings.
 - **To share units with other people**, use Units' **Export pack...** (one `.zip`) and **Import
   pack...** on their side. **Tools > Check and install a pack** is something else: it checks a mod that says
   "copy this data folder over the game" before anything is copied.
+- **Whose work is it?** Whatever you take from another mod (units, buildings, a faction, a battle model, a pack) is
+  noted in **Tools > Authors and sources of this mod** - a small window asks for the author and a link. Going to
+  publish your mod? Ask the author first; even if not, it is good to ask. The list goes into
+  `Authors_and_sources.txt` in your mod folder, so players see whose work it is. Nothing is checked or blocked.
 - A mistake? **Tools > Restore a backup...** gives every file back, byte for byte.
