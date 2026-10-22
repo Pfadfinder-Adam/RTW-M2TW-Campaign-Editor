@@ -1310,11 +1310,7 @@ class RecordEditor(ttk.Frame):
         engine = MO.engine_of(self.mod, lines)
         for r, (key, idx, model) in enumerate(slots):
             info = cat.get(model.lower())
-            tex = None
-            if info:
-                tex = next((info.textures[f] for f in facs if f in info.textures), None) or \
-                    next(iter(info.textures.values()), None)
-            self._texture_card(box, r, info, tex, facs)
+            self._texture_card(box, r, info, MO.model_texture(self.mod, info, facs), facs)
             txt = "%s: %s" % ("Soldiers" if key == "soldier" else "Officer %d" % (idx + 1), model)
             about, problems = "", []
             if info is None:
@@ -1373,9 +1369,7 @@ class RecordEditor(ttk.Frame):
         if kind:
             r = len(slots)
             info = minfo
-            tex = (next((info.textures[f] for f in facs if f in info.textures), None) or
-                   next(iter(info.textures.values()), None)) if info and info.textures else None
-            self._texture_card(box, r, info, tex, facs)
+            self._texture_card(box, r, info, MO.model_texture(self.mod, info, facs), facs)
             cell = ttk.Frame(box)
             cell.grid(row=r, column=1, sticky="nw", padx=6)
             head = ttk.Frame(cell)
@@ -1393,9 +1387,33 @@ class RecordEditor(ttk.Frame):
                 ttk.Button(bar, text="View in 3D...", command=lambda i=info: self.view_model(i)).pack(side="left")
                 ttk.Button(bar, text="Save its files...", command=lambda i=info: self.save_model_files(i)).pack(
                     side="left", padx=4)
+        # the animals its handlers bring (war dogs, pigs: descr_animals.txt) - their own model and texture
+        aword, akind, amodel = MO.unit_animal(self.mod, lines)
+        if aword:
+            r = len(slots) + (1 if kind else 0)
+            info = cat.get((amodel or "").lower())
+            self._texture_card(box, r, info, MO.model_texture(self.mod, info, facs), facs)
+            cell = ttk.Frame(box)
+            cell.grid(row=r, column=1, sticky="nw", padx=6)
+            head = ttk.Frame(cell)
+            head.pack(anchor="w")
+            ttk.Label(head, text="Animals: %s" % aword, font=("", 9, "bold")).pack(side="left")
+            if info:
+                hint(head, "The animals its handlers bring into battle, beside them: descr_animals.txt's %s, its "
+                           "model %s." % (akind, amodel), width=420).pack(side="left")
+                bar = ttk.Frame(cell)
+                bar.pack(anchor="w", pady=(2, 0))
+                ttk.Button(bar, text="View in 3D...", command=lambda i=info: self.view_model(i)).pack(side="left")
+                ttk.Button(bar, text="Save its files...", command=lambda i=info: self.save_model_files(i)).pack(
+                    side="left", padx=4)
+            else:
+                ttk.Label(cell, foreground="#a33", justify="left", wraplength=300, text=(
+                    "descr_animals.txt's %s names the model %s - not in this mod's battle models" % (akind, amodel)
+                    if amodel else "no %s in descr_animals.txt" % akind)).pack(anchor="w")
         # the siege engine its crew works (Rome: descr_engines.txt) - its own model, shown in 3D
         if engine is not None:
-            r = len(slots) + (1 if kind else 0)
+            r = len(slots) + (1 if kind else 0) + (1 if aword else 0)
+            self._texture_card(box, r, engine, MO.model_texture(self.mod, engine), facs)
             cell = ttk.Frame(box)
             cell.grid(row=r, column=1, sticky="nw", padx=6)
             head = ttk.Frame(cell)
@@ -1760,8 +1778,7 @@ class RecordEditor(ttk.Frame):
             if not name:
                 return
             info = st["cat"][name.lower()]
-            tex = next((info.textures[f] for f in facs if f in info.textures), None) or \
-                next(iter(info.textures.values()), None)
+            tex = MO.model_texture(st["mod"], info, facs)
             self._texture_thumb(side, st["mod"], tex, size=(160, 160)).pack(anchor="w")
             ttk.Button(side, text="View in 3D...", command=lambda: self.view_model(info, st["mod"])).pack(
                 anchor="w", pady=(4, 0))
