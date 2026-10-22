@@ -14844,6 +14844,29 @@ building smith
         for got, want in zip(MV.seat_of(rider, horse, (0, 0, 1)), (1, 0.4, 2)):    # forward turned to straight down
             self.assertAlmostEqual(got, want, places=6)
 
+    def test_skeletons_told_apart_by_letter_case(self):
+        """The games tell skeleton names apart by their letter case (Medieval II's halberdier MTW2_Halberd_Primary and
+        his halberd's MTW2_Halberd_primary): the man keeps his own base pose and moves, not the weapon's two-bone ones
+        (report R-20261022-948516: the man stood in the T pose, 'the animations don't play'); a name in another
+        case still finds its one skeleton."""
+        from campaign_editor import animations as AN
+        write(os.path.join(self.root, "data", "descr_skeleton.txt"),
+              "type MTW2_Halberd_Primary\nanim default data/animations/h/man_base.cas\n"
+              "anim stand_a_idle data/animations/h/man_stand.cas\n"
+              "type MTW2_Halberd_Secondary\nparent MTW2_Halberd_Primary\nanim run data/animations/h/run.cas\n"
+              "type MTW2_Halberd_primary\nanim default data/animations/h/weapon.cas\n"
+              "anim stand_a_idle data/animations/h/weapon.cas\n")
+        mod = ModData(os.path.join(self.root, "data"))
+        self.assertEqual(AN.skeleton_anims(mod, "MTW2_Halberd_Primary"),
+                         [("default", "data/animations/h/man_base.cas"), ("stand_a_idle", "data/animations/h/man_stand.cas")])
+        self.assertEqual(AN.skeleton_anims(mod, "MTW2_Halberd_primary"),
+                         [("default", "data/animations/h/weapon.cas"), ("stand_a_idle", "data/animations/h/weapon.cas")])
+        self.assertEqual([f for _, f in AN.skeleton_anims(mod, "MTW2_Halberd_Secondary")],
+                         ["data/animations/h/man_base.cas", "data/animations/h/man_stand.cas", "data/animations/h/run.cas"])
+        self.assertEqual(AN.skeleton_anims(mod, "mtw2_halberd_secondary")[2], ("run", "data/animations/h/run.cas"))
+        self.assertEqual(AN.skeleton_anims(mod, "no_such"), [])
+        self.assertIn("mtw2_halberd_primary", AN.skeletons(mod))         # the checks' set of names (lower case)
+
     def test_the_3d_view_on_numpy_matches_the_pure_python_one(self):
         """With NumPy (the exe has it) a mesh is posed and drawn on arrays (fastmesh) - the same points to the last
         digit and the same picture as the pure-Python ways a Python without NumPy keeps."""

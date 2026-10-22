@@ -132,8 +132,8 @@ def points_of(mod, eng):
 
 def moves(mod, skeleton):
     """{state (lower): animation file} of an engine skeleton from descr_engine_skeleton.txt, in the file's order."""
-    from .animations import skeletons
-    return {w.lower(): f for w, f in skeletons(mod, "descr_engine_skeleton.txt").get((skeleton or "").lower(), [])}
+    from .animations import skeleton_anims
+    return {w.lower(): f for w, f in skeleton_anims(mod, skeleton, "descr_engine_skeleton.txt")}
 
 
 _ANIMS = {}
