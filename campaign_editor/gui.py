@@ -1813,6 +1813,10 @@ class App(tk.Tk):
         st["vars"] = {k: getattr(self, k).get() for k in self.SIDE_VARS}
         st["texts"] = (self.t_descr.get("1.0", "end-1c"), self.t_long.get("1.0", "end-1c"))
         st["colours"] = dict(self.colours)
+        # the buttons' look too: a template's colours are shown, not kept in self.colours (a tester, 2026-10-22: after
+        # Towns on the map... > Done the colour buttons were blank)
+        st["colour_looks"] = {k: str(b.cget("style")) for k, b in (("primary", self.b_primary),
+                                                                    ("secondary", self.b_secondary))}
         st["editing_now"] = copy.deepcopy(self.editing_now)
         st["baseline"] = getattr(self, "_baseline", None)
         st["victory"] = (self.victory.faction, copy.deepcopy(self.victory.cond))
@@ -1831,6 +1835,8 @@ class App(tk.Tk):
             self.colours[key] = st["colours"].get(key)
             if self.colours[key]:
                 theme.paint(b, self.colours[key])
+            elif st.get("colour_looks", {}).get(key):
+                b.configure(style=st["colour_looks"][key])
         for k in self.SIDE_KEYS:
             if k == "dip_set":                            # the diplomacy tab holds this very dict
                 self.dip_set.clear()
@@ -2333,7 +2339,7 @@ class App(tk.Tk):
         except tk.TclError:
             top = None
         if top is None:
-            w = self.focus_get()
+            w = self._focused()
             top = w.winfo_toplevel() if w is not None else None
         if top is None or top is self:
             return False
@@ -2378,9 +2384,17 @@ class App(tk.Tk):
         self.status.set("Redone.")
         return "break"
 
+    def _focused(self):
+        """The widget with the keys, or None - also while a drop-down's list is open (Tk names its popdown, a widget
+        Python never made: focus_get raised KeyError 'popdown' - a tester, 2026-10-22, Ctrl + a key in New faction)."""
+        try:
+            return self.focus_get()
+        except (KeyError, tk.TclError):
+            return None
+
     def _typing(self):
         """In a text box Ctrl+Z belongs to the box."""
-        w = self.focus_get()
+        w = self._focused()
         return w is not None and w.winfo_class() in ("Text",)
 
     def _keys(self):
@@ -2409,7 +2423,7 @@ class App(tk.Tk):
         letter = self.LAYOUT_KEYS.get(e.keycode)
         if letter is None or (len(e.keysym) == 1 and e.keysym.isascii()):
             return None
-        w = self.focus_get()
+        w = self._focused()
         if letter in "cvx":
             if w is not None:
                 w.event_generate({"c": "<<Copy>>", "v": "<<Paste>>", "x": "<<Cut>>"}[letter])
