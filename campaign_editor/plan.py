@@ -70,6 +70,9 @@ class Plan:
         # modder's answer to the one question (the user, 2026-10-10): None / True = they go, False = they stay
         self.on_wasteland = []
         self.wasteland_resources_out = None
+        # characters a moved town carried along (mapedit.apply_places): {(name, old tile): new tile} - the Map's
+        # later changes to them (a move out, units) still find them by the tile they were read on
+        self.carried = {}
 
     # ---- building ----
     def edit(self, path):

@@ -13993,6 +13993,26 @@ building smith
                           if p["id"] == "building_conditions"], [])
         self.assertTrue(bdir)
 
+    def test_an_army_taken_out_stays_when_its_town_moves(self):
+        """A tester (3D map, Rome BI): an army dragged out of its town went back to the town when the town was moved
+        after - the town's move carried everyone on its old tile, then the army's own move no longer found him
+        there. Now an army moved out stays where it was put; one left in the town goes with it (its units edits
+        still find it)."""
+        from campaign_editor import mapedit as ME
+        from campaign_editor.edit import map_changes
+        mod = ModData(self.root)
+        self.assertEqual(tuple(mod.city_tiles("test")["A_R"]), (1, 1))
+        unit = "unit\t\talpha general\t\texp 1 armour 0 weapon_lvl 0"
+        out = {"moves": {"alpha": [{"name": "Aaron Alphid", "from": (1, 1), "to": (0, 3)}]}}
+        stay = {"army_units": {"alpha": [{"name": "Aaron Alphid", "from": (1, 1), "units": [unit, unit]}]}}
+        for changes, where in ((out, (0, 3)), (stay, (1, 2))):
+            plan = Plan(ModData(self.root), "map", "map", {})
+            ME.apply_places(plan, "test", [{"what": "city", "region": "A_R", "to": (1, 2)}])
+            map_changes(plan, "test", changes)
+            s = Strat(plan.files[mod.campaign_file("test", "descr_strat.txt")])
+            aaron = next(c for c in s.faction("alpha").characters if c.name == "Aaron Alphid")
+            self.assertEqual(aaron.xy, where)
+
     def test_town_onto_the_tile_its_port_leaves(self):
         """Report R-20261012-79696C (HLR): 'town of Utica_R cannot go to 139, 190: another town or port stands there'
         though that one was moved too - each place was checked only against the moves BEFORE it in the list. Now
