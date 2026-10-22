@@ -23,6 +23,17 @@ click renames it, gives it a hover text or a width, hides it or takes it back. T
 one). The look is kept for every start in `CampaignEditor_look.json`; a piece whose words a new version of the editor
 changes simply goes back to its place.
 
+**Tools > Layout board...** does the same on one big canvas, with every page already laid out: each work of the
+main window, the tabs of Maps and Factions and the Tools windows side by side (the editor opens each one in turn the
+first time and keeps their pictures; **Refresh all pages** takes them again, after you load a mod for example). The
+wheel zooms, the middle button moves the board. Drag a button, tick or label with the left button: it goes into the
+row beside the piece nearest to where you drop it - hold **Alt** (or tick **Free place**) and it stays exactly where
+you drop it. Drag a corner of the picked piece to size it; the arrows move a free piece a pixel (Shift: ten). Right
+click a piece: Rename, Hover text, Size in pixels, Width in letters, Hide, Back into its row, Back to how it was,
+Show it in the editor; right click a page: refresh it, show it in the editor, its pieces back to how they were. Each
+change is made in the editor at once and kept in the same `CampaignEditor_look.json`; **Undo** / **Redo** and
+**Back to how it was...** take it back. The questions and file pickers Windows draws itself are not on the board.
+
 **Settings > Language of the window** puts a language on every window, the hover texts and the menus; **Add a
 language file...** puts one in. **Words to translate...** writes every word of the windows into a file - fill in the
 translations, add the language's name and yours, and send it: it comes with the editor. Words a file has none for
