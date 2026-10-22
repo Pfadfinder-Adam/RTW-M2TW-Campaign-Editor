@@ -25,6 +25,8 @@
 - New mod folder puts no switched-off engine settings files (descr_ex, descr_caps_ex) in: the mod runs on the engine's defaults as before; the editor writes the line a change needs, Check mod files' Copy them in brings the whole list.
 
 ### Fixed
+- Bring a faction: a horde faction lost its horde lines (it could not wander after losing its last town) -> its horde lines come along, with the unit names it got here.
+- The crash doctor called an error the game went on after a stop -> only an error the game ended on counts as a stop; the others are listed as serious errors.
 - The REX morale and terrain words (steadfast, expendable, elitist, intimidate, immune_to_psychology, desert_raider, forest_ambusher) were offered on stat_mental / stat_ground, where the game ignores them -> they go on attributes, and Check mod files names units that still have them on the old lines.
 - Check mod files named textures of campaign-map models as missing when the mod keeps them in its packs -> the packs are looked in.
 - Ctrl + a key while a drop-down list was open showed an internal error -> nothing happens, as it should.
