@@ -177,7 +177,29 @@ def skeletons(mod, name="descr_skeleton.txt"):
     """{skeleton (lower case): [(what, file)]} from descr_skeleton.txt - each skeleton's animations in its order; a
     skeleton with a 'parent' (Medieval II: MTW2_Fast_Bowman's parent MTW2_Bowman) has the parent's, its own lines
     taking the place of the parent's of the same name. name: another file of the same form (Medieval II's siege
-    engines: descr_engine_skeleton.txt)."""
+    engines: descr_engine_skeleton.txt). Two skeletons named alike but for the letter case: the first one's (look
+    one up with skeleton_anims, which tells them apart)."""
+    out = {}
+    for k, v in _skeleton_table(mod, name).items():
+        out.setdefault(k.lower(), v)
+    return out
+
+
+def skeleton_anims(mod, skeleton, name="descr_skeleton.txt"):
+    """[(what, file)] of one skeleton: the one of exactly this name, else one named alike in another letter case.
+    The games tell names apart by their letter case (RESOURCE_ID: strcmp): Medieval II's own descr_skeleton.txt has
+    the halberdier MTW2_Halberd_Primary and the halberd's MTW2_Halberd_primary - read as one, the man took the
+    halberd's two-bone base pose and stood in the T pose (report R-20261022-948516: 'the animations don't play')."""
+    table = _skeleton_table(mod, name)
+    got = table.get(skeleton or "")
+    if got is None:
+        low = (skeleton or "").lower()
+        got = next((v for k, v in table.items() if k.lower() == low), [])
+    return got
+
+
+def _skeleton_table(mod, name):
+    """{skeleton (as written): [(what, file)]} - skeletons()'s reading, the letter case kept."""
     path = mod.find(name)
     own, parent = {}, {}
     if not path:
@@ -191,23 +213,30 @@ def skeletons(mod, name="descr_skeleton.txt"):
             continue
         m = re.match(r"type\s+(\S+)", line, re.I)
         if m:
-            cur = m.group(1).lower()
+            cur = m.group(1)
             own.setdefault(cur, [])
             continue
         m = re.match(r"parent\s+(\S+)", line, re.I)
         if m and cur is not None:
-            parent[cur] = m.group(1).lower()
+            parent[cur] = m.group(1)
             continue
         m = re.match(r"anim\s+(\S+)\s+(.+?\.cas)\b", line, re.I)
         if m and cur is not None:
             own[cur].append((m.group(1), m.group(2).strip()))
     out = {}
+    low = {}
+    for k in own:
+        low.setdefault(k.lower(), k)
+
+    def real(name):
+        """A parent as the game finds it: this very name, else one alike but for the letter case."""
+        return name if name in own else low.get((name or "").lower())
 
     def whole(name, seen=()):
         if name in out:
             return out[name]
-        lst = list(whole(parent[name], seen + (name,))) if parent.get(name) in own and \
-            parent[name] not in seen + (name,) else []
+        par = real(parent.get(name))
+        lst = list(whole(par, seen + (name,))) if par is not None and par not in seen + (name,) else []
         for what, f in own.get(name, []):
             at = next((i for i, (w, _) in enumerate(lst) if w.lower() == what.lower()), None)
             if at is None:
@@ -230,7 +259,7 @@ def of_skeleton(mod, skeleton):
         except (OSError, ValueError):
             continue
     out, seen = [], set()
-    for what, f in skeletons(mod).get((skeleton or "").lower(), []):
+    for what, f in skeleton_anims(mod, skeleton):
         if (key(f) in names or _loose_here(mod, f)) and (what, key(f)) not in seen:     # a loose .cas plays too
             seen.add((what, key(f)))
             out.append((what, f))
@@ -275,7 +304,7 @@ def base_pose(mod, skeleton):
     """Medieval II: the skeleton's base pose (its 'default' animation, frame 0) as (rotations, offsets) - the pose its
     meshes are made in - with every bone's offset (the base pose holds the pelvis's alone: the others from the first
     of the skeleton's animations that has them all). None when not found."""
-    anims = skeletons(mod).get((skeleton or "").lower(), [])
+    anims = skeleton_anims(mod, skeleton)
     base = next((find(mod, f) for what, f in anims if what.lower() == "default"), None)
     if base is None:
         return None
@@ -293,4 +322,5 @@ def base_pose(mod, skeleton):
     return base.rotations(0), offsets
 
 
-__all__ = ["FPS", "Anim", "Pack", "read_index", "key", "packs", "find", "skeletons", "of_skeleton", "base_pose"]
+__all__ = ["FPS", "Anim", "Pack", "read_index", "key", "packs", "find", "skeletons", "skeleton_anims", "of_skeleton",
+           "base_pose"]
