@@ -60,6 +60,7 @@
 - Mercenaries: a pool renamed to the name of a pool already there was written as two pools of one name -> refused now.
 - New faction > From zero: the Emblem step slowed the window down (it read the whole faction again on every click) -> it reads only when the emblem changed.
 - View in 3D (Medieval II): a mod's men looked crushed when an animation played, a camel and an elephant moved on a man's bones, and some mods' new animations did not play right -> the skeleton is read as the game reads it (every bone, its parent and its place from the mod's own skeleton files, any number and order of bones), each animation moves only the bones it says it moves, and weapons hang on the hand their own skeleton names, so any mod's models and animations play as in the game. Rome's animations are read the same way.
+- Terrain > Climates: on a big map every stroke stopped the map for about a second while the climate colours were drawn again - now they are drawn at once.
 - Terrain / Coast & heights / Maps > 3D: after picking another campaign the brushes still worked on the old campaign's map (its land, sea and regions) and Apply wrote the old strokes into the new one - now another campaign starts the Terrain editor clean on its own map.
 - Roster: the green / red rows of a given / taken unit or level were glaring light ones in the dark look - now dark green / red there.
 - Terrain / Maps > 3D: a big Ground brush over the sea lagged (each tile turned into land one at a time) -> the brush's tiles turn together, about three times faster.

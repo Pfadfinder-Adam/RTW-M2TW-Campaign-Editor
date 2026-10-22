@@ -178,10 +178,14 @@ class CampaignMap:
     def _climates(self, im):
         """Each land tile tinted in its map_climates.tga colour (the Terrain editor's Climates mode); the sea tiles
         too when show_sea_climates (the file has a climate under the sea as well - what new land gets)."""
+        sea_too = bool(getattr(self, "show_sea_climates", False))
+        got = self._climates_fast(sea_too)
+        if got is not None:
+            over, mask = got
+            return Image.composite(over.resize(im.size, Image.NEAREST), im, mask.resize(im.size, Image.NEAREST))
         over = Image.new("RGB", (self.w, self.h))
         mask = Image.new("L", (self.w, self.h))
         cols, keep = [], []
-        sea_too = bool(getattr(self, "show_sea_climates", False))
         for y in range(self.h - 1, -1, -1):
             for x in range(self.w):
                 c = None if not sea_too and self.is_sea(x, y) else self.climate_at(x, y)
@@ -190,6 +194,27 @@ class CampaignMap:
         over.putdata(cols)
         mask.putdata(keep)
         return Image.composite(over.resize(im.size, Image.NEAREST), im, mask.resize(im.size, Image.NEAREST))
+
+    def _climates_fast(self, sea_too):
+        """(tile colours, mask) of _climates worked out by Pillow from the tiles' middles - the loop over every tile
+        took a second on a big map (HLR) at every stroke in the Climates mode; None when the pictures are not the
+        map's size (the loop then)."""
+        size = (2 * self.w + 1, 2 * self.h + 1)
+        c, g = self.mod._optional_map(self.campaign, "map_climates.tga"), self.ground
+        if c is None or (c.width, c.height) != size or (not sea_too and (g is None or (g.width, g.height) != size)):
+            return None
+        box = (0, 0, 2 * self.w, 2 * self.h)
+
+        def middles(t):
+            return Image.frombytes("RGB", size, t.rgb_top_down()).resize((self.w, self.h), Image.NEAREST, box=box)
+        over = middles(c)
+        mask = Image.new("L", (self.w, self.h), 170)
+        if not sea_too:                                 # a sea ground in the middle, no town or port pixel: no tint
+            sea = recolour(middles(g), {k: (255, 255, 255) for k in SEA}, (0, 0, 0)).convert("L")
+            marks = Image.frombytes("RGB", (self.w, self.h), self.regions_img.rgb_top_down())
+            towns = recolour(marks, {CITY: (255, 255, 255), PORT: (255, 255, 255)}, (0, 0, 0)).convert("L")
+            mask.paste(0, mask=ImageChops.subtract(sea, towns))
+        return over, mask
 
     @staticmethod
     def height_look(c):

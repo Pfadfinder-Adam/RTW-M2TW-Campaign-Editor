@@ -69,5 +69,42 @@ class TerrainCampaignTest(unittest.TestCase):
         self.assertEqual(bound, [])
 
 
+class ClimatesViewTest(unittest.TestCase):
+    def test_the_climates_tint_by_pillow_is_the_tile_by_tile_one(self):
+        """The Climates mode's tint was worked out tile by tile in Python (a second on a big map at every stroke):
+        now by Pillow - the same picture, the sea left out (a town or port pixel never counts as sea)."""
+        try:
+            from PIL import ImageChops
+            from campaign_editor.mapdata import CampaignMap
+        except ImportError:
+            self.skipTest("no Pillow")
+        from campaign_editor.tga import Image as Tga
+        w, h = 6, 4
+        ground, climates = Tga(2 * w + 1, 2 * h + 1), Tga(2 * w + 1, 2 * h + 1)
+        regions = Tga(w, h)
+        for y in range(2 * h + 1):
+            for x in range(2 * w + 1):
+                ground.set(x, y, (64, 0, 0) if x < 5 else (0, 128, 128))
+                climates.set(x, y, (10 * (x % 3), 20 * (y % 4), 200))
+        for y in range(h):
+            for x in range(w):
+                regions.set(x, y, (41, 140, 233) if x < 2 else (200, 10, 10))
+        regions.set(1, 1, (255, 255, 255))                     # a port pixel on a sea ground's tile
+        maps = {"map_climates.tga": climates, "map_ground_types.tga": ground}
+        cm = CampaignMap.__new__(CampaignMap)
+        cm.mod = SimpleNamespace(_optional_map=lambda camp, name: maps.get(name))
+        cm.campaign, cm.w, cm.h, cm.regions_img, cm.ground = "c", w, h, regions, ground
+        cm.by_colour, cm.info = {(200, 10, 10): "Latium"}, {"Latium": {"colour": (200, 10, 10)}}
+        for sea in (False, True):
+            cm.show_sea_climates = sea
+            im = cm._tiles()
+            fast = cm._climates(im)
+            cm._climates_fast = lambda s: None
+            slow = cm._climates(im)
+            del cm._climates_fast
+            self.assertIsNone(ImageChops.difference(fast, slow).getbbox(), sea)
+        self.assertIsNotNone(cm._climates_fast(False))
+
+
 if __name__ == "__main__":
     unittest.main()
