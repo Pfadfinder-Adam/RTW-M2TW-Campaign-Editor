@@ -8739,6 +8739,36 @@ building smith
         w = object()
         self.assertIs(G.App._focused(types.SimpleNamespace(focus_get=lambda: w)), w)
 
+    def test_select_all_in_a_spin_box_with_a_russian_layout(self):
+        """A tester, 2026-10-22: Ctrl+A in Place and size's x box (a spin box) with the Russian layout did not pick
+        the text - '382' typed went after '372'. The key's code says A in any layout; a spin box is picked too."""
+        try:
+            from campaign_editor import gui as G
+        except Exception as e:
+            self.skipTest("no tkinter: %s" % e)
+        import types
+        done = []
+        for cls in ("TSpinbox", "Spinbox", "TEntry"):
+            w = types.SimpleNamespace(winfo_class=lambda c=cls: c, selection_range=lambda a, b: done.append((a, b)),
+                                      icursor=lambda i: None)
+            me = types.SimpleNamespace(LAYOUT_KEYS=G.App.LAYOUT_KEYS, _focused=lambda w=w: w)
+            ev = types.SimpleNamespace(keycode=65, keysym="Cyrillic_ef", state=0x4)
+            self.assertEqual(G.App._layout_keys(me, ev), "break")
+        self.assertEqual(done, [(0, "end")] * 3)
+
+    def test_interface_apply_with_no_change_writes_nothing(self):
+        """A tester, 2026-10-22: Apply changes on Interface with nothing changed said 'Done' and left an empty
+        backup. It says there is nothing to write now."""
+        try:
+            from campaign_editor import gui_interface as GI
+        except Exception as e:
+            self.skipTest("no tkinter: %s" % e)
+        import types
+        me = types.SimpleNamespace(doc=object(), _sprites_dirty=lambda: False, dirty=lambda: False)
+        with self.assertRaises(ValueError) as got:
+            GI.InterfacePanel.make_plan(me)
+        self.assertIn("Nothing to write yet", str(got.exception))
+
     def test_brought_faction_select_screen_shows_its_own_face(self):
         """A tester, 2026-10-18: a brought faction's leader's face on the faction tab was still the template's. The
         select-screen pictures are read from the brought faction's own mod; the frame's leader_pic (emptied on Apply
