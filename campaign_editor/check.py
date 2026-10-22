@@ -401,6 +401,8 @@ def check_mod(mod, campaign, deep=False, progress=None, found=None):
         bad(msg)
     for msg in custom_battle_problems(mod, units):
         bad(msg)
+    for msg in misplaced_attribute_words(mod):
+        say(msg)
     for msg in region_rebel_problems(mod, regions):
         bad(msg)
     for msg in slaves_problems(mod, regions):
@@ -993,6 +995,28 @@ def custom_battle_problems(mod, units):
             out.append("%s has no unit for custom / quick battles (none in its ownership without no_custom) - a quick "
                        "battle that picks it stops the game; give it a unit (Units: ownership, take no_custom out) or "
                        "set 'custom_battle_availability no' in descr_sm_factions.txt" % fac)
+    return out
+
+
+def misplaced_attribute_words(mod):
+    """Units whose stat_mental / stat_ground carry an engine word (steadfast, expendable, desert_raider ...) where REX's
+    EDU header puts it: there it does nothing - the engine reads it only on 'attributes' (a game test, Rome with REX,
+    2026-10-22). One line a unit."""
+    from .unitattrs import misplaced
+    p = _data_file(mod, "export_descr_unit.txt")
+    if not p:
+        return []
+    out, cur = [], None
+    for i, l in enumerate(mod.load(p).texts()):
+        code = strip_comment(l).strip()
+        key, value = (code.split(None, 1) + ["", ""])[:2]
+        if key == "type":
+            cur = value.strip()
+        elif cur and key in ("stat_mental", "stat_ground"):
+            gone = misplaced(key, value.strip())
+            if gone:
+                out.append("export_descr_unit.txt line %d: %s's %s holds %s - it does nothing there, the engine "
+                           "reads it only on 'attributes' (move it there in Units)" % (i + 1, cur, key, ", ".join(gone)))
     return out
 
 

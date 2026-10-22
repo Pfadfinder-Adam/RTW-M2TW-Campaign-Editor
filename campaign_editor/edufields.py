@@ -281,6 +281,10 @@ def explain(key, value, medieval2=False):
         names = FIXED[key]
         out.append("%s, from left to right:" % key)
         for i, v in enumerate(vals):
+            if v in unitattrs.NOT_ON.get(key, ()) and i >= len(names):   # REX's header's place: wrong (tested)
+                out.append("- %s: does NOTHING on this line - the engine reads it only on 'attributes' (move it "
+                           "there): %s" % (v, _word(v, "attributes")))
+                continue
             if key == "stat_mental" and i >= len(names):          # then words: lock_morale, REX / M2EX's own
                 out.append("- %s: %s" % (v, _word(v, key) or "a word the game's notes do not explain"))
                 continue

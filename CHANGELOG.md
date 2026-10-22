@@ -25,6 +25,7 @@
 - New mod folder puts no switched-off engine settings files (descr_ex, descr_caps_ex) in: the mod runs on the engine's defaults as before; the editor writes the line a change needs, Check mod files' Copy them in brings the whole list.
 
 ### Fixed
+- The REX morale and terrain words (steadfast, expendable, elitist, intimidate, immune_to_psychology, desert_raider, forest_ambusher) were offered on stat_mental / stat_ground, where the game ignores them -> they go on attributes, and Check mod files names units that still have them on the old lines.
 - A faction brought from another mod showed the template's leader's face and select map on the faction tab -> it shows its own (or says the face is left empty on Apply).
 - Emblem everywhere stopped on a picture whose size could not be read -> it shows 'size unknown'.
 - HD sprite sheets (made with M2EX's own packer) showed the wrong part of the picture -> sprite sheets are read as the game reads them.

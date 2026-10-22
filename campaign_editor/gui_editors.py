@@ -1003,8 +1003,8 @@ class RecordEditor(ttk.Frame):
 
     # ---- pictures ----
     def _thumb(self, parent, path, size=(80, 100)):
-        from PIL import Image, ImageTk
         try:
+            from PIL import Image, ImageTk                # (no Pillow: '(none)', the editor still works)
             im = Image.open(path).convert("RGBA")
             im.thumbnail(size)
             ph = ImageTk.PhotoImage(im)

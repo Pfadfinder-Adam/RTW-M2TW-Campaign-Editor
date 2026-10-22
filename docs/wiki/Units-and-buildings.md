@@ -56,11 +56,13 @@ ammunition..., stat_cost's turns, price, upkeep..., every word of attributes - f
   unit or level has).
 - **Tied to it** (a button beside **Stats**, folds away again) shows who owns and recruits a
   unit, what requires a building.
-- **REX...** (next to a unit's attributes, stat_mental, stat_ground and weapon lines): tick the abilities REX adds,
+- **REX...** (next to a unit's attributes and weapon lines): tick the abilities REX adds,
   each with its effect in plain words - morale (expendable, steadfast, immune_to_psychology...), fatigue
   (relentless, inexhaustible...), charge (brace_for_charge, aggressive_push...), terrain (desert_raider,
   forest_ambusher), garrison (troublemaker, police), unit size (no_scale, single_entity), `sp` shield piercing.
-  They work only under REX. `recruit_priority_offset` (how much the AI recruits the unit) may be added too.
+  They work only under REX. The morale and terrain words go on `attributes` too - on stat_mental / stat_ground the
+  game takes them but they do nothing there (tested in the game); Check mod files names such units. A word the
+  engine does not know on `attributes` stops Rome (with REX) while loading. `recruit_priority_offset` (how much the AI recruits the unit) may be added too.
 - **Recruit a unit** writes the file's own form: Rome `recruit "unit" 0`, Medieval II `recruit_pool "unit" 1 0.5
   4 0` (units at the start, new units a turn, most units waiting, experience); tick "only retraining" for REX's
   `retrain` / `retrain_pool`.
