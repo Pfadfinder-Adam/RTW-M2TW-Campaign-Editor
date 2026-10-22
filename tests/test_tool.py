@@ -5580,6 +5580,115 @@ building smith
             except Exception:
                 pass
 
+    def test_layout_board_sticks_to_lines(self):
+        """The board's sticking (the user, 2026-10-22: 'a grid to turn on, and it sticks to the line another piece
+        stands on, as in Obsidian'): an edge sized onto a line or the grid, the pink guide lines of a box laid down,
+        a draft's change laid over the editor's own."""
+        from campaign_editor import board as B
+        from campaign_editor import look as LK
+        others = [(100, 40, 80, 20), (0, 0, 600, 300)]          # a button, the window
+        xs, ys = B.lines_of(others)
+        self.assertEqual(xs[:3], [100, 140, 180])
+        self.assertEqual(B.snap_edge(103, xs, grid=8), (100, 100))        # within 8 px: on the button's left
+        self.assertEqual(B.snap_edge(103, xs, grid=8, zoom=0.25), (100, 100))
+        self.assertEqual(B.snap_edge(103, xs, grid=8, zoom=4), (104, None))   # 12 px on the screen: the grid
+        self.assertEqual(B.snap_edge(123, xs, grid=8, to_grid=False), (123, None))
+        x, y, _ = B.snap_box((104, 75, 60, 20), others, grid=8)
+        self.assertEqual((x, y), (100, 72))                      # left on the button's line, y on the grid
+        self.assertEqual(B.guide_lines((x, y, 60, 20), others), ([100], []))
+        self.assertEqual(B.guide_lines((110, 40, 60, 20), others), ([140], [40, 50, 60]))   # middles meet too
+        self.assertEqual(LK.merged({"xy": [1, 2], "text": "a"}, {"xy": None, "size": [3, 4]}),
+                         {"text": "a", "size": [3, 4]})
+
+    def test_layout_board_free_by_default_draft_and_accept(self):
+        """On the layout board a dragged piece stays where it is dropped, its edge sticking to another piece's
+        line; the change is a draft (the editor untouched, Undo / Redo on the board) until Accept puts it on; with
+        Alt it goes into a row; Discard drops the draft."""
+        try:
+            import tkinter as tk
+            from tkinter import ttk
+            root = tk.Tk()
+        except Exception as e:
+            self.skipTest("no window: %s" % e)
+        from unittest import mock
+        from campaign_editor import gui_look as GL
+        from campaign_editor import gui_lookboard as GB
+        from campaign_editor import log
+        from campaign_editor import look as LK
+        home = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, home)
+
+        class Ev:
+            def __init__(self, b, pid, x, y, alt=False):
+                px, py = b.places[pid]
+                self.x = (px + x) * b.zoom - b.cv.canvasx(0)
+                self.y = (py + y) * b.zoom - b.cv.canvasy(0)
+                self.state = (0x20000 if sys.platform == "win32" else 0x0008) if alt else 0
+
+        def drag(b, pid, frm, to, alt=False):
+            b._press(Ev(b, pid, *frm))
+            b._motion(Ev(b, pid, (frm[0] + to[0]) / 2, (frm[1] + to[1]) / 2, alt))
+            b._motion(Ev(b, pid, *to, alt=alt))
+            b._release(Ev(b, pid, *to, alt=alt))
+
+        try:
+            with mock.patch.object(log, "home", lambda: home), \
+                    mock.patch.object(GB.messagebox, "askyesnocancel", lambda *a, **k: False):
+                root.geometry("600x300")
+                look = GL.install(root)
+                root.look = look
+                box = ttk.Frame(root)
+                box.pack(fill="both", expand=True)
+                ok = ttk.Button(box, text="OK")
+                ok.pack(side="left", anchor="n")
+                cancel = ttk.Button(box, text="Cancel")
+                cancel.pack(side="left", anchor="n")
+                apply_ = ttk.Button(box, text="Apply")
+                apply_.pack(side="left", anchor="n")
+                root.update()
+                pieces, hidden = GB.pieces_of(look, root)
+                LK.save_board([{"id": "work:x", "title": "X", "group": "Works", "size": [600, 300],
+                                "pieces": pieces, "hidden": hidden}])
+                b = GB.LayoutBoard(root)
+                b.zoom = 1.0
+                b.update()
+                b.draw()
+                pid = "work:x"
+                pc = next(q for q in b.pages[0]["pieces"] if q["key"] == ok._look_key)
+                cx = next(q for q in b.pages[0]["pieces"] if q["key"] == cancel._look_key)["box"][0]
+                ox, oy, ow, oh = pc["box"]
+                drag(b, pid, (ox + 5, oy + 5), (cx + 3 + 5, oy + 105))       # 3 px off Cancel's left edge
+                self.assertEqual(pc["box"][0], cx)                         # stuck to Cancel's line
+                self.assertEqual(look.data["pieces"], {})                  # only a draft: the editor untouched
+                self.assertEqual(ok.winfo_manager(), "pack")
+                self.assertEqual(b.draft[ok._look_key]["xy"][0], cx)
+                self.assertEqual(str(b.b_accept.cget("state")), "normal")
+                b.undo()
+                self.assertEqual(b.draft, {})
+                self.assertEqual(pc["box"], [ox, oy, ow, oh])
+                b.redo()
+                self.assertEqual(pc["box"][0], cx)
+                b.accept()
+                root.update()
+                self.assertEqual(ok.winfo_manager(), "place")
+                self.assertEqual(ok.winfo_x(), cx)
+                self.assertEqual(b.draft, {})
+                drag(b, pid, (pc["box"][0] + 5, pc["box"][1] + 5), (20, 20))
+                b.discard()
+                self.assertEqual(b.draft, {})
+                self.assertEqual(pc["box"][0], cx)                         # back where it was accepted
+                cb = next(q for q in b.pages[0]["pieces"] if q["key"] == cancel._look_key)
+                ab = next(q for q in b.pages[0]["pieces"] if q["key"] == apply_._look_key)["box"]
+                drag(b, pid, (cb["box"][0] + 5, cb["box"][1] + 5), (ab[0] + ab[2] - 2, ab[1] + 5), alt=True)
+                self.assertEqual(b.draft[cancel._look_key], {"to": apply_._look_key, "where": "after", "xy": None,
+                                                            "up": None, "hidden": None})   # Alt: into a row
+                b.close()
+        finally:
+            try:
+                root.destroy()
+            except Exception:
+                pass
+
     def test_editor_words_to_translate(self):
         """Words to translate: every whole English word of the windows read from the code (buttons, titles, hover
         texts), each with its translation so far; a language file read, a broken one refused."""
