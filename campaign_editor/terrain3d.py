@@ -174,12 +174,13 @@ def _ground_index(ground, keys):
     return out
 
 
-def _climate_index(mod, climate_rgb, names):
-    """(h, w) int index into names of each climate pixel (0 = the first / default)."""
+def _climate_index(mod, climate_rgb, names, climates=None):
+    """(h, w) int index into names of each climate pixel (0 = the first / default). climates: T.climates(mod)
+    read once before (then mod is not needed)."""
     out = np.zeros(climate_rgb.shape[:2], np.int32)
     code = (climate_rgb[..., 0].astype(np.int32) << 16) | (climate_rgb[..., 1].astype(np.int32) << 8) | \
         climate_rgb[..., 2]
-    for name, colour, _ in T.climates(mod):
+    for name, colour, _ in (T.climates(mod) if climates is None else climates):
         if name in names:
             c = (colour[0] << 16) | (colour[1] << 8) | colour[2]
             out[code == c] = names.index(name)
