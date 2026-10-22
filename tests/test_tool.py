@@ -13903,6 +13903,10 @@ building smith
         plan = Plan(mod, "mercenaries", "test", {})
         ME.plan_pools(plan, "test", pools)
         self.assertEqual(plan.changed_files(), [])                   # nothing changed: nothing written
+        pools[1].name = "Both"                     # renamed to a pool not changed: two pools of one name (review)
+        with self.assertRaisesRegex(ValueError, "two pools are called Both"):
+            ME.plan_pools(Plan(mod, "mercenaries", "test", {}), "test", pools)
+        pools[1].name = "Only_B"
         left = ME.give_regions(pools, pools[0], ["A_R"])               # Both keeps only A_R ...
         new = ME.Pool("Mine")
         pools.append(new)
