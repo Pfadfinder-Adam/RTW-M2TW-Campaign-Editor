@@ -3777,10 +3777,13 @@ building smith
         edb_text = open(edb_p, encoding="latin-1").read().split("\n")
         at = next(k for k, l in enumerate(edb_text) if recruit_of(l))
         edb_text.insert(at + 1, edb_text[at].replace('"%s"' % recruit_of(edb_text[at])[1], '"doomed unit"'))
+        # the games read unit types in any case: a line spelling it otherwise is the unit's too (review 2026-10-22)
+        edb_text.insert(at + 1, edb_text[at].replace('"%s"' % recruit_of(edb_text[at])[1], '"Doomed Unit"'))
         write(edb_p, "\n".join(edb_text))
         lines = open(strat_p, encoding="latin-1").read().split("\n")
         at = next(k for k, l in enumerate(lines) if E._unit_span(l))       # beside another unit: the army keeps one
         lines.insert(at + 1, "unit\t\tdoomed unit\t\t\texp 0 armour 0 weapon_lvl 0")
+        lines.insert(at + 1, "unit\t\tDOOMED unit\t\t\texp 0 armour 0 weapon_lvl 0")
         write(strat_p, "\n".join(lines))
         card = os.path.join(self.root, "data", "ui", "units", "alpha", "#doomed_unit.tga")
         os.makedirs(os.path.dirname(card), exist_ok=True)
@@ -3793,8 +3796,8 @@ building smith
         plan.apply()
         mod = ModData(self.root)
         self.assertNotIn("doomed unit", [b[0] for b in E.unit_blocks(mod.load(edu_p))])
-        self.assertNotIn("doomed unit", open(edb_p, encoding="latin-1").read())
-        self.assertNotIn("doomed unit", open(strat_p, encoding="latin-1").read())
+        self.assertNotIn("doomed unit", open(edb_p, encoding="latin-1").read().lower())
+        self.assertNotIn("doomed unit", open(strat_p, encoding="latin-1").read().lower())
         self.assertFalse(os.path.exists(card))
         with self.assertRaises(ValueError):
             E.delete_unit(Plan(mod, "z", "units", {}), "doomed unit")
@@ -20627,6 +20630,35 @@ building shrine
         self.assertIsNone(R.drop_faction(line.replace("{ b, c, }", "{ b, }"), "b"))
         self.assertEqual(R.add_faction(line, "d"),
                          "requires ( ( factions { a, b, d, } and x ) or ( factions { b, c, } and y ) )")
+
+    def test_take_unit_shuts_culture_recruit_lines(self):
+        """Review 2026-10-22: a unit taken from a faction kept every recruit line that let it in by its culture or
+        'all' - its towns still recruited it, and Medieval II stops at a recruit line the ownership does not allow
+        (settlement.cpp 'Settlement recruitment availability included unit'). New faction > From zero took the
+        frame's own units the same way (its culture known before the mod knows the faction)."""
+        from campaign_editor import roster as R
+        d = os.path.join(self.root, "data")
+        write(os.path.join(d, "export_descr_buildings.txt"), self.POOL_EDB.replace(
+            'requires factions { slave, }', 'requires factions { eastern, slave, }'))
+        mod = ModData(self.root)
+        plan = Plan(mod, None, "roster")
+        R.take_unit(plan, "alpha", "rebel spear")
+        edb = plan.files[mod.file("edb")].dump().decode("latin-1")
+        self.assertIn('recruit_pool "rebel spear"  1   0.5   4  0  requires factions { slave, }', edb)
+        self.assertTrue(any("written out as the other factions" in m for _, m in plan.warnings), plan.report())
+        # a faction the mod does not know yet: its culture given
+        plan = Plan(mod, None, "roster")
+        R.take_unit(plan, "zorga", "rebel spear", None, "eastern")
+        edb = plan.files[mod.file("edb")].dump().decode("latin-1")
+        self.assertIn('requires factions { alpha, slave, }', edb)
+        # a line of its own name only: as before, the name out
+        write(os.path.join(d, "export_descr_buildings.txt"), self.POOL_EDB.replace(
+            'requires factions { slave, }', 'requires factions { slave, alpha, }'))
+        mod = ModData(self.root)
+        plan = Plan(mod, None, "roster")
+        R.take_unit(plan, "alpha", "rebel spear")
+        edb = plan.files[mod.file("edb")].dump().decode("latin-1")
+        self.assertIn('requires factions { slave, }', edb)
 
     def test_editor_lines_no_cap_of_our_own(self):
         """A key the mod repeats takes any number of lines (no "not more than the mod has"); a one-line key stays
