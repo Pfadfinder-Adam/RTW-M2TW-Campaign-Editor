@@ -3,9 +3,12 @@ every button: click it and change its size, its name, its place' - buttons and t
 language of the editor, translated by the community and picked in Settings).
 
 Kept apart from the windows (gui_look puts it on them):
-- the look: {piece key: {'text', 'tip', 'width', 'hidden', 'to', 'where', 'xy', 'up', 'size'}} in
+- the look: {piece key: {'text', 'tip', 'width', 'hidden', 'to', 'where', 'xy', 'up', 'size', 'bg', 'fg', 'font',
+  'emoji'}} in
   CampaignEditor_look.json beside the settings ('to' + 'where': before / after another piece in a row; 'xy' + 'up':
-  free, at x, y of its box or of the box 'up' boxes around it; 'size': [width, height] in pixels); a piece key names a button / tick / label by its window, the box it sits in and its own English words
+  free, at x, y of its box or of the box 'up' boxes around it; 'size': [width, height] in pixels; 'bg' / 'fg': its
+  own background / words' colour '#rrggbb'; 'font': [family or '', size or 0, 'bold italic'...] - '' / 0 keep the
+  editor's; 'emoji': put before its words); a piece key names a button / tick / label by its window, the box it sits in and its own English words
   (gui_look.piece_key) - the code needs no names of its own, and a piece whose words the code changes later simply
   stops taking its change (nothing breaks);
 - the languages: JSON files {'language': its own name, 'by': who translated, 'words': {English: translated}} -
@@ -23,7 +26,8 @@ from . import log
 LOOK_NAME = "_look.json"
 LANG_FOLDER = "_lang"
 BOARD_FOLDER = "_look_board"
-KEYS = ("text", "tip", "width", "hidden", "to", "where", "xy", "up", "size")
+KEYS = ("text", "tip", "width", "hidden", "to", "where", "xy", "up", "size", "bg", "fg", "font", "emoji")
+STYLE_KEYS = ("bg", "fg", "font", "emoji")     # how a piece looks (copied from one piece to another together)
 
 
 def _home(name):
@@ -92,6 +96,30 @@ def merged(entry, change):
         else:
             new[k] = v
     return new
+
+
+def shown_words(entry, own):
+    """The words a piece shows: its own (the language's) or the look's, its emoji before them."""
+    words = entry.get("text") or own
+    return "%s %s" % (entry["emoji"], words) if entry.get("emoji") and words else entry.get("emoji") or words
+
+
+def font_of(spec, now):
+    """A piece's font as Tk takes it: spec = [family, size, style words] over now = (family, size) of the font it
+    has ('' / 0 in spec keep now's); None when spec asks nothing."""
+    if not spec:
+        return None
+    family, size, style = (list(spec) + ["", 0, ""])[:3]
+    try:
+        size = int(size)
+    except (TypeError, ValueError):
+        size = 0
+    return (family or now[0], size or now[1]) + tuple(str(style or "").split())
+
+
+def deeper(rgb, by=0.85):
+    """A colour a little darker (a button pressed / under the mouse) as '#rrggbb'."""
+    return "#%02x%02x%02x" % tuple(max(0, min(255, int(c * by))) for c in rgb)
 
 
 # ---- the layout board (gui_lookboard): every page of the editor laid out side by side ----
@@ -301,6 +329,6 @@ def template(have=None, seen=()):
     return {"language": "", "by": "", "words": out}
 
 
-__all__ = ["load", "save", "set_entry", "merged", "look_file", "board_dir", "load_board", "save_board", "lay_cards",
+__all__ = ["load", "save", "set_entry", "merged", "shown_words", "font_of", "deeper", "STYLE_KEYS", "look_file", "board_dir", "load_board", "save_board", "lay_cards",
            "piece_at", "drop_beside", "free_spot", "languages", "read_language", "add_language", "words",
            "template", "KEYS"]

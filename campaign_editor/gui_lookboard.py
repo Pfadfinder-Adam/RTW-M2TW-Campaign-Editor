@@ -28,7 +28,7 @@ from tkinter import filedialog, messagebox, simpledialog, ttk
 
 from . import board as B
 from . import look as LK
-from .gui_look import PIECES, YELLOW, all_widgets, can_move
+from .gui_look import PIECES, YELLOW, all_widgets, ask_style, can_move
 
 TITLE = "Layout board"
 # the windows of Tools laid out with the works: (App method, title on the board)
@@ -672,11 +672,16 @@ class LayoutBoard(tk.Toplevel):
                 if pc["text"] and z >= 0.3:
                     cv.create_text((x + nx + nw / 2) * z, (y + ny + nh / 2) * z, text=pc["text"][:30],
                                    font=("", max(6, int(9 * z * 1.6))), fill="#222222", tags="draft")
-            if entry.get("text") and entry.get("text") != pc["text"]:
-                cv.create_rectangle((x + nx) * z, (y + ny) * z, (x + nx + nw) * z, (y + ny + nh) * z, fill=ground,
-                                    outline="", tags="draft")
-                cv.create_text((x + nx + nw / 2) * z, (y + ny + nh / 2) * z, text=entry["text"][:40],
-                               font=("", max(5, int(9 * z * 1.4))), fill=theme.palette()["fg"], tags="draft")
+            if any(entry.get(k) for k in ("text",) + LK.STYLE_KEYS) or \
+                    any(k in (self.draft.get(key) or {}) for k in ("text",) + LK.STYLE_KEYS):
+                words = LK.shown_words(entry, self.look.word(pc["text"]) if pc["text"] else "")
+                font = LK.font_of(entry.get("font"), ("", 9)) or ("", 9)
+                font = (font[0], max(5, int(abs(font[1]) * z * 1.4))) + tuple(font[2:])
+                cv.create_rectangle((x + nx) * z, (y + ny) * z, (x + nx + nw) * z, (y + ny + nh) * z,
+                                    fill=entry.get("bg") or ground, outline="#9a9a9a", tags="draft")
+                if words:
+                    cv.create_text((x + nx + nw / 2) * z, (y + ny + nh / 2) * z, text=words[:40], font=font,
+                                   fill=entry.get("fg") or theme.palette()["fg"], tags="draft")
             cv.create_rectangle((x + nx) * z, (y + ny) * z, (x + nx + nw) * z, (y + ny + nh) * z, outline=CHANGED,
                                 dash=(3, 2), tags="draft")
 
@@ -1066,6 +1071,10 @@ class LayoutBoard(tk.Toplevel):
             m.add_command(label="Hover text...", command=lambda: self._tip(p, pc))
             m.add_command(label="Size in pixels...", command=lambda: self._size(p, pc))
             m.add_command(label="Width in letters...", command=lambda: self._width(p, pc))
+            m.add_command(label="Colours, font and emoji...", command=lambda: self._style(p, pc))
+            m.add_command(label="Copy its look", command=lambda: self._copy_look(pc))
+            m.add_command(label="Paste the look", command=lambda: self._apply(p, pc, **self._copied),
+                          state="normal" if getattr(self, "_copied", None) else "disabled")
             m.add_command(label="Hide", command=lambda: self._apply(p, pc, hidden=True))
             if "xy" in e_:
                 m.add_command(label="Back into its row", command=lambda: self._apply(p, pc, pc.get("was"), xy=None,
@@ -1121,6 +1130,17 @@ class LayoutBoard(tk.Toplevel):
             messagebox.showinfo(TITLE, "Two whole numbers, as 120 x 24, or nothing.", parent=self)
             return
         self._apply(p, pc, [pc["box"][0], pc["box"][1], max(4, w), max(4, h)], size=[max(4, w), max(4, h)])
+
+    def _style(self, p, pc):
+        got = ask_style(self, self._entry(pc["key"]), self.look.word(pc["text"]) if pc["text"] else pc["cls"])
+        if got is not None:
+            self._apply(p, pc, **got)
+
+    def _copy_look(self, pc):
+        """Its colours, font and emoji kept to put on other pieces (Paste the look)."""
+        e = self._entry(pc["key"])
+        self._copied = {k: e.get(k) for k in LK.STYLE_KEYS}
+        self.v_line.set("Its look copied - right click another piece > Paste the look.")
 
     def _width(self, p, pc):
         now = self._entry(pc["key"]).get("width", "")

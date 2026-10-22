@@ -18,7 +18,7 @@ Every change waits until you press **Preview changes** (shows every file and lin
 **Tools > Edit the editor's look...** turns the windows into a layout you can change: a click picks a button, tick or
 label (a yellow frame); drag it with the left button before or after any other piece, in any bar of any window (in a
 bar of another part of the window a copy of it stands there - it does the same and greys out with it); its right
-click renames it, gives it a hover text or a width, hides it or takes it back. The small bar beside it holds **Undo**,
+click renames it, gives it a hover text, a width or its own colours, font and emoji, hides it or takes it back. The small bar beside it holds **Undo**,
 **Hidden pieces...** (show one again), **Back to how it was**, **Save my look...** and **Load a look...** (to share
 one). The look is kept for every start in `CampaignEditor_look.json`; a piece whose words a new version of the editor
 changes simply goes back to its place.
@@ -31,8 +31,10 @@ where you drop it. On the way its edges and middle stick to the lines the other 
 stand on - a pink line shows which - and, with **Grid** ticked, to a grid (4, 8, 16 or 32 px; **Stick to lines**
 turns the lines off). Hold **Alt** (or tick **In a row**) to put it into the row beside the piece nearest to where
 you drop it instead. Drag a corner of the picked piece to size it (it sticks the same way); the arrows move it a
-pixel (Shift: ten). Right click a piece: Rename, Hover text, Size in pixels, Width in letters, Hide, Back into its
-row, Back to how it was, Show it in the editor; right click a page: refresh it, show it in the editor, its pieces
+pixel (Shift: ten). Right click a piece: Rename, Hover text, Size in pixels, Width in letters, **Colours, font and
+emoji...** (its background and words' colour, a font, size and bold / italic, an emoji before its words - a preview
+shows it; **All the editor's own** takes them off), **Copy its look** / **Paste the look** (the same colours, font and
+emoji on another piece), Hide, Back into its row, Back to how it was, Show it in the editor; right click a page: refresh it, show it in the editor, its pieces
 back to how they were. Your changes are a draft drawn on the board (the piece where it goes, its old place greyed):
 **Accept** puts them all on the editor and keeps them in the same `CampaignEditor_look.json`, **Discard** drops
 them, **Undo** / **Redo** step through them; after Accept, **Undo** and **Back to how it was...** take it back. The questions and file pickers Windows draws itself are not on the board.
