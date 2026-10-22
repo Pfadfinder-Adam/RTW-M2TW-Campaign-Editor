@@ -3633,7 +3633,7 @@ building smith
         self.assertEqual(swap_names("GAULISH", [("Gaul", "X"), ("GAUL", "X")], "Gallic"), "GALLIC")
         p = os.path.join(self.root, "data", "text", "expanded_bi.txt")
         write(p, "{ALPHA}\tGaul\n{ST_ALPHA}\tGaul\n{ALPHA_DESCR}\tThe Gaulish Warlord rides\n"
-                 "{EMT_ALPHA_SPY}\tGallic Spy\n", utf16=True)
+                 "{EMT_ALPHA_SPY}\tGallic Spy\n{hall_alpha}\tThe Gaulish Warlord's hall\n", utf16=True)
         mod = ModData(self.root)
         build(mod, "test", "alpha", "beta", {"start": {"regions": ["B_R"], "leader": {"name": "Boris"}},
                                              "display_name": "CE Gaul Clone", "short_name": "CEGC",
@@ -3641,7 +3641,9 @@ building smith
         got = edit.read_faction(ModData(self.root), "test", "beta")
         self.assertEqual((got["display_name"], got["short_name"], got["adjective"]),
                          ("CE Gaul Clone", "CEGC", "CE Gaulish"))
-        self.assertEqual(got["description"], "The CE Gaulish Warlord rides")
+        # the faction's own description is never the template's (2026-10-22): its name; other texts are swapped
+        self.assertEqual(got["description"], "CE Gaul Clone")
+        self.assertIn("{hall_beta}\tThe CE Gaulish Warlord's hall", open(p, encoding="utf-16").read())
 
     def test_mod_from_zero_new_faction_button_opens_its_tab(self):
         """The tester, 2026-10-22: Tools > A mod from zero > 'New faction' left the Factions work on its Buildings tab.
