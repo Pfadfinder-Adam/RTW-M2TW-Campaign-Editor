@@ -7616,6 +7616,37 @@ building smith
         self.assertIsNone(T.paint_problem(Map(), "ground", (0, 2), T.BEACH, set()))        # inland too
         self.assertIsNotNone(T.paint_problem(Map(), "ground", (2, 2), T.BEACH, set()))     # the sea: no
 
+    def test_two_kept_writes_keep_units_under_their_army(self):
+        """Keapon_Laffin (Rome with REX, 2026-10-22): the Map (a new army and two agents written at the end of aedui's
+        block) and the town's window (a new garrison for the heir standing last in the block) kept for one write -
+        the merge put the garrison's units under the diplomat; the game stopped reading the factions there (carnutes
+        and the rebels lost, a crash when carnutes was played). Now the units stay with their army, and a unit line
+        no army holds is named (Check mod files) and refused when a write would leave a new one."""
+        from campaign_editor.plan import merge_lines
+        from campaign_editor.strat import Strat, stray_units
+        head = ["faction\taedui, religious smith", "denari\t5000", "character\tCasticos, named character, heir, "
+                "age 38, , x 64, y 100", "army"]
+        base = head + ["unit\t\tbarb chieftain cavalry early gaul\texp 1", "unit\t\tbarb infantry gaul\texp 0", "",
+                       "faction\tslave, balanced smith"]
+        at = base.index("")
+        town = head + ["unit\t\tbarb chieftain cavalry early gaul\texp 1", "unit\t\twarband axe german\texp 0",
+                       "unit\t\tbarb infantry gaul\texp 0", "unit\t\tbarb peltast gaul\texp 0"] + base[at:]
+        agents = [";;\tdiplomat placed with the Campaign Editor", "character\tVellocatus, diplomat, age 30, , x 69, "
+                  "y 101", "traits NaturalDiplomatSkill 1", ""]
+        mapped = base[:at] + agents + base[at:]
+        out = merge_lines(base, town, mapped)
+        self.assertLess(out.index("unit\t\tbarb peltast gaul\texp 0"), out.index(agents[1]))
+        f = TextFile("descr_strat.txt", out, "latin-1", False)
+        self.assertEqual(stray_units(Strat(f)), [])
+        # the file as that write left it: three units under the diplomat
+        bad = head + ["unit\t\tbarb chieftain cavalry early gaul\texp 1"] + agents + \
+            ["unit\t\twarband axe german\texp 0", "character_record\t\tKeyne, \tfemale, age 32, alive, never_a_leader",
+             "", "faction\tslave, balanced smith"]
+        got = stray_units(Strat(TextFile("descr_strat.txt", bad, "latin-1", False)))
+        self.assertEqual([i for i, _ in got], [bad.index("unit\t\twarband axe german\texp 0")])
+        self.assertIn("aedui: a unit line no army holds", got[0][1])
+        self.assertIn("under Vellocatus", got[0][1])
+
     def test_ground_colours_are_the_games_own(self):
         """map_ground_types.tga colours as the games read them (medieval2.exe / REX.exe / M2EX.exe and the engine
         source's WORLD_MAP::m_ground_type_colours): teal = low fertility, olive = high fertility, green = sparse
