@@ -934,8 +934,12 @@ class Map3DView(ttk.Frame):
                 self.gl.coast_frozen = False             # the shore traced again at the next frame
             ed = self.app.editors.get("terrain")
             if ed is not None and self._coast_now(ed) != getattr(self, "_coast_was", None):
-                self.rebuild()                           # land out of the water (or under it): its ground, its tile
-                return
+                # land out of the water (or under it): its ground and climate were shown while painting; what the
+                # mountains, trees and borders stand on read again in the thread - the map not made again (the
+                # user, 2026-10-22: a lag at the stroke's end, then the new land's texture popping in)
+                self._ground_stale = True
+                if self.gl is not None:
+                    self.gl.models_stale = True
             self._for = self._stamp()                    # the card already shows what was painted
             self._lay_models()                           # the mountains and hills laid again on the new relief
             self._sharp_later()
@@ -952,9 +956,13 @@ class Map3DView(ttk.Frame):
         if gl is None or not gl.models_stale or getattr(self, "_laying", False):
             return
         self._laying, got = True, {}
+        ground, self._ground_stale = getattr(self, "_ground_stale", False), False
+        mod, camp = self._source(), self.app.v_campaign.get()
 
         def work():
             try:
+                if ground:
+                    got["layers"] = gl.data.refresh_ground(mod, camp)
                 gl.data.place_models()
             except Exception as e:                       # said in the bar, never a crash
                 got["error"] = str(e)
@@ -969,9 +977,11 @@ class Map3DView(ttk.Frame):
             if "error" in got:
                 self.lbl.configure(text="the mountains and hills could not be laid again: %s" % got["error"])
                 return
+            if "layers" in got:
+                gl.set_layers(0, 0, got["layers"])
             gl.models_placed()
             self.draw()
-            if gl.models_stale:                          # painted again meanwhile
+            if gl.models_stale or getattr(self, "_ground_stale", False):     # painted again meanwhile
                 self._lay_models()
         gl.models_stale = False
         th = threading.Thread(target=work, daemon=True)
@@ -1013,6 +1023,13 @@ class Map3DView(ttk.Frame):
                 self._limits = (camp, T.max_land_height(ed.mod, camp), T.min_sea_height(ed.mod, camp))
             metres = T3.metres_of(rgb, self._limits[1], self._limits[2])
         self.gl.set_heights((d.rows - 1) - y1, x0, metres)
+        # the same points' ground and climate as the brush leaves them (land out of the water takes its
+        # neighbours' ground and climate): shown at once, never popping in after the stroke
+        pics = [ed._img(n) for n in ("map_ground_types.tga", "map_climates.tga")]
+        blocks = [None if p is None or (p.width, p.height) != (d.cols, d.rows) else
+                  np.frombuffer(p.raw, np.uint8).reshape(p.height, p.width, 3)[y0:y1 + 1, x0:x1 + 1][::-1]
+                  for p in pics]
+        self.gl.set_layers((d.rows - 1) - y1, x0, d.layers_of(blocks[0], blocks[1], metres <= 0))
 
     # ---- the mouse and keys ----
     def _press(self, e, how):

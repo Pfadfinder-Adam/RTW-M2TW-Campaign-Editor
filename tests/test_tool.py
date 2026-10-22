@@ -10579,6 +10579,16 @@ building smith
         self.assertTrue(any("template_weights" in n for n in data.notes))             # no masks: a plain fade
         winter = glmap.MapData(mod, "test", winter=True)
         self.assertGreater(int(winter.pictures[int(winter.layers[4, 4])][0, 0, 0]), 200)  # the snow
+        # a brush raised the sea point out of the water: its own ground shown at once (layers_of, the rule of
+        # loading), the map's pictures read again from memory after the stroke (refresh_ground) - no new build
+        # (the user, 2026-10-22: a lag, then the new land's texture popping in)
+        g = np.array([[[101, 124, 0]]], np.uint8)
+        self.assertEqual(int(data.layers_of(g, None, np.array([[False]]))[0, 0]), green)
+        self.assertEqual(int(data.layers_of(g, None, np.array([[True]]))[0, 0]), sea)
+        was = data.heights[8, 0]
+        data.heights[8, 0] = 5.0
+        self.assertEqual(int(data.refresh_ground(mod, "test")[8, 0]), green)
+        data.heights[8, 0] = was
         # what stands on the map follows descr_strat as the Map leaves it before the write (an army moved there):
         # laid again from the Strat given, the models already read kept
         from unittest import mock
@@ -11089,6 +11099,18 @@ building smith
         self.assertEqual(lifted, [])
         Map3DView._drag_paint(me, SimpleNamespace(x=15, y=10))
         self.assertEqual(lifted, [(15, 10)])
+        # a heights stroke that made land out of the water (or sank it): the map is not made again at its end
+        # (the user, 2026-10-22: a lag, then the new land's texture popping in) - the ground read again in the
+        # thread that lays the mountains again
+        coast = iter([(("g", 1),), ()])
+        laid = []
+        me = SimpleNamespace(app=SimpleNamespace(editors={"terrain": object()}), _pressed=None, _carry=None,
+                             _paint=True, _grab=None, gl=SimpleNamespace(coast_frozen=True, models_stale=False),
+                             _coast_was=(), _coast_now=lambda ed: next(coast), _stamp=lambda: "now",
+                             rebuild=lambda: self.fail("made again"), _lay_models=lambda: laid.append(1),
+                             _sharp_later=lambda: None)
+        Map3DView._paint_end(me, SimpleNamespace(x=0, y=0))
+        self.assertEqual((laid, me._ground_stale, me.gl.models_stale, me._for), ([1], True, True, "now"))
         # the hover's words: a character's name and what he is, a town's name and owner, a resource's name
         app._map_chars["rome:0"].update(kind="general", faction="romans_julii", army=True, units=5)
         mv.cmap, mv.owners = SimpleNamespace(info={"Latium": {"settlement": "Roma"}}), {"Latium": "romans_senate"}
