@@ -440,6 +440,16 @@ class ToolTest(unittest.TestCase):
         self.assertTrue(all(Z._share(men, Mod.pools[f]["characters"]) <= 0.75 for f in owners))
         self.assertIn("B0", men)
         self.assertEqual((pools["surnames"], pools["women"]), (["Sa"], ["Wb"]))
+        # the culture's names are the game's own keys, written as they are: Rome's 'Sk\xedlas', 'Cisantaxma.',
+        # 'of Itius Portis' were refused by the typed-names check and From zero stopped at Create (review 2026-10-22)
+        from campaign_editor import namelists as NL
+        Mod.pools["c"]["characters"].append("Sk\xedlas")
+        Mod.pools["b"]["surnames"] = ["of Itius Portis", "Cisantaxma."]
+        pools, _ = Z.culture_name_list(Mod(), "x")
+        self.assertTrue(all(isinstance(n, NL.Kept) for p in pools.values() for n in p))
+        self.assertIn("of Itius Portis", pools["surnames"])
+        self.assertEqual(NL.problems(pools), [])
+        self.assertEqual(len(NL.problems({"characters": ["Sk\xedlas"], "women": ["W"]})), 1)   # typed: still said
         plan = build(mod, "test", "alpha", "beta", {"display_name": "Betaland", "from_zero": "eastern",
                                                     "start": {"regions": ["B_R"], "leader": {"name": "Boris"}}})
         self.assertIn("recoloured in its own colours right after it is written", plan.report())

@@ -329,7 +329,6 @@ class FromZeroWindow:
         c = self.v["culture"].get()
         if self.pools is None or self._pools_for != c:
             self.pools, self.pool_from = Z.culture_name_list(self.mod, c)
-            self.pools = {p: [k.replace("_", " ") for k in v] for p, v in self.pools.items()}
             self._pools_for = c
         own = self.app.name_list.get("(new)") if self.app.v["name"].get().strip().lower() == \
             self.v["name"].get().strip().lower() else None
