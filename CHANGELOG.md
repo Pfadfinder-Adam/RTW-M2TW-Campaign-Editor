@@ -12,6 +12,12 @@
 - Renaming a faction whose name has a capital letter works again in every file.
 - Check mod files: a skeleton named in another letter case is said as missing - the game tells them apart.
 
+### Changed
+- Limits follow the games' own code: with REX / M2EX only what their code lifts is free (regions, units, religions, buildings, map size); officers (3) and rebel unit types (20) are still said.
+- A mod without its own descr_ex.txt uses the game's one, as REX / M2EX do; raising max_factions copies the whole file into the mod, so no other setting is lost.
+- No more refusals the game does not need - each is now a warning: a surname not in the name list, taking out the faction leader or heir, religions that do not add up to 100, a new region with no resource ('none'), a region's land given to a region it does not touch, two levels of one building chain in a town.
+- Medieval II (with M2EX): missile ammo down to 1 is fine; ancillaries follow descr_campaign_db.xml.
+
 ## 0.35.4 - 2026-10-22
 
 ### In short

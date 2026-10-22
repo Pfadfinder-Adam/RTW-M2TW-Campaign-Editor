@@ -279,7 +279,7 @@ def check_mod(mod, campaign, deep=False, progress=None, found=None):
         # medieval2.exe, REX, M2EX) - every faction may have it
         say("    note: %d unit(s) without an ownership line (the game gives them to every faction: 'Ownership "
             "missing ... using all'), e.g. %s" % (len(no_owner), ", ".join(no_owner[:3])))
-    from .units import edu_problems
+    from .units import edu_problems, officers_over
     from .limits import engine_of, game_kind
     from .units import projectile_names, unit_card
     from .models import mount_classes
@@ -289,6 +289,11 @@ def check_mod(mod, campaign, deep=False, progress=None, found=None):
         bad(m)
     if len(unit_problems) > 12:
         bad("... and %d more export_descr_unit.txt problem(s) of the same kinds (the game stops at the start on each)" % (len(unit_problems) - 12))
+    if engine_of(mod):                              # REX / M2EX keep 3 officers and ignore the rest (unit_db.cpp)
+        many = officers_over(mod.load(mod.file("edu")).texts())
+        if many:
+            say("    note: %d unit(s) with more than 3 officer lines - %s keeps the first 3 and ignores the rest "
+                "(a log line, no stop), e.g. %s" % (len(many), engine_of(mod)[:-4], ", ".join(many[:3])))
     no_card = [u.type for u in units if u.category != "non_combatant" and not unit_card(mod, u)]
     if no_card:                                     # not a crash: logs/missing_images.txt + the generic card
         say("    note: %d unit(s) without a card of their own - the game shows its generic card (and lists them in "
@@ -899,8 +904,9 @@ def hidden_resources(mod):
 def engine_limits(mod, campaign, regions, units, blds, img):
     """[(message, fault)] - the counts against the game's limits: factions against the engine's own
     max_factions (limits.faction_limit), the rest against the original exe's hard limits
-    (limits.HARD_LIMITS). Over a limit is a fault on the original exe; with REX / M2EX beside the data there is
-    no limit at all - one line says so (limits.md THE RULE)."""
+    (limits.HARD_LIMITS). Over a limit is a fault on the original exe; with REX / M2EX beside the data only what
+    the engine source keeps is said (limits.md THE RULE, 2026-10-22): officers 3, rebel unit types 20, stacks 20
+    / 40 - the rest grows."""
     from .limits import HARD_LIMITS, LIMIT_WORDS, faction_limit, game_kind
     kind = game_kind(mod)
     hard = HARD_LIMITS.get(kind, {})
@@ -910,9 +916,11 @@ def engine_limits(mod, campaign, regions, units, blds, img):
               "chains": len(blds), "levels": max((len(b.levels) for b in blds), default=0),
               "hidden_resources": len(hidden_resources(mod))}
     exe = "Rome" if kind == "rome" else "Medieval II"
-    if engine:                  # the user's rule: REX / M2EX = no limits at all - no fault, no warning, no count
-        out = [("LIMITS: none - %s beside the game (factions, regions, religions, cultures, units, buildings: no "
-                "limit; max_factions follows the factions on every Apply)" % engine[:-4], False)]
+    if engine:                  # REX / M2EX: what the engine source lifts grows; what it keeps is said
+        out = [("LIMITS with %s beside the game (engine source): regions, map size, units, religions, building "
+                "chains, levels, hidden resources - no limit; max_factions follows the factions on every Apply. "
+                "Kept: 3 officers per unit and 20 unit types per rebel type (the rest ignored, a log line), "
+                "stacks of 20 (40 with the Army Size option)" % engine[:-4], False)]
         big = big_stacks(mod, campaign)
         if big:
             how = ("Options > Game Settings > Army Size = 40 units, before a NEW campaign" if kind != "rome" else

@@ -911,7 +911,7 @@ building smith
         self.assertEqual(ex_setting(mod, "max_num_ancillaries"), 8)       # no descr_ex.txt: the game's default
         self.assertEqual(ex_setting(mod, "max_num_children"), 4)
         write(os.path.join(game, "data", "descr_ex.txt"), "max_num_ancillaries 16\nmax_num_children 6\n")
-        self.assertEqual(ex_setting(mod, "max_num_ancillaries"), 8)       # a mod never takes the game's copy
+        self.assertEqual(ex_setting(mod, "max_num_ancillaries"), 16)      # the game's copy, as the engine falls back
         write(os.path.join(hlr, "data", "descr_ex.txt"), "; the mod's own\nmax_factions 31\n")
         self.assertEqual(ex_setting(mod, "max_num_children"), 4)          # the mod's file decides: default
         self.assertEqual(ex_setting(ModData(os.path.join(game, "data")), "max_num_ancillaries"), 16)  # the game
@@ -1131,11 +1131,14 @@ building smith
         many = {"R%d" % i: {} for i in range(750)}                       # HLR's 750 regions
         got = engine_limits(mod, "test", many, [], [], img)
         self.assertIn("REX beside the game", got[0][0])
-        self.assertIn("LIMITS: none", got[0][0])                         # the user's rule: no limit at all
+        self.assertIn("no limit", got[0][0])                             # what the engine source lifts
+        self.assertIn("Kept: 3 officers", got[0][0])                     # and what it keeps (2026-10-22)
         self.assertFalse(any(fault for _, fault in got))
         from campaign_editor.limits import lifted
-        for key in ("regions", "chains", "levels", "hidden_resources", "cultures", "anything"):
+        for key in ("regions", "chains", "levels", "hidden_resources", "units", "religions", "map_size"):
             self.assertTrue(lifted(mod, key))
+        for key in ("officers", "rebel_units", "anything"):              # only what the code shows lifted
+            self.assertIsNone(lifted(mod, key))
         os.remove(os.path.join(game, "REX.exe"))
         got = engine_limits(ModData(hlr), "test", many, [], [], img)
         self.assertTrue(any(fault and "regions" in m for m, fault in got))   # the original exe stops at 200
@@ -1200,6 +1203,30 @@ building smith
         self.assertTrue([p for p in RB.problems(mod, [r]) if "first 20" in p])
         r.units = r.units[:20]
         self.assertFalse([p for p in RB.problems(mod, [r]) if "first 20" in p])
+
+    def test_limits_follow_the_engine_source(self):
+        """2026-10-22 (limits.md THE RULE: a limit only where the code backs it): M2EX takes missile ammo down to 1
+        and checks no range (rules_db.cpp); more than 3 officers is found (the engine ignores the extras,
+        unit_db.cpp); Medieval II's ancillaries follow descr_campaign_db.xml (8 when it has none), not descr_ex.txt."""
+        from campaign_editor.units import edu_problems, officers_over
+        from campaign_editor import family as FM
+        edu = ["type a", "dictionary a", "category infantry", "class missile", "soldier a, 20, 0, 1",
+               "officer x", "officer x", "officer x", "officer x",
+               "stat_pri 5, 3, arrow, 0, 1, missile, archery, piercing, none, 25, 1", "ownership alpha"]
+        ammo = lambda engine, kind: [p for p in edu_problems(edu, [("alpha", "eastern")], kind, engine)
+                                     if "ammo" in p or "range" in p.lower()]
+        self.assertEqual(ammo("M2EX.exe", "medieval2"), [])
+        self.assertTrue(ammo(None, "medieval2"))                         # the original exe: 2 at least
+        self.assertEqual(officers_over(edu), ["a"])
+        people = {"k": FM.Person(name="Odo")}
+        changes = {"k": {"ancillaries": ["a%d" % i for i in range(9)]}}
+        d = os.path.join(self.root, "data")
+        write(os.path.join(d, "descr_religions.txt"), "religions\n{\n    catholic\n}\n")
+        mod = ModData(self.root)
+        self.assertTrue(any("at most 8" in w for w in FM.limit_warnings(mod, [], changes, people)))
+        write(os.path.join(d, "descr_campaign_db.xml"), "<campaign_db>\n  <characters>\n"
+              "    <max_number_of_ancillaries uint=\"12\"/>\n  </characters>\n</campaign_db>\n")
+        self.assertEqual(FM.limit_warnings(ModData(self.root), [], changes, people), [])
 
     def test_religion_limit_only_on_the_original_exe(self):
         """The original exe takes 9 religions; with REX / M2EX beside the game a 10th is not refused (their
@@ -7262,8 +7289,10 @@ building smith
         with open(os.path.join(camp, "descr_regions.txt"), encoding="latin-1") as fh:
             self.assertEqual(fh.read(), bi.replace("pagan 90 christianity 10", "pagan 50 christianity 50").replace(
                 "pagan 100", "pagan 50 christianity 50"))
-        with self.assertRaises(ValueError):
-            set_religions(Plan(ModData(self.root), "map", "religions"), "test", {"A_R": {"pagan": 90}})
+        # a sum other than 100 is written with a warning: the game reads each share as it is (religion.cpp)
+        wp = Plan(ModData(self.root), "map", "religions")
+        set_religions(wp, "test", {"A_R": {"pagan": 90}})
+        self.assertTrue(any("not 100" in w for _, w in wp.warnings))
         mod = ModData(self.root)
         restore(mod, backups(mod)[0])
         self.assertEqual({k: v for k, v in tree_hash(self.root).items() if "_backups" not in k}, before)
@@ -7344,8 +7373,9 @@ building smith
         c = s.faction("alpha").characters[0]
         units = [l.split("\t")[2] for l in s.lines[c.start:c.end] if l.startswith("unit")]
         self.assertEqual(units, ["alpha general", "rebel spear", "rebel spear"])
-        with self.assertRaises(ValueError):             # family members are never removed
-            edit(ModData(self.root), "test", "alpha", {"remove": [{"name": "Aaron Alphid", "from": (1, 1)}]})
+        # the leader may be removed (the game picks another itself, world.cpp) - said as a warning
+        plan = edit(ModData(self.root), "test", "alpha", {"remove": [{"name": "Aaron Alphid", "from": (1, 1)}]})
+        self.assertTrue(any("leader itself" in m for _, m in plan.warnings))
         # taking a town whose rebels leave warns that it starts empty
         plan = edit(ModData(self.root), "test", "alpha", {"take": ["B_R"]})
         self.assertTrue(any("no army in B_R" in m for _, m in plan.warnings))
@@ -11846,8 +11876,10 @@ building smith
         write(os.path.join(game, "m2ex.EXE"), "x")
         self.assertEqual(limits.engine_of(mod), "M2EX.exe")
         lim = limits.faction_limit(mod)
-        self.assertEqual((lim["max"], lim["own"], lim["written"]), (31, False, False))   # M2EX's default, not 50
-        self.assertIn("built-in defaults", limits.engine_report(mod))
+        # the engine reads descr_ex.txt through its file overlay: the mod's, else the GAME's (engine source
+        # descr_ex.cpp + setup_path_make, 2026-10-22) - so the game's 50 holds for a mod without its own
+        self.assertEqual((lim["max"], lim["own"], lim["written"]), (50, False, True))
+        self.assertIn("the game's data/descr_ex.txt", limits.engine_report(mod))
         self.assertEqual(limits.faction_limit(ModData(os.path.join(game, "data")))["max"], 50)  # the game itself
         plan = Plan(mod, "a", "b", {})
         limits.raise_limit(plan, lim, 40)
@@ -11856,7 +11888,7 @@ building smith
         with open(own, "rb") as fh:
             text = fh.read()
         self.assertIn(b"max_factions 40", text)
-        self.assertNotIn(b"rolloff", text)                          # only the line meant: the rest stays default
+        self.assertIn(b"rolloff", text)         # the game's whole file copied in: its other settings still hold
         with open(os.path.join(game, "data", "descr_ex.txt"), "rb") as fh:
             self.assertIn(b"max_factions 50", fh.read())
         lim = limits.faction_limit(ModData(mod.data))
@@ -15691,7 +15723,7 @@ building smith
 
     def test_map_deletes_a_character_of_any_faction(self):
         """The Map's right-click Delete: a character of any faction goes with his whole block (army too); the leader,
-        the heir and one on the family tree are refused."""
+        the heir go too, with a warning (the game picks a leader itself - world.cpp)."""
         from campaign_editor.edit import map_changes
         mod = ModData(self.root)
         strat = mod.campaign_file("test", "descr_strat.txt")
@@ -15706,9 +15738,9 @@ building smith
         self.assertEqual(len(plan.files[strat].raw), len(mod.load(strat).raw) - (c.end - c.start))
         lead = next((x for f in s.factions for x in f.characters if x.role == "leader" and x.xy), None)
         if lead:
-            with self.assertRaises(ValueError):
-                map_changes(Plan(mod, "map", "map", {}), "test",
-                            {"remove": {lead.owner: [{"name": lead.name, "from": list(lead.xy)}]}})
+            lp = Plan(mod, "map", "map", {})
+            map_changes(lp, "test", {"remove": {lead.owner: [{"name": lead.name, "from": list(lead.xy)}]}})
+            self.assertTrue(any("leader itself" in w for _, w in lp.warnings))
 
     def test_a_family_member_taken_off_the_map_stays_on_the_tree(self):
         """Report R-20261012-EEEE61: Flavius Julius's army could not go - Units & armies said 'a member of the family,
@@ -15748,9 +15780,11 @@ building smith
             self.assertTrue(any(t.startswith("relative") and "Abel Alphid" in t for t in texts))
             from campaign_editor.strat import characters_after_tree
             self.assertEqual(characters_after_tree(after), [])
-        with self.assertRaises(ValueError):                         # the leader: make another the leader first
-            map_changes(Plan(ModData(self.root), "map", "map", {}), "test",
-                        {"remove": {"alpha": [{"name": "Aaron Alphid", "from": [1, 1]}]}})
+        # the leader may go too (2026-10-22, the code backs no ban: the game makes the first named character the
+        # leader itself, world.cpp) - said as a warning
+        lp = Plan(ModData(self.root), "map", "map", {})
+        map_changes(lp, "test", {"remove": {"alpha": [{"name": "Aaron Alphid", "from": [1, 1]}]}})
+        self.assertTrue(any("Aaron Alphid was alpha's" in w and "leader itself" in w for _, w in lp.warnings))
         # a general whose name is only a part of a name on the tree ('Abel' of 'Abel Alphid') is not on it: he
         # simply goes, no dead record left behind (review 2026-10-22)
         f = mod.load(strat)
@@ -17919,8 +17953,8 @@ building smith
         write(os.path.join(camp, "descr_regions.txt"), text + "\treligions { catholic 20 pagan 80 }\n")
         mod = ModData(self.root)
         self.assertEqual(mod.regions("test")["A_R"]["religions"], {"catholic": 90, "pagan": 10})
-        with self.assertRaises(ValueError):                             # not 100 in all
-            edit(ModData(self.root), "test", "alpha", {"regions": {"religions": {"A_R": {"catholic": 50}}}})
+        wp = edit(ModData(self.root), "test", "alpha", {"regions": {"religions": {"A_R": {"catholic": 50}}}})
+        self.assertTrue(any("not 100" in w for _, w in wp.warnings))  # not 100 in all: written, said
         new = {"name": "N_R", "settlement": "Ntown", "creator": "alpha", "rebels": "Rebels", "resources": [],
                "city": (0, 3), "owner": None}
         plan = edit(mod, "test", "alpha", {"regions": {

@@ -202,16 +202,17 @@ def problems(mod, campaign, region, into=None, land=True, waste=False):
         return ["%s is no region of this campaign" % region], []
     if waste:
         return refusals(mod, campaign, [region], waste=True)
-    errors = []
+    errors, far = [], []
     near = neighbours(mod, campaign, region) if land else [(into, 1)] if into else []
-    if land and not near:
-        errors.append("%s touches no other region's land (an island) - its land would belong to no region; give it to "
-                      "a neighbour on the Map with Edit regions instead" % region)
-    elif into and into not in dict(near):
-        errors.append("%s does not touch %s - its land can go only to a neighbour (%s)" % (
-            into, region, ", ".join(r for r, _ in near[:6])))
+    # the engine keys a region only by its colour on map_regions.tga, with no check that its land is in one piece
+    # (world_map.cpp) - land given to a region it does not touch is an exclave the game takes; said, not refused
+    if land and not near and not into:
+        errors.append("%s touches no other region's land (an island) - pick the region its land goes to" % region)
+    elif into and land and into not in dict(near):
+        far.append("%s does not touch %s - its land becomes a separate piece of %s (the game takes that)" % (
+            into, region, into))
     more, warns = refusals(mod, campaign, [region])
-    return errors + more, warns
+    return errors + more, far + warns
 
 
 def refusals(mod, campaign, gone, last_town=True, waste=False):

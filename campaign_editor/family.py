@@ -422,12 +422,36 @@ def default_record_age(sex, most=MAX_RECORD_AGE):
     return most if sex == "male" else 20
 
 
+def campaign_db_number(mod, tag, default):
+    """A number of Medieval II's descr_campaign_db.xml (<tag uint="N"/>), the mod's copy else the game's."""
+    import re
+    from .campaignrules import game_data
+    from .moddata import _ci
+    game = game_data(mod)
+    for p in (mod.find("descr_campaign_db.xml"), _ci(game, "descr_campaign_db.xml") if game else None):
+        if p:
+            with open(p, encoding="latin-1") as fh:
+                m = re.search(r"<%s\s+(?:uint|int)=\"(\d+)" % re.escape(tag), fh.read())
+            return int(m.group(1)) if m else default
+    return default
+
+
 def limit_warnings(mod, tree, changes, people, renames=None, old_tree=None):
     """Ancillaries and children over what the game takes (limits.ex_setting: REX's descr_ex.txt
     max_num_ancillaries / max_num_children, else the original game's 8 / 4)."""
-    from .limits import engine_of, ex_setting
+    from .limits import engine_of, ex_setting, game_kind
     out = []
-    if engine_of(mod):                  # REX / M2EX: no limit - apply() rewrites the line instead (limits.raise_setting)
+    if game_kind(mod) == "medieval2":   # descr_campaign_db.xml decides, any exe (campaign_db.cpp; children raised there)
+        most = campaign_db_number(mod, "max_number_of_ancillaries", 8)
+        for key, ch in (changes or {}).items():
+            ancs = ch.get("ancillaries")
+            if ancs is not None and len(ancs) > most:
+                p = people.get(key)
+                out.append("%s: %d ancillaries - the game keeps at most %d (max_number_of_ancillaries in "
+                           "descr_campaign_db.xml, 8 when it has none)"
+                           % ((renames or {}).get(p.name, p.name) if p else key, len(ancs), most))
+        return out
+    if engine_of(mod):                  # REX: the descr_ex.txt lines are rewritten to fit (limits.raise_setting)
         return out
     most = ex_setting(mod, "max_num_ancillaries")
     for key, ch in (changes or {}).items():
@@ -491,6 +515,9 @@ def _engine_settings(plan, tree, changes):
     from .limits import engine_of, ex_setting, game_kind, raise_setting
     if game_kind(plan.mod) == "medieval2":
         _campaign_db_children(plan, tree)
+        # Medieval II never reads descr_ex.txt's max_num_* (engine source: only game_rtw uses them) - its children
+        # and ancillaries live in descr_campaign_db.xml (campaign_db.cpp); the children follow above
+        return
     if not engine_of(plan.mod):
         return
     ancs = max((len(ch.get("ancillaries") or []) for ch in (changes or {}).values()), default=0)
