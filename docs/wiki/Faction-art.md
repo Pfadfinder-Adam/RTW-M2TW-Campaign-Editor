@@ -224,6 +224,35 @@ same **Apply changes** that creates it (brush touch-ups come after it is created
 - They wait in the session's list by itself; **Apply changes** in the main window writes each file in its own format (TGA of the same depth, DDS with its compression and mipmaps,
   Medieval II's `.texture`) with one backup; Restore gives every file back.
 
+## Recolour freely
+
+**Recolour freely...** - under any texture (the Unit editor's battle models, the Models tab's figures) and in the
+window of any picture opened big (a click on a card, a button, a texture...) - changes ANY colour of that one
+picture, not only the faction's: a red tunic blue, a brown shield green, a grey helmet gold. Both games.
+
+- **Click a colour on the *now* picture**: a change starts with it. Every part of a colour like it changes - its light
+  and dark shades too, so the folds stay - and faces and hands are left alone. Shift + click gives the picked change
+  another colour.
+- **to**: click the swatch to pick the new colour, or turn it with the sliders - **hue** round the colour wheel,
+  **saturation** and **lightness** as a share of the old colour's. Light and shade are kept as Recolour keeps them;
+  a colour made black or white keeps its folds.
+- **alike**: how far a colour may lie from the clicked one and still change (more takes more shades, at last the
+  neighbouring colours). **Only the area joined to the click**: the same colour elsewhere stays as it is.
+- **Several changes** one after another, each worked out on the picture as it came - two colours can swap places.
+  **Remove** / **Remove all** take them out.
+- **The brush** on the *after* picture: *add to the change* takes in what the colour test missed (a grey or white
+  painted in gets the new colour, its light kept), *keep as it was* gives pixels back; the size is in the picture's own
+  pixels. *Show its area on 'after'* tints what the picked change takes. Wheel: zoom, right drag: move.
+- **Written for** (on a unit's texture card): *everyone wearing this texture* changes the texture itself - every unit
+  and faction wearing it; *only this unit* gives the unit a model of its own with the recoloured texture (as **Your own
+  files...**), the other units keep their look.
+- A battle texture of the game (its own data, or a mod in `mods/` that holds only its changes) is never written over:
+  it is copied beside it (`..._own`) and every model line naming it - `descr_model_battle.txt`, the modeldb - points at
+  the copy. Any other picture is written in the mod (a game's file: the mod's own copy, the game's stays).
+- What is picked waits for **Apply changes** by itself (Undo / Redo in the window); Apply writes it in the picture's
+  own format (TGA of the same depth, DDS with its compression and mipmaps, Medieval II's `.texture` with its head) with
+  a backup - Restore gives it back.
+
 ## Not yet
 
 The strat-map symbol model; a new strat model from files of your own.

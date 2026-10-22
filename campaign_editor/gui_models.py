@@ -66,7 +66,8 @@ class ModelsEditor(ttk.Frame):
             if model not in shown:                      # - seen in 3D too (the user: 'a texture I cannot see in 3D')
                 cells += [a.art_editor.card(g.inner, p, src_faction, new, slim=True, buttons=[
                     ("3D", lambda m=model: self.view_figure(m, src_faction))] + (
-                    [("Recolour...", lambda q=p["path"]: self.recolour(src_faction, q))]
+                    [("Recolour...", lambda q=p["path"]: self.recolour(src_faction, q)),
+                     ("Recolour freely...", lambda q=p["path"]: self.free_recolour(q))]
                     if not new or new == src_faction else [])) for p in ps]
         g.fill(cells)
 
@@ -87,7 +88,8 @@ class ModelsEditor(ttk.Frame):
         for p in pics:
             a.art_editor.card(box, p, faction, new, wrap=a.art_editor.CELL - 60, slim=True, buttons=[
                 ("3D", lambda: self.view_figure(model, faction))] + (
-                [("Recolour...", lambda q=p["path"]: self.recolour(faction, q))] if own else [])).pack(
+                [("Recolour...", lambda q=p["path"]: self.recolour(faction, q)),
+                 ("Recolour freely...", lambda q=p["path"]: self.free_recolour(q))] if own else [])).pack(
                 fill="x", pady=(4, 0))
         if not pics:
             from .gui_util import hint
@@ -106,6 +108,11 @@ class ModelsEditor(ttk.Frame):
         except Exception as e:
             messagebox.showerror("Recolour", "Could not read the pictures: %s" % e, parent=self)
             return None
+
+    def free_recolour(self, path):
+        """Any colour of this texture, not only the faction's (gui_freecolour.open_free)."""
+        from .gui_freecolour import open_free
+        return open_free(self, path)
 
     def view_figure(self, model, faction):
         from . import stratmodels as SM
