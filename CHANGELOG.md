@@ -29,6 +29,7 @@
 - New mod folder puts no switched-off engine settings files (descr_ex, descr_caps_ex) in: the mod runs on the engine's defaults as before; the editor writes the line a change needs, Check mod files' Copy them in brings the whole list.
 
 ### Fixed
+- Map from zero: the old campaign script kept running on the new map and filled the game's log with errors -> the new map gets an empty script; Undo of a map write left the map file the game had built for it -> it goes too, so the game builds the old map again.
 - Map from zero: the new sea showed the old map's coasts and deep water - the sea's colour picture (water_surface.tga, stretched over the whole map) was left as it was; the new map now writes its own in one sea colour (the old picture's open sea). Both games.
 - View in 3D / Make a card: a man whose skeleton has a twin named the same but for the letter case (Medieval II's halberdiers: the man's MTW2_Halberd_Primary and the halberd's MTW2_Halberd_primary) stood in the T pose and his animations did not play -> each skeleton is read apart, as the game reads them, and the man stands and moves.
 - View in 3D / Make a card: a man whose skeleton the mod keeps only in its own animation set (no descr_skeleton.txt lines) stood in the T pose -> his base pose is taken from the set, and he stands and moves.

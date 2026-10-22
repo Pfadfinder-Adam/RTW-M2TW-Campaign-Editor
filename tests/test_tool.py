@@ -3368,6 +3368,8 @@ building smith
         from campaign_editor.tga import read_tga
         mod = ModData(self.root)
         camp = mod.campaign_dir("test")
+        write(os.path.join(camp, "campaign_script.txt"), "script\n\tfreeze_faction_ai aztecs\nend_script\n")
+        mod = ModData(self.root)
         before = {}
         for d, _, fs in os.walk(self.root):
             for n in fs:
@@ -3405,7 +3407,13 @@ building smith
         self.assertEqual([fb.name for fb in st.factions], ["alpha", "slave"])
         self.assertEqual(st.factions[0].settlements[0].region, region)
         self.assertEqual(st.factions[0].characters[0].xy, MZ.TOWN)
+        # the tester, 2026-10-22: the old campaign_script ran on the new map (161 720 error lines); the map.rwm the
+        # game built for the island stayed after Undo
+        with open(os.path.join(camp, "campaign_script.txt")) as fh:
+            self.assertEqual(fh.read().split(), ["script", "end_script"])
+        write(os.path.join(camp, "map.rwm"), "built by the game")
         restore(mod, bdir)
+        self.assertFalse(os.path.exists(os.path.join(camp, "map.rwm")))
         after = {}
         for d, _, fs in os.walk(self.root):
             for n in fs:
