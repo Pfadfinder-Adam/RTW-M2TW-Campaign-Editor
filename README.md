@@ -44,7 +44,7 @@ Any mod of these games loads - a big one like HLR or a small one that only chang
 | **Campaign map** | drag towns, armies and fleets; paint regions, terrain, climates, rivers and heights; a climate library (what each climate gives, new climates); grow, cut or make the map 3 x bigger; see it in 3D |
 | **Units and buildings** | every line as a field; new ones step by step; models in 3D, swapped or your own; voices; bring them from another mod |
 | **Characters** | traits, retinue, ages, names, the family tree, portraits |
-| **Pictures** | every picture of a faction replaced or recoloured, emblem and banners made |
+| **Pictures** | every picture of a faction replaced or recoloured, any colour of any picture changed (Recolour freely), emblem and banners made |
 | **Rules and scripts** | every campaign setting in plain words; ready add-ons; your own scripts made of blocks, like Scratch |
 | **Safety** | your own mod folder, preview, backups with Restore, Undo / Redo, Check mod files |
 

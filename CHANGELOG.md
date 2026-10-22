@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+### Added
+- Recolour freely: any colour of any picture made another, not only the faction's colours - click a colour on a battle texture, campaign-map figure, card or button, pick the new colour or turn it with the sliders; its light and shade kept, faces left alone, several changes in a row, a brush to add or keep. On every texture card (Unit editor, Models tab) and every picture opened big; a texture of the game is copied, never written over; a unit's texture can change for that unit only. Both games, a backup, Restore gives it back.
+
 ### Fixed
 - Rebels: more than 20 unit types in one rebel type is said with REX / M2EX too - the game keeps only 20 there as well.
 - Family tree: children with no father are found by the mod's own ages (Medieval II girls up to 16, as its files say), not fixed ones.
