@@ -786,14 +786,17 @@ def flow(frame, top=False):
         if width <= 1:
             width = max(frame.winfo_toplevel().winfo_width() - 20, 200)
         live = [it for it in items if it[0].winfo_exists()]
-        sizes = [(w.winfo_reqwidth(), w.winfo_reqheight(), a, b, side) for w, a, b, side in live]
+        # a size the modder gave it (gui_look) instead of what its words ask for
+        sizes = [getattr(w, "_look_size", None) or (w.winfo_reqwidth(), w.winfo_reqheight()) for w, _, _, _ in live]
+        sizes = [(s[0], s[1], a, b, side) for s, (w, a, b, side) in zip(sizes, live)]
         key = (width, tuple(sizes))
         if key == state["key"]:
             return
         state["key"] = key
         places, height = flow_places(sizes, width, top=top)
         for (w, _, _, _), (px, py) in zip(live, places):
-            w.place(x=px, y=py)
+            own = getattr(w, "_look_size", None)
+            w.place(x=px, y=py, width=own[0] if own else "", height=own[1] if own else "")
         frame.configure(height=height)
     frame._flow_items, frame._flow_reflow = items, reflow      # [(widget, pad left, pad right, side)]: gui_look
     frame.bind("<Configure>", reflow, add="+")
