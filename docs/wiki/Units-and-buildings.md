@@ -71,7 +71,8 @@ ammunition..., stat_cost's turns, price, upkeep..., every word of attributes - f
 - A rename drags along what is tied to it: recruit lines, the armies of every campaign, mercenary pools,
   rebels, requirements.
 - **Battle model** (units): each soldier and officer model with an owner's texture and how it sits (foot, horse,
-  camel, elephant, chariot); **Replace model...** takes another model of this mod or of another mod of the same game
+  camel, elephant, chariot); the mount or chariot, the siege engine and the war dogs or pigs a handler unit brings, each
+  with its own texture and View in 3D; **Replace model...** takes another model of this mod or of another mod of the same game
   (with every file it names; the unit's factions get textures on it), **View in 3D...** (drawn by the graphics card where it
   gives OpenGL 3.3, else as before) turns the model with the mouse - Medieval II's `.mesh` and Rome's `.cas` - with each faction's texture, the game's detail levels and weapons
   on or off. Rome: in the T pose (arms out) or as the file stands (**Pose**); a chariot unit on its chariot with its

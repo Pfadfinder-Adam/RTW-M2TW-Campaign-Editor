@@ -29,6 +29,7 @@
 - New mod folder puts no switched-off engine settings files (descr_ex, descr_caps_ex) in: the mod runs on the engine's defaults as before; the editor writes the line a change needs, Check mod files' Copy them in brings the whole list.
 
 ### Fixed
+- Units > Battle model: war dogs and pigs had no picture of their own, only their handlers' - the animals are listed now with their own texture, View in 3D and Save its files; chariots and siege engines show their texture too, as do soldiers whose model has no texture line (Rome).
 - Campaign HUD (Rome): the four tabs were too wide and read 'Settlement' and a 4th 'Army' -> as in the game: Army, Town, Agents and an empty one, at their places.
 - Campaign HUD: a right click names every piece under it (a ring and its button's picture) and says when a picture is shared by two buttons; Undo / Redo redraw the view.
 - Units / Buildings: after Apply or Undo the form went blank -> the unit on show stays on show.
