@@ -3464,6 +3464,22 @@ building smith
         self.assertEqual(out.count("\tbuilding"), 1)
         self.assertEqual(out[-1], "}")
 
+    def test_exe_self_check_names_a_module_left_out_of_the_build(self):
+        """The tester, 2026-10-22: Tools > A mod from zero said 'No module named campaign_editor.gui_modzero' in the
+        exe while the self-check passed (it only tries the modules the exe has). The build writes the source's module
+        list into the exe; the self-check names every one the exe lacks."""
+        from unittest import mock
+        from campaign_editor import selfcheck as SC
+        with tempfile.TemporaryDirectory() as d:
+            with open(os.path.join(d, "modules.txt"), "w", encoding="utf-8") as fh:
+                fh.write("__main__\ncheck\ngui_nothere\n")
+            with mock.patch.object(SC.sys, "_MEIPASS", d, create=True):
+                self.assertEqual(SC.built_list(), ["check", "gui_nothere"])
+                bad = []
+                SC._modules(lambda *a: None, lambda what, why: bad.append((what, str(why))), False)
+        self.assertIn(("module gui_nothere", "not in the exe"), bad)
+        self.assertEqual(SC.built_list(), [])
+
     def test_campaign_hud_laid_out_as_the_engine(self):
         """Interface > Campaign HUD (the engines' places, hudlayout): the HUD's bottom at 768, its top 768 - the LEFT
         panel's height, the MIDDLE panel on the bottom, the pieces from the mod's own sheet; a changed page shows."""
