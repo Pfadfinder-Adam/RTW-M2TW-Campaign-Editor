@@ -3,18 +3,22 @@ words, so Units can offer them even when no unit of the mod uses one yet.
 
 REX (the 64-bit engine for Rome: Total War) and M2EX (Medieval II's) added these; the list is
 the engines' own (their builds of 2026-10-03 added the last group). A word goes on one line of the unit:
-'attributes', 'stat_mental', 'stat_ground' or 'stat_pri_attr' / 'stat_sec_attr'."""
+'attributes' or 'stat_pri_attr' / 'stat_sec_attr'. REX's EDU header puts the morale words on stat_mental and the
+desert / forest words on stat_ground - wrong: a game test (Rome with REX, tester 2026-10-22, the script API's
+hasAttribute) showed 'steadfast' on stat_mental taken without an error but doing NOTHING, on attributes working, as
+the engine source's unit reader says for all seven (NOT_ON). An unknown word on attributes stops REX at loading
+('Unrecognised attribute')."""
 
 REX = "REX"
 
 # (word, line, effect)
 ATTRIBUTES = [
     # morale
-    ("expendable", "stat_mental", "does not give other units the 'friendlies routing' morale penalty"),
-    ("elitist", "stat_mental", "ignores the 'friendlies routing' penalty from units that are not elitist"),
-    ("steadfast", "stat_mental", "smaller 'friendlies routing' morale penalty"),
-    ("intimidate", "stat_mental", "a lesser fear effect on enemies nearby"),
-    ("immune_to_psychology", "stat_mental", "no morale penalty from fear effects of enemies nearby"),
+    ("expendable", "attributes", "does not give other units the 'friendlies routing' morale penalty"),
+    ("elitist", "attributes", "ignores the 'friendlies routing' penalty from units that are not elitist"),
+    ("steadfast", "attributes", "smaller 'friendlies routing' morale penalty"),
+    ("intimidate", "attributes", "a lesser fear effect on enemies nearby"),
+    ("immune_to_psychology", "attributes", "no morale penalty from fear effects of enemies nearby"),
     # fatigue (hardy = -2 fatigue rate, very_hardy = -4)
     ("relentless", "attributes", "tires more slowly (fatigue rate -2, like hardy)"),
     ("disciplined_missile", "attributes", "tires more slowly while shooting (-1)"),
@@ -26,8 +30,8 @@ ATTRIBUTES = [
     ("ai_cannot_skirmish", "attributes", "the AI never puts it in skirmish mode"),
     ("ai_cannot_toggle_formation", "attributes", "the AI never switches it to loose formation"),
     # terrain
-    ("desert_raider", "stat_ground", "+2 when fighting in desert"),
-    ("forest_ambusher", "stat_ground", "+2 when fighting in forest"),
+    ("desert_raider", "attributes", "+2 when fighting in desert"),
+    ("forest_ambusher", "attributes", "+2 when fighting in forest"),
     # in a town, unit size
     ("troublemaker", "attributes", "in a garrison: public order -5 % per 80 soldiers, income - 2 per soldier"),
     ("police", "attributes", "in a garrison: public order +5 % per 80 soldiers"),
@@ -69,7 +73,16 @@ ENGINE_KEYS = {
                                      "Medieval II has it, REX adds it to Rome"),
 }
 
-LINES = ("attributes", "stat_mental", "stat_ground", "stat_pri_attr", "stat_sec_attr")
+LINES = ("attributes", "stat_pri_attr", "stat_sec_attr")
+
+# words REX's header (wrongly) puts on these lines: there they do nothing, the engine reads them on 'attributes'
+NOT_ON = {"stat_mental": ("expendable", "elitist", "steadfast", "intimidate", "immune_to_psychology"),
+          "stat_ground": ("desert_raider", "forest_ambusher")}
+
+
+def misplaced(key, value):
+    """The words of a stat_mental / stat_ground value that do nothing there (they belong on 'attributes')."""
+    return [w for w in words(value) if w in NOT_ON.get(key, ())]
 
 
 def for_line(key):
