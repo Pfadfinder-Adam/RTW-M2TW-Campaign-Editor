@@ -4759,8 +4759,10 @@ class App(tk.Tk):
             self.v["short_name"].set("")
             self.t_descr.configure(state="normal")
             self.t_descr.delete("1.0", "end")
-        # shown greyed with the game it belongs to, not hidden (NN/g: features vanishing unexplained confuse)
-        for rows, mine, words in ((self.rome_rows, not m2, " (Rome only)"), (self.m2_rows, m2, " (Medieval II only)")):
+        # shown greyed with the game it belongs to, not hidden (NN/g: features vanishing unexplained confuse); the
+        # game on a line of its own - beside the words it was cut in the narrow label column ('Religion (...')
+        for rows, mine, words in ((self.rome_rows, not m2, "\n(Rome only)"),
+                                  (self.m2_rows, m2, "\n(Medieval II only)")):
             for w in rows:
                 w.grid()
                 if w.winfo_class() in ("TLabel", "Label"):

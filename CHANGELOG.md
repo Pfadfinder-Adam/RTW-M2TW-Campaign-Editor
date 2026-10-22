@@ -33,6 +33,7 @@
 - New mod folder puts no switched-off engine settings files (descr_ex, descr_caps_ex) in: the mod runs on the engine's defaults as before; the editor writes the line a change needs, Check mod files' Copy them in brings the whole list.
 
 ### Fixed
+- Edit faction: the game a row belongs to ("Medieval II only" beside Religion on Rome) was cut off -> it stands on a line of its own.
 - New mod folder on the plain game: the game could not keep its built map (an error in its log, the map built again at every start) -> the new mod has the folder the game keeps it in.
 - Recolour: a faction with no secondary colour could not be previewed or written (an error) -> it recolours like any other.
 - Map from zero: the old campaign script kept running on the new map and filled the game's log with errors -> the new map gets an empty script; Undo of a map write left the map file the game had built for it -> it goes too, so the game builds the old map again.
