@@ -224,7 +224,9 @@ class Map3DView(ttk.Frame):
             if f is None:
                 return None, moved
             return Strat(f), (hash(f.dump()), moved)
-        except Exception:                                # nothing to write yet, a half-made change: the file
+        except Exception as e:                           # a half-made change: the file - said, else the 3D map
+            if "Nothing to write" not in str(e):         # and the Map disagree unseen (a tester: an army shown back
+                self.lbl.configure(text="the Map's changes are not shown here: %s" % e)    # in its town)
             return None, moved
 
     def load(self):

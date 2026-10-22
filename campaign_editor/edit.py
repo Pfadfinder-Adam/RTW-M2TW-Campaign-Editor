@@ -609,7 +609,7 @@ def map_changes(plan, campaign, changes):
             raise ValueError("%s has no faction block in descr_strat.txt" % fac)
         for m in items:
             src = tuple(m["from"])
-            c = next((c for c in fb.characters if c.name == m["name"] and c.xy == src), None)
+            c = _standing(plan, fb, m["name"], src)
             if c is None:
                 raise ValueError("%s at %d, %d is not a character of %s" % (m["name"], src[0], src[1], fac))
             if c.role:
@@ -726,7 +726,7 @@ def _army_edits(plan, f, faction=None, units=None, remove=None):
     found = []
     for what, m in jobs:
         src = tuple(m["from"])
-        c = next((c for c in fb.characters if c.name == m["name"] and c.xy == src), None)
+        c = _standing(plan, fb, m["name"], src)
         if c is None:
             raise ValueError("%s at %d, %d is not a character of %s" % (m["name"], src[0], src[1], faction))
         if what == "remove" and c.role:
@@ -757,6 +757,17 @@ def _army_edits(plan, f, faction=None, units=None, remove=None):
         plan.note(f, "%s (%s): %d unit(s)%s" % (c.name, c.kind, len(lines), " + his bodyguard" if keep else ""))
 
 
+def _standing(plan, fb, name, src):
+    """The character of fb named so that stood at src when the Map read the file - also when a town moved in the
+    same write carried him to its new tile (a tester: an army taken out of a town went back into it when the town
+    was moved after), or None."""
+    for xy in (src, getattr(plan, "carried", {}).get((name, src))):
+        c = next((c for c in fb.characters if c.name == name and c.xy == xy), None) if xy else None
+        if c is not None:
+            return c
+    return None
+
+
 def _moves(plan, f, campaign, faction=None, moves=None):
     """opts['moves'] = [{'name', 'from': (x, y), 'to': (x, y)}]: characters of
     the faction moved on the map, checked like the window checks them (faction / moves: another faction's, the
@@ -770,7 +781,7 @@ def _moves(plan, f, campaign, faction=None, moves=None):
     # another one leaves later in the list, or of another faction (a report: 'another army stands there')
     for m in plan.opts["moves"] if moves is None else moves:
         src, dst = tuple(m["from"]), tuple(m["to"])
-        c = next((c for c in fb.characters if c.name == m["name"] and c.xy == src), None)
+        c = _standing(plan, fb, m["name"], src)
         if c is None:
             raise ValueError("%s at %d, %d is not a character of %s" % (m["name"], src[0], src[1], faction))
         army = _has_army(s.lines[c.start:c.end])

@@ -34,6 +34,9 @@
 
 ### Fixed
 - Edit faction: the game a row belongs to ("Medieval II only" beside Religion on Rome) was cut off -> it stands on a line of its own.
+- Maps (and 3D): an army taken out of its town went back into it when the town was moved after -> it stays where you put it; one left in the town still goes with it.
+- Maps > 3D: a white frame showed on empty ground and none on the army or resource you had moved -> the 3D map shows the Map's changes again (and says so in its bar when it cannot).
+- Maps > 3D: thin pale lines along the edges of some ground squares on some graphics cards -> the ground is drawn without them.
 - New mod folder on the plain game: the game could not keep its built map (an error in its log, the map built again at every start) -> the new mod has the folder the game keeps it in.
 - Recolour: a faction with no secondary colour could not be previewed or written (an error) -> it recolours like any other.
 - Map from zero: the old campaign script kept running on the new map and filled the game's log with errors -> the new map gets an empty script; Undo of a map write left the map file the game had built for it -> it goes too, so the game builds the old map again.

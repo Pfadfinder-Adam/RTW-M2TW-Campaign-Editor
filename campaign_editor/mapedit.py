@@ -367,6 +367,7 @@ def apply_places(plan, campaign, places, painted=None):
         old = orig(mod, campaign, what, region)
         for c in s.characters_at(tuple(old)):
             f.set(c.start, RE_XY.sub("x %d, y %d" % to, f.text(c.start), 1))
+            plan.carried[(c.name, tuple(old))] = tuple(to)
             plan.note(f, "%s moves with the town of %s to %d, %d" % (c.name, region, to[0], to[1]))
         for c in s.characters_at(tuple(to)):
             if any(l.split(None, 1)[:1] == ["army"] for l in s.lines[c.start:c.end]):
