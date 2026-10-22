@@ -9,7 +9,6 @@
 - View in 3D: Face and parts - pick each head, body ... variant by hand (Medieval II); Mount's colour - each of the mount's own textures; Units > Battle models lists every armour upgrade's model with its own View in 3D. Front / Back buttons gone (the model turns with the mouse).
 - Tools > A mod from zero, step by step: your own mod folder, the map, the factions, units and buildings, Check mod files, the game - in order, how far each is, a button for each.
 - Make a card / Make a picture: 'Painted look' - the 3D view turned into flat brush areas with a thin dark line, so the card looks painted, not 3D.
-- Check mod files: a faction with no unit for custom / quick battles is named (a quick battle that picks it stops the game), with what to do.
 - Map from zero (the map's bar): a new small map in place of the campaign's - one island, one region with its town, a port and a resource, one faction (Rome: the Gauls, Medieval II: France) and the rebels; Restore puts the old map back.
 - Map from zero: as many regions and factions as you like - each faction its own capital and leader, the regions left over the rebels' towns; the map grows to fit them.
 - Interface > Campaign HUD: the campaign map's bottom panel as the game draws it (both games, the engines' own places), from the mod's pictures; right click a piece to replace its picture or set its place and size; preview on bigger screens; save as PNG.
@@ -19,7 +18,6 @@
 - Units and Buildings: the block's lines also as text, as written in the file - this block or the whole file (line numbers, colours, Undo, Find, a wrong line underlined red); both views show the same changes, Apply writes them (renames drag their recruit lines and armies along). Open in Notepad++ (at the block's line). A right click on a line says what it means, its form (commas or spaces, values in order), a line like it, and the words it takes.
 - The game stopped? The editor notices it (after Start the game, or at its next start when it was closed) and asks once whether to send a report - the reason in one line, nothing sent without your click; can be switched off in Settings.
 - Coast & heights drawn by the graphics card straight into the window on Windows (the map, the shore line and the brush; moving, zooming and painting no longer remake a picture each time); the frame's time shows beside the zoom. Elsewhere, or if the card fails, it draws as before.
-- Check mod files names the files a mod built on the plain game holds that are still the game's own, byte for byte, with **Take them out** (backed up - Restore puts them back).
 - The editor's own look: Tools > Edit the editor's look - drag any button, tick or label anywhere, rename it, give it a hover text or a width, hide it, take it back; kept for every start. The editor's language from a language file (Settings), and Words to translate writes every word for translators.
 
 ### Changed
@@ -34,46 +32,60 @@
 - Campaign HUD (Rome): the four tabs were too wide and read 'Settlement' and a 4th 'Army' -> as in the game: Army, Town, Agents and an empty one, at their places.
 - Campaign HUD: a right click names every piece under it (a ring and its button's picture) and says when a picture is shared by two buttons; Undo / Redo redraw the view.
 - Units / Buildings: after Apply or Undo the form went blank -> the unit on show stays on show.
-- New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
 - Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
-- New faction: the form jumped a line when the template hint came or went -> it stays put.
 - Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
 - New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
 - Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
-- Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
-- Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
-- Bring a faction: a horde faction lost its horde lines (it could not wander after losing its last town) -> its horde lines come along, with the unit names it got here.
-- The crash doctor called an error the game went on after a stop -> only an error the game ended on counts as a stop; the others are listed as serious errors.
-- The REX morale and terrain words (steadfast, expendable, elitist, intimidate, immune_to_psychology, desert_raider, forest_ambusher) were offered on stat_mental / stat_ground, where the game ignores them -> they go on attributes, and Check mod files names units that still have them on the old lines.
-- Check mod files named textures of campaign-map models as missing when the mod keeps them in its packs -> the packs are looked in.
-- Ctrl + a key while a drop-down list was open showed an internal error -> nothing happens, as it should.
-- New faction: after picking its towns on the map, the colour buttons showed no colour -> they keep it.
-- A faction brought from another mod showed the template's leader's face and select map on the faction tab -> it shows its own (or says the face is left empty on Apply).
-- Emblem everywhere stopped on a picture whose size could not be read -> it shows 'size unknown'.
-- HD sprite sheets (made with M2EX's own packer) showed the wrong part of the picture -> sprite sheets are read as the game reads them.
-- New / Edit faction kept the fields of the faction shown before (names, texts, colours, pictures picked) -> the form starts empty when New faction opens, a template is picked, a faction is brought or another faction is edited.
-- A faction brought from another mod got its template's flags and icons where it had none of its own -> those pictures are left empty now (give your own on the Art tab).
 - Building '?' hints mislabelled half the vanilla lines (a level and 'bonus N' are both allowed on every effect) -> both forms explained; free_upkeep, religion, settlement sizes (castles too) and Rome's weapon levels said right; Medieval II level lines, hidden_resources and Barbarian Invasion's religious_belief get hints.
 - Unit '?' hints checked against the games' files: class skirmish, voice words, banner, animal (wardogs, pigs), berserker discipline, formations, weapon sounds and types, era number, soldier radius / height corrected; lines that are only notes in Medieval II's file (stat_pri_ex, stat_armour_ex, unit_info) are said as not read and refused when typed into a unit.
 - A recruit line ending in 'bonus N' is no longer called a mistake.
+
+## 0.35.2 - 2026-10-22
+
+### In short
+- **Fixed**: the map no longer stops drawing while a town waits for Apply; writes no longer stop on a name with a letter like 'ė'; a mod built on the plain game no longer gets the game's whole campaign folder copied in; Coast & heights no longer lags on a big map; many smaller fixes from the testers' and players' reports.
+- **Added**: Check mod files names a faction with no unit for custom / quick battles (that battle stops the game) and the files a mod holds that are still the game's own, with Take them out.
+- **Changed**: the exe checks itself for every part of the editor before it is handed out.
+
+### Fixed
 - The map stopped drawing when a watchtower, port, army or region point was picked while a town waited for Apply -> it draws on.
 - A name with a letter like 'ė' or 'ā' stopped the write -> the nearest plain letter is written, and the write says so.
 - A full description typed for a faction whose campaign had none was lost on Apply -> it is written.
 - A new full name became the short name and the adjective too when all three had the same word -> each keeps its own.
+- New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
+- New faction: the form jumped a line when the template hint came or went -> it stays put.
+- New / Edit faction kept the fields of the faction shown before (names, texts, colours, pictures picked) -> the form starts empty when New faction opens, a template is picked, a faction is brought or another faction is edited.
+- New faction: after picking its towns on the map, the colour buttons showed no colour -> they keep it.
+- A faction brought from another mod got its template's flags and icons where it had none of its own -> those pictures are left empty now (give your own on the Art tab).
+- A faction brought from another mod showed the template's leader's face and select map on the faction tab -> it shows its own (or says the face is left empty on Apply).
+- Bring a faction: a horde faction lost its horde lines (it could not wander after losing its last town) -> its horde lines come along, with the unit names it got here.
 - The region brush stopped on a map whose sea is not the usual blue -> it works.
 - A garrison for a town the map shows no town for stopped the write -> that town is skipped with a warning.
 - Mercenaries: a pool naming a region the map lacks refused any edit -> only the regions a pool gains are checked.
 - A family edit was refused for records and 'none' wives written the games' own way -> they read right.
 - Coast & heights lagged on a big map with the shore line on (thousands of lines in the window) -> the shore line is drawn into the map's picture and worked out once; the brushes and moving the map are quicker, and the line follows the brush while it is held.
 - Medieval II maps whose regions carry 'legion:' lines: new regions got a stray line, and the game found none of them -> written right, and Load offers to take the stray lines out of an older file.
-- A drop-down (the map's Layers...) stopped the editor when its bar had been rebuilt -> it opens again.
-- Start the game refused an exe set to run as administrator -> Windows is asked to start it so.
 - Medieval II's custom campaigns (campaign/custom/...) did not appear in Campaign -> they are listed and can be edited.
-- Apply on a page with nothing to write (Recolour, Events...) said 'its changes are kept by themselves' -> it says what to do.
-- A .zip picked instead of a picture gave a technical error -> it says to unpack it first.
 - A mod built on the plain game got the game's whole campaign folder (descr_strat, events, scripts, texts) when a faction's map picture was redrawn, and those copies hid the modder's own files -> now only the changed picture goes in, and a map change brings only the map's own files.
 - The editor's automatic fixes (faction-select slots, 'faction destroyed' pictures, a later faction holding a town) put the game's own campaign files into a mod built on the plain game though nothing in them was changed -> they touch only files you changed; a picture written with the game's very bytes is not copied in.
 - Load offered to open the locked factions of the game's own campaigns in a mod built on the plain game, which copied the game's campaign file in -> it asks only about the mod's own campaigns (Check mod files still names them).
+- The REX morale and terrain words (steadfast, expendable, elitist, intimidate, immune_to_psychology, desert_raider, forest_ambusher) were offered on stat_mental / stat_ground, where the game ignores them -> they go on attributes, and Check mod files names units that still have them on the old lines.
+- Check mod files named textures of campaign-map models as missing when the mod keeps them in its packs -> the packs are looked in.
+- The crash doctor called an error the game went on after a stop -> only an error the game ended on counts as a stop; the others are listed as serious errors.
+- HD sprite sheets (made with M2EX's own packer) showed the wrong part of the picture -> sprite sheets are read as the game reads them.
+- Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
+- Emblem everywhere stopped on a picture whose size could not be read -> it shows 'size unknown'.
+- A drop-down (the map's Layers...) stopped the editor when its bar had been rebuilt -> it opens again.
+- Ctrl + a key while a drop-down list was open showed an internal error -> nothing happens, as it should.
+- Ctrl+A in a number box with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
+- Start the game refused an exe set to run as administrator -> Windows is asked to start it so.
+- Apply on a page with nothing to write (Recolour, Events...) said 'its changes are kept by themselves' -> it says what to do.
+- A .zip picked instead of a picture gave a technical error -> it says to unpack it first.
+
+### Added and changed
+- Check mod files: a faction with no unit for custom / quick battles is named (a quick battle that picks it stops the game), with what to do.
+- Check mod files names the files a mod built on the plain game holds that are still the game's own, byte for byte, with **Take them out** (backed up - Restore puts them back).
+- The exe checks itself before it is handed out: every part of the editor the source has must be in it.
 
 ## 0.35.1 - 2026-10-18
 
