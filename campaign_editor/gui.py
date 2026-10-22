@@ -2310,6 +2310,9 @@ class App(tk.Tk):
         if ed is None and self.editors.get("terrain") is not None and self.map_work() and \
                 self.tab_name() in self.TERRAIN_TABS:
             ed = self.editors["terrain"]                 # Maps > Terrain / Coast & heights: its strokes
+        if ed is None and getattr(self, "map3d", None) is not None and self.map_work() and \
+                self.tab_name() == self.MAP3D_TAB:
+            return self.map3d.undo_step(redo)            # Maps > 3D: its strokes, else the window's own steps
         if ed is None:
             return False
         step = getattr(ed, "redo_step" if redo else "undo_step", None)

@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### Added
+- Maps > 3D: **Ctrl+Z / Ctrl+Y** take back (or do again) what was done on the 3D map - a brush stroke, regions painted, a figure carried; with a tile brush in hand the mouse resting on a tile says its ground, climate and region.
 - Maps > 3D: Paint > **Regions** - the Map's Edit regions brush right on the 3D map (paint tiles into the region picked, the region colours shown over the map, the borders drawn again after the stroke); **Alt + click** picks the tile's own region, ground, mark or climate for the brush.
 - Maps > 3D > Layers: **colours over the map** - each tile in its climate's colour (the sea's too: what land raised there gets) or its region's, following the brushes while you paint; picking the Climates brush shows the climates by itself.
 - Maps > 3D: **Paint** (was Heights brush) paints right on the 3D map - the heights, or tile by tile the ground, rivers / cliffs / volcanoes, climates, land or sea, each picked in 'brush' with the Terrain editor's own palette; Undo, Preview and Apply shared with the Terrain editor, the painted ground shows at once.
