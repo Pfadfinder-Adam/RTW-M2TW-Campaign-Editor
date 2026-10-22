@@ -18096,6 +18096,36 @@ building smith
         self.assertTrue(all(got.values()))
         self.assertEqual(Image.open(got["roman"]).size, (360, 160))                      # Rome's own size
 
+    def test_event_date_changed_keeps_the_queue(self):
+        """Review 2026-10-22: a date changed in Events (or a later faction's event written) stayed where it was - an
+        event left behind one of a later date never fires (the games read descr_events.txt as a queue). It moves to
+        its place, its comment with it; an event in order stays put; a later faction's event goes in order too."""
+        from campaign_editor import events as EV
+        from campaign_editor import emergence as EM
+        from campaign_editor.plan import Plan
+        camp = os.path.join(self.root, "data", "world", "maps", "campaign", "test")
+        write(os.path.join(camp, "descr_events.txt"),
+              "; events\nevent\thistoric\ta\ndate\t2\n\n; about b\nevent\thistoric\tb\ndate\t5\n\n"
+              "event\thistoric\tc\ndate\t9 winter\n\nevent\tplague\tp\ndate\t12\n\nevent\tplague\tp\ndate\t14\n")
+        mod = ModData(self.root)
+        path = EV.path_of(mod, "test")
+        names = lambda plan: [(e["id"], e["date"]) for e in EV.read(plan.files[path])]
+        plan = Plan(mod, "e", "e", {})
+        EV.apply(plan, "test", {"edit": {"b": {"date": "10"}}})
+        self.assertEqual(names(plan), [("a", "2"), ("c", "9 winter"), ("b", "10"), ("p", "12"), ("p#2", "14")])
+        t = plan.files[path].texts()
+        self.assertEqual(t[t.index("event\thistoric\tb") - 1], "; about b")
+        self.assertTrue(any("date order" in n for _, n in plan.notes))
+        plan = Plan(mod, "e", "e", {})                  # the second of two of one name, to the front; the first edited
+        EV.apply(plan, "test", {"edit": {"p#2": {"date": "1"}, "p": {"date": "13"}}})
+        self.assertEqual(names(plan), [("p", "1"), ("a", "2"), ("b", "5"), ("c", "9 winter"), ("p#2", "13")])
+        plan = Plan(mod, "e", "e", {})
+        EV.apply(plan, "test", {"edit": {"c": {"date": "8"}}})
+        self.assertFalse(any("date order" in n for _, n in plan.notes))
+        plan = Plan(mod, "e", "e", {})
+        EM.set_event(plan, "test", "alpha", "6")
+        self.assertEqual([e["name"] for e in EV.read(plan.files[path])], ["a", "b", "alpha", "c", "p", "p"])
+
     def test_rome_pak_read(self):
         """Rome's data/packs/*.pak: the name table, the end offsets, the files one after another - a file not loose
         on disk is read from the pack (x.tga found as x.tga.dds too)."""
