@@ -28,6 +28,7 @@ import time
 import numpy as np
 
 from . import maptrees as MT
+from . import terrain as T
 from . import terrain3d as T3
 
 SCALE = {"medieval2": 1.2, "rome": 0.6}         # the games' height scale (aerial_map.h)
@@ -183,17 +184,6 @@ class MapData:
         """(layer of each point (rows, cols) uint16, [pictures (LAYER, LAYER, 3)], [repeats a tile per layer])."""
         keys = sorted(set(T3.GROUND_KEYS.values()) | {"beach"})
         names, choices, density = T3.picture_choices(mod, keys, winter)
-        ground = T3._picture(mod, campaign, "map_ground_types.tga")
-        climate = T3._picture(mod, campaign, "map_climates.tga")
-        shape = (self.rows, self.cols)
-        gi = T3._ground_index(ground, keys) if ground is not None and ground.shape[:2] == shape else \
-            np.full(shape, keys.index("fertility_low"), np.int32)
-        ci = T3._climate_index(mod, climate, names) if climate is not None and climate.shape[:2] == shape else \
-            np.zeros(shape, np.int32)
-        sea = self.heights <= 0
-        # the games' own fix at loading: a land point with a sea colour is low fertility, a sea point is beach
-        gi = np.where(gi < 0, keys.index("fertility_low"), gi)
-        gi = np.where(sea, keys.index("beach"), gi)
         files, loaded, pictures, repeat, missing = {}, {}, [], [], set()
         table = np.zeros((len(names), len(keys)), np.int32)
         for c, cname in enumerate(names):
@@ -228,7 +218,49 @@ class MapData:
                                   sorted(os.path.basename(m) for m in missing)[:4]) + (" ..." if len(missing) > 4 else "")))
         if not any(choices.values()):
             self.notes.append("no descr_aerial_map_ground_types.txt - the grounds' plain colours shown")
-        return table[ci, gi].astype(np.uint16), pictures, repeat
+        self._ground_keys, self._climate_names, self._climates, self._table = keys, names, T.climates(mod), table
+        layers = self.layers_of(T3._picture(mod, campaign, "map_ground_types.tga"),
+                                T3._picture(mod, campaign, "map_climates.tga"), self.heights <= 0)
+        return layers, pictures, repeat
+
+    def layers_of(self, ground, climate, sea):
+        """The ground picture (layer) of points: (h, w) uint16 from their map_ground_types and map_climates colours
+        ((h, w, 3) top row first, or None) and whether each is under the sea ((h, w) bool) - the rule of loading,
+        also for a brush's few points (a point raised out of the water shows its own ground and climate at once)."""
+        keys, shape = self._ground_keys, sea.shape
+        gi = T3._ground_index(ground, keys) if ground is not None and ground.shape[:2] == shape else \
+            np.full(shape, keys.index("fertility_low"), np.int32)
+        ci = T3._climate_index(None, climate, self._climate_names, self._climates) if climate is not None and \
+            climate.shape[:2] == shape else np.zeros(shape, np.int32)
+        # the games' own fix at loading: a land point with a sea colour is low fertility, a sea point is beach
+        gi = np.where(gi < 0, keys.index("fertility_low"), gi)
+        gi = np.where(sea, keys.index("beach"), gi)
+        return self._table[ci, gi].astype(np.uint16)
+
+    def refresh_ground(self, mod, campaign):
+        """The brushes changed the ground, climates or regions in memory (land raised out of the water, land sunk
+        under it): what the tile models, trees and borders stand on read again, each point's picture made again -
+        returned, for the card to take on the main thread. No new build of the map (the user, 2026-10-22: the map
+        made again at a stroke's end lagged, and the new land's texture came in after)."""
+        from . import mapnet as N
+        from . import tilemodels as TM
+        ground = T3._picture(mod, campaign, "map_ground_types.tga")
+        climate = T3._picture(mod, campaign, "map_climates.tga")
+        if getattr(self, "_model_src", None):
+            self._model_src = (ground,) + tuple(self._model_src[1:])
+        if getattr(self, "_tree_src", None):
+            H, W = (self.rows - 1) // 2, (self.cols - 1) // 2
+            names = [n for n, _ in self._tree_src[2]]
+            ci = T3._climate_index(mod, climate, names) if climate is not None and \
+                climate.shape[:2] == self.heights.shape else np.zeros(self.heights.shape, np.int32)
+            self._tree_src = (ground, ci[1::2, 1::2][:H, :W][::-1]) + tuple(self._tree_src[2:])
+        src = getattr(self, "_net_src", None)
+        if src:
+            src["grid"], src["names"] = N.region_grid(mod, campaign)
+            H, W = src["grid"].shape
+            src["mountains"] = TM.tile_types(ground)[TM.MOUNTAINS_HIGH] if ground is not None and \
+                ground.shape[:2] == self.heights.shape else np.zeros((H, W), bool)
+        return self.layers_of(ground, climate, self.heights <= 0)
 
     def _tile_models(self, mod, campaign, winter):
         """The tile models (mountains, hills, volcanoes - tilemodels) placed on this map, their pictures."""
