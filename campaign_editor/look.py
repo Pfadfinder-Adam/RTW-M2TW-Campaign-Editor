@@ -83,6 +83,17 @@ def set_entry(look, key, entry):
         look["order"].append(key)
 
 
+def merged(entry, change):
+    """A piece's entry with a change laid over it (None in the change takes that part out) - a new dict."""
+    new = dict(entry or {})
+    for k, v in (change or {}).items():
+        if v is None:
+            new.pop(k, None)
+        else:
+            new[k] = v
+    return new
+
+
 # ---- the layout board (gui_lookboard): every page of the editor laid out side by side ----
 def board_dir():
     return _home(BOARD_FOLDER)
@@ -290,6 +301,6 @@ def template(have=None, seen=()):
     return {"language": "", "by": "", "words": out}
 
 
-__all__ = ["load", "save", "set_entry", "look_file", "board_dir", "load_board", "save_board", "lay_cards",
+__all__ = ["load", "save", "set_entry", "merged", "look_file", "board_dir", "load_board", "save_board", "lay_cards",
            "piece_at", "drop_beside", "free_spot", "languages", "read_language", "add_language", "words",
            "template", "KEYS"]

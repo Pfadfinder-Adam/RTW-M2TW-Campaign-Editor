@@ -26,13 +26,16 @@ changes simply goes back to its place.
 **Tools > Layout board...** does the same on one big canvas, with every page already laid out: each work of the
 main window, the tabs of Maps and Factions and the Tools windows side by side (the editor opens each one in turn the
 first time and keeps their pictures; **Refresh all pages** takes them again, after you load a mod for example). The
-wheel zooms, the middle button moves the board. Drag a button, tick or label with the left button: it goes into the
-row beside the piece nearest to where you drop it - hold **Alt** (or tick **Free place**) and it stays exactly where
-you drop it. Drag a corner of the picked piece to size it; the arrows move a free piece a pixel (Shift: ten). Right
-click a piece: Rename, Hover text, Size in pixels, Width in letters, Hide, Back into its row, Back to how it was,
-Show it in the editor; right click a page: refresh it, show it in the editor, its pieces back to how they were. Each
-change is made in the editor at once and kept in the same `CampaignEditor_look.json`; **Undo** / **Redo** and
-**Back to how it was...** take it back. The questions and file pickers Windows draws itself are not on the board.
+wheel zooms, the middle button moves the board. Drag a button, tick or label with the left button: it stays exactly
+where you drop it. On the way its edges and middle stick to the lines the other pieces (and the window's edges)
+stand on - a pink line shows which - and, with **Grid** ticked, to a grid (4, 8, 16 or 32 px; **Stick to lines**
+turns the lines off). Hold **Alt** (or tick **In a row**) to put it into the row beside the piece nearest to where
+you drop it instead. Drag a corner of the picked piece to size it (it sticks the same way); the arrows move it a
+pixel (Shift: ten). Right click a piece: Rename, Hover text, Size in pixels, Width in letters, Hide, Back into its
+row, Back to how it was, Show it in the editor; right click a page: refresh it, show it in the editor, its pieces
+back to how they were. Your changes are a draft drawn on the board (the piece where it goes, its old place greyed):
+**Accept** puts them all on the editor and keeps them in the same `CampaignEditor_look.json`, **Discard** drops
+them, **Undo** / **Redo** step through them; after Accept, **Undo** and **Back to how it was...** take it back. The questions and file pickers Windows draws itself are not on the board.
 
 **Settings > Language of the window** puts a language on every window, the hover texts and the menus; **Add a
 language file...** puts one in. **Words to translate...** writes every word of the windows into a file - fill in the
