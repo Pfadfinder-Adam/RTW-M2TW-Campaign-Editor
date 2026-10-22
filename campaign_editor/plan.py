@@ -270,6 +270,7 @@ class Plan:
             nw = self.opts.get("people") or ""
             if not nw:
                 base = (self.opts.get("short_name") or (self.opts.get("display_name") or "").split(" of ")[-1]).strip()
+                base = base.split()[0] if base.split() else base        # 'Zorgan Realm': the Zorgans
                 nw = base if not base or base.lower().endswith("s") else base + "s"
             if nw:
                 pairs.append((old, nw))

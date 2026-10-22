@@ -559,7 +559,7 @@ def text_strings(plan):
                 # the campaign screen's long text, e.g. {IMPERIAL_CAMPAIGN_<FACTION>_DESCR}
                 value, more = gap + plan.opts["long_description"].replace("\n", "\\n"), []
                 long_keys.append(new_key)
-            elif is_story(key, t) and is_prose(value, more):
+            elif is_story(key, t) and (is_story(key, t) == "always" or is_prose(value, more)):
                 # the template's own story ('The trouser-wearing and unfeasibly moustached Gauls now...'): names
                 # swapped it would still tell of the template - a plain line of the new faction instead
                 value, more = gap + plain_text(key, plan), []
@@ -593,13 +593,15 @@ def is_prose(value, more):
 
 
 def is_story(key, t):
-    """A key of the faction's own story the game shows for it - its descriptions (faction-select tooltip, campaign
-    screen, Medieval II's strengths / weaknesses / famous unit), its victory and defeat texts, its first advice.
+    """'always' / 'prose' / None: whether a key is the faction's own story the game shows for it - its descriptions
+    (faction-select tooltip, campaign screen, Medieval II's strengths / weaknesses / famous unit): always; its victory
+    and defeat texts, its first advice: when they tell a story (is_prose - 'The Gauls are victorious' is swapped).
     Other keys naming it (a building's or unit's description) are copied with the names swapped."""
     up, t = key.upper(), t.upper()
-    return up in ("%s_DESCR" % t, "UI_FACTION_%s_DESCRIPTION" % t, "%s_STRENGTH" % t, "%s_WEAKNESS" % t,
-                  "%s_UNIT" % t) or up.endswith("_%s_DESCR" % t) or \
-        bool(re.search(r"(VICTORY|DEFEATED_BY)", up)) or "INITIAL_ADVICE" in up
+    if up in ("%s_DESCR" % t, "UI_FACTION_%s_DESCRIPTION" % t, "%s_STRENGTH" % t, "%s_WEAKNESS" % t, "%s_UNIT" % t) \
+            or up.endswith("_%s_DESCR" % t):
+        return "always"                     # what the faction is like ('Highland Nobles'): never the template's
+    return "prose" if re.search(r"(VICTORY|DEFEATED_BY)", up) or "INITIAL_ADVICE" in up else None
 
 
 PLAIN_TEXTS = (("DEFEATED_BY", "Victory can no longer be yours. %(name)s has won."),
