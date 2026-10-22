@@ -90,9 +90,11 @@ Something confusing or hard to find? That counts as a bug too - tell us ([[Repor
 
 - [[Campaign map]] - the map, towns and ports, characters, new armies, new regions.
 - [[Terrain editor]] - ground, rivers, fords and cliffs.
+- [[Bigger map x3]] - the campaign map made 3 x bigger, step by step.
 - [[Faction art]] - every picture of a faction, banners, the campaign-select map.
 - [[Characters and portraits]] - family tree, traits, portraits and the portrait library.
 - [[Units and buildings]] - the unit and building editors, battle models in 3D, unit voices, the roster, unit packs.
+- [[Move units and buildings between mods]] - bring units and building chains from another mod.
 - [[Campaign rules and Add-ons]] - every campaign setting in plain words; Sack Settlement and other add-ons; the Module builder for your own.
 - [[Backups and Restore]] - how nothing gets lost.
 - [[Reporting a bug]] - what to send when something goes wrong.
@@ -113,6 +115,7 @@ needs are copied under its own name (Epirus cloned from Macedon gets `standard_e
 - [[Reference]] - how each window and button works, in full.
 - [[What it changes]] - the game files a new faction writes, and the command line.
 - [[FAQ and known limits]] - common questions and what does not work yet.
+- [[Screenshots and videos]] - what the editor looks like.
 
 The editor is free. If it saves you time, a coffee on [Ko-fi](https://ko-fi.com/pfadfinder) or [GitHub Sponsors](https://github.com/sponsors/Pfadfinder-Adam)
 keeps new features coming.

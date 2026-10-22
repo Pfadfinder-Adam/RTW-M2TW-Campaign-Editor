@@ -289,7 +289,7 @@ The page is drawn by the graphics card where it gives OpenGL 3.3 (else as before
   `descr_font_db.txt` names.
 - **Copy** (right click) makes the next numbered piece - the game finds many pieces by their numbers, so more faction buttons on the
   faction-select screen start with a copy of the last one. **Rename...** and **Remove** beside it.
-- A double click on a button (or **Open its page**) goes to the page it opens, as in the game.
+- A double click on a button (or its right click > **Open the page ...**) goes to the page it opens, as in the game.
 - A button under the mouse shows its **mouse over** picture and white words, as in the game; **Buttons shown** draws
   every button in one state (normal, mouse over, pressed, ticked). A right click > **Pictures of its states...** sets
   the picture (texture and region) of each state, adds a state or takes one out - every piece drawn with the same UI
@@ -318,7 +318,10 @@ The second tab of **Interface** shows every sprite sheet in the mod's `ui` folde
 Medieval II `strategy`, `shared`, `battle`...) as the game reads it: the binary `.rsd` / `.sd` on the plain games, the
 `.sd.xml` under REX / M2EX with `sprite_format xml`. Pick a sheet, a page and a culture: the page's picture shows with
 the box of every sprite on it; the mouse over a box names it. **Find** looks through every sheet. A double click opens a
-sprite big; its right click saves it, or the whole page, as a PNG. Nothing here writes the mod.
+sprite big; its right click saves it, or the whole page, as a PNG. The right click also **replaces** a sprite's
+picture (stretched, kept in shape or filling its box) or the whole page's, and sets a sprite's **Place and size** (its
+box on the page and, on an `.sd.xml` sheet, the size the game shows it at); **Back to the page as it is in the files**
+undoes it. **Apply changes** writes the mod's own copy of the page, its click mask and the sheet's twin follow.
 
 The idea and the first map of the file's format come from Wholesome Queen's *RTW Sprite & HUD Studio*.
 
@@ -335,3 +338,6 @@ places), from the mod's own pictures. It lies on a board, as on Obsidian Canvas:
   stretches it). Drag the screenshot aside to see both side by side; it lands on the grid's dots and sticks to the HUD's
   edges and middle, so dragged back it sits exactly on it again. **Snap to grid** off or **Alt** held: it stays where you
   let go. Over the HUD it is see-through (the slider, [ and ]); beside it, whole. O shows or hides it.
+- a **right click** on a piece names every piece under it and offers **Replace its picture...** and **Place and size on
+  its sheet...** (written by Apply, as on Sprite sheets); **Screen** previews it on a bigger screen; **Save the whole
+  HUD as PNG...**.

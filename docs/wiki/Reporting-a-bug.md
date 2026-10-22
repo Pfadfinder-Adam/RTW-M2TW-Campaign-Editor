@@ -2,7 +2,7 @@
 
 When the game crashes, the tool shows an error, or something looks wrong, please send:
 
-1. **The logs**: in the tool, **Report a bug / Suggest** (bottom right, also Tools -> Report a bug...). Write a few
+1. **The logs**: in the tool, **Report a bug / Suggest** (the bar at the bottom, beside Tools). Write a few
    words of what happened, add a screenshot if you like (**Add a screenshot...**, or take one with Win+Shift+S /
    PrintScreen and press **Ctrl+V** in the report window), press **Send** - the tool's log, the game's
    `system.log.txt` and the crash report of the game's last run (REX / M2EX) go to the author at once, no account
@@ -20,7 +20,7 @@ When the game crashes, the tool shows an error, or something looks wrong, please
    With a mod loaded, `mod_files.txt` goes too (untick it to leave it out): the list of the mod's files - name,
    size, date, and whether the game has the file with the same size - never their contents.
    **Anonymous**: before anything leaves, the logs lose your Windows user name (also inside folder paths), the
-   computer's name, e-mail addresses, Steam IDs, IP addresses and the player's name of REX's crash report; add
+   computer's name, e-mail addresses, Steam IDs, Windows SIDs, IP addresses and the player's name of REX's crash report; add
    your own words to hide (your nick). **Show what is sent** shows every line that goes. The contact field is
    optional; with **remember it** ticked (the default) every next report fills it in by itself - it is kept in
    Tools > Settings > Reports too, and unticking it forgets it.
@@ -48,7 +48,7 @@ Every report - bug or idea - arrives as its own numbered entry with its logs and
 The author answers every report - a question ("which picture?"), "fixed in the next build", or why not. You see the
 answer in the editor itself: the report window's second tab, **Answers to my reports**. It lists the reports you sent
 from this editor, each with its state (open / closed - fixed / closed - not planned) and the talk so far. The editor
-looks for new answers when it starts (every few hours), **Check now** looks at once, and the **Report a bug /
+looks for new answers when it starts (at most every 3 hours), **Check now** looks at once, and the **Report a bug /
 Suggest** button says "(1 new)" when one came (the status line says it too).
 
 To reply - answer a question, add details, say "still broken in the new build" - pick the report, write in **Your

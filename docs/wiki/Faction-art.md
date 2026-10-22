@@ -121,13 +121,9 @@ bucket** fills one; **Undo**, **Fit again**, **Start over**. **Next** makes all 
   one in grey. The routing flag and the rebels' flag are never changed;
 - **the symbol on the flags and banners (Rome)**: the flag symbol on the campaign map gets the symbol alone (no
   disc, no ground), and the faction's **battle banners** (its own standard texture and its allies') are made new
-  from the game's own **blank white banner** (the cloth a routing unit carries - Roman, barbarian or eastern,
-  any of the three for any faction, whatever its culture - picked by its picture in **Banner...**; the game turns a fleeing unit's banner into it, and it is only read, never
-  changed): its cloth dyed in the faction's colour, the folds kept, the symbol painted on it (faint on the allies'
-  banner, as the game's own are); the trim, the experience stars and the pole stay as they are. **Banner...** under
-  a banner picks another blank banner, a **pattern** of up to three colours (plain, two or three stripes upright -
-  a tricolour - or across, halves or bands slanting, quarters, a cross, a slanting cross, a border, a stripe in the
-  middle), the symbol on or off, and the symbol dragged with the left mouse button where it should be;
+  from the game's own **blank white banner** (it is only read, never changed), its cloth dyed in the faction's
+  colour with the symbol on it; **Banner...** under a banner changes the blank banner, the pattern and where the
+  symbol sits - see [Banner...](#banner---battle-banners-from-a-white-banner-both-games) below;
 - a picture with a plain background (a white square round the symbol) has it cleared at once, so no square shows on
   the flags and banners (**Start over** brings it back);
 - 'Use it' puts them on the Art tab; Preview and Apply write them with a backup, Restore gives them back.
