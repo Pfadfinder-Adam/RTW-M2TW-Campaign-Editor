@@ -1405,7 +1405,8 @@ class MapView(ttk.Frame):
         self._drawn_at = (self.ox, self.oy)
         if self.v_grid.get() and self.z >= 10:
             self._grid(cw, ch)
-        self._markers(cw, ch)
+        if self._signs_wanted():
+            self._markers(cw, ch)
         if self.point_marks:
             self._point_marks(cw, ch)
         if self.edge_mode:
@@ -1595,6 +1596,12 @@ class MapView(ttk.Frame):
             # invisible on a like colour and shimmered on the coast (testers' reports); until the stroke ends
             c.create_rectangle(sx - z / 2, sy - z / 2, sx + z / 2, sy + z / 2, fill="#%02x%02x%02x" % rgb,
                                outline="#ffd400" if z >= 6 else "", width=1, tags=("paint",))
+
+    def _signs_wanted(self):
+        """Towns, ports, armies, resources ... drawn on the map - never on the heights map (the Terrain editor's map by
+        points: the user, 2026-10-22: 'no signs at all on the heights map - I see towns and ports there'), either game;
+        its own rings (Find ground on the wrong side, point_marks) stay."""
+        return not getattr(self.cmap, "show_heights", False)
 
     def _markers(self, cw, ch):
         c, cm = self.canvas, self.cmap

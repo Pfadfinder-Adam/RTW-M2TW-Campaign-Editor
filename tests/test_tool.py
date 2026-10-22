@@ -8587,6 +8587,26 @@ building smith
             v.at = 150
             self.assertTrue(GM.MapView._shore_lines(v, 8, 8))
 
+    def test_heights_map_draws_no_signs(self):
+        """The heights map (the Terrain editor's map by points) draws no towns, ports or other signs (the user,
+        2026-10-22: 'no signs at all on the heights map'); every other map view keeps them."""
+        try:
+            import tkinter  # noqa: F401
+            import inspect
+            from campaign_editor import gui_map as GM
+        except ImportError:
+            self.skipTest("no tkinter")
+
+        class View:
+            cmap = type("C", (), {"show_heights": True})()
+
+        self.assertFalse(GM.MapView._signs_wanted(View()))
+        View.cmap.show_heights = False
+        self.assertTrue(GM.MapView._signs_wanted(View()))
+        View.cmap = type("C", (), {})()                       # a map with no heights view at all
+        self.assertTrue(GM.MapView._signs_wanted(View()))
+        self.assertIn("if self._signs_wanted():\n            self._markers(cw, ch)", inspect.getsource(GM.MapView._render))
+
     def test_upkeep_addon_doubles_and_takes_out_exactly(self):
         """Upkeep x 2 as an add-on of its own (the user, 2026-10-09: 'no huge armies - put in and taken out, on any
         mod'): every unit's upkeep (stat_cost's third number) doubled, the old numbers kept beside the file; Take it
