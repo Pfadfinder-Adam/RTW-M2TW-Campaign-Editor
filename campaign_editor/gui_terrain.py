@@ -457,16 +457,20 @@ class TerrainEditor(ttk.Frame):
             if last and max(abs(last[0] - tiles[0][0]), abs(last[1] - tiles[0][1])) >= 1:
                 tiles = T.river_path(last, tiles[0])
         took, why = [], None
+        turned = set()
+        if what == "ground":
+            # a sea ground on land / a land ground on the sea turns the tile, as Land and sea's tile brush does
+            # (regions, heights, ground) - freedom: by cells here too (a tester, R-20261014-093582); all the brush's
+            # tiles in one go, the shore round them risen and smoothed once (tile by tile a big brush lagged)
+            turn = [t for t in tiles if self._current(what, t) != colour and (colour in T.SEA) != self.cmap.is_sea(*t)]
+            if turn:
+                turned = {tuple(t) for t, _ in self.paint_coast(turn, mode="sea" if colour in T.SEA else "land")}
         for t in tiles:
             if self._current(what, t) == colour:
                 continue
-            if what == "ground" and (colour in T.SEA) != self.cmap.is_sea(*t):
-                # a sea ground on land / a land ground on the sea turns the tile, as Land and sea's tile brush
-                # does (regions, heights, ground) - freedom: by cells here too (a tester, R-20261014-093582)
-                if not self.paint_coast([t], mode="sea" if colour in T.SEA else "land"):
-                    why = self._coast_why or "the tile cannot turn into %s here" % (
-                        "sea" if colour in T.SEA else "land")
-                    continue
+            if what == "ground" and (colour in T.SEA) != self.cmap.is_sea(*t) and tuple(t) not in turned:
+                why = self._coast_why or "the tile cannot turn into %s here" % ("sea" if colour in T.SEA else "land")
+                continue
             why = T.paint_problem(self.cmap, what, t, colour, self.standing) or None
             if why:
                 continue
