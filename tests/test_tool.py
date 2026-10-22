@@ -3701,6 +3701,33 @@ building smith
             self.assertEqual(im.getpixel((int(800 * 1.875), int(620 * 1080 / 768)))[:3], (0, 255, 0))
             self.assertIn(("strat3", "END_TURN_BUTTON_IMAGE"), H.missing(mod))
 
+    def test_board_pans_zooms_and_snaps_like_a_canvas(self):
+        """The board (Campaign HUD, the editor's layout board - Obsidian Canvas's ways): the point under the mouse
+        stays put when zooming, fit puts a box in the middle, the grid thins out far away, a dragged box sticks to the
+        grid and to another box's edges within 8 screen pixels."""
+        from campaign_editor import board as B
+        v = B.View()
+        wx, wy = v.to_world(300, 200)
+        v.zoom_at(True, (300, 200))
+        self.assertEqual(v.zoom, 1.25)
+        self.assertEqual(tuple(round(c, 6) for c in v.to_world(300, 200)), (wx, wy))
+        for _ in range(40):
+            v.zoom_at(False, (0, 0))
+        self.assertEqual(v.zoom, B.ZOOMS[0])
+        v.fit((0, 0, 1024, 768), 1024, 844, margin=0)
+        self.assertEqual(v.zoom, 1.0)
+        self.assertEqual(v.to_screen(512, 384), (512, 422))
+        self.assertEqual(v.to_screen(*v.to_world(17, 23)), (17, 23))
+        v.set_zoom(0.25)
+        self.assertGreaterEqual(v.grid_step() * v.zoom, 10)
+        self.assertEqual(B.snap(23), 16)
+        hud = (0, 0, 1024, 768)
+        self.assertEqual(B.snap_box((5, -6, 1024, 768), [hud])[:2], (0, 0))           # laid over the HUD: corner on it
+        self.assertEqual(B.snap_box((1030, 100, 200, 100), [hud])[:2], (1024, 96))   # beside it; y on the grid
+        self.assertEqual(B.snap_box((1030, 100, 200, 100), [hud], zoom=0.5)[:2], (1024, 96))
+        self.assertEqual(B.snap_box((1060, 101, 200, 100), [hud])[:2], (1056, 96))   # too far: the grid only
+        self.assertEqual(B.snap_box((1060, 101, 200, 100), [hud], to_grid=False)[:2], (1060, 101))
+
     def test_sprite_change_waits_for_apply_in_the_interface_work(self):
         """A sprite's picture replaced on the Sprite sheets tab is a change of the Interface work: counted for Apply,
         in its plan, undone by Undo on that tab."""
