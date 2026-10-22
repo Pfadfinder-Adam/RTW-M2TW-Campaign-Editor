@@ -324,7 +324,8 @@ label on the map changes to the name for that faction's culture; the towns list 
 
 **All towns' names...** (on the Edit / New faction tab, in the per-town dialog and under **Tools**) shows every town in one
 table: one column per culture plus *every other*, the owner, its culture and the name shown now. Sort by any
-column, filter by a culture (towns with or without a name for it), by the owner's culture, by what waits for Apply,
+column, filter by a culture (towns with or without a name for it), by the owner's culture, by the owner
+(one faction's towns only), by what waits for Apply,
 or search. Double click a culture's cell to type a name in place (Enter keeps it, Esc drops it, an empty cell
 removes it). Towns the mod's own campaign script renames are shown grey and are not edited here.
 

@@ -13,6 +13,17 @@ from . import log
 from . import theme
 
 APP = "RTW & M2TW Campaign Editor"
+ALL = "(all)"
+
+
+def owners_of(rows):
+    """The owners the Owner filter offers: '(all)', then every owner holding a town in the rows, by name."""
+    return [ALL] + sorted({r["owner"] for r in rows}, key=str.lower)
+
+
+def of_owner(rows, owner):
+    """The rows of the towns one owner holds ('(all)' or empty: every row)."""
+    return list(rows) if owner in (ALL, "", None) else [r for r in rows if r["owner"] == owner]
 
 
 class SettlementsPanel(ttk.Frame):
@@ -48,7 +59,11 @@ class SettlementsPanel(ttk.Frame):
         self.v_owner = tk.StringVar(value="(all)")
         self.cb_owner = ttk.Combobox(top, textvariable=self.v_owner, state="readonly", width=14)
         self.cb_owner.pack(side="left", padx=4)
-        for v in (self.v_find, self.v_cult, self.v_show, self.v_owner):
+        ttk.Label(top, text="Owner").pack(side="left", padx=(10, 0))
+        self.v_holder = tk.StringVar(value=ALL)       # one faction's towns (england: only the towns England holds)
+        self.cb_holder = ttk.Combobox(top, textvariable=self.v_holder, state="readonly", width=22)
+        self.cb_holder.pack(side="left", padx=4)
+        for v in (self.v_find, self.v_cult, self.v_show, self.v_owner, self.v_holder):
             v.trace_add("write", lambda *a: self.fill())
         self.lbl_n = ttk.Label(top, foreground="#666")
         self.lbl_n.pack(side="left", padx=6)
@@ -180,8 +195,12 @@ class SettlementsPanel(ttk.Frame):
         key = CN.DEFAULT if cult == "every other" else (None if cult == "(all)" else cult)
         show, oc, q = self.v_show.get(), self.v_owner.get(), self.v_find.get().lower().strip()
         every = self._rows()
+        self.cb_holder["values"] = owners_of(every)
+        if self.v_holder.get() not in self.cb_holder["values"]:
+            self.v_holder.set(ALL)                 # its last town given away: every owner again (fill runs again)
+            return
         rows = []
-        for r in every:
+        for r in of_owner(every, self.v_holder.get()):
             names = r["names"]
             if oc != "(all)" and r["oc"] != oc:
                 continue
