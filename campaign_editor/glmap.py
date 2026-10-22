@@ -325,9 +325,10 @@ class MapData:
             for tex in self.objects:
                 if tex is not None:
                     self.object_pictures[tex] = loader.picture(tex)
+            self.objects_missing = sorted(loader.missing)        # all of them (the bar names four): into the log
             if loader.missing:
                 self.notes.append("model(s) or texture(s) of what stands on the map not found: %s" %
-                                  ", ".join(sorted(loader.missing)[:4]))
+                                  ", ".join(self.objects_missing[:4]))
         except Exception as e:                          # said in the bar, the map still drawn
             self.notes.append("the towns and armies are not drawn: %s" % e)
 
@@ -342,25 +343,27 @@ class MapData:
     def place_objects(self):
         """The towns, armies, roads and borders laid again on the heights as they are now."""
         from . import mapmodels as MM
-        self.ghost = {}
+        self.ghost, self._held = {}, None
         if getattr(self, "_objs", None):
-            self.objects = MM.build(self._objs[0], self._objs[1], self.heights, 0.0005 * self.scale)
+            self._each = MM.build_each(self._objs[0], self._objs[1], self.heights, 0.0005 * self.scale)
+            self.objects = MM.join(self._each)
         self.place_net()
 
     def lift_out(self, pick):
         """What pick(object) chooses (mapobjects3d.objects' dicts) taken out of the map into the hand: self.ghost
         holds it as the card draws it, self.objects the rest - it then goes with the mouse (GLMap.ghost_shift) until
-        put down. True when anything was taken."""
+        put down. True when anything was taken. Only joined again from each object's laid pieces (_each), nothing
+        laid anew."""
         from . import mapmodels as MM
-        if not getattr(self, "_objs", None):
+        if not getattr(self, "_objs", None) or len(getattr(self, "_each", ())) != len(self._objs[0]):
             return False
-        objs, loader = self._objs
-        held = [o for o in objs if pick(o)]
+        objs = self._objs[0]
+        held = [i for i, o in enumerate(objs) if pick(o)]
         if not held:
             return False
-        ys = 0.0005 * self.scale
-        self.objects = MM.build([o for o in objs if not pick(o)], loader, self.heights, ys)
-        self.ghost = MM.build(held, loader, self.heights, ys)
+        out = set(held)
+        self.objects = MM.join(e for i, e in enumerate(self._each) if i not in out)
+        self.ghost = MM.join(self._each[i] for i in held)
         self._held = held
         return True
 
@@ -373,12 +376,16 @@ class MapData:
         if not held or not getattr(self, "ghost", None):
             return False
         if tile is not None:
-            towns = {tuple(o["xy"]) for o in self._objs[0] if o["kind"] == "town"}
-            for o in held:
-                o["xy"] = tuple(tile)
-                if o["kind"] == "character":
-                    o["in_town"] = tuple(tile) in towns
-            self.ghost = MM.build(held, self._objs[1], self.heights, 0.0005 * self.scale)
+            objs = self._objs[0]
+            towns = {tuple(o["xy"]) for o in objs if o["kind"] == "town"}
+            for i in held:
+                objs[i]["xy"] = tuple(tile)
+                if objs[i]["kind"] == "character":
+                    objs[i]["in_town"] = tuple(tile) in towns
+            laid = MM.build_each([objs[i] for i in held], self._objs[1], self.heights, 0.0005 * self.scale)
+            for i, one in zip(held, laid):
+                self._each[i] = one
+            self.ghost = MM.join(laid)
         for tex, arr in self.ghost.items():
             if len(arr):
                 have = self.objects.get(tex)

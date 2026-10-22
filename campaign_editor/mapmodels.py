@@ -45,9 +45,16 @@ class Loader:
         """The data-relative texture a static model's part names, as the game finds it - or None."""
         if not name:
             return None
-        folder = model.replace("\\", "/").rsplit("/", 1)[0] if "/" in model else ""
+        model = model.replace("\\", "/")
+        folder = model.rsplit("/", 1)[0] if "/" in model else ""
+        # a name with a path in it ('data\\models_strat\\textures\\x.tga'): data-relative, else its file name alone
+        path = name.replace("\\", "/").lstrip("/")
+        path = path[5:] if path.lower().startswith("data/") else path
+        base = path.rsplit("/", 1)[-1]
+        names = [path] + ([base] if base != path else [])
         # a name with no ending (HLR's 'Paccos_barbarian_texture') is its .tga (texture_image finds .tga.dds too)
-        for nm in [name] + ([name + ".tga"] if "." not in name.rsplit("/", 1)[-1] else []):
+        names += [n + ".tga" for n in names if "." not in n.rsplit("/", 1)[-1]]
+        for nm in names:
             for rel in (folder + "/textures/" + nm, folder + "/" + nm, "models_strat/textures/" + nm, nm):
                 if self.picture(rel) is not None:
                     return rel
@@ -194,11 +201,29 @@ def _port_dock(x, y, sea):
 def build(objs, loader, heights, yscale):
     """{texture rel or None: (n, 9) float32 x y z normal u v kind} of every object laid on the map (triangles as
     vertex triples); kind KIND (1 towns and ports, 2 resources, 3 characters)."""
+    return join(build_each(objs, loader, heights, yscale))
+
+
+def join(each):
+    """The pieces of build_each (or any of them) as one {texture: vertices}, as build gives."""
+    out = {}
+    for one in each:
+        for tex, arr in one.items():
+            out.setdefault(tex, []).append(arr)
+    return {k: np.concatenate(v).astype(np.float32, copy=False) for k, v in out.items()}
+
+
+def build_each(objs, loader, heights, yscale):
+    """[{texture rel or None: (n, 9) float32}] - each object's own vertices, in the order of objs ({} for one not
+    drawn): what is lifted out of the map and put down again is taken from these, the rest not laid again (a tester:
+    a stall at every click on a resource - every town, army and resource of HLR's map was laid anew, ~0.6 s)."""
     rows, cols = heights.shape
     H, W = (rows - 1) // 2, (cols - 1) // 2
     sea = heights[::-1][1::2, 1::2][:H, :W] <= 0
-    out = {}
+    each = []
     for o in objs:
+        out = {}
+        each.append(out)
         x, y = o["xy"]
         if not (0 <= x < W and 0 <= y < H):
             continue
@@ -224,7 +249,9 @@ def build(objs, loader, heights, yscale):
             w[:, 1] += gy
             w[:, 2] += top + 0.5
             out.setdefault(tex, []).append(np.c_[w, np.full(len(w), KIND.get(o["kind"], 1), np.float32)])
-    return {k: np.concatenate(v).astype(np.float32) for k, v in out.items()}
+        for tex in out:
+            out[tex] = np.concatenate(out[tex]).astype(np.float32)
+    return each
 
 
-__all__ = ["Loader", "build", "KIND"]
+__all__ = ["Loader", "build", "build_each", "join", "KIND"]
