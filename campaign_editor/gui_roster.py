@@ -1,7 +1,7 @@
-"""The Roster tab (Edit faction): every unit and building level of the mod, whether
-the faction has it, and giving or taking it. The picks are kept by the window
-(App.roster_set, with Undo) and written on Apply with everything tied to them -
-see roster.py."""
+"""The Roster tab (Edit faction), two tabs: 'Units and levels' - every unit and building level of the mod, whether
+the faction has it, and giving or taking it; 'By buildings' - the faction's buildings, their levels and the units
+each level recruits, added and taken away there (gui_rosterbuildings). The picks are kept by the window
+(App.roster_set, with Undo) and written on Apply with everything tied to them - see roster.py."""
 
 import tkinter as tk
 from tkinter import ttk
@@ -18,7 +18,15 @@ class RosterEditor(ttk.Frame):
         super().__init__(master, padding=4)
         self.app = app
         self.data, self.faction, self._for = None, None, None
-        top = ttk.Frame(self)
+        self.tabs = ttk.Notebook(self)
+        self.tabs.pack(fill="both", expand=True)
+        page = ttk.Frame(self.tabs, padding=(0, 4, 0, 0))
+        self.tabs.add(page, text="Units and levels")
+        from .gui_rosterbuildings import RosterBuildings
+        self.by_buildings = RosterBuildings(self.tabs, app)
+        self.tabs.add(self.by_buildings, text="By buildings")
+        self.tabs.bind("<<NotebookTabChanged>>", lambda e: self._tab_changed())
+        top = ttk.Frame(page)
         top.pack(fill="x")
         self.title = ttk.Label(top, text="Edit faction: pick the faction on the Faction tab", font=("", 10, "bold"))
         self.title.pack(side="left")
@@ -30,25 +38,25 @@ class RosterEditor(ttk.Frame):
         self.v_only = tk.BooleanVar(value=False)
         ttk.Checkbutton(top, text="only what it has", variable=self.v_only, command=self.redraw).pack(side="left", padx=8)
         ttk.Button(top, text="Undo all changes here", command=self.reset).pack(side="right")
-        ShortHint(self, foreground="#555", justify="left", wraplength=1000, text=(
+        ShortHint(page, foreground="#555", justify="left", wraplength=1000, text=(
             "Give or take a unit or a building level: double click, or select and use the buttons. On Apply the "
             "tool keeps every place in step - a unit: its ownership (export_descr_unit), the recruit lines that "
             "let the faction train it (export_descr_buildings) and its cards (ui/units, ui/unit_info); a building "
             "level: its 'requires factions' list. A culture or 'everyone' is written out as the other factions "
             "when only this one loses it. Armies and towns that already hold it keep it (the preview warns).")
                   ).pack(fill="x", pady=(2, 6))
-        panes = ttk.Panedwindow(self, orient="horizontal")
+        panes = ttk.Panedwindow(page, orient="horizontal")
         panes.pack(fill="both", expand=True)
         self.tv_units = self._table(panes, "Units", (("type", "unit", 230), ("cat", "category", 80),
                                                      ("has", "has it", 150), ("where", "recruited in (for it)", 260)))
         self.tv_build = self._table(panes, "Building levels", (("level", "chain / level", 280),
                                                                ("has", "may build", 120)), tree=True)
-        bar = ttk.Frame(self)
+        bar = ttk.Frame(page)
         bar.pack(fill="x", pady=(4, 0))
         ttk.Button(bar, text="Give", command=lambda: self.pick(True)).pack(side="left")
         ttk.Button(bar, text="Take away", command=lambda: self.pick(False)).pack(side="left", padx=4)
         ttk.Button(bar, text="As it is", command=lambda: self.pick(None)).pack(side="left")
-        self.info = ttk.Label(bar, text="", foreground="#333")
+        self.info = ttk.Label(bar, text="", foreground=theme.ink("#333", "bg"))
         self.info.pack(side="left", padx=12)
 
     def _table(self, panes, label, cols, tree=False):
@@ -68,14 +76,26 @@ class RosterEditor(ttk.Frame):
         tv.configure(yscrollcommand=sb.set)
         sb.pack(side="right", fill="y")
         tv.pack(fill="both", expand=True)
-        tv.tag_configure("give", background="#d9f2d0", foreground="#000000")
-        tv.tag_configure("take", background="#f4c7c3", foreground="#000000")
-        tv.tag_configure("no", foreground=theme.ink("#888", "field"))
+        self._tags(tv)
         tv.bind("<Double-1>", lambda e, tv=tv: self.toggle(tv))
         return tv
 
+    @staticmethod
+    def _tags(tv):
+        """The rows' colours in the look shown now (the light look's pale green / red glared in the dark one)."""
+        tv.tag_configure("give", background=theme.mark("give"), foreground=theme.palette()["fg"])
+        tv.tag_configure("take", background=theme.mark("take"), foreground=theme.palette()["fg"])
+        tv.tag_configure("no", foreground=theme.ink("#888", "field"))
+
+    def _tab_changed(self):
+        if self.tabs.index("current") == 1:
+            self.by_buildings.shown()
+        else:
+            self.redraw()
+
     # ---- data ----
     def load(self):
+        self.by_buildings.load(self.app.mod)
         app = self.app
         faction = app.v["template"].get().strip() if app.editing() else ""
         if not app.mod or not faction:
@@ -94,6 +114,7 @@ class RosterEditor(ttk.Frame):
     def forget(self):
         """The files changed (Apply, Restore, another mod): read again when shown."""
         self.data = None
+        self.by_buildings.forget()
 
     def _state(self, key, has):
         pick = self.app.roster_set.get(key)
@@ -104,8 +125,11 @@ class RosterEditor(ttk.Frame):
         return None
 
     def redraw(self):
+        self.by_buildings.relay()
         if not self.data:
             return
+        for tv in (self.tv_units, self.tv_build):
+            self._tags(tv)
         q = self.v_find.get().strip().lower()
         only = self.v_only.get()
         tv = self.tv_units

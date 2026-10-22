@@ -2290,6 +2290,9 @@ class App(tk.Tk):
             return units
         taken = {k[5:] for k, v in self.roster_set.items() if k.startswith("unit:") and v is False}
         given = {k[5:] for k, v in self.roster_set.items() if k.startswith("unit:") and v is True}
+        # a unit added to a building level on the Roster's By buildings becomes the faction's too
+        given |= {k.split(":", 3)[3] for k, v in self.roster_set.items() if k.startswith("recruit:") and v is True}
+        taken -= given
         have = {u.type for u in units}
         out = [u for u in units if u.type not in taken]
         if given - have and self.mod.file("edu"):

@@ -3,10 +3,11 @@ town they need) and, under each level, the units the faction recruits there - fr
 export_descr_unit.txt, both games (Rome's 'recruit' lines, Medieval II's 'recruit_pool' lines). What the Buildings
 work's 'By faction' tab shows (gui_factionbuildings); nothing here writes."""
 
+import copy
 import re
 
 from . import editors as E
-from .roster import covers, factions_in, recruit_of
+from .roster import covers, factions_in, recruit_key, recruit_of
 from .textio import strip_comment
 
 # the chains' groups in the order the tab shows them (editors.CHAIN_GROUPS names them)
@@ -112,6 +113,49 @@ def faction_chains(mod, faction, f=None):
         from .units import read_units
         types = {u.type.lower() for u in read_units(mod.load(edu))}
     return chains(f, faction, mod.culture(faction), types)
+
+
+def with_changes(items, changes):
+    """chains() as the Roster's picks (App.roster_set) leave them, not yet written: a level given or taken
+    ('building:<chain>:<level>') has its 'has' set and pending 'give' / 'take'; a unit added to a level
+    ('recruit:<chain>:<level>:<type>' True) is a card with pending 'give', one taken away (False) pending 'take'.
+    The items are copied; nothing else changes."""
+    out = copy.deepcopy(items)
+    for c in out:
+        for lv in c["levels"]:
+            lv["pending"] = None
+            pick = changes.get("building:%s:%s" % (c["chain"], lv["name"]))
+            if pick is True and not lv["has"]:
+                lv["has"], lv["pending"] = "own", "give"
+            elif pick is False and lv["has"]:
+                lv["has"], lv["pending"] = None, "take"
+            have = set()
+            for u in lv["units"]:
+                u["pending"] = "take" if changes.get(recruit_key(c["chain"], lv["name"], u["unit"])) is False \
+                    else None
+                have.add(u["unit"])
+            head = recruit_key(c["chain"], lv["name"], "")
+            for key, give in sorted(changes.items()):
+                unit = key[len(head):] if key.startswith(head) else None
+                if unit and give and unit not in have:
+                    have.add(unit)
+                    lv["units"].append({"unit": unit, "line": None, "key": "", "has": "own", "needs": "",
+                                        "numbers": {}, "known": True, "pending": "give"})
+        c["builds"] = any(x["has"] for x in c["levels"])
+    return out
+
+
+def upward(chain, level, unit, give, has_unit):
+    """The Roster's keys for adding (give) or taking away a unit at a level of a chain (a chains() item): that level
+    and every one above it - the game trains only what the town's CURRENT level lists, a unit put in one level was
+    gone once the building grew (report #283). has_unit(level) tells
+    whether the level recruits it for the faction now (as the files say). [(key, give)], give None where the files
+    are so already (a pick there is dropped)."""
+    names = [x["name"] for x in chain["levels"]]
+    if level not in names:
+        return []
+    return [(recruit_key(chain["chain"], n, unit), None if bool(has_unit(n)) == give else give)
+            for n in names[names.index(level):]]
 
 
 def grouped(items, everyone=False, find=""):

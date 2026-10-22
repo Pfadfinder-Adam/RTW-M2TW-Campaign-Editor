@@ -51,6 +51,15 @@ def palette():
     return DARK if _state["dark"] else LIGHT
 
 
+# a change not yet written: given (green) / taken away (red) - pale under dark words, deep under light ones
+MARKS = {"give": ("#d9f2d0", "#2f4d2b"), "take": ("#f4c7c3", "#5c302d")}
+
+
+def mark(kind):
+    """The background of a row or tile given ('give') or taken away ('take') and not yet written, in this look."""
+    return MARKS[kind][1 if _state["dark"] else 0]
+
+
 def field():
     """The background of an entry that shows nothing special."""
     return palette()["field"]

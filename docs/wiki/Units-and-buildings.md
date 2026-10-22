@@ -177,9 +177,25 @@ town holding two. A mod that wants more temples names the extra chains without "
 
 ## Roster (Edit faction)
 
-Every unit and building level of the mod and whether the faction has it. **Give** / **Take away**. A unit is
-the faction's only when three places agree, and Apply keeps them in step: its `ownership`, the recruit lines
-that let the faction train it, and its cards.
+Two tabs. **Units and levels**: every unit and building level of the mod and whether the faction has it.
+**Give** / **Take away**. A unit is the faction's only when three places agree, and Apply keeps them in step:
+its `ownership`, the recruit lines that let the faction train it, and its cards.
+
+**By buildings**: the faction's buildings as the game shows them. Pick a building on the left, a level of it in
+the middle - the units it recruits there are cards. On the right, **All units** lists every unit of the mod: a
+click adds it to the picked level **and every level above it** in that building. The game trains only what the
+town's building has at its *current* level, so a unit written into one level alone disappears once the building
+grows - this tab never leaves it like that. A level that has no line for the unit gets one for this faction alone
+(with the pool numbers of the unit's line one level lower, if it has one); a line for other factions takes this
+faction in. A unit that is not the faction's yet becomes its own (ownership, cards).
+
+- the **x** on a card takes the unit from that level and the levels above (the ones below keep it);
+- **+ Building** lists the buildings the faction may not build yet: a click lets it build every level;
+- the **x** on a building takes it away; the **+ / x** on a level gives it with the levels below / takes it with
+  the levels above (the game builds a chain level by level - a gap stops it).
+
+Green = added, red = taken away; nothing is written before **Preview changes** / **Apply changes**, and Undo
+works. Both tabs share the same changes.
 
 ## Unit packs
 

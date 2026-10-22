@@ -21184,6 +21184,78 @@ building castle_port
         self.assertEqual(FB.conditions("x requires factions { a, }  and  event_counter guns 1 ; note"),
                          "event_counter guns 1")
 
+    def test_a_unit_added_to_a_level_gets_a_line_of_its_own(self):
+        """The Roster's building view (the user, 2026-10-22): a unit added to a level that has no line for it gets
+        one for the faction alone - the numbers of the unit's line in the level below, not its conditions; a line
+        for other factions takes the faction in; the unit becomes the faction's."""
+        from campaign_editor import roster as R
+        from campaign_editor.plan import Plan
+        plan = Plan(self.mod, "x", "x")
+        self.assertTrue(R.set_recruit(plan, "alpha", "barracks", "big_barracks", "alpha general"))
+        self.assertTrue(R.set_recruit(plan, "alpha", "barracks", "muster", "rebel spear"))
+        self.assertFalse(R.set_recruit(plan, "alpha", "barracks", "muster", "alpha general"))   # it has it
+        edb = plan.files[self.mod.file("edb")].texts()
+        big = edb.index("        big_barracks requires factions { barbarian, }")
+        self.assertIn('                recruit "alpha general"  2  requires factions { alpha, }', edb[big:])
+        self.assertIn('                recruit "rebel spear"  0  requires factions { slave, alpha, }', edb)
+        self.assertEqual(sum("rebel spear" in l and "alpha" in l for l in edb), 1)
+        self.assertTrue(any("may not build this level yet" in str(n) for n in plan.notes), plan.notes)
+        edu = "\n".join(plan.files[self.mod.file("edu")].texts())
+        self.assertRegex(edu, r"ownership\s+slave, alpha")
+        # a unit no line names anywhere: the game's plain line
+        f = self.mod.load(self.mod.file("edb"))
+        self.assertEqual(R.new_recruit_line(f, "alpha", "new guy", "barracks", "muster"),
+                         'recruit "new guy"  0  requires factions { alpha, }')
+
+    def test_a_unit_taken_from_a_level(self):
+        from campaign_editor import roster as R
+        from campaign_editor.plan import Plan
+        plan = Plan(self.mod, "x", "x")
+        self.assertTrue(R.set_recruit(plan, "alpha", "barracks", "muster", "ghost unit", give=False))
+        self.assertTrue(R.set_recruit(plan, "alpha", "barracks", "muster", "alpha general", give=False))
+        self.assertFalse(R.set_recruit(plan, "alpha", "barracks", "muster", "rebel spear", give=False))
+        edb = "\n".join(plan.files[self.mod.file("edb")].texts())
+        self.assertNotIn("ghost unit", edb)                   # its culture had only alpha: the line goes
+        self.assertNotIn("alpha general", edb)
+        self.assertIn('recruit "rebel spear"  0  requires factions { slave, }', edb)
+        # a line for everyone: written out as the others
+        plan = Plan(self.mod, "x", "x")
+        R.set_recruit(plan, "alpha", "castle_port", "dock", "rebel spear", give=False)
+        edb = "\n".join(plan.files[self.mod.file("edb")].texts())
+        self.assertIn('recruit_pool "rebel spear"  1   0.5   4  0  requires factions { slave, } and '
+                      'building_present_min_level barracks muster', edb)
+
+    def test_adding_a_unit_reaches_every_level_above(self):
+        """Report #283: the game trains only what the town's current level lists - a unit added at a level goes
+        to it and every level above; taken away, from it and every level above (the ones below keep it)."""
+        from campaign_editor import factionbuildings as FB
+        from campaign_editor.edit import edit
+        items = {c["chain"]: c for c in FB.faction_chains(self.mod, "alpha")}
+        bar = items["barracks"]
+        has = {"muster": False, "big_barracks": False}
+        self.assertEqual(FB.upward(bar, "muster", "rebel spear", True, has.get),
+                         [("recruit:barracks:muster:rebel spear", True),
+                          ("recruit:barracks:big_barracks:rebel spear", True)])
+        self.assertEqual(FB.upward(bar, "big_barracks", "rebel spear", True, has.get),
+                         [("recruit:barracks:big_barracks:rebel spear", True)])
+        has["muster"] = True                          # already so in the files: a pick there is dropped
+        self.assertEqual(FB.upward(bar, "muster", "rebel spear", True, has.get)[0][1], None)
+        changes = {"recruit:barracks:muster:rebel spear": True, "recruit:barracks:muster:alpha general": False,
+                   "building:barracks:big_barracks": True}
+        seen = {c["chain"]: c for c in FB.with_changes(list(items.values()), changes)}
+        muster, big = seen["barracks"]["levels"]
+        self.assertEqual([(u["unit"], u["pending"]) for u in muster["units"]],
+                         [("alpha general", "take"), ("ghost unit", None), ("rebel spear", "give")])
+        self.assertEqual((big["has"], big["pending"]), ("own", "give"))
+        self.assertIsNone(items["barracks"]["levels"][1]["has"])         # the read items untouched
+        # written with Apply: the level let in first, then the lines
+        changes["recruit:barracks:big_barracks:rebel spear"] = True
+        plan = edit(self.mod, "test", "alpha", {"roster": changes})
+        edb = plan.files[self.mod.file("edb")].texts()
+        self.assertIn("        big_barracks requires factions { barbarian, alpha, }", edb)
+        self.assertIn('                recruit "rebel spear"  1  requires factions { slave, alpha, }', edb)
+        self.assertNotIn("alpha general", "\n".join(edb))
+
     def test_the_tab_shows_a_chain_and_a_unit(self):
         try:
             import tkinter as tk
@@ -21212,6 +21284,56 @@ building castle_port
             v._read()                                          # the picked chain kept for the new faction
             self.assertEqual(v.chain["chain"], "barracks")
             self.assertEqual([u["unit"] for u in v.level["units"]], ["rebel spear"])
+        finally:
+            root.destroy()
+
+    def test_the_roster_by_buildings_adds_and_takes(self):
+        """The Roster's By buildings tab: a click on a unit under All units adds it to the picked level and every
+        level above; the x on a card takes it from there and above; a level's + gives the ones below too."""
+        try:
+            import tkinter as tk
+            root = tk.Tk()
+        except Exception as e:
+            self.skipTest("no window: %s" % e)
+        from types import SimpleNamespace
+        from campaign_editor.gui_rosterbuildings import RosterBuildings
+        from campaign_editor.gui_garrison import Pictures
+        said = []
+        try:
+            app = SimpleNamespace(pictures=Pictures(), shown_names=lambda: {}, open_unit=None, mod=self.mod,
+                                  v={"template": tk.StringVar(value="alpha")}, editing=lambda: True,
+                                  remember=lambda: None, roster_set={}, roster_changed=lambda: None,
+                                  status=SimpleNamespace(set=said.append))
+            v = RosterBuildings(root, app)
+            v.load(self.mod)
+            v.refresh()
+            self.assertEqual(len(v.items), 3)
+            self.assertTrue(v.visible_units())
+            v.building_list()                                   # + Building: the chains it may not build all of
+            top = next(w for w in v.winfo_children() if isinstance(w, tk.Toplevel))
+            tv = next(w for w in top.winfo_children()[0].winfo_children()[-2].winfo_children()
+                      if w.winfo_class() == "Treeview")
+            self.assertEqual(list(tv.get_children()), ["barracks", "temple_of_x"])
+            top.destroy()
+            bar = next(c for c in v.items if c["chain"] == "barracks")
+            v.show_chain(bar, "big_barracks")
+            v.add("rebel spear")                                # alpha may not build big_barracks yet
+            self.assertEqual(app.roster_set, {})
+            v.give_level(v.chain, "big_barracks", True)
+            self.assertEqual(app.roster_set, {"building:barracks:big_barracks": True})
+            v.show_chain(next(c for c in v.items if c["chain"] == "barracks"), "muster")
+            v.add("rebel spear")
+            self.assertEqual(app.roster_set["recruit:barracks:muster:rebel spear"], True)
+            self.assertEqual(app.roster_set["recruit:barracks:big_barracks:rebel spear"], True)
+            muster = v.level
+            self.assertIn(("rebel spear", "give"), [(u["unit"], u.get("pending")) for u in muster["units"]])
+            v.give_unit("rebel spear", "muster", False)        # the x on the new card: back as it was
+            self.assertNotIn("recruit:barracks:muster:rebel spear", app.roster_set)
+            v.give_unit("alpha general", "muster", False)
+            self.assertIs(app.roster_set["recruit:barracks:muster:alpha general"], False)
+            v.give_chain(v.chain, False)                       # the x on the tile: every level
+            self.assertIs(app.roster_set["building:barracks:muster"], False)
+            self.assertNotIn("building:barracks:big_barracks", app.roster_set)
         finally:
             root.destroy()
 
