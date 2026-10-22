@@ -13,6 +13,7 @@
 **Map**
 - [[Campaign map]]
 - [[Terrain editor]]
+- [[Bigger map x3]]
 
 **Units and buildings**
 - [[Units and buildings]]
@@ -20,6 +21,13 @@
 
 **Rules and add-ons**
 - [[Campaign rules and Add-ons]]
+
+**Everything in full**
+- [[Every feature]]
+- [[Reference]]
+- [[What it changes]]
+- [[FAQ and known limits]]
+- [[Screenshots and videos]]
 
 **Safety and help**
 - [[Backups and Restore]]
