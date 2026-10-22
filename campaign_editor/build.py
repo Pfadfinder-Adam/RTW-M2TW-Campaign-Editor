@@ -205,6 +205,8 @@ def build(mod, campaign, template, new, opts):
         primary = None
     apply_art(plan, campaign, new, list(opts["start"].get("regions") or []), primary,
               towns_changed=opts.get("copy_art", True), own_map=opts.get("copy_art", True))
+    from .traces import plan_note
+    plan_note(plan)
     validate(plan, campaign)
     return plan
 

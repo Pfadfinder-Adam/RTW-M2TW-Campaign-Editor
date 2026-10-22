@@ -329,6 +329,39 @@ class ToolTest(unittest.TestCase):
         self.assertIn("alpha\t\t##standard_alpha.tga", "\n".join(plan.files[mod.file("building_battle")].texts()))
         self.assertIn("symbol\t\tmodels_strat/symbol_alpha.CAS", sm)
 
+    def test_traces_of_another_faction(self):
+        """Stage 2 of a faction with nothing in common (the user, 2026-10-22): what a faction the editor made still
+        shares with another - colours, unit cards pixel for pixel, a text naming another faction - listed by Check
+        mod files for the factions the backups say the editor made; the plan of a new faction says it too."""
+        from campaign_editor import traces as T
+        from campaign_editor.check import check_mod
+        d = os.path.join(self.root, "data")
+        mod = ModData(self.root)
+        plan = build(mod, "test", "alpha", "beta", {"display_name": "Betaland",
+                                                    "start": {"regions": ["B_R"], "leader": {"name": "Boris"}}})
+        self.assertIn("beta still has of alpha", plan.report())
+        plan.apply()
+        p = os.path.join(d, "text", "expanded_bi.txt")
+        with open(p, encoding="utf-16") as fh:
+            text = fh.read()
+        with open(p, "w", encoding="utf-16") as fh:
+            fh.write(text + "{EMT_BETA_TOWN}\t\tAlphan Kingdom's town\n")
+        mod = ModData(self.root)
+        self.assertEqual(T.made_factions(mod), {"beta": "alpha"})
+        found = T.traces(mod, "test", "beta")
+        kinds = {(t["what"], t["other"]) for t in found}
+        self.assertIn(("colours almost the same as another faction's", "alpha"), kinds)    # the template's colours
+        self.assertIn(("unit cards pixel for pixel another faction's", "alpha"), kinds)
+        self.assertIn(("of its texts naming another faction", "alpha"), kinds)
+        self.assertTrue(all(":" in line for line in T.summary(found)))
+        report = check_mod(mod, "test")
+        self.assertIn("TRACES OF ANOTHER FACTION in beta (made from alpha", report)
+        self.assertIn("unit cards pixel for pixel another faction's: alpha", report)
+        # colours of its own: no colour trace
+        self.assertEqual(T.colour_traces({"a": {"primary_colour": (200, 10, 10), "secondary_colour": (0, 0, 0)},
+                                          "b": {"primary_colour": (10, 200, 10), "secondary_colour": (0, 0, 0)}},
+                                         "a"), [])
+
     def test_people_word_of_a_faction(self):
         from campaign_editor.build import people_word
         self.assertEqual(people_word({"display_name": "Scotland", "adjective": "Scottish"}), "Scots")
