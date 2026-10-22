@@ -29,6 +29,7 @@
 - New mod folder puts no switched-off engine settings files (descr_ex, descr_caps_ex) in: the mod runs on the engine's defaults as before; the editor writes the line a change needs, Check mod files' Copy them in brings the whole list.
 
 ### Fixed
+- Map from zero: the new sea showed the old map's coasts and deep water - the sea's colour picture (water_surface.tga, stretched over the whole map) was left as it was; the new map now writes its own in one sea colour (the old picture's open sea). Both games.
 - View in 3D / Make a card: a man whose skeleton has a twin named the same but for the letter case (Medieval II's halberdiers: the man's MTW2_Halberd_Primary and the halberd's MTW2_Halberd_primary) stood in the T pose and his animations did not play -> each skeleton is read apart, as the game reads them, and the man stands and moves.
 - Settings: typing a zoom number redrew the map at every key and held the window, so Close needed a second click -> the map is drawn once the typing stops.
 - New faction: a clone whose template has the same full and short name (the Gauls: Gaul) got its full name as the short one, and words grown from the name (Gaulish) half swapped -> the short name is the one you typed, such words take the new adjective.

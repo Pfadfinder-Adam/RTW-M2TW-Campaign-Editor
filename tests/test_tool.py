@@ -3394,6 +3394,9 @@ building smith
         self.assertGreaterEqual(h.get(2 * MZ.PORT[0] + 1, 2 * MZ.PORT[1] + 1)[0], 1)       # the port's tile: land
         self.assertEqual(tuple(h.get(1, 1)[:3]), MZ.SEA_BLUE)
         self.assertEqual(read_tga(os.path.join(camp, "map_roughness.tga")).width, 64)
+        w = read_tga(os.path.join(camp, "water_surface.tga"))           # one sea colour: no old coasts in the water
+        self.assertEqual((w.width, w.height), MZ.WATER_SIZE)
+        self.assertEqual(len({tuple(w.get(x, y)[:3]) for x in range(0, w.width, 7) for y in range(0, w.height, 7)}), 1)
         with open(os.path.join(camp, "descr_terrain.txt"), encoding="latin-1") as fh:
             t = fh.read()
         self.assertRegex(t, r"width\s+32")
@@ -3448,6 +3451,30 @@ building smith
         self.assertIn("slave", names)
         self.assertEqual(sum(len(fb.settlements) for fb in st.factions), n)
         self.assertEqual({s.region for fb in st.factions for s in fb.settlements}, set(regions))
+
+    def test_map_from_zero_sea_takes_the_old_water_surface_colour_only(self):
+        """The user, 2026-10-22 (screenshot, Medieval II): the new island's sea showed the old map's coasts and deeps -
+        water_surface.tga, the sea's colour picture stretched over the whole map, was left as it was. The new map
+        writes its own: the old picture's open-sea colour (its most common) everywhere, none of its shapes."""
+        try:
+            from PIL import Image
+        except ImportError:
+            self.skipTest("no Pillow")
+        from campaign_editor import mapzero as MZ
+        from campaign_editor.tga import read_tga
+        mod = ModData(self.root)
+        camp = mod.campaign_dir("test")
+        old = Image.new("RGB", (64, 64), (97, 227, 255))
+        old.paste((27, 27, 57), (0, 0, 20, 64))                          # an old ocean's deep down one side
+        old.save(os.path.join(camp, "water_surface.tga"), format="TGA", rle=False)
+        self.assertEqual(MZ._open_sea(mod, "test", False), (97, 227, 255))
+        plan = Plan(mod, "z", "alpha", {})
+        MZ.make(plan, "test", "alpha", (32, 24))
+        plan.apply()
+        w = read_tga(os.path.join(camp, "water_surface.tga"))
+        self.assertEqual((w.width, w.height), MZ.WATER_SIZE)
+        self.assertEqual({tuple(w.get(x, y)[:3]) for x in range(0, w.width, 5) for y in range(0, w.height, 5)},
+                         {(97, 227, 255)})
 
     def test_map_from_zero_leaves_port_buildings_where_no_port_is(self):
         """The tester, 2026-10-22 (6 regions): Etruria's and Apulia's towns kept 'type port_buildings port' on the new
