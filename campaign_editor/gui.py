@@ -6539,10 +6539,9 @@ class App(tk.Tk):
                 hint = ("%s = template of a NEW faction. To change %s itself: Edit faction" % (picked, picked)
                         if picked else "")
             self.lbl_work.configure(text=hint)
-            if hint and not self.lbl_work.winfo_manager():
-                self.lbl_work.pack(fill="x", padx=16, after=self._work_frame)
-            elif not hint and self.lbl_work.winfo_manager():
-                self.lbl_work.pack_forget()
+            if not self.lbl_work.winfo_manager():      # its line always there: the form below never jumps when the
+                self.lbl_work.pack(fill="x", padx=16, after=self._work_frame)   # words come or go (the tester,
+                # 2026-10-22: a click meant for Internal name landed on Name (short))
 
     def make_plan(self):
         ed = self.editor()

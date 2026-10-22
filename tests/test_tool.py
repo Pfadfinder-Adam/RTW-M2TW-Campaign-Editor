@@ -191,6 +191,17 @@ class ToolTest(unittest.TestCase):
             with open(p, "rb") as f:
                 self.assertEqual(f.read(), TextFile.load(p).dump())
 
+    def test_clone_names_swapped_once(self):
+        """The tester, 2026-10-22: a clone of the Gauls named 'CE Gaul Clone' / 'CEGC' / 'CE Gaulish' got 'CE CEGC
+        Clone' and 'CE CE CEGC Cloneish Spy' - each name swapped again over the one put in before. One pass now."""
+        from campaign_editor.clone import swap_names
+        repl = [("Gaulish", "CE Gaulish"), ("Gauls", "CE Gaul Clone"), ("Gaul", "CEGC")]
+        self.assertEqual(swap_names("Gaulish Spy", repl), "CE Gaulish Spy")
+        self.assertEqual(swap_names("The Gauls rule; a Gaul warlord", repl), "The CE Gaul Clone rule; a CEGC warlord")
+        self.assertEqual(swap_names("Gaulish warriors", repl), "CE Gaulish warriors")
+        self.assertEqual(swap_names("Transgaul", repl), "Transgaul")
+        self.assertEqual(swap_names("Gauls's", repl), "CE Gaul Clone's")
+
     def test_clone_and_restore(self):
         before = tree_hash(self.root)
         mod = ModData(self.root)

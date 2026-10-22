@@ -35,6 +35,21 @@ def _replace_word(text, old, new):
     return re.sub(r"(?<![A-Za-z0-9_])%s(?![A-Za-z0-9_])" % re.escape(old), new, text)
 
 
+def swap_names(text, repl):
+    """The template's names in a copied text put to the new faction's, all in ONE pass, the longest first, each only
+    at the start of a word (a plural or '-ish' after it rides along): a new name that holds the template's word is
+    never swapped again (the tester, 2026-10-22: 'CE Gaul Clone' became 'CE CEGC Clone', 'Gaulish' 'CE CE CEGC
+    Cloneish'; earlier 'CE32ian tribes')."""
+    olds = [o for o, _ in sorted(repl, key=lambda p: -len(p[0])) if o]
+    if not olds:
+        return text
+    to = {}
+    for o, n in repl:
+        to.setdefault(o, n)
+    rx = re.compile(r"(?<![A-Za-z0-9_])(%s)" % "|".join(re.escape(o) for o in olds))
+    return rx.sub(lambda m: to[m.group(1)], text)
+
+
 # ---------------------------------------------------------------------------
 # descr_sm_factions.txt / .json
 # ---------------------------------------------------------------------------
@@ -483,9 +498,8 @@ def text_strings(plan):
                 value, more = gap + plan.opts["long_description"].replace("\n", "\\n"), []
                 long_keys.append(new_key)
             else:
-                for old, nw in repl:
-                    value = value.replace(old, nw)
-                    more = [l.replace(old, nw) for l in more]
+                value = swap_names(value, repl)
+                more = [swap_names(l, repl) for l in more]
             # the copy goes after the template's whole entry, never inside it
             f.insert(end, [m.group(1) + new_key + "}" + value] + more)
             keys.add(new_key.upper())
