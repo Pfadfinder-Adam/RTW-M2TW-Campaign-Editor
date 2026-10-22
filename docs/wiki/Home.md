@@ -53,8 +53,8 @@ texture (vanilla-style uniforms), so a new faction's troops wear its own colour 
 
 Medieval II keeps its data packed: the editor offers to unpack it once, with the game's own unpacker. The engines
 REX / M2EX beside the game lift every limit: with them the editor knows no limits at all (no refusal, no warning -
-their setting lines are rewritten to fit); the original exes' limits apply only without them. Features marked 🧪 in
-the [Roadmap](https://github.com/Pfadfinder-Adam/RTW-M2TW-Campaign-Editor/blob/main/ROADMAP.md) are out but not yet confirmed in the game - reports welcome.
+their setting lines are rewritten to fit); the original exes' limits apply only without them. Not every feature
+has been confirmed in the game yet - reports welcome.
 
 ## Made to be easy
 
@@ -107,8 +107,6 @@ needs are copied under its own name (Epirus cloned from Macedon gets `standard_e
 
 ## What is where
 
-- [ROADMAP](https://github.com/Pfadfinder-Adam/RTW-M2TW-Campaign-Editor/blob/main/ROADMAP.md) - what it
-  does, what is being tested, what comes next.
 - [CHANGELOG](https://github.com/Pfadfinder-Adam/RTW-M2TW-Campaign-Editor/blob/main/CHANGELOG.md) - what
   changed in each version and what was tested in the game.
 - [[Every feature]] - everything the editor does, area by area.

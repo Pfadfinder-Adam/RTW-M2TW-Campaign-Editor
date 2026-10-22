@@ -35,7 +35,7 @@ with the game's own unpacker.
 - **Art.** A new faction starts with copies of its template's pictures under its own name (banners, logos, symbols, cards) - replace them on the **Art** tab; the tool does not draw art.
 - **Strings.** Copied strings keep the template's text apart from the names ("the wicked Seleucids..."). Edit them in `data/text` if you care.
 - **Character names.** A leader, heir or family member takes names from the faction's name list (the game crashes on a name without a string); a faction's own names go in with **Name list...**.
-- **In the game.** Features marked 🧪 in [ROADMAP.md](https://github.com/Pfadfinder-Adam/RTW-M2TW-Campaign-Editor/blob/main/ROADMAP.md) are released but not yet confirmed in the game - reports welcome.
+- **In the game.** Not every feature has been confirmed in the game yet - reports welcome.
 - **A mod that holds only the files it changes** (REX `-mod:` and Medieval II `mods/<name>` leave the rest to the game's `data`) loads as the game reads it: every file the mod lacks comes from the game's `data`. A change to such a file goes into the mod as its own copy - the game's files are never written - and Restore takes the copy away. Medieval II: the game's own `data` must be unpacked first (load it once - the editor offers to unpack it). The engines' own `descr_ex.txt` / `descr_caps_ex.txt` are read from the mod alone, as REX / M2EX read them.
 - **Medieval II: Kingdoms campaigns** (Americas, Britannia, Crusades, Teutonic) are checked only on made-up copies so far - reports from them welcome.
 - **The bigger map (x3)** is new ground for the game's AI (pathfinding, slower turns) - try it in the game before a long campaign.
