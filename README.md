@@ -2,7 +2,7 @@
 
 **A campaign editor for Rome: Total War (with REX) and Medieval II: Total War (with M2EX).** Factions, the map,
 towns, armies, characters, units, buildings, diplomacy, texts and pictures - all in one window, no digging through
-files. Every change is shown before it is written, and a backup lets you go back. Free. Version **0.35.3**.
+files. Every change is shown before it is written, and a backup lets you go back. Free. Version **0.35.4**.
 
 [![Download](https://img.shields.io/github/v/release/Pfadfinder-Adam/RTW-M2TW-Campaign-Editor?label=Download&style=for-the-badge)](../../releases)
 [![Wiki](https://img.shields.io/badge/Guide-Wiki-2b6cb0?style=for-the-badge)](../../wiki)
@@ -58,10 +58,7 @@ More: [Reporting a bug](../../wiki/Reporting-a-bug).
 
 ## ✨ What's new
 
-**0.35.3** ([release](../../releases/tag/v0.35.3)) - fixes: the game no longer stops reading the factions after a
-garrison and new agents were kept for one Apply; the Terrain editor's and 3D map's ground colours are the games' own;
-war dogs and pigs get their own texture in Units > Battle model.
-Every version: [CHANGELOG.md](CHANGELOG.md).
+**0.35.4** ([release](../../releases/tag/v0.35.4)): **a mod, a map or a faction from zero**, step by step; **paint right on the 3D map**; **Themes** and the editor's own look; **Buildings by faction** - a faction's chains and the units each level recruits, as the game shows them; **Delete a unit** and the texts players read for it; the **Layout board** - every page of the editor on one canvas; Interface > **Campaign HUD** and **Sprite sheets**; the **Climate library**; a **Painted look** for unit cards; every fix of 0.35.1 - 0.35.3 and many more. Older versions: [CHANGELOG.md](CHANGELOG.md).
 
 ## 🔗 Links
 

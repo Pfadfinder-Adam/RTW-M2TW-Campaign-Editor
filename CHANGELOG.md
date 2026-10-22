@@ -1,6 +1,12 @@
 # Changelog
 
-## Unreleased
+## 0.35.4 - 2026-10-22
+
+### In short
+- **Added**: a whole mod, map or faction from zero, step by step; paint right on the 3D map (heights, ground, climates, regions) with Undo; Themes and the editor's own look (Appearance, Layout board); the Climate library; Buildings by faction and the roster's By buildings; Delete a unit and its texts; Campaign HUD and Sprite sheets in Interface; Painted look for cards; Authors and sources of this mod.
+- **Fixed**: every fix of 0.35.1 - 0.35.3 and many more from testers' and players' reports (Recolour of a faction with one colour, T pose in View in 3D, Map from zero's sea and script, a thin mod's built map, the 3D map).
+- **Changed**: a new faction starts with an empty form; the shore line from 500 % zoom; 40-unit stacks with REX / M2EX.
+- **Known issue**: New faction > From zero on Rome stops at Create when the culture's name list holds names with accented letters (é, ā...) - the fix comes in the next version.
 
 ### Added
 - New faction > **From zero...**: a new faction with nothing of an existing one, step by step - its culture (the faction its lines in the game's lists are made from is picked behind it, never shown as a template), its names (the internal name made from them), colours away from every faction's (free pairs offered; colours like another faction's said), its own emblem on every sign (a must; a symbol like another faction's said), a name list mixed from the whole culture (no one faction's list); then the form for its towns and leader, and one Apply creates it and recolours every picture it got in its own colours. Its units: only those its culture shares, not the ones only that faction has (a tick on the last step; a culture sharing fewer than 6 keeps them); once made it opens on Roster > By buildings to give it units of its own. 'Forget it' makes it a copy of the template again.
