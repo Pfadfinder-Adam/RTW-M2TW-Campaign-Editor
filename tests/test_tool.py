@@ -20357,6 +20357,7 @@ building smith
         canvas for the card, in order; the map's own picture item ('bg') is left out."""
         try:
             import tkinter as tk
+            import numpy  # noqa: F401  (the release's Windows test job has no NumPy)
             from campaign_editor.glflat import canvas_rows
             root = tk.Tk()
         except Exception as e:
