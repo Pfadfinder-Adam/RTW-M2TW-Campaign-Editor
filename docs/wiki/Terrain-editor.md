@@ -86,7 +86,8 @@ is made again when the stroke ends.
 as above, or tile by tile **Ground**, **Rivers, cliffs, volcanoes...**, **Climates** (each with the Terrain tab's own
 palette), **Regions** (the Map's Edit regions brush: the tiles go to the region picked in *paint with*, kept for
 Apply), **Land (tiles)** or **Sea (tiles)** (the Land and sea tile brushes); **Alt + click** picks the tile's own
-region, ground, mark or climate. A white square on the ground shows the
+region, ground, mark or climate; the mouse resting on a tile says its ground, climate and region; **Ctrl+Z /
+Ctrl+Y** on the 3D tab take back or do again the newest stroke, regions painted or figure carried there. A white square on the ground shows the
 tiles it paints (size 1 one tile, 2 a square of 3 x 3...); the ground and climate show at once, the mountains,
 rivers, trees and borders a moment after the stroke. The Terrain editor's Undo, Preview and Apply are shared.
 **Layers > colours over the map** lays each tile's climate colour (the sea's too - what land raised there will
