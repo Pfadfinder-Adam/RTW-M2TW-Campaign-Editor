@@ -51,6 +51,8 @@ whose it is):
 - **Yuri** - 2 reports
 - **Bartek K** - 1 report
 - **CrimsonScorpio** - 1 report
+- **Keapon_Laffin** - 1 report
+- **seki** - 1 report
 
 ## How to get in
 
