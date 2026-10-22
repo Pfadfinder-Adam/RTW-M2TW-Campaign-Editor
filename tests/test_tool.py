@@ -15528,6 +15528,18 @@ building smith
         with self.assertRaises(ValueError):                         # the leader: make another the leader first
             map_changes(Plan(ModData(self.root), "map", "map", {}), "test",
                         {"remove": {"alpha": [{"name": "Aaron Alphid", "from": [1, 1]}]}})
+        # a general whose name is only a part of a name on the tree ('Abel' of 'Abel Alphid') is not on it: he
+        # simply goes, no dead record left behind (review 2026-10-22)
+        f = mod.load(strat)
+        i = next(n for n, t in enumerate(f.texts()) if t.startswith("character\tAbel Alphid"))
+        f.raw[i:i] = [f.make(x) for x in ("character\tAbel, named character, age 30, , x 3, y 1", "army",
+                                          "unit\t\talpha general\t\texp 0 armour 0 weapon_lvl 0")]
+        f.save()
+        plan = Plan(ModData(self.root), "map", "map", {})
+        map_changes(plan, "test", {"remove": {"alpha": [{"name": "Abel", "from": [3, 1]}]}})
+        texts = plan.files[strat].texts()
+        self.assertFalse([t for t in texts if t.startswith("character_record") and "Abel," in t], texts)
+        self.assertFalse([t for t in texts if t.startswith("character\tAbel,")])
 
     def test_map_editor_moves_and_arms_any_faction(self):
         """The Map editor (no faction picked): any faction's character dragged elsewhere and any army's units
