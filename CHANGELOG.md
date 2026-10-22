@@ -25,6 +25,7 @@
 - The editor's own look: Tools > Edit the editor's look - drag any button, tick or label anywhere, rename it, give it a hover text or a width, hide it, take it back; kept for every start. The editor's language from a language file (Settings), and Words to translate writes every word for translators.
 
 ### Changed
+- Maps: the '?' of Bigger map (x3)... stands after the button, no longer beside the zoom's own '?'.
 - Terrain editor: the heights map (drawn point by point) shows no towns, ports or other signs - only the heights, the water and the shore.
 - Terrain editor: the Shore line follows the zoom you see - drawn from 500 % on any map, either game (was a fixed closeness, much later on a big map); Settings > Campaign map changes the zoom.
 - A new faction is a clean clone: its colours, units, buildings, models and cards - none of the template's trait / ancillary triggers (the tick for them is gone).
