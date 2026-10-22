@@ -1401,6 +1401,7 @@ building smith
         self.assertEqual(st["base"], "(game)")
         self.assertTrue(st["thin"])
         self.assertEqual([n for _, _, fs in os.walk(data) for n in fs], [])     # nothing copied
+        self.assertTrue(os.path.isdir(os.path.join(data, "world", "maps", "base")))   # the game saves map.rwm there
         self.assertEqual(os.path.normcase(ModData(data).under), os.path.normcase(os.path.join(game, "data")))
         with open(os.path.join(game, "Beta", "Start_Beta.bat"), "rb") as f:
             bat = f.read()
@@ -8856,7 +8857,7 @@ building smith
             from campaign_editor import gui_map as GM
         except ImportError:
             self.skipTest("no tkinter")
-        self.assertEqual(GM.ZOOM_SETTINGS["map_shore_from"], 300)
+        self.assertEqual(GM.ZOOM_SETTINGS["map_shore_from"], 500)
 
         class View:                                   # just what _shore_lines reads; an all-sea 9 x 9 point map
             shore, z, ox, oy, SHORE_BLOCK = (None, None), 1.0, 0.0, 0.0, 8

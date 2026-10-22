@@ -1100,7 +1100,7 @@ class TerrainEditor(ttk.Frame):
             "Find ground on the wrong side of the coast: land ground in the water, sea ground on the land.").pack(
             side="left", padx=(16, 0))
         tip(ttk.Checkbutton(more, text="Shore line", variable=self.v_shore, command=self._shore_toggled),
-            "From the zoom set in Settings > Campaign map ('shore line from zoom %', 300 % by default), a light line "
+            "From the zoom set in Settings > Campaign map ('shore line from zoom %', 500 % by default), a light line "
             "shows the shore exactly as the game will draw it (in every mode of this tab): "
             "the game cuts every square of four heights points into two triangles and lays the water at height 0 - "
             "so the shore runs between the points, not along the tiles.").pack(side="left", padx=(12, 0))
