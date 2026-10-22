@@ -88,14 +88,14 @@ def view_picture(parent, path, title=None, crop=None, image=None):
         from tkinter import messagebox
         messagebox.showinfo("Picture", "%s cannot be shown here: %s" % (os.path.basename(path), e), parent=parent)
         return None
-    win = PictureWindow(parent, path, im, title, ImageTk)
+    win = PictureWindow(parent, path, im, title, ImageTk, crop=crop, plain=image is None)
     _OPEN[key] = win
     win.bind("<Destroy>", lambda e: _OPEN.pop(key, None) if e.widget is win else None, add="+")
     return win
 
 
 class PictureWindow(tk.Toplevel):
-    def __init__(self, parent, path, im, title, ImageTk):
+    def __init__(self, parent, path, im, title, ImageTk, crop=None, plain=True):
         super().__init__(parent)
         self.title(title or os.path.basename(path))
         self.im, self._tk, self._photo = im, ImageTk, None
@@ -113,6 +113,15 @@ class PictureWindow(tk.Toplevel):
         ttk.Button(bar, text="Close", command=self.destroy).pack(side="right")
         ttk.Button(bar, text="Fit", command=self.fit).pack(side="right", padx=4)
         ttk.Button(bar, text="1 : 1", command=lambda: self.set_zoom(1)).pack(side="right")
+        from .gui_freecolour import app_of
+        if plain and app_of(parent) is not None and os.path.isfile(path):
+            # any picture looked at closely can be recoloured from here (gui_freecolour)
+            from .gui_freecolour import open_free
+            from .gui_util import tip
+            tip(ttk.Button(bar, text="Recolour freely...", command=lambda: open_free(
+                self, path, crop=crop, title=title)), "Make any colour of this picture another: click a colour, "
+                "pick the new one - its shades and folds kept. Written with a backup, Restore gives it back.").pack(
+                side="right", padx=(0, 8))
         self.about = describe(path, im)
         self.cx, self.cy = cw / 2, ch / 2         # where the picture's middle stands on the canvas
         for seq in ("<MouseWheel>", "<Button-4>", "<Button-5>"):         # a wheel of its own: zoom

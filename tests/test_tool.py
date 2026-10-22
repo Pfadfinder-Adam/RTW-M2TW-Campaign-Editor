@@ -12427,6 +12427,198 @@ building smith
         restore(mod, backups(mod)[0])
         self.assertFalse(os.path.exists(os.path.join(tex, "spearman_alpha_own.tga")))
 
+    def test_free_recolour_takes_a_colour_with_its_shades_not_faces(self):
+        """Recolour freely (a modder on Discord: 'recolour the textures through the tool'): a colour clicked on any
+        picture takes its light and dark shades, never skin, grey or see-through; 'only the joined area' keeps a
+        patch of the same colour elsewhere; two changes are found on the picture as it came (red <-> blue swap)."""
+        try:
+            from PIL import Image
+        except ImportError:
+            self.skipTest("Pillow")
+        from campaign_editor import freecolour as F
+        im = Image.new("RGBA", (40, 4), (0, 0, 0, 0))
+        for x in range(35):
+            c = (200, 30, 30) if x < 10 or x >= 30 else (90, 12, 12) if x < 20 else (90, 90, 90) if x < 25 else \
+                (225, 180, 150)
+            for y in range(4):
+                im.putpixel((x, y), c + (255,))
+        m = F.pick_mask(im, (200, 30, 30))
+        self.assertEqual([m.getpixel((x, 1)) for x in (5, 15, 22, 27, 32, 37)], [255, 255, 0, 0, 255, 0])
+        m = F.pick_mask(im, (200, 30, 30), at=(5, 1))
+        self.assertEqual([m.getpixel((x, 1)) for x in (5, 15, 32)], [255, 255, 0])
+        new, share = F.changed(im, [F.swap((200, 30, 30), (30, 30, 200))])
+        light, dark = new.getpixel((5, 1)), new.getpixel((15, 1))
+        self.assertGreater(light[2], light[0])                           # blue now
+        self.assertGreater(dark[2], dark[0])
+        self.assertLess(dark[2], light[2])                               # the fold stays darker
+        self.assertEqual(new.getpixel((27, 1)), (225, 180, 150, 255))   # the face as it was
+        self.assertEqual(new.getpixel((37, 1))[3], 0)                    # see-through kept
+        self.assertAlmostEqual(share, 25 / 40.0)
+        grey = F.changed(im, [F.swap((90, 90, 90), (20, 140, 40))])[0].getpixel((22, 1))
+        self.assertGreater(grey[1], grey[0])                             # a grey made green
+        blue = Image.new("RGB", (2, 1), (30, 30, 200))
+        blue.putpixel((0, 0), (200, 30, 30))
+        both = F.changed(blue, [F.swap((200, 30, 30), (30, 30, 200)), F.swap((30, 30, 200), (200, 30, 30))])[0]
+        self.assertGreater(both.getpixel((0, 0))[2], both.getpixel((0, 0))[0])
+        self.assertGreater(both.getpixel((1, 0))[0], both.getpixel((1, 0))[2])
+        self.assertEqual(F.hsl_target((200, 30, 30), 120), (30, 200, 30))
+        # the brush: added to the change, kept out of it
+        sw = F.swap((200, 30, 30), (30, 30, 200))
+        sw["keep"] = Image.new("L", im.size, 0)
+        sw["keep"].putpixel((5, 1), 255)
+        sw["add"] = Image.new("L", im.size, 0)
+        sw["add"].putpixel((22, 1), 255)
+        new = F.changed(im, [sw])[0]
+        self.assertEqual(new.getpixel((5, 1)), (200, 30, 30, 255))
+        self.assertNotEqual(new.getpixel((22, 1)), (90, 90, 90, 255))
+
+    def test_free_recolour_writes_any_picture_and_restore_gives_it_back(self):
+        """A card (no faction colour in it at all) recoloured freely: written as the same kind of file (32-bit TGA,
+        its size), a part of a sheet only in its box, nothing written when no change takes anything; Restore byte for
+        byte."""
+        try:
+            from PIL import Image
+        except ImportError:
+            self.skipTest("Pillow")
+        from campaign_editor import freecolour as F
+        from campaign_editor.factionart import picture_info
+        d = os.path.join(self.root, "data")
+        cards = os.path.join(d, "ui", "units", "alpha")
+        os.makedirs(cards, exist_ok=True)
+        card = os.path.join(cards, "#alpha_general.tga")
+        im = Image.new("RGBA", (48, 64), (120, 80, 30, 255))             # brown leather
+        im.paste((60, 60, 60, 255), (0, 0, 48, 10))
+        im.save(card, format="TGA")
+        before = tree_hash(self.root)
+        info = picture_info(card)
+        mod = ModData(self.root)
+        plan = Plan(mod, "recolour", "free", {})
+        self.assertEqual(F.plan_free(plan, card, [F.swap((20, 200, 20), (200, 20, 20))]), 0.0)   # no green in it
+        self.assertFalse(plan.binaries)
+        self.assertGreater(F.plan_free(plan, card, [F.swap((120, 80, 30), (30, 90, 160))]), 0.5)
+        bdir = plan.apply()
+        got = Image.open(card).convert("RGBA")
+        self.assertEqual(got.size, (48, 64))
+        self.assertGreater(got.getpixel((20, 40))[2], got.getpixel((20, 40))[0])     # the leather blue
+        self.assertEqual(got.getpixel((20, 5)), (60, 60, 60, 255))                  # the grey as it was
+        self.assertEqual(picture_info(card)[2], info[2])                             # the same depth
+        restore(ModData(self.root), bdir)
+        self.assertEqual({k: v for k, v in tree_hash(self.root).items() if "_backups" not in k}, before)
+        # a part of a sheet: only its box changes
+        plan = Plan(ModData(self.root), "recolour", "free", {})
+        F.plan_free(plan, card, [F.swap((120, 80, 30), (30, 90, 160))], crop=(0, 32, 48, 32))
+        plan.apply()
+        got = Image.open(card).convert("RGBA")
+        self.assertEqual(got.getpixel((20, 20)), (120, 80, 30, 255))
+        self.assertGreater(got.getpixel((20, 40))[2], got.getpixel((20, 40))[0])
+
+    def test_free_recolour_never_writes_over_the_games_texture(self):
+        """A battle texture that is the game's own (here: the mod is the game's data folder) is never written over
+        (the tester's rule, as Recolour): a copy beside it, every model line naming it pointed at the copy (both
+        factions wearing it); 'only this unit': a model of its own, the other unit keeps the old one."""
+        try:
+            from PIL import Image
+        except ImportError:
+            self.skipTest("Pillow")
+        from campaign_editor import freecolour as F, models as M
+        d = os.path.join(self.root, "data")
+        tex = os.path.join(d, "models_unit", "textures")
+        os.makedirs(tex, exist_ok=True)
+        orig = os.path.join(tex, "spearman_alpha.tga")
+        Image.new("RGBA", (32, 32), (200, 20, 20, 255)).save(orig, format="TGA")
+        write(os.path.join(d, "descr_model_battle.txt"),
+              "type\t\tspearman\nskeleton\tfs_spearman\nindiv_range\t40\n"
+              "texture\t\talpha, data/models_unit/textures/spearman_alpha.tga\n"
+              "texture\t\tslave, data/models_unit/textures/spearman_alpha.tga\n"
+              "model_flexi\tdata/models_unit/spearman.cas, max\n\n")
+        write(os.path.join(d, "export_descr_unit.txt"), EDU.replace(
+            "ownership\talpha", "soldier\t\tspearman, 20, 0, 1\nownership\talpha").replace(
+            "ownership\tslave", "soldier\t\tspearman, 20, 0, 1\nownership\tslave"))
+        write(os.path.join(self.root, "RomeTW.exe"), "")  # a game folder: its data is the game's own
+        with open(orig, "rb") as fh:
+            first = fh.read()
+        before = tree_hash(self.root)
+        mod = ModData(self.root)
+        self.assertEqual(sorted(f for _, f, _ in F.wearers(mod, orig)), ["alpha", "slave"])
+        plan = Plan(mod, "recolour", "free", {})
+        F.plan_free(plan, orig, [F.swap((200, 20, 20), (20, 160, 40))])
+        bdir = plan.apply()
+        with open(orig, "rb") as fh:
+            self.assertEqual(fh.read(), first)                                       # the original as it was
+        info = M.catalogue(ModData(self.root))["spearman"]
+        self.assertEqual(info.textures, {"alpha": "data/models_unit/textures/spearman_alpha_own.tga",
+                                         "slave": "data/models_unit/textures/spearman_alpha_own.tga"})
+        own = Image.open(os.path.join(tex, "spearman_alpha_own.tga")).convert("RGB").getpixel((5, 5))
+        self.assertGreater(own[1], own[0])
+        restore(ModData(self.root), bdir)
+        self.assertEqual({k: v for k, v in tree_hash(self.root).items() if "_backups" not in k}, before)
+        # only for one unit: its own model, the rebels' spearmen keep the old texture
+        plan = Plan(ModData(self.root), "recolour", "free", {})
+        F.plan_free(plan, orig, [F.swap((200, 20, 20), (20, 160, 40))], unit=("alpha general", "soldier", 0, "alpha"))
+        bdir = plan.apply()
+        m2 = ModData(self.root)
+        mine = M.unit_slots(M.unit_lines(m2, "alpha general"))[0][2]
+        self.assertNotEqual(mine.lower(), "spearman")
+        self.assertEqual(M.unit_slots(M.unit_lines(m2, "rebel spear"))[0][2], "spearman")
+        cat = M.catalogue(m2)
+        self.assertEqual(cat["spearman"].textures["slave"], "data/models_unit/textures/spearman_alpha.tga")
+        self.assertNotEqual(cat[mine.lower()].textures["alpha"], "data/models_unit/textures/spearman_alpha.tga")
+        with open(orig, "rb") as fh:
+            self.assertEqual(fh.read(), first)
+        restore(ModData(self.root), bdir)
+        self.assertEqual({k: v for k, v in tree_hash(self.root).items() if "_backups" not in k}, before)
+
+    def test_free_recolour_medieval2_texture_of_the_game_under_a_mod(self):
+        """Medieval II (both games, always): a mod in mods/ that holds only its changes, the battle texture (.texture:
+        48-byte head + DDS) in the game's data - recoloured freely as a copy in the mod (the head kept), the
+        modeldb's row of the faction wearing it pointed at the copy, the other faction's row and the game's files
+        untouched."""
+        try:
+            from PIL import Image
+        except ImportError:
+            self.skipTest("Pillow")
+        import io
+        from campaign_editor import freecolour as F, modeldb as MDB, models as M
+        game = os.path.join(self.root, "game")
+        write(os.path.join(game, "medieval2.exe"), "exe")
+        gtex = os.path.join(game, "data", "unit_models", "x")
+        os.makedirs(gtex)
+        buf = io.BytesIO()
+        Image.new("RGBA", (16, 16), (200, 20, 20, 255)).save(buf, format="DDS")
+        head = b"\x01" * 48
+        with open(os.path.join(gtex, "tex alpha.texture"), "wb") as fh:
+            fh.write(head + buf.getvalue())
+        m = MDB.from_dict({"name": "knights", "scale": "1", "lods": [["unit_models/x/k.mesh", "121"]],
+                           "textures": [[f, "unit_models/x/tex %s.texture" % f, "unit_models/x/n.texture",
+                                         "unit_sprites/%s_s.spr" % f] for f in ("alpha", "slave")],
+                           "attach": [], "mounts": [], "torch": ["-1", "0", "0", "0", "0", "0", "0"]})
+        m.ci = {k: ["0", "0"] for k in ("lodvec", "lod", "texvec", "tex", "mountvec", "mount", "weapons", "torch")}
+        db = os.path.join(game, "data", "unit_models", "battle_models.modeldb")
+        with open(db, "wb") as fh:
+            fh.write(("22 serialization::archive 3 0 0 0 0 1 0 0 " + " ".join(MDB.ModelDB.dump_models([m]))).encode(
+                "latin-1"))
+        mod_root = os.path.join(game, "mods", "test")
+        shutil.copytree(os.path.join(self.root, "data"), os.path.join(mod_root, "data"))
+        game_before = tree_hash(os.path.join(game, "data"))
+        mod = ModData(mod_root)
+        path = os.path.join(gtex, "tex alpha.texture")
+        self.assertEqual([f for _, f, _ in F.wearers(mod, path)], ["alpha"])
+        plan = Plan(mod, "recolour", "free", {})
+        F.plan_free(plan, path, [F.swap((200, 20, 20), (20, 40, 200))])
+        bdir = plan.apply()
+        self.assertEqual(tree_hash(os.path.join(game, "data")), game_before)          # the game's files untouched
+        copy = os.path.join(mod_root, "data", "unit_models", "x", "tex alpha_own.texture")
+        with open(copy, "rb") as fh:
+            data = fh.read()
+        self.assertEqual(data[:48], head)
+        px = Image.open(io.BytesIO(data[48:])).convert("RGB").getpixel((3, 3))
+        self.assertGreater(px[2], px[0])
+        info = M.catalogue(ModData(mod_root))["knights"]
+        self.assertEqual(info.textures["alpha"], "unit_models/x/tex alpha_own.texture")
+        self.assertEqual(info.textures["slave"], "unit_models/x/tex slave.texture")
+        restore(ModData(mod_root), bdir)
+        self.assertFalse(os.path.exists(copy))
+
     def test_recolour_copies_of_two_textures_never_share_a_name(self):
         """Two battle textures that differ only in the wearer's word (EN_Peasant_Padded_england / _france) both became
         ..._<faction>: the one written last dressed every model of the other (a tester: the peasants of a new

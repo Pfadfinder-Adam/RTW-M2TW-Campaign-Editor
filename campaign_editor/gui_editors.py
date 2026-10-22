@@ -1197,9 +1197,10 @@ class RecordEditor(ttk.Frame):
         return zoomable(tk.Label(parent, image=ph, relief="sunken"), got[1] if got else os.path.join(mod.data, rel),
                         image=lambda: MO.texture_image(mod, rel), title=rel)
 
-    def _texture_card(self, box, r, info, tex, facs):
+    def _texture_card(self, box, r, info, tex, facs, slot=None):
         """A texture's picture with Recolour... under it: that one texture in the faction's colours (the faction
-        wearing it first - Show's, else the first owner)."""
+        wearing it first - Show's, else the first owner) - and Recolour freely...: any colour of it (slot: the
+        unit's (key, index) line wearing it - 'only this unit' offered)."""
         cell = ttk.Frame(box)
         cell.grid(row=r, column=0, sticky="nw", pady=2)
         self._texture_thumb(cell, self.mod, tex).pack(anchor="w")
@@ -1209,6 +1210,22 @@ class RecordEditor(ttk.Frame):
         if got and fac:
             ttk.Button(cell, text="Recolour...", command=lambda p=got[1], f=fac: self.recolour_texture(f, p)).pack(
                 anchor="w", pady=(2, 0))
+        if got:
+            unit = None
+            if slot and self.current and info is not None:
+                worn = next((f for f, t in info.textures.items() if f and t == tex), None)
+                unit = (self.current[0], slot[0], slot[1], worn or "*", "%s's %s%s" % (
+                    self.current[0], "soldiers" if slot[0] == "soldier" else "officer %d" % (slot[1] + 1),
+                    " (%s's texture)" % worn if worn else ""))
+            from .gui_util import tip
+            tip(ttk.Button(cell, text="Recolour freely...", command=lambda p=got[1], u=unit: self.free_recolour(p, u)),
+                "Any colour of this texture made another (not only the faction's): click a colour, pick the new "
+                "one.").pack(anchor="w", pady=(2, 0))
+
+    def free_recolour(self, path, unit=None):
+        """Any colour of this texture (gui_freecolour: waits for Apply changes by itself)."""
+        from .gui_freecolour import open_free
+        return open_free(self, path, unit=unit)
 
     def recolour_texture(self, faction, path):
         """Recolour this one texture for the faction (gui_recolour.open_one: waits for Apply changes by itself)."""
@@ -1310,7 +1327,7 @@ class RecordEditor(ttk.Frame):
             if info:
                 tex = next((info.textures[f] for f in facs if f in info.textures), None) or \
                     next(iter(info.textures.values()), None)
-            self._texture_card(box, r, info, tex, facs)
+            self._texture_card(box, r, info, tex, facs, slot=(key, idx))
             txt = "%s: %s" % ("Soldiers" if key == "soldier" else "Officer %d" % (idx + 1), model)
             about, problems = "", []
             if info is None:
