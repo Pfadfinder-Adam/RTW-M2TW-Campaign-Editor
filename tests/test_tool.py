@@ -5600,6 +5600,59 @@ building smith
         self.assertEqual(LK.merged({"xy": [1, 2], "text": "a"}, {"xy": None, "size": [3, 4]}),
                          {"text": "a", "size": [3, 4]})
 
+    def test_editor_look_colours_font_and_emoji(self):
+        """A piece's own colours, font and emoji (the user, 2026-10-22: 'change the button's colour, its text, add
+        emoji'): a ttk button gets a style of its own built on the one it had, a tk label its options; the emoji
+        stands before its words; Back to how it was gives the theme's look and words back."""
+        from campaign_editor import look as LK
+        self.assertEqual(LK.shown_words({"emoji": "💾"}, "Save"), "💾 Save")
+        self.assertEqual(LK.shown_words({"emoji": "💾", "text": "Keep"}, "Save"), "💾 Keep")
+        self.assertEqual(LK.shown_words({"emoji": "❓"}, ""), "❓")
+        self.assertEqual(LK.font_of(["", 0, "bold"], ("Segoe UI", 9)), ("Segoe UI", 9, "bold"))
+        self.assertEqual(LK.font_of(["Georgia", 14, ""], ("Segoe UI", 9)), ("Georgia", 14))
+        self.assertIsNone(LK.font_of(None, ("Segoe UI", 9)))
+        self.assertEqual(LK.deeper((200, 100, 0)), "#aa5500")
+        try:
+            import tkinter as tk
+            from tkinter import ttk
+            root = tk.Tk()
+        except Exception as e:
+            self.skipTest("no window: %s" % e)
+        from unittest import mock
+        from campaign_editor import gui_look as GL
+        from campaign_editor import log
+        home = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, home)
+        try:
+            with mock.patch.object(log, "home", lambda: home):
+                look = GL.install(root)
+                play = ttk.Button(root, text="Play", style="Play.TButton")
+                play.pack()
+                lab = tk.Label(root, text="Faction:")
+                lab.pack()
+                root.update()
+                look.change_key(play._look_key, bg="#123456", fg="#ffffff", font=["", 0, "bold"], emoji="▶")
+                look.change_key(lab._look_key, fg="#aa0000", font=["", 15, ""])
+                root.update()
+                name = str(play.cget("style"))
+                self.assertTrue(name.startswith("CE") and name.endswith(".Play.TButton"), name)
+                st = ttk.Style(root)
+                self.assertEqual(st.lookup(name, "background"), "#123456")
+                self.assertIn("bold", str(st.lookup(name, "font")))
+                self.assertEqual(str(play.cget("text")), "▶ Play")
+                self.assertEqual(str(lab.cget("foreground")), "#aa0000")
+                self.assertIn("15", str(lab.cget("font")))
+                look.back_all()
+                root.update()
+                self.assertEqual(str(play.cget("style")), "Play.TButton")
+                self.assertEqual(str(play.cget("text")), "Play")
+                self.assertNotEqual(str(lab.cget("foreground")), "#aa0000")
+        finally:
+            try:
+                root.destroy()
+            except Exception:
+                pass
+
     def test_layout_board_free_by_default_draft_and_accept(self):
         """On the layout board a dragged piece stays where it is dropped, its edge sticking to another piece's
         line; the change is a draft (the editor untouched, Undo / Redo on the board) until Accept puts it on; with
@@ -5682,6 +5735,12 @@ building smith
                 drag(b, pid, (cb["box"][0] + 5, cb["box"][1] + 5), (ab[0] + ab[2] - 2, ab[1] + 5), alt=True)
                 self.assertEqual(b.draft[cancel._look_key], {"to": apply_._look_key, "where": "after", "xy": None,
                                                             "up": None, "hidden": None})   # Alt: into a row
+                b._copied = {"bg": "#204060", "fg": None, "font": None, "emoji": "❓"}
+                b._apply(b.pages[0], pc, **b._copied)                      # Paste the look: a draft too
+                self.assertNotIn("bg", look.data["pieces"][ok._look_key])
+                b.accept()
+                root.update()
+                self.assertEqual(str(ok.cget("text")), "❓ OK")
                 b.close()
         finally:
             try:
