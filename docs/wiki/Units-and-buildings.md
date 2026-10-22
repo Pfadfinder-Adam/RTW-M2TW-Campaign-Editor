@@ -108,7 +108,8 @@ ammunition..., stat_cost's turns, price, upkeep..., every word of attributes - f
   like **Import...** (the faction **Pictures for** names, a backup first); **Save a copy...** keeps a PNG.
   **Pictures for** (a unit with more than one owner): the faction whose card / description picture is shown and
   put in - each faction has its own (the game reads ui/units/<faction> and ui/unit_info/<faction>); the other
-  owners keep theirs.
+  owners keep theirs. Pick **all owners (the same picture)** to put one card / description picture in for every
+  owner at once.
   The window stands beside the 3D view and follows it: turn the man or pick another frame there and the card is
   taken again by itself (**Take the 3D view again** does it at once and says what it took). How much of him and
   nearer / up / right are kept for the next unit (cards and pictures apart).

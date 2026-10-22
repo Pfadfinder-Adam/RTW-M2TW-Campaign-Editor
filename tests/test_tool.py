@@ -3480,6 +3480,28 @@ building smith
         self.assertIn(("module gui_nothere", "not in the exe"), bad)
         self.assertEqual(SC.built_list(), [])
 
+    def test_one_unit_card_for_all_owners(self):
+        """#401 (the user's answer 2026-10-22: 'one and the same card for all factions, for whoever needs it'):
+        'Pictures for' offers every owner at once - the picture goes to each owner's own folder; a faction picked
+        alone still gets only its own."""
+        try:
+            from campaign_editor import gui_editors as GE
+        except Exception as e:
+            self.skipTest("no tkinter: %s" % e)
+        import types
+        v = types.SimpleNamespace(val=GE.ALL_OWNERS)
+        v.get, v.set = (lambda: v.val), (lambda x: setattr(v, "val", x))
+        me = types.SimpleNamespace(v_pfor=v)
+        self.assertEqual(GE.RecordEditor._pictures_for(me, ["england", "france"]), ["england", "france"])
+        v.set("france")
+        self.assertEqual(GE.RecordEditor._pictures_for(me, ["england", "france"]), ["france"])
+        v.set(GE.ALL_OWNERS)
+        self.assertEqual(GE.RecordEditor._pictures_for(me, ["england"]), ["england"])
+        mod = ModData(self.root)
+        from campaign_editor import editors as E
+        got = E.unit_picture_targets(mod, "knights", ["england", "france"])
+        self.assertEqual([os.path.basename(os.path.dirname(p)) for p in got], ["england", "france"])
+
     def test_campaign_hud_laid_out_as_the_engine(self):
         """Interface > Campaign HUD (the engines' places, hudlayout): the HUD's bottom at 768, its top 768 - the LEFT
         panel's height, the MIDDLE panel on the bottom, the pieces from the mod's own sheet; a changed page shows."""

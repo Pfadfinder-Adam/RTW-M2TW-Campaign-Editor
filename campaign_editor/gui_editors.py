@@ -29,6 +29,9 @@ def _value_of(line):
     return split(line)[2]
 
 
+ALL_OWNERS = "all owners (the same picture)"   # 'Pictures for': one card / description picture for every owner
+
+
 class RecordEditor(ttk.Frame):
     """kind 'unit' (export_descr_unit.txt) or 'building' (export_descr_buildings.txt)."""
 
@@ -1051,8 +1054,12 @@ class RecordEditor(ttk.Frame):
     def _pictures_for(self, facs):
         """[the faction] a unit's card / description picture is for: the one picked in 'Pictures for' (the faction
         shown first by default) - each faction has its own (ui/units/<faction>, ui/unit_info/<faction>); one picture
-        is never put in for every owner (the user, 2026-10-15: 'they are always different')."""
-        self.v_pfor = getattr(self, "v_pfor", tk.StringVar())
+        is put in for every owner only when ALL_OWNERS is picked there (the user, 2026-10-15: 'they are always
+        different'; 2026-10-22, #401: 'give the option - one and the same card for all factions')."""
+        if getattr(self, "v_pfor", None) is None:
+            self.v_pfor = tk.StringVar()
+        if self.v_pfor.get() == ALL_OWNERS and len(facs) > 1:
+            return list(facs)
         if self.v_pfor.get() not in facs:
             self.v_pfor.set(facs[0] if facs else "")
         return [self.v_pfor.get()] if self.v_pfor.get() else []
@@ -1073,12 +1080,14 @@ class RecordEditor(ttk.Frame):
             top = ttk.Frame(self.pics)
             top.pack(fill="x", pady=(0, 4))
             ttk.Label(top, text="Pictures for").pack(side="left")
-            cb = ttk.Combobox(top, textvariable=self.v_pfor, values=list(facs), state="readonly", width=26)
+            cb = ttk.Combobox(top, textvariable=self.v_pfor, values=list(facs) + [ALL_OWNERS], state="readonly",
+                              width=26)
             cb.pack(side="left", padx=4)
             cb.bind("<<ComboboxSelected>>", lambda ev: self.show_pictures())
             hint(top, "The game shows each faction the card in its own folder (ui/units/<faction>, the description "
                       "picture in ui/unit_info/<faction>). Import and Make a card put the picture in for the faction "
-                      "picked here only - the other owners keep theirs.").pack(
+                      "picked here only - the other owners keep theirs; '%s' puts the same picture in for every "
+                      "owner at once." % ALL_OWNERS).pack(
                 side="left", padx=4)
         row = ttk.Frame(self.pics)
         row.pack(fill="x")
