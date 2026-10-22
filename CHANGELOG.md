@@ -29,11 +29,8 @@
 - New mod folder puts no switched-off engine settings files (descr_ex, descr_caps_ex) in: the mod runs on the engine's defaults as before; the editor writes the line a change needs, Check mod files' Copy them in brings the whole list.
 
 ### Fixed
-- Two changes kept for one Apply (a town's new garrison and new agents on the Map) could leave the garrison's units under an agent - the game then stopped reading the factions there: the factions after it were missing, the rebels' towns empty and playing one of them crashed -> the units stay with their army; Check mod files names such a line and a write never makes a new one.
 - Settings: typing a zoom number redrew the map at every key and held the window, so Close needed a second click -> the map is drawn once the typing stops.
 - New faction: a clone whose template has the same full and short name (the Gauls: Gaul) got its full name as the short one, and words grown from the name (Gaulish) half swapped -> the short name is the one you typed, such words take the new adjective.
-- Units > Battle model: war dogs and pigs had no picture of their own, only their handlers' - the animals are listed now with their own texture, View in 3D and Save its files; chariots and siege engines show their texture too, as do soldiers whose model has no texture line (Rome).
-- Terrain editor and the 3D map: the ground colours were mixed up - high fertility was shown as low fertility, low fertility as sparse forest, sparse forest as high fertility (and its trees stood on the wrong tiles), impassable sea painted a colour the game does not know -> every ground is read and painted with the games' own colours.
 - Campaign HUD (Rome): the four tabs were too wide and read 'Settlement' and a 4th 'Army' -> as in the game: Army, Town, Agents and an empty one, at their places.
 - Campaign HUD: a right click names every piece under it (a ring and its button's picture) and says when a picture is shared by two buttons; Undo / Redo redraw the view.
 - Units / Buildings: after Apply or Undo the form went blank -> the unit on show stays on show.
@@ -44,6 +41,18 @@
 - Building '?' hints mislabelled half the vanilla lines (a level and 'bonus N' are both allowed on every effect) -> both forms explained; free_upkeep, religion, settlement sizes (castles too) and Rome's weapon levels said right; Medieval II level lines, hidden_resources and Barbarian Invasion's religious_belief get hints.
 - Unit '?' hints checked against the games' files: class skirmish, voice words, banner, animal (wardogs, pigs), berserker discipline, formations, weapon sounds and types, era number, soldier radius / height corrected; lines that are only notes in Medieval II's file (stat_pri_ex, stat_armour_ex, unit_info) are said as not read and refused when typed into a unit.
 - A recruit line ending in 'bonus N' is no longer called a mistake.
+
+## 0.35.3 - 2026-10-22
+
+### In short
+- **Fixed**: a game that stopped reading the factions after two changes kept for one Apply (a garrison's units under an agent); the ground colours mixed up in the Terrain editor and the 3D map.
+- **Added**: war dogs and pigs listed in Units > Battle model with their own texture and View in 3D.
+- **Changed**: nothing else - this release holds only these fixes.
+
+### Fixed
+- Two changes kept for one Apply (a town's new garrison and new agents on the Map) could leave the garrison's units under an agent - the game then stopped reading the factions there: the factions after it were missing, the rebels' towns empty and playing one of them crashed -> the units stay with their army; Check mod files names such a line and a write never makes a new one.
+- Terrain editor and the 3D map: the ground colours were mixed up - high fertility was shown as low fertility, low fertility as sparse forest, sparse forest as high fertility (and its trees stood on the wrong tiles), impassable sea painted a colour the game does not know -> every ground is read and painted with the games' own colours.
+- Units > Battle model: war dogs and pigs had no picture of their own, only their handlers' - the animals are listed now with their own texture, View in 3D and Save its files; chariots and siege engines show their texture too, as do soldiers whose model has no texture line (Rome).
 
 ## 0.35.2 - 2026-10-22
 
