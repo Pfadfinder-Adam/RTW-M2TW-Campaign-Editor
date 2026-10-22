@@ -8353,7 +8353,7 @@ building smith
                                note=lambda f, m: notes.append(m), warn=lambda f, m: notes.append(m),
                                edit=lambda p: None)
         src = SimpleNamespace(culture=lambda f: None)
-        stubs = dict(bring_units=lambda *a: ([], [], {}), start_of=lambda *a: None, bring_sm_files=lambda *a: None,
+        stubs = dict(bring_units=lambda *a: ([], [], {}), start_of=lambda *a: None, bring_sm_files=lambda *a: None, bring_horde=lambda *a: None,
                      own_select_map=lambda *a: None, bring_characters=lambda *a: None, bring_figures=lambda *a: None,
                      bring_names=lambda *a: called.append(a))
         with mock.patch.multiple(FB, **stubs), mock.patch("campaign_editor.moddata.ModData", lambda p: src), \
@@ -8530,6 +8530,32 @@ building smith
                              (os.path.abspath(src), "imperial", "macedon", True))
             with mock.patch.object(FA, "start_pictures", return_value=[]):
                 self.assertFalse(FB.select_screen_source(here, "c", "gauls", bring)[3])
+
+    def test_brought_faction_keeps_its_horde(self):
+        """A tester, 2026-10-22: the Franks of Barbarian Invasion brought into a Rome mod - the game dropped their horde
+        units ('This horde unit has been assigned to a non-hording faction'). Their horde lines come with them, in
+        place of the frame's, after custom_battle_availability; horde_unit follows a renamed unit, one this mod lacks is left out."""
+        from campaign_editor import factionbring as FB
+        from campaign_editor.plan import Plan
+        mod = ModData(self.root)
+        write(os.path.join(mod.data, "descr_sm_factions.txt"),
+              "faction\t\talpha\nculture\t\teastern\nhorde_min_units 5\ncustom_battle_availability yes\n"
+              "can_sap yes\n;;;;\n\nfaction\t\tslave\nculture\t\tbarbarian\n;;;;\n")
+        with tempfile.TemporaryDirectory() as src:
+            write(os.path.join(src, "descr_sm_factions.txt"),
+                  "faction\t\tfranks\nculture\t\tbarbarian\ncustom_battle_availability yes\nhorde_min_units\t60\n"
+                  "horde_unit\t\tbarb horde spearman\nhorde_unit\t\tbarb horde ghost\ncan_sap yes\n"
+                  ";;;;\nfaction\t\tgoths\nhorde_min_units 1\n")
+            plan = Plan(mod, "alpha", "alpha", {})
+            lines = FB.bring_horde(plan, ModData(src), "franks", "alpha", {"barb horde spearman": "rebel spear"})
+            self.assertEqual([x.split()[0] for x in lines], ["horde_min_units", "horde_unit"])
+            got = plan.edit(mod.file("sm_factions")).texts()
+            self.assertEqual(got[:6], ["faction\t\talpha", "culture\t\teastern", "custom_battle_availability yes",
+                                       "horde_min_units\t60", "horde_unit\t\trebel spear", "can_sap yes"])
+            self.assertIn("left out (neither brought nor in this mod): barb horde ghost", plan.report())
+            plan = Plan(mod, "alpha", "alpha", {})                    # a faction with no horde: nothing changes
+            write(os.path.join(src, "descr_sm_factions.txt"), "faction\t\tfranks\nculture\t\tbarbarian\n")
+            self.assertEqual(FB.bring_horde(plan, ModData(src), "franks", "alpha", {}), [])
 
     def test_brought_faction_pictures_and_figures(self):
         # its own pictures come even when the new faction keeps its name; a strat model this mod lacks comes with

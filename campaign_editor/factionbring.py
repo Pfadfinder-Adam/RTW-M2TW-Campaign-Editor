@@ -310,6 +310,76 @@ def bring_sm_files(plan, src, faction, new):
         plan.note(sm, "%s's %s now %s (%s's own)" % (new, key, got[1], faction))
 
 
+# a faction block's words the horde lines stand before (BI's order; M2EX / REX stop reading the file at a word out of
+# place - rules.md 'descr_sm_factions WORD ORDER')
+HORDE_BEFORE = ("can_homeless", "can_sap", "prefers_naval_invasions", "can_have_princess", "has_family_tree")
+
+
+def _block_span(f, faction):
+    """(first, end) lines of a faction's block in descr_sm_factions.txt, or None."""
+    start = None
+    for i in range(len(f)):
+        t = tokens(strip_comment(f.text(i)))
+        if t[:1] == ["faction"]:
+            if start is not None:
+                return start, i
+            if len(t) > 1 and t[1].rstrip(",") == faction:
+                start = i
+    return (start, len(f)) if start is not None else None
+
+
+def bring_horde(plan, src, faction, new, names):
+    """A faction that moves as a horde in the other mod (Barbarian Invasion's Franks, Huns...) brings its horde lines
+    (horde_* numbers and horde_unit) in place of the frame's - without them the game drops its horde units ('This horde
+    unit has been assigned to a non-hording faction', the tester, 2026-10-22). horde_unit names follow the brought units'
+    names here; a unit neither brought nor in this mod is left out. -> the lines written ([] when it has none)."""
+    theirs = src.load(src.file("sm_factions"))
+    span = _block_span(theirs, faction)
+    if not span:
+        return []
+    want = [theirs.text(i) for i in range(*span) if tokens(strip_comment(theirs.text(i)))[:1] and
+            tokens(strip_comment(theirs.text(i)))[0].startswith("horde_")]
+    if not want:
+        return []
+    from .packs import type_blocks
+    have = set(type_blocks(plan.edit(plan.mod.file("edu"))))
+    lines, dropped = [], []
+    for line in want:
+        code = strip_comment(line)
+        key, unit = (code.split(None, 1) + ["", ""])[:2]
+        if key == "horde_unit":
+            unit = unit.strip()
+            here = names.get(unit, unit)
+            if here not in have:
+                dropped.append(unit)
+                continue
+            line = line.replace(unit, here, 1) if here != unit else line
+        lines.append(line)
+    sm = plan.edit(plan.mod.file("sm_factions"))
+    span = _block_span(sm, new)
+    if not span:
+        return []
+    a, b = span
+    old = [i for i in range(a, b) if (tokens(strip_comment(sm.text(i)))[:1] or [""])[0].startswith("horde_")]
+    for i in reversed(old):
+        sm.delete(i, i + 1)
+    b -= len(old)
+    first = [(tokens(strip_comment(sm.text(i)))[:1] or [""])[0] for i in range(a, b)]
+    if "custom_battle_availability" in first:            # the horde lines come right after it
+        at = a + first.index("custom_battle_availability") + 1
+    else:
+        at = old[0] if old else next((a + k for k, w in enumerate(first) if w in HORDE_BEFORE), None)
+    if at is None:
+        at = b
+        while at > a + 1 and not strip_comment(sm.text(at - 1)).strip():
+            at -= 1                                     # before the blank / comment lines that close the block
+    sm.insert(at, lines)
+    plan.note(sm, "%s moves as a horde as %s does: its %d horde line(s)%s" % (
+        new, faction, len(lines), "; left out (neither brought nor in this mod): " + ", ".join(dropped)
+        if dropped else ""))
+    return lines
+
+
 def _queued(plan, src, dst):
     """The plan copies this very file there already."""
     own = plan.mod.own(dst) if hasattr(plan.mod, "own") else dst
@@ -654,6 +724,7 @@ def overlay(plan, campaign, bring):
                 art[rel] = pic                          # a cut-out or another format: made to fit (Art's way)
         blank_frame_pictures(plan, campaign, set(art) | set(picks), folder)
     bring_sm_files(plan, src, faction, new)
+    bring_horde(plan, src, faction, new, names)
     own_select_map(plan, campaign, new)
     if not plan.opts.get("names"):                      # a name list typed in the window wins (clone.names wrote it):
         bring_names(plan, src, faction, new)            # the other mod's took its place and the leader typed from it

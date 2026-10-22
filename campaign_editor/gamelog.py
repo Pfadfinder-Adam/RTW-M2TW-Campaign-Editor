@@ -224,6 +224,21 @@ def _words(line, detail):
     return ""
 
 
+WENT_ON = 150       # log lines after an ASSERT (call stack left out) that say the game ran on
+
+
+def _went_on(lines, at):
+    """The game wrote on after line `at`: more than WENT_ON lines that are not its call stack."""
+    n = 0
+    for t in lines[at + 1:]:
+        s = t.strip()
+        if s and not s.startswith("at "):
+            n += 1
+            if n > WENT_ON:
+                return True
+    return False
+
+
 def verdict(text, game=None):
     """The crash doctor's word on the game's last run (its system.log.txt as text): {'headline': one line in plain
     words, 'lines': [the log lines it rests on], 'serious': [plain words of fatal errors the game went on after],
@@ -232,7 +247,10 @@ def verdict(text, game=None):
     serious, not the stop. Its cause: the engine's detail line, else the nearest Script Error before it."""
     lines = text.splitlines()
     events = fatal_events(lines)
-    stops = [e for e in events if RE_STOP.search(e[1])]
+    closed = any(RE_CLOSED.search(t) for t in lines[-60:])
+    # an ASSERT the game went on after is no stop (HLR writes ~28 at every load - a tester, 2026-10-22: 'The game
+    # stopped' offered for a game that ran on): a stop ends the log - a call stack, a few lines, the game closing
+    stops = [e for e in events if RE_STOP.search(e[1]) and not _went_on(lines, e[0])]
     serious = []
     for i, line, detail in events:
         if stops and i == stops[-1][0]:
@@ -240,7 +258,6 @@ def verdict(text, game=None):
         w = _words(line, detail)
         if w and w not in serious:
             serious.append(w)
-    closed = any(RE_CLOSED.search(t) for t in lines[-60:])
     if not stops:
         if not events and not closed:
             return None
