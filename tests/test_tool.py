@@ -476,6 +476,91 @@ class ToolTest(unittest.TestCase):
         self.assertEqual({k: v for k, v in tree_hash(self.root).items() if not k.startswith("CampaignEditor_backups")},
                          {k: v for k, v in now.items() if not k.startswith("CampaignEditor_backups")})
 
+    def test_restore_of_a_backup_missing_a_copy_changes_nothing(self):
+        """A backup whose copy of a file was deleted by hand: Restore removed the mod's file first and then failed
+        on the copy - the file lost. Now it is refused before anything is touched; a whole backup still restores, and
+        a faction's select map put back leaves the game's map.rwm alone (it is not a layer of it)."""
+        from campaign_editor import textio
+        mod = ModData(self.root)
+        bdir = build(mod, "test", "alpha", "beta", {"start": {"regions": ["B_R"], "leader": {"name": "Boris"}}}).apply()
+        from campaign_editor.plan import read_manifest, stored
+        m = read_manifest(bdir)
+        rel = m["modified"][0]
+        kept = os.path.join(bdir, stored(rel))
+        with open(kept, "rb") as fh:
+            body = fh.read()
+        os.remove(kept)
+        now = tree_hash(self.root)
+        with self.assertRaises(textio.WriteError) as got:
+            restore(ModData(self.root), bdir)
+        self.assertIn("not whole", str(got.exception))
+        self.assertIn("Nothing was changed", str(got.exception))
+        self.assertEqual(tree_hash(self.root), now)
+        with open(kept, "wb") as fh:
+            fh.write(body)
+        base = os.path.join(mod.data, "world", "maps", "base")
+        os.makedirs(base, exist_ok=True)
+        write(os.path.join(base, "map.rwm"), "built by the game")
+        p2 = Plan(ModData(self.root), None, "gamma")
+        p2.binary(os.path.join(mod.campaign_dir("test"), "map_beta.tga"), b"repainted")
+        restore(ModData(self.root), p2.apply())
+        self.assertTrue(os.path.isfile(os.path.join(base, "map.rwm")))   # a select map is no map layer
+        restore(ModData(self.root), bdir)
+        self.assertFalse([n for n in os.listdir(os.path.dirname(os.path.join(self.root, rel)))
+                          if n.endswith(".CampaignEditor_tmp")])
+
+    def test_settings_are_written_whole_or_not_at_all(self):
+        """Settings are written beside the file and renamed over it: a value JSON cannot hold leaves the file as it
+        was (before: a cut file, read back as broken - every setting lost) and is not kept; no temp file stays."""
+        import json
+        from unittest import mock
+        from campaign_editor import log, settings
+        d = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, d, ignore_errors=True)
+        with mock.patch.object(log, "home", return_value=d), mock.patch.object(settings, "_data", None):
+            settings.put("theme", "dark")
+            settings.put("map_look", {"bad": object()})
+            with open(os.path.join(d, log.SETTINGS_NAME), encoding="utf-8") as fh:
+                self.assertEqual(json.load(fh), {"theme": "dark"})
+            self.assertIsNone(settings.get("map_look"))
+            settings.put("game", "C:/Games/Rome")
+            self.assertEqual(sorted(os.listdir(d)), [log.SETTINGS_NAME])
+
+    def test_packs_never_put_a_file_out_of_the_data_folder(self):
+        """A unit pack or a mod pack someone sent that names 'data/../../d3d9.dll': the guard lets writes into the game's
+        folder, so such a file landed beside the game's exe. A unit pack with one is refused whole; a mod pack leaves
+        it out and names it."""
+        import json
+        import zipfile
+        from campaign_editor import modpack as MP, packs as P
+        unit = os.path.join(self.root, "evil_units.zip")
+        with zipfile.ZipFile(unit, "w") as z:
+            z.writestr("manifest.json", json.dumps({"pack": P.PACK_VERSION}))
+            z.writestr("files/ui/units/a.tga", b"x")
+            z.writestr("files/../../d3d9.dll", b"MZ")
+        with self.assertRaises(ValueError) as got:
+            P.read_pack(unit)
+        self.assertIn("outside a mod's data folder", str(got.exception))
+        mp = os.path.join(self.root, "evil_mod.zip")
+        with zipfile.ZipFile(mp, "w") as z:
+            z.writestr("data/ui/units/a.tga", b"x")
+            z.writestr("data/../../d3d9.dll", b"MZ")
+        files, left = MP.read(mp)
+        self.assertEqual(list(files), ["ui/units/a.tga"])
+        self.assertIn("data/../../d3d9.dll", left)
+
+    def test_a_plain_ascii_language_table_takes_any_letter(self):
+        """The engines' text tables in a language folder (data/text/english/*.txt) are UTF-8 without a BOM; one that
+        held only ASCII so far was read as single-byte and a Cyrillic name typed into it was written as '?'. It now
+        reads as UTF-8 (the same bytes untouched); descr_* files and data/text's own stay single-byte."""
+        f = TextFile.from_bytes(os.path.join("g", "data", "text", "english", "credits.txt"), b"{A}\r\nhello\r\n")
+        self.assertEqual(f.dump(), b"{A}\r\nhello\r\n")
+        f.set(1, "\u041f\u0451\u0442\u0440")
+        self.assertEqual(f.unplain(), "")
+        self.assertEqual(f.dump().decode("utf-8"), "{A}\r\n\u041f\u0451\u0442\u0440\r\n")
+        for p in (os.path.join("g", "data", "descr_strat.txt"), os.path.join("g", "data", "text", "names.txt")):
+            self.assertEqual(TextFile.from_bytes(p, b"x").encoding, "latin-1")
+
     def test_modeldb_miscounted_name_and_two_models_of_one_name(self):
         """Check mod files on battle_models.modeldb: the game reads it as a Boost text archive - a string is its length,
         ONE space, then that many letters - so a space too many by hand (the modders' '3 spaces crash') makes a name
@@ -8642,7 +8727,8 @@ building smith
         from unittest import mock
         with mock.patch.object(launch.sys, "platform", "win32"), mock.patch.object(launch.subprocess, "Popen") as run:
             launch.start(launch.start_line(hlr))                      # the script, run from its own folder
-            self.assertEqual(run.call_args[0][0], ["cmd", "/c", os.path.join(rome, "HLR", "Start_HLR.bat")])
+            # one string, the path quoted twice under /s: cmd keeps the quotes of a path with '(x86)' in it
+            self.assertEqual(run.call_args[0][0], 'cmd /s /c ""%s""' % os.path.join(rome, "HLR", "Start_HLR.bat"))
             self.assertEqual(run.call_args[1]["cwd"], os.path.join(rome, "HLR"))
             launch.start(dac)                                         # the engine, from the game folder
             self.assertEqual(run.call_args[0][0], [os.path.join(m2, "M2EX.exe"), "--features.mod=mods/DaC"])
@@ -12258,6 +12344,11 @@ building smith
         self.assertIn("- Old.", plain)
         with self.assertRaises(ValueError):
             RN.notes(log, "9.9.9", "owner/repo")
+        # no release while the editor names another version of itself (its new-version check would nag for ever)
+        self.assertEqual(RN.code_version('APP = "x"\nVERSION = "1.2.0"\n'), "1.2.0")
+        self.assertIsNone(RN.code_version("nothing here"))
+        with open(os.path.join(os.path.dirname(__file__), "..", "campaign_editor", "gui.py"), encoding="utf-8") as fh:
+            self.assertRegex(RN.code_version(fh.read()) or "", r"^\d+\.\d+\.\d+$")   # the real one is found
 
     def test_sprite_sheet_binary_read_write_and_add(self):
         """The plain games' binary sprite sheets (Rome .rsd version 5, Medieval II .sd version 6): read and written

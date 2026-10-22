@@ -154,6 +154,12 @@ def _utf8(data):
     return True
 
 
+def _language_table(path):
+    """A text table in a language folder (REX: data/text/english/*.txt, UTF-8)."""
+    parts = os.path.normcase(os.path.abspath(path or "")).replace("\\", "/").split("/")
+    return len(parts) > 2 and parts[-1].endswith(".txt") and parts[-3] == "text"
+
+
 _PARSED = {}
 
 
@@ -198,8 +204,10 @@ class TextFile:
             encoding, bom, data = "utf-8", codecs.BOM_UTF8, data[3:]
         elif len(data) > 1 and data[1:2] == b"\x00" and data[0:1] != b"\x00":
             encoding = "utf-16-le"
-        elif _utf8(data):
-            encoding = "utf-8"          # REX's data/text/english tables: UTF-8 without a BOM
+        elif _utf8(data) or (max(data, default=0) < 0x80 and _language_table(path)):
+            # REX's data/text/english tables: UTF-8 without a BOM - one that is plain ASCII so far too (its credits,
+            # date_format...: read as single-byte, a Cyrillic or Greek name typed in became '?')
+            encoding = "utf-8"
         else:
             encoding = "latin-1"        # single-byte: a byte-exact round trip for any file
         return cls(path, data.decode(encoding).split("\n"), encoding, bom)

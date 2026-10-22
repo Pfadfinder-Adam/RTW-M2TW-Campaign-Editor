@@ -68,8 +68,17 @@ def put(key, value):
     p = _path()
     if not p:
         return
+    # written beside and renamed over: the editor closed (or the PC off) half way through a write left a cut file,
+    # read back as broken - every setting gone (the games list, the theme, the reports' contact...)
+    tmp = p + ".tmp"
     try:
-        with open(p, "w", encoding="utf-8") as fh:
+        with open(tmp, "w", encoding="utf-8") as fh:
             json.dump(d, fh, indent=1)
-    except OSError:
-        pass
+        os.replace(tmp, p)
+    except (OSError, TypeError, ValueError) as e:
+        if not isinstance(e, OSError):
+            d.pop(key, None)                     # a value JSON cannot hold: not kept, the others still are
+        try:
+            os.remove(tmp)
+        except OSError:
+            pass
