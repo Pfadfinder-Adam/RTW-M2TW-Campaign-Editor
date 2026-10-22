@@ -1163,6 +1163,44 @@ building smith
         self.assertEqual(manhood_age(mod), 18)
         self.assertFalse(FM.record_age_problems(son, None, manhood_age(mod) - 1))
 
+    def test_child_ages_are_the_mods_settings(self):
+        """Universality: a record is a child below the mod's own ages, as the engine reads them (engine source
+        character_db.cpp) - REX's descr_ex.txt daughters_age_of_consent / age_of_manhood, Medieval II's
+        descr_campaign_db.xml (vanilla's own says 16 for girls, not Rome's 12). A 14-year-old girl with no father is
+        left out by vanilla Medieval II, kept by Rome."""
+        from campaign_editor import family as FM
+        from campaign_editor.limits import family_age
+        game, hlr = self._game()
+        mod = ModData(hlr)
+        self.assertEqual(FM.child_ages(mod), {"female": 12, "male": 16})
+        write(os.path.join(hlr, "data", "descr_ex.txt"), "; REX\ndaughters_age_of_consent 15\nage_of_manhood 18\n")
+        mod = ModData(hlr)
+        self.assertEqual(FM.child_ages(mod), {"female": 15, "male": 18})
+        d = os.path.join(self.root, "data")
+        write(os.path.join(d, "descr_religions.txt"), "religions\n{\n    catholic\n}\n")
+        write(os.path.join(d, "descr_campaign_db.xml"), "<campaign_db>\n  <family_tree>\n"
+              "    <age_of_manhood uint=\"16\"/>\n    <daughters_age_of_consent uint=\"16\"/>\n"
+              "  </family_tree>\n</campaign_db>\n")
+        m2 = ModData(self.root)
+        self.assertEqual(family_age(m2, "daughters_age_of_consent"), 16)
+        wed = {"people": [FM.Person(name="Ada", sex="female", age=14, source="record")], "tree": [["Odo", "Ada", []]]}
+        self.assertEqual(FM.dropped_records(wed, FM.child_ages(m2)), [("Ada", "child")])     # Medieval II: under 16
+        self.assertEqual(FM.dropped_records(wed), [])                                         # Rome's 12: a wife
+
+    def test_rebel_type_past_20_units_warned_with_rex_too(self):
+        """Universality: REX / M2EX keep the game's 20 unit types per rebel type (engine source rebel_faction_db.h
+        MAX_REBEL_UNIT_TYPES, RebelFactionRegistry.cpp clamps) - the 21st is dropped, so it is said with REX too."""
+        from campaign_editor import rebels as RB
+        from campaign_editor.limits import engine_of
+        game, hlr = self._game()
+        mod = ModData(hlr)
+        self.assertEqual(engine_of(mod), "REX.exe")
+        r = RB.RebelType("Many", units=["u%d" % i for i in range(21)])
+        r.changed = lambda: True
+        self.assertTrue([p for p in RB.problems(mod, [r]) if "first 20" in p])
+        r.units = r.units[:20]
+        self.assertFalse([p for p in RB.problems(mod, [r]) if "first 20" in p])
+
     def test_religion_limit_only_on_the_original_exe(self):
         """The original exe takes 9 religions; with REX / M2EX beside the game a 10th is not refused (their
         README: religions uncapped) - the tool must not hold modders on REX to vanilla's limits."""
@@ -1778,6 +1816,26 @@ building smith
         self.assertEqual(open(merc).read(), before)
         mine = open(os.path.join(data, "world", "maps", "campaign", "test", "descr_mercenaries.txt")).read()
         self.assertIn("regions B_R2", mine)
+
+    def test_rename_a_faction_named_with_a_capital(self):
+        """Universality: the engine reads faction names in any case (string_recognition.cpp), so a mod may write
+        'Alpha'. Its rename skipped every file (the file's text was lowered, the name was not) - it follows now."""
+        import re
+        from campaign_editor import factionrename as FR
+        d = os.path.join(self.root, "data")
+        strat = os.path.join(d, "world", "maps", "campaign", "test", "descr_strat.txt")
+        for p in (os.path.join(d, "descr_sm_factions.txt"), strat):
+            with open(p, encoding="latin-1") as fh:
+                text = fh.read()
+            write(p, re.sub(r"(?<![A-Za-z0-9_])alpha(?![A-Za-z0-9_])", "Alpha", text))
+        mod = ModData(self.root)
+        plan = Plan(mod, "rename", "delta", {})
+        FR.plan_rename(plan, "test", "Alpha", "delta")
+        plan.apply()
+        with open(strat, encoding="latin-1") as fh:
+            text = fh.read()
+        self.assertRegex(text, r"(?m)^faction\s+delta\b")
+        self.assertNotRegex(text, r"(?<![A-Za-z0-9_])Alpha(?![A-Za-z0-9_])")
 
     def test_rename_faction_reaches_glued_names_and_the_games_files(self):
         """Report R-20261009-CDDAF0 (the test mod on Medieval II with M2EX): venice renamed venice_ce, then the game
@@ -4724,6 +4782,54 @@ building smith
         restore(ModData(self.root), bdir)
         after = {k: v for k, v in tree_hash(self.root).items() if "_backups" not in k}
         self.assertEqual(after, before)
+
+    def test_a_mods_pope_stays_locked_by_its_type_not_its_name(self):
+        """Universality: the engine finds the Pope by `special_faction_type papal_faction` in descr_sm_factions.txt
+        (engine source faction_db.cpp), not by the name papal_states - a mod's pope under another name stays locked."""
+        from campaign_editor import gamefix
+        strat = os.path.join(self.root, "data", "world", "maps", "campaign", "test", "descr_strat.txt")
+        with open(strat) as fh:
+            text = fh.read()
+        write(strat, text.replace("playable\n\talpha\nend\nunlockable\nend", "playable\nend\nunlockable\n\talpha\nend", 1))
+        self.assertEqual(gamefix.locked_factions(ModData(self.root), "test"), ["alpha"])
+        sm = os.path.join(self.root, "data", "descr_sm_factions.txt")
+        with open(sm, encoding="latin-1") as fh:
+            text = fh.read()
+        write(sm, text.replace("culture\t\teastern\n", "culture\t\teastern\nspecial_faction_type\tpapal_faction\n", 1))
+        self.assertEqual(gamefix.papal_factions(ModData(self.root)), {"alpha"})
+        self.assertEqual(gamefix.locked_factions(ModData(self.root), "test"), [])
+
+    def test_region_names_of_a_custom_campaign_found_like_the_engine(self):
+        """Universality: the engine takes the LAST part of the campaign's name for its region names
+        (map_regions_db.cpp: custom/foo -> text/foo_regions_and_settlement_names.txt), else the campaign folder's
+        own copy - not text/custom/foo_..., which never exists."""
+        d = os.path.join(self.root, "data")
+        write(os.path.join(d, "text", "foo_regions_and_settlement_names.txt"), "{A_R}\tA\n", utf16=True)
+        camp = os.path.join(d, "world", "maps", "campaign", "custom", "bar")
+        write(os.path.join(camp, "bar_regions_and_settlement_names.txt"), "{A_R}\tA\n", utf16=True)
+        mod = ModData(self.root)
+        self.assertEqual(os.path.basename(mod.region_labels_file("custom/foo")), "foo_regions_and_settlement_names.txt")
+        self.assertEqual(os.path.dirname(mod.region_labels_file("custom/bar")), camp)
+        self.assertIsNone(mod.region_labels_file("custom/none"))
+
+    def test_override_packs_come_before_data_pack(self):
+        """Universality: the engine mounts a folder's .pack files in REVERSE name order, so an override pack sorting
+        after data.pack wins (engine source core/io/io_vfs.cpp); Rome's .pak stay in name order after them."""
+        from campaign_editor import gamepacks as G
+        d = os.path.join(self.root, "data")
+        for n in ("data.pack", "data_1.pack", "zz_override.pack", "sprites_0.pak", "sprites_1.pak"):
+            write(os.path.join(d, "packs", n), "x")
+        self.assertEqual([os.path.basename(p) for p in G.packs([d])],
+                         ["zz_override.pack", "data_1.pack", "data.pack", "sprites_0.pak", "sprites_1.pak"])
+
+    def test_ai_personalities_per_game(self):
+        """Universality: Medieval II's exe reads 15 military personalities Rome's does not (richard, saladin, ...;
+        engine source string_recognition.cpp) - offered for Medieval II only."""
+        from campaign_editor.strat import ai_choices
+        self.assertIn("balanced richard", ai_choices("medieval2"))
+        self.assertNotIn("balanced richard", ai_choices("rome"))
+        self.assertEqual(len(ai_choices("rome")), 8 * 7)
+        self.assertEqual(len(ai_choices("medieval2")), 8 * 22)
 
     def test_select_map_outline_smooth_without_a_picture_from_above(self):
         """Report #271 (Barbarian Invasion): with no picture from above the select map was drawn on the editor's own
@@ -10391,6 +10497,10 @@ building smith
         with open(os.path.join(troot, "data", "descr_model_battle.txt"), "a") as fh:
             fh.write("\ntype\t\tbroken\nskeleton\t\tfs_hc_spearman_classic, fs_swordsman ; old\n")
         self.assertEqual(skeleton_problems(ModData(troot)), [("broken", ["fs_hc_spearman_classic"])])
+        # the engine finds a skeleton by its exact name (anim_db.h skeleton_get): another letter case is missing too
+        with open(os.path.join(troot, "data", "descr_model_battle.txt"), "a") as fh:
+            fh.write("\ntype\t\tshouting\nskeleton\t\tFS_Swordsman\n")
+        self.assertIn(("shouting", ["FS_Swordsman"]), skeleton_problems(ModData(troot)))
 
     def test_medieval2_animation_set_takes_a_carried_skeleton(self):
         """Bring in Medieval II (BACKLOG B): the game's own data/Animations set is read (its 112 skeletons, 2401

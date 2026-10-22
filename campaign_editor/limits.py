@@ -86,18 +86,32 @@ def manhood_age(mod):
     """The age a boy comes of age - the oldest a living man off the map (a record) may be. A setting, not a fixed
     number: Rome + REX read `age_of_manhood` in descr_ex.txt, Medieval II `<age_of_manhood uint="N"/>` in
     descr_campaign_db.xml (the mod's copy, else the game's); vanilla and the defaults say 16."""
+    return family_age(mod, "age_of_manhood")
+
+
+FAMILY_AGES = {"age_of_manhood": 16, "daughters_age_of_consent": 12}
+
+
+def family_age(mod, key):
+    """A family tree age setting (`age_of_manhood`, `daughters_age_of_consent`) as the engine reads it: Rome + REX
+    from descr_ex.txt (engine source descr_ex.cpp, defaults 16 / 12; the original RomeTW.exe has them fixed at the
+    same), Medieval II from descr_campaign_db.xml's family_tree block (campaign_db.cpp, the mod's copy, else the
+    game's) - vanilla Medieval II's own file says 16 for both, not 12."""
     import re
     from .newmod import game_of
+    default = FAMILY_AGES[key]
     if game_kind(mod) != "medieval2":
-        return ex_setting(mod, "age_of_manhood") or 16
+        p = ex_file(mod, "descr_ex.txt")
+        value = _setting(p, key)[1] if p else None
+        return default if value is None else value
     game = game_of(mod.data)
     for folder in (mod.data, _ci(game, "data") if game else None):
         p = _ci(folder, "descr_campaign_db.xml") if folder else None
         if p:
             with open(p, encoding="latin-1") as fh:
-                m = re.search(r"<age_of_manhood\s+(?:uint|int|float)=\"(\d+)", fh.read())
-            return int(m.group(1)) if m else 16
-    return 16
+                m = re.search(r"<%s\s+(?:uint|int|float)=\"(\d+)" % key, fh.read())
+            return int(m.group(1)) if m else default
+    return default
 
 
 def ex_file(mod, name):

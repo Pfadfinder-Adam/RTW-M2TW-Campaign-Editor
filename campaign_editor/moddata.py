@@ -375,8 +375,11 @@ class ModData:
         return mine + main + rest
 
     def region_labels_file(self, campaign):
-        """data/text/<campaign>_regions_and_settlement_names.txt, or None."""
-        return self.text_file("%s_regions_and_settlement_names.txt" % campaign)
+        """The campaign's region and town names as the engine finds them (engine source map_regions_db.cpp
+        open_names_string_table): data/text/<last part of the campaign's name>_regions_and_settlement_names.txt
+        (custom/foo -> foo_...), else the same file in the campaign's own folder; or None."""
+        name = "%s_regions_and_settlement_names.txt" % campaign.replace("\\", "/").rstrip("/").split("/")[-1]
+        return self.text_file(name) or self.in_campaign(campaign, name)
 
     def data_rel(self, path):
         """'ui/x/y.tga': the path under its own data folder - the mod's, or the game's data under a mod folder that

@@ -206,10 +206,8 @@ def _logged_error(title=None, message=None, **kw):
 
 messagebox.showerror = _logged_error
 
-# descr_strat.txt: "faction <name>, <economy> <military>" - the words the game knows
-AI_ECONOMY = ("balanced", "bureaucrat", "comfortable", "craftsman", "fortified", "religious", "sailor", "trader")
-AI_MILITARY = ("caesar", "genghis", "henry", "mao", "napoleon", "smith", "stalin")
-AI_CHOICES = ["%s %s" % (e, m) for e in AI_ECONOMY for m in AI_MILITARY]
+# descr_strat.txt: "faction <name>, <economy> <military>" - the words the game knows (strat.ai_choices)
+from .strat import AI_CHOICES, AI_ECONOMY, AI_MILITARY, ai_choices  # noqa: E402,F401
 # New faction: how it comes into the campaign (emergence.WAYS in this order)
 WAY_LABELS = ("on the map from the start", "later, by an event (a date and a region)",
               "later, as the shadow of a faction (its civil war)", "later, splitting off a faction in a revolt")
@@ -5393,7 +5391,9 @@ class App(tk.Tk):
         # (variants like 'balanced smith random' or REX's 'opportunist')
         seen = {" ".join(x.header.split(";")[0].split(",", 1)[1].split())
                 for x in (self.strat.factions if self.strat else []) if "," in x.header}
-        self.cb_ai["values"] = AI_CHOICES + sorted(v for v in seen if v and v not in AI_CHOICES)
+        from .limits import game_kind
+        known = ai_choices(game_kind(self.mod))
+        self.cb_ai["values"] = known + sorted(v for v in seen if v and v not in known)
         pool = self.leader_pool()
         self.refresh_name_combos()
         if not self.editing():                 # names left from another faction are not in this one's lists

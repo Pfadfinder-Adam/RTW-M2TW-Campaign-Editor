@@ -304,15 +304,24 @@ def children_order_problems(fam):
     return out
 
 
-# a record is a child below these ages (RomeTW.exe's own record maker, 2026-10-14: girls under 12, boys under 16)
+# a record is a child below these ages (RomeTW.exe's own record maker, 2026-10-14: girls under 12, boys under 16) -
+# the defaults only: a mod sets them (limits.family_age: REX descr_ex.txt, Medieval II descr_campaign_db.xml, whose
+# vanilla copy says 16 for girls too; engine source character_db.cpp)
 CHILD_AGE = {"female": 12, "male": 16}
 
 
-def dropped_records(fam):
+def child_ages(mod):
+    """{'female': age, 'male': age} below which a record is a child, as this mod sets them."""
+    from .limits import family_age
+    return {"female": family_age(mod, "daughters_age_of_consent"), "male": family_age(mod, "age_of_manhood")}
+
+
+def dropped_records(fam, ages=None):
     """[(name, 'woman' | 'child')]: the records off the map the game leaves out when it reads the family tree, in
     the games' own order (RomeTW.exe / medieval2.exe / REX / M2EX): a woman with no husband and no father ('is
     neither married, nor has a father and will be ommited from the game'), then a child (a girl under 12, a boy
     under 16) with no father ('The child character record %s has no father and will be ommited')."""
+    ages = ages or CHILD_AGE
     wives = {w for _, w, _ in fam["tree"] if w}
     kids = {k for _, _, ks in fam["tree"] for k in ks}
     out = []
@@ -321,7 +330,7 @@ def dropped_records(fam):
             continue
         if p.sex == "female" and p.name not in wives:
             out.append((p.name, "woman"))
-        elif p.age is not None and p.age < CHILD_AGE.get(p.sex, 16):
+        elif p.age is not None and p.age < ages.get(p.sex, ages["male"]):
             out.append((p.name, "child"))
     return out
 

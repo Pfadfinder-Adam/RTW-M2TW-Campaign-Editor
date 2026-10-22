@@ -119,7 +119,7 @@ def plan_rename(plan, campaign, old, new):
             continue                                    # a UTF-16 / binary file under a text name: not ours
         text = raw.decode("latin-1")
         low = text.lower()
-        if old not in low and not any(a.lower() in low for a, _ in moved):
+        if old.lower() not in low and not any(a.lower() in low for a, _ in moved):
             continue
         f = plan.edit(p)
         n = 0
