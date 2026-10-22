@@ -18,7 +18,7 @@ ZOOMS = (1, 1.5, 2, 3, 4, 6, 8, 12, 16, 24, 32, 48, 64)       # screen pixels pe
 # shown zoom, the zoom from which armies, agents, fleets and ports are drawn (towns always) and the one from which
 # the Terrain editor draws the shore line (MapView._shore_lines)
 ZOOM_SETTINGS = {"map_zoom_step": 50, "map_zoom_step_fine": 10, "map_signs_from": 300,
-                 "map_shore_from": 300}
+                 "map_shore_from": 500}
 
 
 def zoom_setting(key):

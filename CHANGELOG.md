@@ -26,7 +26,7 @@
 
 ### Changed
 - Terrain editor: the heights map (drawn point by point) shows no towns, ports or other signs - only the heights, the water and the shore.
-- Terrain editor: the Shore line follows the zoom you see - drawn from 300 % on any map, either game (was a fixed closeness, much later on a big map); Settings > Campaign map changes the zoom.
+- Terrain editor: the Shore line follows the zoom you see - drawn from 500 % on any map, either game (was a fixed closeness, much later on a big map); Settings > Campaign map changes the zoom.
 - A new faction is a clean clone: its colours, units, buildings, models and cards - none of the template's trait / ancillary triggers (the tick for them is gone).
 - With REX or M2EX an army, garrison or fleet may hold 40 units: Medieval II (with M2EX) keeps them with Options > Game Settings > Army Size = 40 units (seen in the game); Rome (with REX) kept 20 in a game test so far. Check mod files says which stacks are over 20.
 - New mod folder puts no switched-off engine settings files (descr_ex, descr_caps_ex) in: the mod runs on the engine's defaults as before; the editor writes the line a change needs, Check mod files' Copy them in brings the whole list.
