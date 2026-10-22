@@ -208,6 +208,7 @@ The first nine days (0.1.0 → 0.30.0): from a one-mod faction cloner to a campa
 
 ## 📦 Built, comes with the next release
 
+- 📦 Campaign HUD on a board like Obsidian Canvas: move, zoom, a screenshot card that snaps to the grid and the HUD (both games)
 - 📦 Buildings by faction: a faction's chains as pictures, a chain's levels side by side, the units each level recruits as cards, the unit on the right (both games)
 - 🧪 New / Edit faction: Culture - one line written, the game follows (towns, portraits, buildings, units); what changes said first (0.35.0)
 - 🧪 Faction emblem (Rome): town flags in battle, the 3D campaign-map symbol, captains' cards and portraits from white templates; routing / rebel flags untouched (0.35.0)
