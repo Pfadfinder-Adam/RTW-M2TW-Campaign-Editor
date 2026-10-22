@@ -263,13 +263,77 @@ class ToolTest(unittest.TestCase):
         self.assertEqual(rd("banners", "textures", "Faction_banner_beta.texture"), "A-banner")
         self.assertIn("factions alpha, beta", rd("descr_sounds_accents.txt"))       # the file's commas
         self.assertIn("<Faction>alpha</Faction>\n    <Faction>beta</Faction>", rd("descr_sounds_db.xml"))
-        self.assertIn('<faction name="beta">\n    <track>a.bik</track>', rd("descr_movies_tracks.xml"))
+        # the template's voice track and subtitles over the movies are not the new faction's (vanilla leaves 7 of its
+        # factions out of the file: they play the movies plain)
+        self.assertNotIn('"beta"', rd("descr_movies_tracks.xml"))
         self.assertIn("<name>beta</name>", rd("world", "maps", "campaign", "test", "descr_faction_movies.xml"))
+        # alpha.bik is the template's own movie: no movie for the new faction, never the template's
+        self.assertIn("<name>beta</name>\n\t\t<intro></intro>",
+                      rd("world", "maps", "campaign", "test", "descr_faction_movies.xml"))
         self.assertIn("factions slave alpha beta", rd("world", "maps", "base", "descr_sounds_music_types.txt"))
         self.assertEqual(rd("descr_banners_new.xml").count("Faction="), 3)            # slave's not copied
         restore(ModData(self.root), backups(ModData(self.root))[0])
         after = {k: v for k, v in tree_hash(self.root).items() if not k.startswith(("faction_tool_backups", "CampaignEditor_backups"))}
         self.assertEqual(before, after)
+
+    def test_new_faction_keeps_nothing_of_the_template_s_own(self):
+        """The user, 2026-10-22 ('no traces of the clone'): a dry clone of the Gauls / Scotland kept the template's
+        story texts ('The trouser-wearing ... Gauls'), 'The Scots are Victorious' (Scots: no name nor adjective of
+        Scotland), its own movies, its leader's face, and pointed its town flag and 3D symbol at the template's files.
+        Now the story is a plain line of the new faction, the people's word swapped, a movie of the template's own
+        is left empty (a shared one stays), the flag and the symbol are copies of its own, no leader_pic copied."""
+        d = os.path.join(self.root, "data")
+        write(os.path.join(d, "text", "expanded_bi.txt"),
+              "{ALPHA}\t\tAlphland\n{EMT_ALPHA_SPY}\t\tAlphish Spy\n{EMT_VICTORY_ALPHA}\t\tThe Alphs are victorious\n"
+              "{EMT_DEFEATED_BY_ALPHA}\t\tVictory is gone: the unfeasibly moustached Alphs now rule the whole world\n"
+              "{ALPHA_DESCR}\t\tAlphs\\nStrong close-combat infantry, but very limited cavalry indeed\n"
+              "{hut_alpha_desc}\t\tThe Alphish hut where the Alphs of the hills keep their goats in winter\n",
+              utf16=True)
+        write(os.path.join(d, "descr_sm_factions.txt"), SM.replace(
+            "secondary_colour\t\tred 4, green 5, blue 6\n",
+            "secondary_colour\t\tred 4, green 5, blue 6\nsymbol\t\tmodels_strat/symbol_alpha.CAS\n"
+            "victory_movie\t\tfmv/victory/barb_outro.wmv\ndefeat_movie\t\tfmv/lose/alpha_eliminated.wmv\n").replace(
+            "culture\t\tbarbarian\n", "culture\t\tbarbarian\nvictory_movie\t\tfmv/victory/barb_outro.wmv\n"))
+        os.makedirs(os.path.join(d, "models_strat"), exist_ok=True)
+        with open(os.path.join(d, "models_strat", "symbol_alpha.CAS"), "wb") as fh:
+            fh.write(b"head textures\\#banner_symbol_alpha.tga\x00tail")
+        write(os.path.join(d, "models_strat", "textures", "#banner_symbol_alpha.tga.dds"), "symbol")
+        write(os.path.join(d, "descr_building_battle.txt"), "\t##standard_alpha.tga\n\t{\n\t\talpha\t\t##standard_"
+                                                            "alpha.tga\n\t\tslave\t\t##standard_slave.tga\n\t}\n")
+        write(os.path.join(d, "models_building", "textures", "##standard_alpha.tga.dds"), "flag")
+        camp = os.path.join(d, "world", "maps", "campaign", "test")
+        write(os.path.join(camp, "leader_pic_alpha.tga"), "face")
+        mod = ModData(self.root)
+        plan = build(mod, "test", "alpha", "beta", {"display_name": "Betaland", "adjective": "Betish",
+                                                    "start": {"regions": ["B_R"], "leader": {"name": "Boris"}}})
+        text = "\n".join(plan.files[mod.text_file("expanded_bi.txt")].texts())
+        self.assertIn("{EMT_VICTORY_BETA}\t\tThe Betalands are victorious", text)       # people: the name + s
+        self.assertIn("{EMT_DEFEATED_BY_BETA}\t\tVictory can no longer be yours. Betaland has won.", text)
+        self.assertIn("{BETA_DESCR}\t\tBetaland", text)
+        self.assertNotIn("cavalry indeed\n{EMT", text.split("{BETA_DESCR}")[1][:80])
+        self.assertIn("{hut_beta_desc}\t\tThe Betish hut where the Betalands of the hills", text)  # a building's: swapped
+        sm = "\n".join(plan.files[mod.file("sm_factions")].texts())
+        beta = sm.split("faction\t\tbeta")[1].split("faction\t\tslave")[0]
+        self.assertIn("victory_movie\t\tfmv/victory/barb_outro.wmv", beta)           # shared with the rebels: kept
+        self.assertRegex(beta, r"(?m)^defeat_movie\s*$")                                # its own: none
+        self.assertIn("symbol\t\tmodels_strat/symbol_beta.CAS", beta)
+        cas = os.path.join(d, "models_strat", "symbol_beta.CAS")
+        # the texture name inside the model keeps its length (the model's bytes stay where they were)
+        self.assertEqual(plan.binaries[cas], b"head textures\\#banner_symbol_beta_.tga\x00tail")
+        dsts = {os.path.relpath(dst, d).replace("\\", "/"): src for src, dst in plan.copies}
+        self.assertIn("models_strat/textures/#banner_symbol_beta_.tga.dds", dsts)
+        self.assertIn("models_building/textures/##standard_beta.tga.dds", dsts)
+        self.assertIn("beta\t\t##standard_beta.tga", "\n".join(plan.files[mod.file("building_battle")].texts()))
+        self.assertFalse([k for k in dsts if "leader_pic" in k])
+        # the template's own files stay as they were
+        self.assertIn("alpha\t\t##standard_alpha.tga", "\n".join(plan.files[mod.file("building_battle")].texts()))
+        self.assertIn("symbol\t\tmodels_strat/symbol_alpha.CAS", sm)
+
+    def test_people_word_of_a_faction(self):
+        from campaign_editor.build import people_word
+        self.assertEqual(people_word({"display_name": "Scotland", "adjective": "Scottish"}), "Scots")
+        self.assertIsNone(people_word({"display_name": "Gaul", "short_name": "Gaul", "adjective": "Gallic"}))
+        self.assertIsNone(people_word({"display_name": "Egypt", "adjective": "Egyptian"}))
 
     def test_restore_to_undoes_a_backup_and_every_newer_one(self):
         before = tree_hash(self.root)

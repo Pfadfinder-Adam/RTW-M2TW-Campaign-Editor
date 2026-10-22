@@ -16,9 +16,11 @@ def template_display(mod, template, campaign=None):
     adjective - from the tables this campaign reads (not another campaign's)."""
     T = template.upper()
     found = {}
+    own = []                                                # the template's own strings (keys naming it)
     from .textio import parsed_once
     for path in mod.campaign_text_files(campaign):
         keys = parsed_once(_text_keys, mod.load(path))         # each table read once, then looked up
+        own.extend(v for k, v in keys.items() if T in k)
         val = keys.get(T)
         if val is not None and "display_name" not in found:
             found["display_name"] = val
@@ -32,7 +34,26 @@ def template_display(mod, template, campaign=None):
             adj = _shared_adjective([keys.get("EMT_%s_%s" % (T, s)) for s in ADJECTIVE_LABELS])
             if adj:
                 found["adjective"] = adj
+    people = people_word(found)
+    if people and any(re.search(r"\b%s\b" % re.escape(people), v) for v in own):     # a word its texts use
+        found["people"] = people
     return found
+
+
+def people_word(names):
+    """The people's plural name copied texts may use beside the faction's names: 'Scots' of Scotland / Scottish -
+    the stem the name and the adjective share (4 letters at least, shorter than both) with an s; None when they share
+    none ('Gaul' / 'Gallic') - then no word of the template's people is looked for."""
+    adj = (names.get("adjective") or "").strip()
+    best = ""
+    for key in ("short_name", "display_name"):
+        name = (names.get(key) or "").strip().split(" of ")[-1].strip()
+        n = 0
+        while n < min(len(name), len(adj)) and name[n].lower() == adj[n].lower():
+            n += 1
+        if n > len(best) and n < len(name) and n < len(adj) and " " not in name[:n]:
+            best = name[:n]
+    return best + "s" if len(best) >= 4 else None
 
 
 # the faction's own labels ({EMT_MAYANS_CITY} Mayan City): their first word(s) are the adjective - a mod may call the
@@ -142,6 +163,7 @@ def build(mod, campaign, template, new, opts):
     if opts.get("copy_art", True):
         clone.art_files(plan, campaign)
         clone.own_pictures(plan)
+        clone.own_symbol(plan)
         from .symbols import give_own
         give_own(plan, new)              # its own flag symbol and faction logos (Rome)
     if opts.get("bring"):                        # a faction of another mod: its own units, names, figures, pictures
@@ -182,7 +204,7 @@ def build(mod, campaign, template, new, opts):
     except Exception:
         primary = None
     apply_art(plan, campaign, new, list(opts["start"].get("regions") or []), primary,
-              towns_changed=opts.get("copy_art", True))
+              towns_changed=opts.get("copy_art", True), own_map=opts.get("copy_art", True))
     validate(plan, campaign)
     return plan
 
