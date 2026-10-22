@@ -63,6 +63,13 @@ def plan_remove(plan, path, ids):
         while b < len(f) and not f.text(b).strip():
             b += 1
         f.delete(a, b)
+    left = read(f)
+    if (any(p["kind"] == "wait_monitors" for p in gone) and not any(p["kind"] == "wait_monitors" for p in left)
+            and any(p["kind"] in ("monitor_event", "monitor_conditions") for p in left)):
+        # without it the script runs to its end at once and every monitor of it stops with it, silently
+        plan.warn(f, "wait_monitors is taken out but %d monitor(s) stay - without it the script ends at once and "
+                     "its monitors never react; keep it (it is the last line before end_script)"
+                  % sum(1 for p in left if p["kind"] in ("monitor_event", "monitor_conditions")))
     if gone:
         plan.note(f, "%d piece(s) of the campaign script taken out: %s" % (
             len(gone), ", ".join(p["first"][:40] for p in gone[:5]) + (" ..." if len(gone) > 5 else "")))

@@ -51,6 +51,9 @@
 - New mod folder puts no switched-off engine settings files (descr_ex, descr_caps_ex) in: the mod runs on the engine's defaults as before; the editor writes the line a change needs, Check mod files' Copy them in brings the whole list.
 
 ### Fixed
+- A general taken off the map whose name is part of a name on the family tree ('Abel' of 'Abel Alphid') was written back as a man who died before the start -> only a man the tree itself names stays on it.
+- Events > Campaign script: taking out wait_monitors while monitors stayed said nothing - the script then ends at once and its monitors never react -> it is said before Apply.
+- Events: an event given a new date stayed where it was in the file, and a later faction's event was put at the end - one behind an event of a later date never fires (the games read the events as a queue) -> both go to their place in date order.
 - Roster: a unit taken away from a faction stayed in the recruit lines that let it in by its culture or 'everyone' (its towns still trained it; Medieval II stops at such a line) -> those lines now leave it out too; New faction > From zero takes the template's own units the same way.
 - Delete unit / renaming a unit: a recruit line or an army writing the unit's name in other capitals was left behind (the game reads them the same) -> they follow now, and so does the rebels' list of a mod that uses the game's own file.
 - New unit: a card name taken by another unit in other capitals was let through (the cards would be shared) -> refused now.
