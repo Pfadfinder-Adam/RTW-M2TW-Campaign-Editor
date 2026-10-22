@@ -71,7 +71,8 @@ ammunition..., stat_cost's turns, price, upkeep..., every word of attributes - f
 - A rename drags along what is tied to it: recruit lines, the armies of every campaign, mercenary pools,
   rebels, requirements.
 - **Battle model** (units): each soldier and officer model with an owner's texture and how it sits (foot, horse,
-  camel, elephant, chariot); **Replace model...** takes another model of this mod or of another mod of the same game
+  camel, elephant, chariot); the mount or chariot, the siege engine and the war dogs or pigs a handler unit brings, each
+  with its own texture and View in 3D; **Replace model...** takes another model of this mod or of another mod of the same game
   (with every file it names; the unit's factions get textures on it), **View in 3D...** (drawn by the graphics card where it
   gives OpenGL 3.3, else as before) turns the model with the mouse - Medieval II's `.mesh` and Rome's `.cas` - with each faction's texture, the game's detail levels and weapons
   on or off. Rome: in the T pose (arms out) or as the file stands (**Pose**); a chariot unit on its chariot with its
@@ -137,6 +138,21 @@ ammunition..., stat_cost's turns, price, upkeep..., every word of attributes - f
   new names, `export_descr_sounds_units_voice.txt` gets the unit its own block (taken out of a line it shares with
   other units; a new unit gets one), and `data/sounds/events.dat` / `events.idx` are removed with a backup - the game
   builds them again from the texts on the next start. The voice class is the `voice_type` line.
+
+## Buildings by faction
+
+The Buildings work has two tabs: **Lines** (every line of a chain, above) and **By faction** - a faction's buildings
+as the game shows them. Pick the **Faction**: on the left the building chains it may build, as the game's pictures
+of its culture, grouped by type (core and walls, military, economy, temples, culture, guilds; Medieval II's castle
+chains marked *(castle)*); **also what it cannot build** shows the rest in grey. A click on a chain opens it in the
+middle: its levels side by side, each with its picture, cost, turns to build and the smallest town it needs (a level
+the faction may not build is grey), and under the picked level the units the faction recruits there, as cards. The
+hover on a card tells how it is recruited there - Medieval II's pool (how many at the start, how many a turn, the
+most), the experience, the conditions (a resource, another building, an event) - and warns about a recruit line
+for a unit `export_descr_unit.txt` lacks (the game stops at the start). A click on a card shows the unit on the
+right - its card, description picture, numbers, 3D - and every building where the faction recruits it (a click goes
+there). **Lines of this building** and **Open in Units** go to the lines to change them; the tab reads the file as
+the Lines tab has it. Both games.
 
 ## The recruitment panel in order
 

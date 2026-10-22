@@ -310,7 +310,7 @@ class Plan:
         """What this write would make that the game cannot read, judged on the files as they will be written (so the
         order of the changes does not matter): an army with no unit (the game stops reading the campaign there - a
         report: most factions vanished), two armies on one tile. One the mod has already is its own and stays."""
-        from .strat import Strat, empty_armies, shared_army_tiles
+        from .strat import Strat, empty_armies, shared_army_tiles, stray_units
         out = []
         changed = self.changed_files()
         for path, f in self.files.items():
@@ -324,6 +324,12 @@ class Plan:
                            "add at least one unit to an army') and every faction after it is lost; give it a unit or "
                            "take it off the map" % (", ".join(new[:8]) + (" and %d more" % (len(new) - 8)
                                                                             if len(new) > 8 else "")))
+            had = {w.split(" (line ")[0] for _, w in stray_units(old)} if old else set()
+            for _, w in stray_units(Strat(f)):
+                if w.split(" (line ")[0] not in had:
+                    out.append("%s - the game stops reading the factions there and every faction after it is lost "
+                               "(the rebels too); this write would leave it so" % w)
+                    break
             was = shared_army_tiles(old) if old else {}
             for xy, names in sorted(shared_army_tiles(Strat(f)).items()):
                 if not set(names) - set(was.get(xy, [])) or self._engine_takes(names):
@@ -667,6 +673,27 @@ def delete_backups(mod):
     return gone + clean_restored(mod)
 
 
+MAP_SOURCES = ("descr_regions.txt", "descr_terrain.txt", "water_surface.tga")
+
+
+def _drop_built_maps(mod, root, manifest):
+    """The map.rwm the game built from a write's map pictures goes when the write is undone - else the game reads the
+    undone map from it (a tester, 2026-10-22: Undo of Map from zero left the island's map.rwm). One the backup put
+    back stays."""
+    back = {os.path.normcase(os.path.join(root, rel)) for rel in manifest.get("modified", [])}
+    folders = set()
+    for rel in manifest.get("modified", []) + manifest.get("created", []):
+        n = os.path.basename(rel).lower()
+        if n.startswith("map_") or n in MAP_SOURCES:
+            folders.add(os.path.dirname(os.path.join(root, rel)))
+    if folders:
+        folders.add(os.path.join(mod.data, "world", "maps", "base"))
+    for d in folders:
+        rwm = os.path.join(d, "map.rwm")
+        if os.path.isfile(rwm) and os.path.normcase(rwm) not in back:
+            remove_file(rwm)
+
+
 def restore(mod, bdir):
     """Put every file of a backup back and remove what that run created."""
     root = os.path.dirname(mod.data)
@@ -696,6 +723,7 @@ def restore(mod, bdir):
                     and not os.listdir(d):
                 os.rmdir(d)
                 d = os.path.dirname(d)
+        _drop_built_maps(mod, root, manifest)
         p = bdir
         _drop_backup(bdir)               # undone: its copies are the files as they are now - nothing left to keep
     except OSError as e:                        # a file held by the game, the disk full...: the backup stays whole
@@ -738,8 +766,17 @@ def merge_lines(base, ours, theirs):
             a2, a_new = mine_at.pop(i)
             if i in other_at and other_at[i] == (a2, a_new):
                 other_at.pop(i)                       # the same change made twice: once
-            elif i in other_at and other_at[i][0] == i:   # theirs inserts here too: theirs' lines first
-                out += other_at.pop(i)[1]
+            elif i in other_at and other_at[i][0] == i:   # theirs inserts here too
+                b_new = other_at.pop(i)[1]
+                # the one that goes on with the lines above it (a unit after an army's units) first, else theirs:
+                # a town's new garrison and a new agent written at the end of one faction block left the units
+                # under the agent - the game stopped reading the factions there (Keapon_Laffin, 2026-10-22)
+                if a2 == i and _goes_on(base[i - 1] if i else None, a_new) and \
+                        not _goes_on(base[i - 1] if i else None, b_new):
+                    out += a_new
+                    a_new = b_new
+                else:
+                    out += b_new
             out += a_new
             if a2 > i:
                 i = a2
@@ -754,6 +791,16 @@ def merge_lines(base, ours, theirs):
             out.append(base[i])
         i += 1
     return out
+
+
+def _goes_on(above, lines):
+    """lines begin with the same first word as the line above them - they go on with it (more units of one army)."""
+    from .textio import tokens
+    first = next((x for x in lines if x.strip()), None)
+    if above is None or first is None:
+        return False
+    a, b = tokens(above)[:1], tokens(first)[:1]
+    return bool(a) and a == b
 
 
 def rebased(plan):

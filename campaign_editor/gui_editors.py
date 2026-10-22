@@ -47,7 +47,19 @@ class RecordEditor(ttk.Frame):
         self.text_edits = {}                 # {key in export_buildings / export_units: new text}, written on Apply
         self.deletes = []                    # units taken out on Apply (#375), with what names them
         # the list and the record side by side; the line between them is dragged to make the list wider (kept)
-        pane = self.pane = ttk.Panedwindow(self, orient="horizontal")
+        # Buildings: two tabs - Lines (every line of a chain) and By faction (a faction's buildings as the game shows
+        # them, with the units they recruit as cards - gui_factionbuildings; a tester's wish 2026-10-22)
+        host, self.byfaction = self, None
+        if kind == "building":
+            self.tabs = ttk.Notebook(self)
+            self.tabs.pack(fill="both", expand=True)
+            host = ttk.Frame(self.tabs)
+            self.tabs.add(host, text="Lines")
+            from .gui_factionbuildings import FactionBuildings
+            self.byfaction = FactionBuildings(self.tabs, app, self)
+            self.tabs.add(self.byfaction, text="By faction")
+            self.tabs.bind("<<NotebookTabChanged>>", lambda e: self._tab_changed(), add="+")
+        pane = self.pane = ttk.Panedwindow(host, orient="horizontal")
         pane.pack(fill="both", expand=True)
         side = ttk.Frame(pane, padding=(0, 0, 6, 0))
         pane.add(side, weight=0)
@@ -453,6 +465,8 @@ class RecordEditor(ttk.Frame):
     work = None                                         # the file as typed in the notepad (or None: as on disk)
 
     def load(self, mod):
+        was = self.current[0] if self.current and self.mod is not None and mod is not None and \
+            os.path.normcase(os.path.abspath(mod.data)) == os.path.normcase(os.path.abspath(self.mod.data)) else None
         self.mod = mod
         self.work = None
         self.changes, self.imports, self.current, self.copy_ops = {}, [], None, []
@@ -467,12 +481,26 @@ class RecordEditor(ttk.Frame):
             self.blocks = E.unit_blocks(f) if self.kind == "unit" else E.building_blocks(f)
         self._fill_filters()
         self.fill_list()
+        if self.byfaction is not None:
+            self.byfaction.load(mod)
         for w in self._form().winfo_children():
             w.destroy()
         for w in self.pics.winfo_children():
             w.destroy()
         self.title.configure(text="Pick one on the left" if self.blocks else "No %s in this mod" % (
             "export_descr_unit.txt" if self.kind == "unit" else "export_descr_buildings.txt"))
+        if was:                             # read again after a write or an Undo: the one on show stays on show (the
+            self.pick(was)                  # tester, 2026-10-22: the form went blank until the unit was clicked)
+
+    def _tab_changed(self):
+        """By faction came up: it reads the file as the Lines tab has it now (the text typed there too)."""
+        if self.tabs.select() == str(self.byfaction):
+            self.byfaction._stale = True
+            self.byfaction.shown()
+
+    def show_lines_tab(self):
+        if self.byfaction is not None:
+            self.tabs.select(0)
 
     def _fill_filters(self):
         """The Show list: by owner (faction or culture), by kind, mercenaries apart."""
@@ -1323,11 +1351,7 @@ class RecordEditor(ttk.Frame):
         engine = MO.engine_of(self.mod, lines)
         for r, (key, idx, model) in enumerate(slots):
             info = cat.get(model.lower())
-            tex = None
-            if info:
-                tex = next((info.textures[f] for f in facs if f in info.textures), None) or \
-                    next(iter(info.textures.values()), None)
-            self._texture_card(box, r, info, tex, facs, slot=(key, idx))
+            self._texture_card(box, r, info, MO.model_texture(self.mod, info, facs), facs, slot=(key, idx))
             txt = "%s: %s" % ("Soldiers" if key == "soldier" else "Officer %d" % (idx + 1), model)
             about, problems = "", []
             if info is None:
@@ -1386,9 +1410,7 @@ class RecordEditor(ttk.Frame):
         if kind:
             r = len(slots)
             info = minfo
-            tex = (next((info.textures[f] for f in facs if f in info.textures), None) or
-                   next(iter(info.textures.values()), None)) if info and info.textures else None
-            self._texture_card(box, r, info, tex, facs)
+            self._texture_card(box, r, info, MO.model_texture(self.mod, info, facs), facs)
             cell = ttk.Frame(box)
             cell.grid(row=r, column=1, sticky="nw", padx=6)
             head = ttk.Frame(cell)
@@ -1406,9 +1428,33 @@ class RecordEditor(ttk.Frame):
                 ttk.Button(bar, text="View in 3D...", command=lambda i=info: self.view_model(i)).pack(side="left")
                 ttk.Button(bar, text="Save its files...", command=lambda i=info: self.save_model_files(i)).pack(
                     side="left", padx=4)
+        # the animals its handlers bring (war dogs, pigs: descr_animals.txt) - their own model and texture
+        aword, akind, amodel = MO.unit_animal(self.mod, lines)
+        if aword:
+            r = len(slots) + (1 if kind else 0)
+            info = cat.get((amodel or "").lower())
+            self._texture_card(box, r, info, MO.model_texture(self.mod, info, facs), facs)
+            cell = ttk.Frame(box)
+            cell.grid(row=r, column=1, sticky="nw", padx=6)
+            head = ttk.Frame(cell)
+            head.pack(anchor="w")
+            ttk.Label(head, text="Animals: %s" % aword, font=("", 9, "bold")).pack(side="left")
+            if info:
+                hint(head, "The animals its handlers bring into battle, beside them: descr_animals.txt's %s, its "
+                           "model %s." % (akind, amodel), width=420).pack(side="left")
+                bar = ttk.Frame(cell)
+                bar.pack(anchor="w", pady=(2, 0))
+                ttk.Button(bar, text="View in 3D...", command=lambda i=info: self.view_model(i)).pack(side="left")
+                ttk.Button(bar, text="Save its files...", command=lambda i=info: self.save_model_files(i)).pack(
+                    side="left", padx=4)
+            else:
+                ttk.Label(cell, foreground="#a33", justify="left", wraplength=300, text=(
+                    "descr_animals.txt's %s names the model %s - not in this mod's battle models" % (akind, amodel)
+                    if amodel else "no %s in descr_animals.txt" % akind)).pack(anchor="w")
         # the siege engine its crew works (Rome: descr_engines.txt) - its own model, shown in 3D
         if engine is not None:
-            r = len(slots) + (1 if kind else 0)
+            r = len(slots) + (1 if kind else 0) + (1 if aword else 0)
+            self._texture_card(box, r, engine, MO.model_texture(self.mod, engine), facs)
             cell = ttk.Frame(box)
             cell.grid(row=r, column=1, sticky="nw", padx=6)
             head = ttk.Frame(cell)
@@ -1773,8 +1819,7 @@ class RecordEditor(ttk.Frame):
             if not name:
                 return
             info = st["cat"][name.lower()]
-            tex = next((info.textures[f] for f in facs if f in info.textures), None) or \
-                next(iter(info.textures.values()), None)
+            tex = MO.model_texture(st["mod"], info, facs)
             self._texture_thumb(side, st["mod"], tex, size=(160, 160)).pack(anchor="w")
             ttk.Button(side, text="View in 3D...", command=lambda: self.view_model(info, st["mod"])).pack(
                 anchor="w", pady=(4, 0))

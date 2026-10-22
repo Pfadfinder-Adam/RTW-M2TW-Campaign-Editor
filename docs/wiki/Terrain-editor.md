@@ -127,7 +127,7 @@ minimap picture - its size and border kept. Restore takes it back.
   water along the new shore), and a town, port, character, fort, resource or river keeps a little land round it.
   **Smooth the coast** rounds the coast under the brush the same way - the longer you hold, the smoother (a stepped
   coast becomes a curve; small capes and bays ease out). While these brushes are picked the map is shown **by
-  points** (land grey, water blue, each point centred on its place), and from 300 % zoom a light **Shore line** shows
+  points** (land grey, water blue, each point centred on its place; no towns, ports or other signs), and from 300 % zoom a light **Shore line** shows
   the shore exactly as the game will draw it (in every mode of the tab; the tick is beside *Find ground...*; the zoom
   it starts from is in Settings > Campaign map).
 - **Pull** and **Push** (beside the shape brush): *pull* grabs the coast under the brush and drags it with the mouse,

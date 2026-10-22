@@ -254,6 +254,66 @@ def unit_mount(mod, lines):
     return kind, (model[0][0] if model and model[0] else None)
 
 
+# EDU 'animal' word -> descr_animals.txt type: the engine maps the word itself, whatever the file names it ('wardogs'
+# -> 'wardog', 'pigs' -> 'pig'; the engine source's unit_db.cpp)
+ANIMAL_TYPES = {"wardogs": "wardog", "pigs": "pig"}
+
+
+def unit_animal(mod, lines):
+    """(EDU animal word, descr_animals.txt type, its battle model) of a handler unit's animal line (war dogs, pigs -
+    the animals its men bring, not ridden), or (None, None, None). The model: the block's `model` line, else the
+    first name of M2EX's `models { }` form."""
+    from .packs import _block_lines, _values, type_blocks
+    got = _values(lines, "animal")
+    if not got or not got[0] or not got[0][0]:
+        return None, None, None
+    word = got[0][0]
+    kind = ANIMAL_TYPES.get(word.lower(), word)
+    path = mod.find("descr_animals.txt")
+    if not path:
+        return word, kind, None
+    f = mod.load(path)
+    span = next((sp for name, sp in type_blocks(f).items() if name.lower() == kind.lower()), None)
+    if not span:
+        return word, kind, None
+    bl = _block_lines(f, span)
+    model = _values(bl, "model")
+    if model and model[0] and model[0][0]:
+        return word, kind, model[0][0]
+    inside = False
+    for line in bl:                                 # models { skeleton X  <model> ... }
+        t = line.split(";")[0].replace("{", " { ").replace("}", " } ").split()
+        for w in t:
+            if w == "{":
+                inside = True
+            elif w == "}":
+                inside = False
+            elif inside and t[0].lower() != "skeleton" and w.lower() != "models":
+                return word, kind, w
+    return word, kind, None
+
+
+def model_texture(mod, info, factions=()):
+    """The texture a model is shown in: its texture line for the first of factions that has one, else its first;
+    with no texture line (Rome's war dogs, pigs, chariots, siege engines, some soldiers; Medieval II's siege
+    engines) the one its closest mesh names itself (meshview: texture_ref). None when there is neither."""
+    if info is None:
+        return None
+    if info.textures:
+        return next((info.textures[f] for f in factions if f in info.textures), None) or \
+            next(iter(info.textures.values()), None)
+    from . import meshview as MV
+    for rel in info.meshes[:1]:
+        path = MV.mesh_path(mod, rel)
+        if not path:
+            return None
+        try:
+            return MV.read_file(path).texture_ref or None
+        except Exception:
+            return None
+    return None
+
+
 def chariot_of(mod, lines):
     """A Rome chariot or scorpion cart the unit rides (descr_mount.txt class chariot / scorpion_cart - no 'model'
     line, its own lods): {'type', 'class', 'info' (a ModelInfo of the chariot: its lod .cas files), 'horse' (the

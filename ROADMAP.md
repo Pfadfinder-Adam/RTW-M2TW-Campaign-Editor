@@ -131,6 +131,8 @@ The first nine days (0.1.0 → 0.30.0): from a one-mod faction cloner to a campa
 |---|---|
 | 0.35 | A whole faction brought from another mod · The campaign map in 3D, everything on it carried with the mouse · One emblem for every flag and banner · Locked factions opened · Your own pictures in the menus · Every script's places on the map |
 | 0.35.1 | Fixes from the testers' reports · The crash doctor: why the game stopped, in one line |
+| 0.35.2 | Fixes from the testers' and players' reports · Thin mods stay thin · Check mod files: the quick-battle crash |
+| 0.35.3 | Fixes from players' reports: the factions read whole again, the ground colours right |
 
 | Area | Confirmed in game | Released | Being tested | Next |
 |---|---|---|---|---|
@@ -141,7 +143,7 @@ The first nine days (0.1.0 → 0.30.0): from a one-mod faction cloner to a campa
 | Both games | Rome / BI / Alexander, city ↔ castle | Medieval II and Kingdoms | religions, campaign rules, add-ons, module builder | vassals (`client_of`), window in other languages |
 | Safety | - | preview, backup, byte-exact restore, Check mod files, report a bug in one click, settings | pack check | signed exe |
 
-## What it does now (0.35.1)
+## What it does now (0.35.3)
 
 ### Factions
 - ✅ New faction from a template: names, texts, colours, units, buildings, cards, name lists, traits, art *(in-game ✓)*
@@ -207,6 +209,8 @@ The first nine days (0.1.0 → 0.30.0): from a one-mod faction cloner to a campa
 ## 📦 Built, comes with the next release
 
 - 📦 Recolour freely (both games): any colour of any picture - a battle texture, a campaign-map figure, a card, a button - made another with a click on it and the new colour (or hue / saturation / lightness sliders), light and shade kept, several changes, a brush; a texture of the game copied, never written over; one unit only on request (from a Discord wish)
+- 📦 Campaign HUD on a board like Obsidian Canvas: move, zoom, a screenshot card that snaps to the grid and the HUD (both games)
+- 📦 Buildings by faction: a faction's chains as pictures, a chain's levels side by side, the units each level recruits as cards, the unit on the right (both games)
 - 🧪 New / Edit faction: Culture - one line written, the game follows (towns, portraits, buildings, units); what changes said first (0.35.0)
 - 🧪 Faction emblem (Rome): town flags in battle, the 3D campaign-map symbol, captains' cards and portraits from white templates; routing / rebel flags untouched (0.35.0)
 - 🧪 Faction emblem (Medieval II): the battle banner sheet from the white template of the mod's sheets, the symbol on every banner shape (0.35.0)
@@ -432,6 +436,7 @@ The first nine days (0.1.0 → 0.30.0): from a one-mod faction cloner to a campa
 - 🧪 Alliances and wars at the start (both games): one status per faction that pulls the AI feelings along, every value in words; Medieval II's diplomacy read as the game writes it (`faction_standings`), a new Medieval II faction at war with the rebels (0.23.0)
 - 🧪 Victory conditions on the Faction tab: regions to hold and take, factions to outlive, Rome's goal - long and short campaign (0.23.0)
 - ✅ Wonders on the Map (Rome): shown, dragged, added, removed; the map's real size shown (0.25.0)
+- 📦 The layout board: every page of the editor side by side on one canvas - buttons dragged into their rows or anywhere (Alt), sized by their corners, renamed, hidden; shown in the editor at once
 - 📦 The editor's own look: Tools > Edit the editor's look - any button, tick or label dragged anywhere, renamed, given a hover text or width, hidden, taken back; the window's language from a language file (Settings), Words to translate for the community
 - 🧪 A Settings window (look, language, game folder, the map's look, report contact, set-up questions, folders); Check mod renamed Check mod files (0.24.0)
 - 🧪 The family tree folded behind a Family tree button on the Faction tab; hover texts on the work buttons (0.23.0)

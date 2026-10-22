@@ -22,8 +22,8 @@ import numpy as np
 from . import terrain as T
 
 GROUND_KEYS = {
-    (101, 124, 0): "fertility_low", (96, 160, 64): "fertility_medium", (0, 128, 0): "fertility_high",
-    (0, 0, 0): "fertility_low", (0, 64, 0): "forest_dense", (0, 128, 128): "forest_sparse",
+    (0, 128, 128): "fertility_low", (96, 160, 64): "fertility_medium", (101, 124, 0): "fertility_high",
+    (0, 0, 0): "fertility_low", (0, 64, 0): "forest_dense", (0, 128, 0): "forest_sparse",
     (128, 128, 64): "hills", (98, 65, 65): "mountains_low", (196, 128, 128): "mountains_high",
     (0, 255, 128): "swamp", (255, 255, 255): "beach", (64, 64, 64): "impassable_land",
     (32, 32, 32): "impassable_shrouded",

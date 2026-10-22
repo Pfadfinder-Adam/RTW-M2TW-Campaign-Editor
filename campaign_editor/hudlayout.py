@@ -120,19 +120,35 @@ def pieces(mod):
     return out
 
 
-def _rome_tabs(sheets, dy, words=("Army", "Settlement", "Agents", "Army")):
+# the tabs' words and the word each is as wide as (strat_v2_pieces.cpp 127-143: the wider of Army / Fleet, of Town /
+# City; Agents; the passengers' tab is as wide as 'Army' and shows no word until a ship's army is picked - the
+# tester's game at 1600 x 900, 2026-10-22: 'Army / Town / Agents / (empty)')
+ROME_TAB_WORDS = (("Army", "Fleet"), ("Town", "City"), ("Agents", "Agents"), ("", "Army"))
+# Verdana small's letters, pixels on the 1024 canvas (narrow and wide ones; the rest 6) - the four tabs measured in the
+# game: about 333 wide together
+TAB_LETTERS = {**dict.fromkeys("iljI", 3), **dict.fromkeys("frt", 4), **dict.fromkeys("s", 5),
+               **dict.fromkeys("ACDGHNOQRUw", 7), **dict.fromkeys("mMW", 10), "T": 6}
+
+
+def tab_text_width(word):
+    return sum(TAB_LETTERS.get(c, 6) for c in word)
+
+
+def _rome_tabs(sheets, dy, words=ROME_TAB_WORDS):
     """Rome's four tabs: each LEFT + MID (as wide as its word + 20) + RIGHT, the group centred on 1024, 8 pixels
-    over each other (strat_v2_pieces.cpp 1549-1609); the first one picked (drawn last, on top)."""
+    over each other (strat_v2_pieces.cpp 1549-1609); the first one picked (drawn last, on top). words: (shown,
+    the words its width comes from)."""
     sheet, l, m, r, y, h = ROME_TABS
     gl, gm, gr = (find(sheets, sheet, n) for n in (l, m, r))
     if not (gl and gm and gr):
         return []
-    widths = [gl[1][2] + 7 * len(w) + 20 + gr[1][2] for w in words]
+    widths = [gl[1][2] + max(tab_text_width(x) for x in w) + 20 + gr[1][2] for w in words]
+    words = [w[0] for w in words]
     total = sum(widths) - 8 * (len(widths) - 1)
     x = (CANVAS[0] - total) // 2
     tabs = []
     for word, w in zip(words, widths):
-        tabs.append({"piece": "tab: %s" % word.lower(), "sheet": sheet, "sprite": m, "page": gm[0], "art": gm[1],
+        tabs.append({"piece": "tab: %s" % (word.lower() or "passengers"), "sheet": sheet, "sprite": m, "page": gm[0], "art": gm[1],
                      "box": (x, y + dy, w, h), "kind": "tab", "parts": (gl, gm, gr), "word": word})
         x += w - 8
     return tabs[1:][::-1] + tabs[:1]
@@ -249,4 +265,22 @@ def piece_at(mod, x, y, items=None):
     return None
 
 
-__all__ = ["pieces", "compose", "missing", "piece_at", "find", "CANVAS"]
+def pieces_at(mod, x, y, items=None):
+    """Every piece under (x, y), the topmost first (a ring lies over its button's picture: both can be picked)."""
+    out = []
+    for p in reversed(items if items is not None else pieces(mod)):
+        px, py, w, h = p["box"]
+        if px <= x < px + w and py <= y < py + h:
+            out.append(p)
+    return out
+
+
+def sharing(p, items):
+    """The other pieces that show the same sprite of the same sheet as p (Rome's medium ring is the faction button's
+    and the end-turn button's both - a new picture for it changes both, the tester, 2026-10-22)."""
+    if not p.get("sprite"):
+        return []
+    return [q for q in items if q is not p and q.get("sprite") == p["sprite"] and q.get("sheet") == p.get("sheet")]
+
+
+__all__ = ["pieces", "compose", "missing", "piece_at", "pieces_at", "sharing", "find", "CANVAS"]

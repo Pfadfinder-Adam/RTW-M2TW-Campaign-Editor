@@ -3030,6 +3030,7 @@ UI = {
     "Test mod": "Test mod",
     "Settings": "Settings, Help, the log, Save logs, Game manifest",
     "Edit the editor's look": "Settings, Help, the log, Save logs, Game manifest",
+    "Layout board": "Settings, Help, the log, Save logs, Game manifest",
     "Help": "Settings, Help, the log, Save logs, Game manifest",
     "A mod from zero": "A mod from zero, step by step",
 }
