@@ -20,6 +20,8 @@ CARD = (48, 64)                  # a unit card (Rome's are 48 x 64; Medieval II'
 class FactionBuildings(ttk.Frame):
     """editor: the Buildings work's RecordEditor (its file as typed, and its Lines tab to jump to)."""
 
+    PICK_FACTION = True              # its own faction box (the Roster's tab follows Edit faction's pick instead)
+
     def __init__(self, master, app, editor):
         super().__init__(master, padding=4)
         self.app, self.editor = app, editor
@@ -28,10 +30,12 @@ class FactionBuildings(ttk.Frame):
         self._pics = self._texts = self._utexts = self._units = None
         bar = ttk.Frame(self)
         bar.pack(fill="x", pady=(0, 4))
-        ttk.Label(bar, text="Faction").pack(side="left")
+        self.lbl_fac = ttk.Label(bar, text="Faction")
         self.v_fac = tk.StringVar()
         self.cb_fac = ttk.Combobox(bar, textvariable=self.v_fac, state="readonly", width=30)
-        self.cb_fac.pack(side="left", padx=4)
+        if self.PICK_FACTION:
+            self.lbl_fac.pack(side="left")
+            self.cb_fac.pack(side="left", padx=4)
         self.cb_fac.bind("<<ComboboxSelected>>", lambda e: self._faction_picked())
         ttk.Label(bar, text="Find").pack(side="left", padx=(8, 0))
         self.v_find = tk.StringVar()
@@ -43,11 +47,14 @@ class FactionBuildings(ttk.Frame):
                         command=self._all_toggled).pack(side="left", padx=8)
         self.lbl_count = ttk.Label(bar, text="", foreground=theme.ink("#666", "bg"))
         self.lbl_count.pack(side="left", padx=4)
-        ShortHint(bar, text="A faction's buildings as the game shows them: pick a building on the left, a level "
+        self.hint = ShortHint(bar, text="A faction's buildings as the game shows them: pick a building on the left, a level "
                             "of it in the middle, a unit card to see it on the right. A card's hover tells how the "
                             "unit is recruited there. Change the lines on the Lines tab (Lines of this building) "
                             "and in Units (Open in Units); this tab follows what you type there.",
-                  foreground="#555", wraplength=700, justify="left").pack(side="left", padx=8)
+                  foreground="#555", wraplength=700, justify="left")
+        self.hint.pack(side="left", padx=8)
+        self.bar = bar
+        self._bar_extra(bar)
         flow(bar)
         pane = self.pane = ttk.Panedwindow(self, orient="horizontal")
         pane.pack(fill="both", expand=True)
@@ -57,6 +64,32 @@ class FactionBuildings(ttk.Frame):
         pane.add(self.mid, weight=2)
         right = ttk.Frame(pane, padding=(6, 0, 0, 0))
         pane.add(right, weight=1)
+        self._build_right(right)
+        self.lbl_empty = ttk.Label(self.mid.inner, text="Pick a building on the left", font=("", 10, "bold"))
+        self.lbl_empty.pack(anchor="w")
+
+    # ---- what a tab built on this one adds (the Roster's 'By buildings' - gui_rosterbuildings) ----
+    def _bar_extra(self, bar):
+        """More pieces on the top bar."""
+
+    def _changed(self, items):
+        """The chains as shown (picks not yet written laid over them)."""
+        return items
+
+    def _tile_made(self, box, c):
+        """A chain's tile is on the left."""
+
+    def _level_made(self, box, lv):
+        """A level's step is in the chain's window."""
+
+    def _card_made(self, box, u, lv):
+        """A unit's card is under the picked level."""
+
+    def _level_tail(self, parent, c, lv):
+        """Under the picked level's cards."""
+
+    def _build_right(self, right):
+        """The right side: the picked unit."""
         from .gui_preview import UnitPreview
         self.preview = UnitPreview(right)
         self.preview.pack(fill="both", expand=True)
@@ -67,8 +100,6 @@ class FactionBuildings(ttk.Frame):
         tip(self.b_unit, "The Units work with this unit picked: every line of it, its cards, models and voice.")
         self.where = ttk.Frame(right)
         self.where.pack(fill="x", pady=(4, 0))
-        self.lbl_empty = ttk.Label(self.mid.inner, text="Pick a building on the left", font=("", 10, "bold"))
-        self.lbl_empty.pack(anchor="w")
 
     # ---- reading ----
     def load(self, mod):
@@ -123,7 +154,7 @@ class FactionBuildings(ttk.Frame):
             f = self.editor._src() if self.editor is not None and self.editor.mod is mod else None
         except Exception:
             f = None
-        self.items = FB.faction_chains(mod, fac, f) if fac else []
+        self.items = self._changed(FB.faction_chains(mod, fac, f)) if fac else []
         self.preview.faction = fac
         self._tiles()
         keep = next((c for c in self.items if self.chain and c["chain"] == self.chain["chain"]), None)
@@ -171,10 +202,11 @@ class FactionBuildings(ttk.Frame):
         for w in frame.winfo_children():
             w.destroy()
 
-    def _box(self, parent, image, text, picked=False, grey=False, width=12):
-        """A tile: a picture over its words, a frame around it (the picked one stands out); the click on any part."""
+    def _box(self, parent, image, text, picked=False, grey=False, width=12, mark=None):
+        """A tile: a picture over its words, a frame around it (the picked one stands out); the click on any part.
+        mark: 'give' / 'take' - a change not yet written (green / red, theme.mark)."""
         pal = theme.palette()
-        bg = pal["accent"] if picked else pal["field"]
+        bg = theme.mark(mark) if mark else pal["accent"] if picked else pal["field"]
         fg = pal["muted"] if grey else pal["fg"]
         box = tk.Frame(parent, background=bg, highlightthickness=1, cursor="hand2",
                        highlightbackground=pal["select"] if picked else pal["border"])
@@ -217,11 +249,19 @@ class FactionBuildings(ttk.Frame):
                 img = self._level_pic(first["name"], TILE) if first else None
                 picked = self.chain is not None and self.chain["chain"] == c["chain"]
                 words = self._level_name(first["name"]) if first else c["chain"]
-                box = self._box(row, img, words + (" (castle)" if c["castle"] else ""), picked, grey=not c["builds"])
+                box = self._box(row, img, words + (" (castle)" if c["castle"] else ""), picked, grey=not c["builds"],
+                                mark=self._chain_mark(c))
                 box.pack(side="left", padx=2, pady=2)
                 self._on_click(box, lambda c=c: self.show_chain(c))
                 tip(box, self._chain_words(c))
+                self._tile_made(box, c)
             flow(row, top=True)
+
+    @staticmethod
+    def _chain_mark(c):
+        """'give' / 'take' when a level of the chain is given / taken away and not yet written."""
+        marks = {x.get("pending") for x in c["levels"]} - {None}
+        return "give" if marks == {"give"} else "take" if marks == {"take"} else None
 
     def _chain_words(self, c):
         lv = [x["name"] for x in c["levels"]]
@@ -268,9 +308,10 @@ class FactionBuildings(ttk.Frame):
             if not x["has"]:
                 words.append("(not for %s)" % self._faction())
             box = self._box(steps, self._level_pic(x["name"], STEP), "\n".join(words), x is lv, not x["has"],
-                            width=15)
+                            width=15, mark=x.get("pending"))
             box.pack(side="left", padx=2, pady=2)
             self._on_click(box, lambda x=x: self.show_chain(c, x["name"]))
+            self._level_made(box, x)
             tip(box, "%s: costs %d, %d turn(s) to build, a town at least %s%s%s" % (
                 x["name"], x["cost"], x["turns"], x["town"] or "village",
                 "; needs %s" % x["needs"] if x["needs"] else "",
@@ -287,18 +328,20 @@ class FactionBuildings(ttk.Frame):
         for u in units:
             shown = self._unit_name(u["unit"])
             box = self._box(cards, self._unit_card(u["unit"]), shown or u["unit"],
-                            self.unit == u["unit"], grey=not u["known"], width=10)
+                            self.unit == u["unit"], grey=not u["known"], width=10, mark=u.get("pending"))
             box.pack(side="left", padx=2, pady=2)
             self._on_click(box, lambda u=u: self.show_unit(u["unit"]))
             words = FB.unit_words(u)
             un = (self._units or {}).get(u["unit"])
             tip(box, "%s\n%s%s" % (shown or u["unit"], un.summary() if un is not None else u["unit"],
                                    "\n" + words if words else ""))
+            self._card_made(box, u, lv)
         if units:
             flow(cards, top=True)
         elif lv["has"]:
             ttk.Label(cards, text="No unit is recruited in this level by %s." % self._faction(),
                       foreground="#888").pack(anchor="w")
+        self._level_tail(self.mid.inner, c, lv)
         if lv["others"]:
             ttk.Label(self.mid.inner, text="%d more recruit line(s) here are for other factions." % lv["others"],
                       foreground="#888").pack(anchor="w", pady=(4, 0))

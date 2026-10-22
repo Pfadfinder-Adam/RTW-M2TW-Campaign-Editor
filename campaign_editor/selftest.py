@@ -981,6 +981,27 @@ def s_roster_other(c, mod):
     return edit(mod, c.campaign, c.new, {"roster": ch})
 
 
+@step("Roster by buildings: {edited} gets a unit at a building's first level and every level above it",
+      "the unit in that building's recruitment list at its first level AND after the building grows")
+def s_roster_buildings(c, mod):
+    from . import factionbuildings as FB
+    from .edit import edit
+    items = FB.faction_chains(mod, c.edited)
+    units = [u for c2 in items for lv in c2["levels"] for u in lv["units"] if u["known"]]
+    for ch in items:
+        lvs = [lv for lv in ch["levels"] if lv["has"]]
+        if len(lvs) < 2:
+            continue
+        here = {u["unit"] for u in lvs[0]["units"]}
+        u = next((x["unit"] for x in units if x["unit"] not in here), None)
+        if u is None:
+            continue
+        levels = {lv["name"]: lv for lv in ch["levels"]}
+        pairs = FB.upward(ch, lvs[0]["name"], u, True, lambda n: any(x["unit"] == u for x in levels[n]["units"]))
+        return edit(mod, c.campaign, c.edited, {"roster": {k: g for k, g in pairs if g is not None}})
+    raise Skip("%s builds no chain of two levels with a unit to add" % c.edited)
+
+
 @step("Campaign-map figures: {edited}'s agent shown by another model", "its agent's figure on the campaign map")
 def s_figures(c, mod):
     from . import stratmodels as SM
@@ -2919,6 +2940,7 @@ COVERAGE = {
     "Religions (Medieval II, Barbarian Invasion)": ["s_religion"],
     "New / Edit faction: Culture": ["s_culture"],
     "Roster: give": ["s_roster", "s_roster_other"],
+    "Roster by buildings: a unit at a level and every level above": ["s_roster_buildings"],
     "Roster: take away": ["s_roster_take"],
     "Campaign-map figures": ["s_figures"],
     "Unit editor: lines": ["s_unit_fields"],
