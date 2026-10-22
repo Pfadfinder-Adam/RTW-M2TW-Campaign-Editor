@@ -1,6 +1,6 @@
 # The report relay
 
-`Tools > Send a report` in the editor sends the logs (with names cut out) to this small relay, a Cloudflare Worker.
+**Report a bug / Suggest** in the editor sends the logs (with names cut out) to this small relay, a Cloudflare Worker.
 The relay keeps the GitHub token on its side, so the token is never in the editor or in this repo. It checks each
 report (size, a real zip, 3 a minute from one address), commits the zip to a **private** reports repo and opens an
 issue there, so the author gets a notification with the report's number. It keeps no IP addresses and sets no
@@ -23,7 +23,7 @@ cookies.
 5. **Its address**: the Worker's page shows it, like `https://rtw-m2tw-campaign-editor-reports.<account>.workers.dev`. It goes
    into `campaign_editor/report.py` (`REPORT_URL`), and the next release sends reports there.
 
-## Answers to reports (since the editor's version after 0.29.2)
+## Answers to reports (since 0.30.0)
 
 The same Worker also gives the reporters the author's answers: `POST /answers` (the editor sends the numbers of the
 reports it sent; the relay reads those issues' comments with its token and returns only the comment texts and the

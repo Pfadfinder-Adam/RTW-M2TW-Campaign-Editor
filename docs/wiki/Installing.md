@@ -23,7 +23,6 @@ Beside the exe, in a folder of its own - `CampaignEditor` (not among the game's 
 - `CampaignEditor_logs` - its log (`CampaignEditor.log`), the logs zips, and `sessions`: on every close the
   session's log and a copy of the game's newest `system.log.txt` (as `game_system.log.txt` - the game's own log, its
   errors are the game's, not the editor's) are saved there by themselves. **Report a bug** sends them.
-
 - `CampaignEditor_addons` - add-ons you added.
 
 **An update** is simply the new exe in the same place; the settings stay. Versions up to 0.33 kept these files right
@@ -58,8 +57,9 @@ browser and Windows SmartScreen may warn about it:
   a program packed into one exe the way this one is (PyInstaller) is often taken for one at first. Download it only
   from Releases; you can let the antivirus finish its check, or mark the exe as safe in it.
 
-The tool sends nothing over the network unless you press **Send** in *Report a bug / Suggest*. It reads and
-writes only the game or mod folder you load and its own two files beside the exe.
+The tool sends nothing over the network unless you press **Send** in *Report a bug / Suggest*; it only asks GitHub
+for the newest version's number and, once you sent a report, asks for the answers to it ([SECURITY](https://github.com/Pfadfinder-Adam/RTW-M2TW-Campaign-Editor/blob/main/SECURITY.md)).
+It reads and writes only the game or mod folder you load and its own `CampaignEditor` folder beside the exe.
 
 ## Without the exe (any OS)
 

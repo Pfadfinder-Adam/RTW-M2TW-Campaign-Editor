@@ -7,7 +7,7 @@ the game at once, so you can test every change after that straight away. The tem
 
 1. **Factions** at the top, its **New faction** tab; load the mod, pick the campaign.
 2. **Template**: the faction to copy. The new one gets its culture, units, buildings, character models, name
-   lists, trait triggers and pictures.
+   lists and pictures - a clean clone: none of the template's trait or ancillary triggers.
    **From another mod...** (under it): take a faction of another mod of the same game instead - pick the mod
    (it is only read) and the faction. The window fills with its names, colours and descriptions. It is made
    **from zero**: the Template row and the template's options are put away - a faction of your mod of the same
@@ -28,7 +28,7 @@ the game at once, so you can test every change after that straight away. The tem
    used); Events... (top row) changes it afterwards.
 4. **Name (full)**, **Name (short)**, **Adjective**: for example `Kingdom of Epirus`, `Epirus`, `Epirote`.
    The copied texts use them ("Epirote Spy", "Your forces attack an army of Epirus").
-   **Colours**: the faction's primary and secondary colour. **Emblem everywhere...** beside them takes one
+   **Colours**: the faction's primary and secondary colour (empty at first; left empty, the template's stay). **Emblem everywhere...** beside them takes one
    picture - the faction's symbol - and makes every sign of the faction from it in those colours: the menu
    buttons, loading screen, logos, the flag on the campaign map and its 3D symbol, the battle banners, the
    flag on its towns, the captains' cards (the same window as the Art tab's **Faction emblem**).
@@ -37,8 +37,8 @@ the game at once, so you can test every change after that straight away. The tem
 6. **Leader** (and the heir if you like): a first name and surname **from the faction's name list** - the
    game crashes on a name that has no text, so the tool only accepts listed names. The new faction copies the
    template's list, or has one of its own: **Name list...** (below).
-   **Leader's title** / **heir's** (under the names): what the game calls them - the template's (King, Prince)
-   until you write others (Duke, Grand Prince...).
+   **Leader's title** / **heir's** (under the names): what the game calls them - empty at first, and left empty
+   the template's (King, Prince) stay; write others if you like (Duke, Grand Prince...).
 7. **Victory** (under the leader): what the player must do to win - starts as the template's.
    The other tabs if you want: garrisons, buildings, diplomacy (alliances and wars at the start), [[Faction art]].
 8. **Preview changes**, then **Create faction**.
@@ -52,7 +52,7 @@ the game at once, so you can test every change after that straight away. The tem
   lines), Medieval II's `unit_models/battle_models.modeldb` (the template's texture and attachment entries in
   every battle model, copied for the new faction - a mod folder without its own modeldb gets a copy of the
   game's), `descr_banners.txt`, `descr_lbc_db.txt`, `descr_offmap_models.txt`, `descr_building_battle.txt`,
-  trait and ancillary triggers, win conditions.
+  win conditions (no trait or ancillary triggers: the clone is clean).
 - Texts: every string that names the template, with the new names.
 - `descr_strat.txt`: the faction's block, towns, leader, heir, armies, diplomacy.
 - **Pictures of its own**: every picture named after the template is copied under the new name

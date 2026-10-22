@@ -12,6 +12,8 @@
   descr_engines, effects, fonts, `menu/Rome.lnt`, aerial map ground textures...),
   5 byte-identical to vanilla. A file in the game folder that matches this
   manifest is REX's; vanilla's original of a replaced one is in the game manifest.
+- `m2tw_manifest.json.gz` - the same for a clean *Medieval II: Total War* install (with the `mods/` of its
+  Kingdoms campaigns): 2,832 files, 16.5 GB. **Check mod files** uses it for Medieval II.
 
 - `engine_catalogue.json.gz` - what REX and M2EX offer a script, from the documentation the engines write
   themselves (console command `dump_docudemon`, builds of 2026-10-04): every console command, campaign-script

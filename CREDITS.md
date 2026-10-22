@@ -20,7 +20,6 @@
   and many new ideas came in - natural rivers, coasts and borders among them.
 - **Klerski** - for the questions and ideas that pushed the editor forward.
 
-
 ## Supporters
 
 Thank you to everyone who helped with money and kept the work going - directly, on Ko-fi or on GitHub Sponsors:

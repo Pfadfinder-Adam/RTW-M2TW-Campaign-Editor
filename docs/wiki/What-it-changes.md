@@ -45,6 +45,7 @@ python campaign_editor.py restore --data PATH
 python campaign_editor.py scan gaetulii --data PATH    # every mention of a faction in the whole mod
 python campaign_editor.py newmod HLR_Saba --data PATH  # a separate mod folder built on PATH's mod
 python campaign_editor.py slim --data NEWMOD\data        # plain-game mods: keep only the changed files
+python campaign_editor.py manifest GAMEFOLDER        # a game manifest (rtw_manifest.json.gz) of a clean game folder
 python campaign_editor.py selfcheck report.txt          # the editor checks itself (the exe: RTW-M2TW-Campaign-Editor.exe selfcheck report.txt)
 ```
 
