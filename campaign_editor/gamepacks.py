@@ -277,6 +277,18 @@ def packs(roots):
     return out
 
 
+def in_packs(roots, rel):
+    """Whether a pack the game reads beside these data folders holds data/<rel> (only the packs' indexes are read)."""
+    key = fold(rel).lstrip("/")
+    if key.startswith("data/"):
+        key = key[5:]
+    for pack in packs(roots):
+        index = read_index(pack)
+        if key in index or ("data/" + key) in index:
+            return True
+    return False
+
+
 def unpacked(roots, rel):
     """A file under data/ taken out of the packs into the temporary folder (once): its path, or None when no pack
     holds it (or it does not open)."""

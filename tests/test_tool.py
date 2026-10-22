@@ -4573,6 +4573,18 @@ building smith
                       got[0])
         self.assertIn("'wool.TGA'", got[1])
         self.assertIn("names the texture 'textures\\gold.tga'", check_mod(mod, "test"))
+        # a texture the mod keeps in its packs is there (a tester, 2026-10-22: HLR's towns' textures - 90 false
+        # problems); a pack names it from the game's folder ('hlr/data/...') as HLR's does
+        import struct
+        names = "hlr/data/models_strat/textures/gold.tga.dds\0"
+        os.makedirs(os.path.join(mod.data, "packs"), exist_ok=True)
+        with open(os.path.join(mod.data, "packs", "mine.pak"), "wb") as fh:
+            fh.write(b"PAK0" + struct.pack("<2I", len(names), 1) + names.encode("utf-16-le") +
+                     struct.pack("<I", 12 + len(names) * 2 + 4 + 1) + b"x")
+        got = castex.problems(mod)
+        self.assertEqual(len(got), 1, got)
+        self.assertIn("'wool.TGA'", got[0])
+        os.remove(os.path.join(mod.data, "packs", "mine.pak"))
         write(os.path.join(mod.data, "models_strat", "textures", "gold.tga.dds"), "x")
         write(os.path.join(mod.data, "models_strat", "textures", "wool.tga"), "x")
         self.assertEqual(castex.problems(mod), [])
@@ -8701,6 +8713,21 @@ building smith
             with Image.open(plan.opts["art"]["symbol:flag"]) as im:
                 self.assertEqual(im.convert("RGBA").getextrema()[3], (0, 0))          # clear: nothing of the frame
         self.assertEqual(plan.opts["art"]["loading_screen/symbols/symbol128_picts.tga"], "/mine.png")
+
+    def test_keys_with_a_drop_down_open(self):
+        """A tester, 2026-10-22: Ctrl + a key while a drop-down's list was open - focus_get raised KeyError 'popdown'
+        (Tk's own list widget) and the editor showed an internal error. No widget is said to have the keys then."""
+        try:
+            from campaign_editor import gui as G
+        except Exception as e:
+            self.skipTest("no tkinter: %s" % e)
+        import types
+
+        def popdown():
+            raise KeyError("popdown")
+        self.assertIsNone(G.App._focused(types.SimpleNamespace(focus_get=popdown)))
+        w = object()
+        self.assertIs(G.App._focused(types.SimpleNamespace(focus_get=lambda: w)), w)
 
     def test_brought_faction_select_screen_shows_its_own_face(self):
         """A tester, 2026-10-18: a brought faction's leader's face on the faction tab was still the template's. The

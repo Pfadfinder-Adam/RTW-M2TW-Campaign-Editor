@@ -26,6 +26,9 @@
 
 ### Fixed
 - The REX morale and terrain words (steadfast, expendable, elitist, intimidate, immune_to_psychology, desert_raider, forest_ambusher) were offered on stat_mental / stat_ground, where the game ignores them -> they go on attributes, and Check mod files names units that still have them on the old lines.
+- Check mod files named textures of campaign-map models as missing when the mod keeps them in its packs -> the packs are looked in.
+- Ctrl + a key while a drop-down list was open showed an internal error -> nothing happens, as it should.
+- New faction: after picking its towns on the map, the colour buttons showed no colour -> they keep it.
 - A faction brought from another mod showed the template's leader's face and select map on the faction tab -> it shows its own (or says the face is left empty on Apply).
 - Emblem everywhere stopped on a picture whose size could not be read -> it shows 'size unknown'.
 - HD sprite sheets (made with M2EX's own packer) showed the wrong part of the picture -> sprite sheets are read as the game reads them.
