@@ -130,7 +130,7 @@ class FromZeroWindow:
 
     def _frame_text(self):
         c = self.v["culture"].get()
-        frame = Z.frame_faction(self.mod, self.camp, c) if c else None
+        frame = self.frame()
         shown = self.app.shown_names()
         others = Z.culture_factions(self.mod, c) if c else []
         self.l_frame.configure(text=(
@@ -246,11 +246,19 @@ class FromZeroWindow:
         ttk.Button(f, text="Pick the emblem...", command=self._emblem).pack(anchor="w")
         self.l_emblem = ttk.Label(f, wraplength=680, justify="left")
         self.l_emblem.pack(anchor="w", pady=(10, 0))
-        self.w.bind("<FocusIn>", lambda e: self._emblem_state(), add="+")
+        # back from the emblem window (a Toplevel's binding fires for each of its widgets; one bind, not one per
+        # visit of this step): read again only when the pictures picked changed
+        self.w.bind("<FocusIn>", lambda e: self._emblem_state(only_changed=True))
         self._emblem_state()
 
     def frame(self):
-        return Z.frame_faction(self.mod, self.camp, self.v["culture"].get())
+        """The culture's frame faction, read once per culture (it reads the units and the campaign; the emblem step
+        asks on every focus change of the window)."""
+        c = self.v["culture"].get()
+        got = self.__dict__.setdefault("_frames", {})
+        if c not in got:
+            got[c] = Z.frame_faction(self.mod, self.camp, c) if c else None
+        return got[c]
 
     def _emblem(self):
         self.to_form()
@@ -277,12 +285,16 @@ class FromZeroWindow:
         except Exception:
             return None, True
 
-    def _emblem_state(self):
+    def _emblem_state(self, only_changed=False):
         try:
             if not self.l_emblem.winfo_exists():
                 return
         except (tk.TclError, AttributeError):
             return
+        seen = (self.frame(), self.v["name"].get(), repr(sorted(self.app.art_replace.items(), key=lambda kv: kv[0])))
+        if only_changed and seen == getattr(self, "_emblem_seen", None):
+            return
+        self._emblem_seen = seen
         pic, done = self._logo_pic()
         if not done:
             self.l_emblem.configure(foreground="#a60", text="No emblem yet.")

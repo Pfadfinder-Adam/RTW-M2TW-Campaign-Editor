@@ -34,9 +34,50 @@ def tree_hash(root):
     return out
 
 
+# a Medieval II man's 20 bones and each one's parent (the game's own skeletons) - test data for the posing tests
+MAN_BONES = ("bone_pelvis", "bone_RThigh", "bone_Rlowerleg", "bone_Rfoot", "bone_abs", "bone_torso", "bone_head",
+             "bone_jaw", "bone_eyebrow", "bone_Rclavical", "bone_Rupperarm", "bone_Relbow", "bone_Rhand",
+             "bone_Lclavical", "bone_Lupperarm", "bone_Lelbow", "bone_Lhand", "bone_LThigh", "bone_Llowerleg",
+             "bone_Lfoot")
+MAN_PARENTS = (-1, 0, 1, 2, 0, 4, 5, 6, 6, 5, 9, 10, 11, 5, 13, 14, 15, 0, 17, 18)
+
+
+def _m2_skeleton(names, parents, rest, paths=(), binds=None, scale=1.0):
+    """A Medieval II skeleton's record in skeletons.dat (SKELETON::pack): the scale, the bone count, the IK share;
+    per bone its kind, base pose, parent, two flags, the IK controller, its bind and its name; then its animations."""
+    import struct as _st
+    from campaign_editor.animations import _binds
+    binds = binds or _binds(parents, [(0, 0, 0, 1)] * len(names), rest)
+    out = _st.pack("<fHf", scale, len(names), 0.5)
+    for n, par, r, b in zip(names, parents, rest, binds):
+        out += _st.pack("<i3fiBBxxi", 0, r[0], r[1], r[2], par, 0, 0, -1) + _st.pack("<12f", *b) + n.encode() + b"\0"
+    return out + b"".join(x.encode() + b"\0" * 9 for x in paths)
+
+
+def _cas_bytes():
+    """A loose .cas animation of three bones (Scene Root, bone_body, bone_arm), three frames, the arm turning."""
+    import struct as _st
+
+    def text(t):
+        return _st.pack("<I", len(t) + 1) + t.encode() + b"\x00"
+
+    def raw(t):
+        return _st.pack("<I", len(t)) + t.encode()
+    head = _st.pack("<f", 3.18) + b"\x00" * 46 + _st.pack("<H", 3) + _st.pack("<3I", 0, 0, 1)
+    head += _st.pack("<I3f", 3, 0.05, 0.1, 0.15)
+    props = "Mass = 0.000000\r\nEllasticity = 0.300000\r\nFriction = 0.300000\r\n"
+    bones = text("Scene Root") + _st.pack("<5I", 0, 0, 0, 48, 0) + b"\x01\x00\x00\x00\x00"
+    bones += text("bone_body") + _st.pack("<5I", 0, 0, 0, 48, 0) + b"\x01\x00\x00\x00\x00"
+    bones += text("bone_arm") + _st.pack("<5I", 3, 1, 0, 48, 0) + b"\x00" + raw(props)
+    keys = b"".join(_st.pack("<4f", 0.1 * k, 0, 0, 1) for k in range(3)) + _st.pack("<3f", 0, 1, 0.25)
+    rest = _st.pack("<9f", 0, 0, 0, 0, 0.5, 0, 9, 9, 9)
+    return head + bones + keys + rest + b"\x00" * 40
+
+
 def _make_anim_set(folder, skels, anims, shape=(2, 3, 1)):
-    """A game animation set (pack.idx / .dat, skeletons.idx / .dat) in folder: skels {name: [anim path]}, anims
-    {path: [(scale, bytes)]}; shape: each animation's (frames, bones, kind) in the index."""
+    """A game animation set (pack.idx / .dat, skeletons.idx / .dat) in folder: skels {name: [anim path] or a whole
+    record (bytes: _m2_skeleton)}, anims {path: [(scale, bytes)]}; shape: each animation's (frames, bones, kind) in
+    the index."""
     import struct as _st
     os.makedirs(folder, exist_ok=True)
     head = lambda magic, stamp, ver, n: magic + stamp + _st.pack("<II", ver, n)  # noqa: E731
@@ -53,7 +94,8 @@ def _make_anim_set(folder, skels, anims, shape=(2, 3, 1)):
     sidx, sdat = bytearray(head(b"SKEL.PACK", b"\x80\x79\x08", 3, len(skels))), \
         bytearray(head(b"SKEL.PACK", b"\x80\x79\x08", 3, len(skels)))
     for name, paths in skels.items():
-        rec = b"\x01\x02" + b"".join(p.encode() + b"\0" * 9 for p in paths)
+        rec = bytes(paths) if isinstance(paths, (bytes, bytearray)) else \
+            b"\x01\x02" + b"".join(p.encode() + b"\0" * 9 for p in paths)
         sidx += _st.pack("<III", len(name) + 1, len(sdat), len(rec)) + name.encode() + b"\0"
         sdat += rec
     for name, data in (("pack.idx", pidx), ("pack.dat", pdat), ("skeletons.idx", sidx),
@@ -3862,10 +3904,13 @@ building smith
         edb_text = open(edb_p, encoding="latin-1").read().split("\n")
         at = next(k for k, l in enumerate(edb_text) if recruit_of(l))
         edb_text.insert(at + 1, edb_text[at].replace('"%s"' % recruit_of(edb_text[at])[1], '"doomed unit"'))
+        # the games read unit types in any case: a line spelling it otherwise is the unit's too (review 2026-10-22)
+        edb_text.insert(at + 1, edb_text[at].replace('"%s"' % recruit_of(edb_text[at])[1], '"Doomed Unit"'))
         write(edb_p, "\n".join(edb_text))
         lines = open(strat_p, encoding="latin-1").read().split("\n")
         at = next(k for k, l in enumerate(lines) if E._unit_span(l))       # beside another unit: the army keeps one
         lines.insert(at + 1, "unit\t\tdoomed unit\t\t\texp 0 armour 0 weapon_lvl 0")
+        lines.insert(at + 1, "unit\t\tDOOMED unit\t\t\texp 0 armour 0 weapon_lvl 0")
         write(strat_p, "\n".join(lines))
         card = os.path.join(self.root, "data", "ui", "units", "alpha", "#doomed_unit.tga")
         os.makedirs(os.path.dirname(card), exist_ok=True)
@@ -3878,8 +3923,8 @@ building smith
         plan.apply()
         mod = ModData(self.root)
         self.assertNotIn("doomed unit", [b[0] for b in E.unit_blocks(mod.load(edu_p))])
-        self.assertNotIn("doomed unit", open(edb_p, encoding="latin-1").read())
-        self.assertNotIn("doomed unit", open(strat_p, encoding="latin-1").read())
+        self.assertNotIn("doomed unit", open(edb_p, encoding="latin-1").read().lower())
+        self.assertNotIn("doomed unit", open(strat_p, encoding="latin-1").read().lower())
         self.assertFalse(os.path.exists(card))
         with self.assertRaises(ValueError):
             E.delete_unit(Plan(mod, "z", "units", {}), "doomed unit")
@@ -13991,6 +14036,10 @@ building smith
         plan = Plan(mod, "mercenaries", "test", {})
         ME.plan_pools(plan, "test", pools)
         self.assertEqual(plan.changed_files(), [])                   # nothing changed: nothing written
+        pools[1].name = "Both"                     # renamed to a pool not changed: two pools of one name (review)
+        with self.assertRaisesRegex(ValueError, "two pools are called Both"):
+            ME.plan_pools(Plan(mod, "mercenaries", "test", {}), "test", pools)
+        pools[1].name = "Only_B"
         left = ME.give_regions(pools, pools[0], ["A_R"])               # Both keeps only A_R ...
         new = ME.Pool("Mine")
         pools.append(new)
@@ -16030,68 +16079,79 @@ building smith
         self.assertEqual([w for w, _ in AN.of_skeleton(mod, "mtw2_bowman")], ["default", "stand_a_idle"])
         self.assertEqual(AN.of_skeleton(mod, "MTW2_Fast_Bowman")[1],
                          ("stand_a_idle", "data\\animations\\MTW2_Bowman\\turn.cas"))
-        rot, off = AN.base_pose(mod, "MTW2_Bowman")
-        self.assertEqual((len(rot), off[0], off[5]), (20, (0, 1, 0), (0, 0.5, 0)))   # the others' offsets filled in
-        mesh = MV.Mesh([MV.Group("Body", "x", (0, 1, 2), False)], [(1, 1, 0), (0, 1, 1), (0, 1, 0)], None)
+        # the skeleton: neither the set the game loads nor a .cas file of it here - the game could not play it either
+        self.assertIsNone(AN.skeleton(mod, "MTW2_Bowman"))
+        rest = [(0, 1, 0)] + [(0, 0.5, 0)] * 19
+        sk = AN.Skeleton("MTW2_Bowman", MAN_PARENTS, rest, MAN_BONES)
+        rot = [(0, 0, 0, 1)] * 20
+        mesh = MV.Mesh([MV.Group("Body", "x", (0, 1, 2), False)], [(1, 1, 0), (0, 4.5, 0), (0, 1, 0)], None)
         mesh.skin = [(0, 4, 1.0, 0.0), (20, 16, 1.0, 0.0), (0, 0, 0.0, 0.0)]       # a weapon point: its hand holds it
-        turned = MV.pose_mesh(mesh, MV.Pose.of(AN.find(mod, "data/animations/MTW2_Bowman/turn.cas"), 0), (rot, off))
+        turned = MV.pose_mesh(mesh, MV.Pose.of(AN.find(mod, "data/animations/MTW2_Bowman/turn.cas"), 0), sk)
         for got, want in zip(turned.positions[0], (-1, 0.5, 0)):          # half round the up axis at the pelvis
             self.assertAlmostEqual(got, want, places=5)
-        self.assertIsNone(MV.pose_mesh(MV.Mesh(mesh.groups, mesh.positions, None), MV.Pose(rot, off), (rot, off)))
-        # a weapon's own move in the hand (its skeleton's animation of the same name): half round at the hand - a
-        # javelin turned point first for the throw (it was thrown blunt end first)
-        hand = MV._world(rot, off)[1][16]
-        flipped = MV.pose_mesh(mesh, MV.Pose(rot, off), (rot, off), held={20: (1.0, 0.0, 0.0, 0.0)})
-        v = mesh.positions[1]
-        for got, want in zip(flipped.positions[1], (v[0], 2 * hand[1] - v[1], 2 * hand[2] - v[2])):
-            self.assertAlmostEqual(got, want, places=5)
-        self.assertEqual(MV.pose_mesh(mesh, MV.Pose(rot, off), (rot, off)).positions[1], tuple(v))   # none: as held
-        self.assertEqual(MV.weapon_turn(type("W", (), {"frames": 1, "rotations": lambda s, k: [(0, 0, 0, 1),
-                                                       (1, 0, 0, 0)], "offsets": lambda s, k: [(0, 0, 0)]})(), 0),
-                         (1, 0, 0, 0))
-        # a weapon point naming only the pelvis as its second bone (a knight's lance and sword) is held by the right
-        # hand - held by the pelvis they hung in the air; a mount's tree has no hands
-        self.assertEqual((MV.hand_of(16, 20), MV.hand_of(0, 20), MV.hand_of(25, 20), MV.hand_of(0, 23)), (16, 12, 12, 0))
-        knight = MV.Mesh(mesh.groups, mesh.positions, None)
+        self.assertEqual(MV.pose_mesh(mesh, MV.Pose(rot, [None] * 20), sk).positions, mesh.positions)  # at its rest
+        self.assertIsNone(MV.pose_mesh(MV.Mesh(mesh.groups, mesh.positions, None), MV.Pose(rot, rest), sk))
+        self.assertIsNone(MV.pose_mesh(mesh, MV.Pose(rot[:19], rest), sk))      # fewer bones than its skeleton
+        # which bones an animation carries offsets for: the bit mask at its record's end (a camel's swim, a crossbow's
+        # string - read as 'the first kind bones', a mod's men fell together); none there: the first kind bones
+        tail = b"\x00" * (24 + 32) + (0b101).to_bytes(8, "little")
+        masked = AN.Anim("m", 1, 3, 2, struct.pack("<HHB", 1, 3, 2) + struct.pack("<4f", 0, 0, 0, 1) * 3 +
+                         struct.pack("<6f", 1, 2, 3, 4, 5, 6) + tail, 9)
+        self.assertEqual((masked.moved, masked.offsets(0)), ((0, 2), [(1, 2, 3), None, (4, 5, 6)]))
+        self.assertEqual(AN.find(mod, "data/animations/MTW2_Bowman/stand.cas").moved, tuple(range(20)))
+        self.assertEqual(sk.offsets([(9, 9, 9), None]), [(9, 9, 9)] + rest[1:])   # a bone with none: its base pose
+        # a weapon with no skeleton of its own here: the hand its points name holds it - the man lifted, it goes too
+        lifted = MV.pose_mesh(mesh, MV.Pose(rot, [(0, 1.5, 0)] + [None] * 19), sk)
+        self.assertAlmostEqual(lifted.positions[1][1], 5.0, places=5)
+        # a knight's lance and sword name only the pelvis as their second bone: held by the right hand (held by the
+        # pelvis they hung in the air)
+        knight = MV.Mesh(mesh.groups, [(1, 1, 0), (0.3, 4.0, 0), (0, 1, 0)], None)
         knight.skin = [(0, 4, 1.0, 0.0), (20, 0, 1.0, 0.0), (0, 0, 0.0, 0.0)]
-        swung = MV.Pose(rot, [(0, 0.5, 0)] + list(off[1:]))           # the man lifted: the hand goes with him
-        self.assertAlmostEqual(MV.pose_mesh(knight, swung, (rot, off)).positions[1][1], v[1] - 0.5, places=5)
-        named = MV.Mesh([], [], None)
-        named.bone_names = {0: "bone_pelvis", 20: "bone_weapon01", 21: "bone_weapon02", 22: "bone_shield"}
-        self.assertEqual(MV.weapon_bones(named), {"weapon": [20, 21], "shield": [22]})
-        # a Discord modder's shield (a Morrowind mod) floated beside the head as an animation played: the game's
-        # meshes give slot 22 several names (bone_weapon03, bone_shield01, bone_shield) - only the first was kept, so
-        # no shield was found, and its points' weightless second bone (the belly) held it. The game binds a shield to
-        # the left hand by name (the engine source).
-        many = MV.Mesh([], [], None)
-        many.bone_aliases = {20: ["bone_weapon01"], 22: ["bone_weapon03", "bone_shield01", "bone_shield"]}
-        many.bone_names = {20: "bone_weapon01", 22: "bone_weapon03"}
-        self.assertEqual(MV.weapon_bones(many), {"weapon": [20], "shield": [22]})
-        group = MV.Mesh([], [], None)                                   # report #293: the mod's only name
-        group.bone_names = {20: "bone_weapon_group01", 22: "bone_weapon_group03"}
-        self.assertEqual(MV.weapon_bones(group), {"weapon": [20], "shield": [22]})
         bent = list(rot)
-        bent[16] = (0.0, 0.0, math.sqrt(0.5), math.sqrt(0.5))           # the left hand turned a quarter round
+        bent[12] = (0.0, 0.0, math.sqrt(0.5), math.sqrt(0.5))           # the right hand turned a quarter round
+        for got, want in zip(MV.pose_mesh(knight, MV.Pose(bent, [None] * 20), sk).positions[1], (0, 4.3, 0)):
+            self.assertAlmostEqual(got, want, places=5)
+        # the weapon's own skeleton (the model's skeleton_attachment): its first bone is the man's hand it hangs on
+        # (here the left), its weapon bone the mesh's of the same name; its animation of the same move turns it -
+        # a javelin point first for the throw - its first bone's own turn left out, as the game does
+        bow = AN.Skeleton("Bow_Primary", (-1, 0), [(0, 4, 0), (0, 0.25, 0)], ["bone_Lhand", "bone_Weapon01"])
+        mesh.bone_aliases = {20: ["bone_weapon01"]}
+        same = MV.pose_mesh(mesh, MV.Pose(rot, [None] * 20), sk, [(bow, None)])
+        self.assertEqual(same.positions[1], mesh.positions[1])
+        flip = MV.Pose([(0, 1, 0, 0), (1, 0, 0, 0)], [None, None])
+        flipped = MV.pose_mesh(mesh, MV.Pose(rot, [None] * 20), sk, [(bow, flip)])
+        for got, want in zip(flipped.positions[1], (0, 4.0, 0)):            # half round at the weapon's bone (4.25)
+            self.assertAlmostEqual(got, want, places=5)
+        self.assertEqual(MV._child_offset(1, (1, 2, 3)), (-3, 2, 1))      # its own offsets as the game lays them on
+        self.assertEqual(MV._child_offset(2, (1, 2, 3)), (-1, 3, 2))
+        # a shield goes to the left hand by its name (a Discord modder's shield floated beside the head: its points'
+        # weightless second bone named the belly); the game's meshes give slot 22 several names
         for pure in (True, False):
             shield = MV.Mesh(mesh.groups, mesh.positions, None)
             shield.skin = [(0, 4, 1.0, 0.0), (22, 4, 1.0, 0.0), (0, 0, 0.0, 0.0)]
-            shield.bone_aliases, shield.bone_names = {22: ["bone_shield"]}, {22: "bone_shield"}
+            shield.bone_aliases = {22: ["bone_weapon03", "bone_shield01", "bone_shield"]}
             on_hand = MV.Mesh(mesh.groups, mesh.positions, None)
             on_hand.skin = [(0, 4, 1.0, 0.0), (16, 0, 1.0, 0.0), (0, 0, 0.0, 0.0)]
             shield.pure = on_hand.pure = pure
-            got = MV.pose_mesh(shield, MV.Pose(bent, off), (rot, off)).positions[1]
-            want = MV.pose_mesh(on_hand, MV.Pose(bent, off), (rot, off)).positions[1]
+            lbent = list(rot)
+            lbent[16] = (0.0, 0.0, math.sqrt(0.5), math.sqrt(0.5))
+            got = MV.pose_mesh(shield, MV.Pose(lbent, rest), sk).positions[1]
+            want = MV.pose_mesh(on_hand, MV.Pose(lbent, rest), sk).positions[1]
             for g, w in zip(got, want):
                 self.assertAlmostEqual(g, w, places=5)
+        group = MV.Mesh([], [], None)                                   # report #293: the mod's only name
+        group.bone_names = {20: "bone_weapon_group01", 22: "bone_weapon_group03"}
+        self.assertEqual(MV.shield_slots(group), {22})
         # a moment between two frames is drawn between them (the play looked hurried and jerky drawing whole
         # frames only): half way from unturned to half round the up axis = a quarter round; past the last frame
-        # it blends into the first
+        # it blends into the first; a bone with no offset in either frame has none between them
         stand = AN.find(mod, "data/animations/MTW2_Bowman/stand.cas")
         half = MV.Pose.of(type("A", (), {"frames": 2, "rotations": lambda s, k: [(0, 0, 0, 1)] * 20 if k == 0 else
-                                         [(0, 1, 0, 0)] * 20, "offsets": lambda s, k: [(0, k, 0)] * 20})(), 0.5)
+                                         [(0, 1, 0, 0)] * 20,
+                                         "offsets": lambda s, k: [(0, k, 0)] + [None] * 19})(), 0.5)
         for got, want in zip(half.rotations[0], (0, math.sqrt(0.5), 0, math.sqrt(0.5))):
             self.assertAlmostEqual(got, want, places=5)
-        self.assertEqual(half.offsets[0], (0, 0.5, 0))
+        self.assertEqual((half.offsets[0], half.offsets[1]), ((0, 0.5, 0), None))
         self.assertEqual(MV.Pose.of(stand, 2.5).offsets[0], (0, 0.5, 0))
         # a turning horse carries its rider round: the saddle's heading (round the up axis) only
         tipped = MV.Mesh([], [], None)
@@ -16131,30 +16191,48 @@ building smith
         self.assertEqual(AN.skeleton_anims(mod, "no_such"), [])
         self.assertIn("mtw2_halberd_primary", AN.skeletons(mod))         # the checks' set of names (lower case)
 
-    def test_base_pose_of_a_skeleton_only_in_the_animation_set(self):
-        """A skeleton the mod keeps only in the set the game loads (skeletons.dat, no descr_skeleton.txt line): its
-        base pose is the animation its record names as one (..._basepose / ..._default), else its last - the man is
-        posed, not left in the T pose."""
+    def test_skeletons_read_as_the_game_reads_them(self):
+        """A skeleton as the game has it, whatever its bones (a mod's own: the hard-coded man's and horse's trees
+        crushed them): its record in the set the game loads (skeletons.dat: each bone's name, parent, base pose and
+        bind, its scale), the name as written else alike but for the letter case (a record not of that form: none);
+        a mod on descr_skeleton.txt alone from its type's first .cas file (SKELETON_BASE::open: the Scene Root left
+        out); an animation at the scale of its skeleton."""
         import struct
         from campaign_editor import animations as AN
-
-        def body(w):            # 2 frames, 3 bones, each bone's offset; each bone turned (0, 0, 0, w)
-            return struct.pack("<HHB", 2, 3, 3) + struct.pack("<4f", 0, 0, 0, w) * 6 + struct.pack("<3f", 0, 1, 0) * 6
-        stand, base, last = ("data/animations/own/Own_Stand_A_idle.cas", "data/animations/own/Own_basepose.cas",
-                             "data/animations/own/Own_run.cas")
-        _make_anim_set(os.path.join(self.root, "data", "animations"),
-                       {"Own_Man": [stand, base, last], "Own_Odd": [stand, last]},
-                       {stand: [(1.0, body(0.5))], base: [(1.0, body(1.0))], last: [(1.0, body(0.25))]}, (2, 3, 3))
+        anims = os.path.join(self.root, "data", "animations")
+        names, parents, rest = ["bone_root", "bone_neck", "bone_head"], (-1, 0, 1), [(0, 1, 0), (0, 0, 0.5), (0, 0.3, 0)]
+        stand, base = "data/animations/own/Own_Stand_A_idle.cas", "data/animations/own/Own_basepose.cas"
+        body = struct.pack("<HHB", 2, 3, 1) + struct.pack("<4f", 0, 0, 0, 1) * 6 + struct.pack("<3f", 0, 1, 0) * 2
+        _make_anim_set(anims, {"Own_Beast": _m2_skeleton(names, parents, rest, [stand], scale=1.12),
+                               "Own_Tool": [stand, base]},
+                       {stand: [(1.0, body + b"A"), (1.12, body + b"B")], base: [(1.0, body)]})
         mod = ModData(os.path.join(self.root, "data"))
-        rot, off = AN.base_pose(mod, "Own_Man")
-        self.assertEqual((rot[0], len(off)), ((0, 0, 0, 1.0), 3))
-        self.assertEqual(AN.base_pose(mod, "Own_Odd")[0][2], (0, 0, 0, 0.25))      # none named so: the last
-        self.assertIsNone(AN.base_pose(mod, "no_such"))
+        sk = AN.skeleton(mod, "own_beast")
+        self.assertEqual((sk.names, sk.parents, len(sk), sk.bone("BONE_HEAD")), (names, parents, 3, 2))
+        self.assertEqual([tuple(round(v, 4) for v in r) for r in sk.rest], rest)
+        self.assertAlmostEqual(sk.scale, 1.12, places=5)
+        self.assertAlmostEqual(sk.binds[2][7], -1.3, places=5)        # its head 1.3 up in the pose the mesh is made in
+        self.assertEqual(AN.find(mod, stand, sk.scale).data[-1:], b"B")    # the animation at its skeleton's scale
+        self.assertEqual(AN.find(mod, stand).data[-1:], b"A")
+        self.assertIsNone(AN.skeleton(mod, "Own_Tool"))                 # a record of paths only
+        self.assertIsNone(AN.skeleton(mod, "no_such"))
+        # descr_skeleton.txt alone (no set loads): the type's first .cas file
+        shutil.rmtree(anims)
+        os.makedirs(os.path.join(anims, "t"))
+        with open(os.path.join(anims, "t", "first.cas"), "wb") as fh:
+            fh.write(_cas_bytes())
+        write(os.path.join(self.root, "data", "descr_skeleton.txt"),
+              "type Text_Man\nanim stand_a_idle data/animations/t/first.cas\nanim default data/animations/t/first.cas\n"
+              "type Text_Child\nparent Text_Man\nanim run data/animations/t/first.cas\n")
+        mod = ModData(os.path.join(self.root, "data"))
+        for name in ("Text_Man", "Text_Child"):
+            got = AN.skeleton(mod, name)
+            self.assertEqual((got.names, got.parents, got.rest[0]), (["bone_body", "bone_arm"], (-1, 0), (0, 0.5, 0)))
 
     def test_the_3d_view_on_numpy_matches_the_pure_python_one(self):
         """With NumPy (the exe has it) a mesh is posed and drawn on arrays (fastmesh) - the same points to the last
         digit and the same picture as the pure-Python ways a Python without NumPy keeps."""
-        from campaign_editor import meshview as MV
+        from campaign_editor import animations as AN, meshview as MV
         if MV._fast is None:
             self.skipTest("no NumPy")
         try:
@@ -16174,10 +16252,13 @@ building smith
         turned = list(rot)
         turned[1] = (math.sin(0.3), 0.0, 0.0, math.cos(0.3))
         turned[12] = (0.0, math.sin(0.5), 0.0, math.cos(0.5))
-        held = {20: (1.0, 0.0, 0.0, 0.0)}
-        fast = MV.pose_mesh(mesh, MV.Pose(turned, off), (rot, off), held)
+        sk = AN.Skeleton("man", MAN_PARENTS, off, MAN_BONES)
+        held = [(AN.Skeleton("w", (-1, 0), [(0.5, 1.0, 0.0), (0.0, 0.2, 0.0)], ["bone_Rhand", "bone_weapon01"]),
+                 MV.Pose([(0, 0, 0, 1), (1.0, 0.0, 0.0, 0.0)], [None, None]))]
+        mesh.bone_aliases = {20: ["bone_weapon01"]}
+        fast = MV.pose_mesh(mesh, MV.Pose(turned, off), sk, held)
         mesh.pure = True
-        pure = MV.pose_mesh(mesh, MV.Pose(turned, off), (rot, off), held)
+        pure = MV.pose_mesh(mesh, MV.Pose(turned, off), sk, held)
         for a, b in zip(fast.positions, pure.positions):
             for k in range(3):
                 self.assertAlmostEqual(a[k], b[k], places=9)
@@ -16201,38 +16282,28 @@ building smith
             self.assertGreater(near / len(b), 0.95)
 
     def test_a_horse_is_posed_on_its_own_bones(self):
-        """A Medieval II horse (fs_horse: 23 bones - saddle, spine, neck, head, four legs, tail) is posed on its own
-        tree, not a man's (its animation looked broken); a mesh listing its bones by name in another order gets its
-        points' bone numbers put in the animations' order. descr_mount's rider_offset is read per mount type."""
+        """A beast (a Medieval II horse, camel, elephant - or a mod's own) is posed on its own skeleton's tree, read
+        from its record, not a man's (its animation looked broken; a camel and an elephant stood on the man's 20
+        bones); a beast's mesh names no pelvis (with no animation picked it stands in its idle move).
+        descr_mount's rider_offset is read per mount type."""
         import math
-        import struct
-        from campaign_editor import meshview as MV, models as MO
-
-        def names(order):
-            return struct.pack("<I", len(order)) + b"".join(
-                struct.pack("<I", len(n)) + n.encode() + struct.pack("<I", i) for i, n in enumerate(order))
-        alpha = sorted(MV.HORSE_BONES)
-        got = MV._bone_names(b"\x00" * 50 + names(alpha) + b"\x00" * 8)
-        self.assertEqual(got[0], "bone_H_Saddle")
-        self.assertEqual(got[1], "bone_Head")
-        mesh = MV.Mesh([], [(0, 0, 0)], None)
-        mesh.skin = [(alpha.index("bone_Head"), alpha.index("bone_Neck"), 1.0, 0.0)]
-        MV._animal_tree(mesh, got)
-        self.assertEqual(mesh.skin[0][:2], (4, 3))                     # Head, Neck in the animations' order
-        self.assertEqual(mesh.parents, MV.HORSE_PARENTS)
-        man = MV.Mesh([], [(0, 0, 0)], None)
-        man.skin = [(0, 0, 1.0, 0.0)]
-        MV._animal_tree(man, {0: "bone_pelvis", 1: "bone_rthigh"})
-        self.assertIsNone(man.parents)                                  # a man keeps the man's tree
-        # posed on the horse's tree: the head follows the neck turned at Spine1, not a man's arm chain
-        rot = [(0, 0, 0, 1)] * 23
-        off = [(0, 1, 0)] + [(0, 0, 0.5)] * 22
-        mesh.positions = [MV._world(rot, off, MV.HORSE_PARENTS)[1][4]]   # a point on the head
+        from campaign_editor import animations as AN, meshview as MV, models as MO
+        # a toy horse: saddle, spine, neck, head - the head follows the neck turned at the spine
+        names = ["bone_H_Saddle", "bone_Spine", "bone_Neck", "bone_Head"]
+        sk = AN.Skeleton("fs_horse", (-1, 0, 1, 2), [(0, 1, 0), (0, 0, 0.5), (0, 0, 0.5), (0, 0, 0.5)], names)
+        mesh = MV.Mesh([], [(0, 1, 1.5)], None)                      # a point on the head
+        mesh.skin = [(3, 2, 1.0, 0.0)]
+        mesh.bone_aliases = {i: [n] for i, n in enumerate(names)}
+        rot = [(0, 0, 0, 1)] * 4
         turned = list(rot)
-        turned[2] = (0, math.sqrt(0.5), 0, math.sqrt(0.5))              # Spine1 a quarter round the up axis
-        posed = MV.pose_mesh(mesh, MV.Pose(turned, off), (rot, off))
+        turned[1] = (0, math.sqrt(0.5), 0, math.sqrt(0.5))              # the spine a quarter round the up axis
+        posed = MV.pose_mesh(mesh, MV.Pose(turned, [None] * 4), sk)
         self.assertAlmostEqual(posed.positions[0][0], 1.0, places=5)   # the neck and head swung sideways
-        self.assertEqual(len(posed.joints), 23)
+        self.assertEqual(len(posed.joints), 4)
+        self.assertTrue(MV.is_animal(mesh))
+        man = MV.Mesh([], [(0, 0, 0)], None)
+        man.skin, man.bone_aliases = [(0, 0, 1.0, 0.0)], {0: ["bone_pelvis"], 1: ["bone_RThigh"]}
+        self.assertFalse(MV.is_animal(man))
         write(os.path.join(self.root, "data", "descr_mount.txt"),
               "type heavy horse\nclass horse\nmodel Mount_Heavy_Horse\n;rider_offset 0.0, 0.45, 0.35\n"
               "rider_offset\t\t0.0, 0.38, 0.70\n\ntype camel\nclass camel\n")
@@ -20718,6 +20789,35 @@ building shrine
         self.assertIsNone(R.drop_faction(line.replace("{ b, c, }", "{ b, }"), "b"))
         self.assertEqual(R.add_faction(line, "d"),
                          "requires ( ( factions { a, b, d, } and x ) or ( factions { b, c, } and y ) )")
+
+    def test_take_unit_shuts_culture_recruit_lines(self):
+        """Review 2026-10-22: a unit taken from a faction kept every recruit line that let it in by its culture or
+        'all' - its towns still recruited it, and Medieval II stops at a recruit line the ownership does not allow
+        (settlement.cpp 'Settlement recruitment availability included unit'). New faction > From zero took the
+        frame's own units the same way (its culture known before the mod knows the faction)."""
+        from campaign_editor import roster as R
+        d = os.path.join(self.root, "data")
+        write(os.path.join(d, "export_descr_buildings.txt"), self.POOL_EDB.replace(
+            'requires factions { slave, }', 'requires factions { eastern, slave, }'))
+        mod = ModData(self.root)
+        plan = Plan(mod, None, "roster")
+        R.take_unit(plan, "alpha", "rebel spear")
+        edb = plan.files[mod.file("edb")].dump().decode("latin-1")
+        self.assertIn('recruit_pool "rebel spear"  1   0.5   4  0  requires factions { slave, }', edb)
+        self.assertTrue(any("written out as the other factions" in m for _, m in plan.warnings), plan.report())
+        # a faction the mod does not know yet: its culture given
+        plan = Plan(mod, None, "roster")
+        R.take_unit(plan, "zorga", "rebel spear", None, "eastern")
+        edb = plan.files[mod.file("edb")].dump().decode("latin-1")
+        self.assertIn('requires factions { alpha, slave, }', edb)
+        # a line of its own name only: as before, the name out
+        write(os.path.join(d, "export_descr_buildings.txt"), self.POOL_EDB.replace(
+            'requires factions { slave, }', 'requires factions { slave, alpha, }'))
+        mod = ModData(self.root)
+        plan = Plan(mod, None, "roster")
+        R.take_unit(plan, "alpha", "rebel spear")
+        edb = plan.files[mod.file("edb")].dump().decode("latin-1")
+        self.assertIn('requires factions { slave, }', edb)
 
     def test_editor_lines_no_cap_of_our_own(self):
         """A key the mod repeats takes any number of lines (no "not more than the mod has"); a one-line key stays
