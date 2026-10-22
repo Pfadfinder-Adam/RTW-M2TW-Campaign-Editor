@@ -1268,7 +1268,7 @@ def rivers_off_the_water(features, heights, ground, land=None):
     def px(r, W, H, st, td, x, y):
         o = (((H - 1 - y) if td else y) * W + x) * st
         return (r[o + 2], r[o + 1], r[o])
-    sea_ground = {(64, 0, 0), (128, 0, 0), (196, 0, 0), (128, 128, 128), (255, 255, 255)}
+    sea_ground = {(64, 0, 0), (128, 0, 0), (196, 0, 0), (0, 0, 64), (255, 255, 255)}
     rivery, wet = set(), set()
     for y in range(h):
         for x in range(w):
@@ -1446,7 +1446,7 @@ def coast_corners(heights, hgt, land):
 
 SHALLOW = (196, 0, 0)
 DEEP_KINDS = ((128, 0, 0), (64, 0, 0))     # deep sea, ocean
-DEFAULT_LAND = (101, 124, 0)                 # low fertility: a beach with no land ground near it
+DEFAULT_LAND = (0, 128, 128)                 # low fertility: a beach with no land ground near it
 SPECK = 40                                 # ground pixels: deep water this small in the shallows is shallow too
 
 
@@ -1493,7 +1493,7 @@ def shallow_coast(data):
     for y in range(h):                             # of the land or the beach
         for x in range(w):
             if water[y * w + x] and any(0 <= x + a < w and 0 <= y + b < h and not water[(y + b) * w + x + a]
-                                        and kind[(y + b) * w + x + a] != (128, 128, 128)
+                                        and kind[(y + b) * w + x + a] != (0, 0, 64)
                                         for a in (-2, -1, 0, 1, 2) for b in (-2, -1, 0, 1, 2) if a or b):
                 coast[y * w + x] = True
     shallow = [1.0 if (k == SHALLOW or c or not wt) else 0.0 for k, c, wt in zip(kind, coast, water)]
