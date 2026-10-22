@@ -673,6 +673,27 @@ def delete_backups(mod):
     return gone + clean_restored(mod)
 
 
+MAP_SOURCES = ("descr_regions.txt", "descr_terrain.txt", "water_surface.tga")
+
+
+def _drop_built_maps(mod, root, manifest):
+    """The map.rwm the game built from a write's map pictures goes when the write is undone - else the game reads the
+    undone map from it (a tester, 2026-10-22: Undo of Map from zero left the island's map.rwm). One the backup put
+    back stays."""
+    back = {os.path.normcase(os.path.join(root, rel)) for rel in manifest.get("modified", [])}
+    folders = set()
+    for rel in manifest.get("modified", []) + manifest.get("created", []):
+        n = os.path.basename(rel).lower()
+        if n.startswith("map_") or n in MAP_SOURCES:
+            folders.add(os.path.dirname(os.path.join(root, rel)))
+    if folders:
+        folders.add(os.path.join(mod.data, "world", "maps", "base"))
+    for d in folders:
+        rwm = os.path.join(d, "map.rwm")
+        if os.path.isfile(rwm) and os.path.normcase(rwm) not in back:
+            remove_file(rwm)
+
+
 def restore(mod, bdir):
     """Put every file of a backup back and remove what that run created."""
     root = os.path.dirname(mod.data)
@@ -702,6 +723,7 @@ def restore(mod, bdir):
                     and not os.listdir(d):
                 os.rmdir(d)
                 d = os.path.dirname(d)
+        _drop_built_maps(mod, root, manifest)
         p = bdir
         _drop_backup(bdir)               # undone: its copies are the files as they are now - nothing left to keep
     except OSError as e:                        # a file held by the game, the disk full...: the backup stays whole

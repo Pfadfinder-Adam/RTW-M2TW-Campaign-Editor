@@ -510,6 +510,12 @@ def make(plan, campaign, faction=None, size=SIZE, regions=1, others=0):
     if mod.campaign_file(campaign, "descr_regions_and_settlement_name_lookup.txt"):
         texts["descr_regions_and_settlement_name_lookup.txt"] = "".join(
             "%s\n%s\n" % (r, info[r]["settlement"]) for r in names)
+    if mod.in_campaign(campaign, "campaign_script.txt"):
+        # the old script names the old map's factions and places: on the new map it stops at its first line
+        # ([fatal] 'faction aztecs not found') and floods the log (a tester, 2026-10-22: 161 720 lines in 4 turns)
+        texts["campaign_script.txt"] = "script\n\nend_script\n"
+        plan.note(None, "campaign_script.txt left empty (script / end_script): the old one named the old map's "
+                        "factions and places")
     for name, text in texts.items():
         plan.binary(os.path.join(folder, name), _text(text))
     for d in (folder, os.path.join(mod.data, "world", "maps", "base")):
