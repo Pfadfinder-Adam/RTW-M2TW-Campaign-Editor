@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+- Rebels: more than 20 unit types in one rebel type is said with REX / M2EX too - the game keeps only 20 there as well.
+- Family tree: children with no father are found by the mod's own ages (Medieval II girls up to 16, as its files say), not fixed ones.
+- Opening locked factions: a mod's Pope under another name stays locked, like papal_states.
+- Region names of a campaign in a subfolder (custom/...) are found, as the game finds them.
+- A mod's override .pack now wins over data.pack, as in the game.
+- New faction: the AI list offers Medieval II's own personalities too (richard, saladin and the others).
+- Renaming a faction whose name has a capital letter works again in every file.
+- Check mod files: a skeleton named in another letter case is said as missing - the game tells them apart.
+
 ## 0.35.4 - 2026-10-22
 
 ### In short

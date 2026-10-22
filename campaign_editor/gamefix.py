@@ -21,8 +21,24 @@ def _vegetation_maps(mod):
 
 # factions a locked faction stays for when the others are opened (the user, 2026-10-15): the Roman Senate, the Pope,
 # the rebels - and any that starts with no town (the Mongols, the Timurids, BI's hordes and rebel empires): picked,
-# it would be dead on the first turn
+# it would be dead on the first turn. 'slave' and Rome's 'romans_senate' are names the engine itself looks for; the
+# Pope is whichever faction descr_sm_factions.txt marks 'special_faction_type papal_faction' (engine source
+# faction_db.cpp) - papal_states in vanilla, any name in a mod (papal_factions)
 KEEP_LOCKED = {"romans_senate", "papal_states", "slave"}
+
+
+def papal_factions(mod):
+    """The factions descr_sm_factions.txt gives `special_faction_type papal_faction` (Medieval II's Pope)."""
+    from .textio import tokens
+    p = mod.file("sm_factions")
+    out, cur = set(), None
+    for line in (mod.load(p).texts() if p else []):
+        t = tokens(line)
+        if len(t) >= 2 and t[0] == "faction":
+            cur = t[1]
+        elif len(t) >= 2 and t[0] == "special_faction_type" and t[1] == "papal_faction" and cur:
+            out.add(cur)
+    return out
 
 
 def locked_factions(mod, campaign):
@@ -35,7 +51,8 @@ def locked_factions(mod, campaign):
     s = Strat(mod.load(sp))
     towns = {fb.name: len(fb.settlements) for fb in s.factions}
     shut = [n for lst in (s.unlockable, s.nonplayable) for _, n in (lst or {}).get("items", [])]
-    return [n for n in shut if n not in KEEP_LOCKED and towns.get(n, 0) > 0]
+    keep = KEEP_LOCKED | papal_factions(mod)
+    return [n for n in shut if n not in keep and towns.get(n, 0) > 0]
 
 
 def open_factions(f, names):

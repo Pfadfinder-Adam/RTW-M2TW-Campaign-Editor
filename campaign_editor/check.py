@@ -215,10 +215,11 @@ def check_mod(mod, campaign, deep=False, progress=None, found=None):
         for father, younger, older in wrong[:3]:
             bad("%s: %s's children - %s is written before the older %s; the game wants them oldest first ('... is "
                 "supposed to be younger than ...')" % (fb.name, father, younger, older))
-    from .family import dropped_records
+    from .family import child_ages, dropped_records
+    ages = child_ages(mod)
     for fb in s.factions:                           # records the game leaves out of the family tree
         try:
-            gone = dropped_records(read_family(strat_f, fb.name))
+            gone = dropped_records(read_family(strat_f, fb.name), ages)
         except Exception:
             continue
         for name, why in gone[:5]:
@@ -691,12 +692,14 @@ def ai_label_problems(mod, strat_f):
 def skeleton_problems(mod):
     """[(model, [skeletons])] of descr_model_battle.txt naming a skeleton descr_skeleton.txt lacks - the game stops
     at the start: "Unable to find skeleton '...'" (a report: models brought from a mod with animations of its
-    own). [] when no descr_skeleton.txt is read."""
-    from .animations import skeletons
-    from .animpacks import skeleton_names
+    own). [] when no descr_skeleton.txt is read. Names compared EXACTLY, letter case too: the engine finds a
+    skeleton by its RESOURCE_ID (anim_db.h skeleton_get; report R-20261022-948516)."""
+    from .animations import _skeleton_table
+    from .animpacks import loaded_set
     from .models import TEXT_FILE
     from .packs import _block_lines, type_blocks
-    known = set(skeletons(mod)) | skeleton_names(mod)       # descr_skeleton's and the animation set the game loads
+    loaded = loaded_set(mod)
+    known = set(_skeleton_table(mod, "descr_skeleton.txt")) | (set(loaded.skeletons()) if loaded else set())
     path = mod.find(TEXT_FILE)
     if not known or not path:
         return []
@@ -707,7 +710,7 @@ def skeleton_problems(mod):
         for line in _block_lines(f, span):
             code = strip_comment(line).strip().split(None, 1)
             if len(code) == 2 and code[0].lower().startswith("skeleton") and "attachment" not in code[0].lower():
-                gone += [x.strip() for x in code[1].split(",") if x.strip() and x.strip().lower() not in known]
+                gone += [x.strip() for x in code[1].split(",") if x.strip() and x.strip() not in known]
         if gone:
             out.append((name, sorted(set(gone))))
     return out

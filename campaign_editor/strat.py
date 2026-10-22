@@ -683,3 +683,20 @@ def village_block(region, faction):
     return ["settlement", "{", "\tlevel village", "\tregion %s" % region, "",
             "\tyear_founded 0", "\tpopulation 400", "\tplan_set default_set",
             "\tfaction_creator %s" % faction, "}"]
+
+
+# descr_strat.txt: "faction <name>, <economy> <military>" - the words the game knows (engine source
+# string_recognition.cpp; it reads "craftsman", writes "craftsmen")
+AI_ECONOMY = ("balanced", "bureaucrat", "comfortable", "craftsman", "fortified", "religious", "sailor", "trader")
+AI_MILITARY = ("caesar", "genghis", "henry", "mao", "napoleon", "smith", "stalin")
+AI_CHOICES = ["%s %s" % (e, m) for e in AI_ECONOMY for m in AI_MILITARY]
+# Medieval II's exe knows 15 more military personalities (engine source game/env/string_recognition.cpp; Rome's
+# game_rtw has only the 7 above)
+AI_MILITARY_M2 = AI_MILITARY + ("alfonso", "arslan", "doge", "guy", "heinrich", "knud", "richard", "robert",
+                                "roger", "saladin", "subotai", "tahar", "tzar", "vlad", "wyvadslaw")
+
+
+def ai_choices(kind):
+    """Every 'economy military' pair the game reads for this game ('rome' / 'medieval2')."""
+    mil = AI_MILITARY_M2 if kind == "medieval2" else AI_MILITARY
+    return ["%s %s" % (e, m) for e in AI_ECONOMY for m in mil]

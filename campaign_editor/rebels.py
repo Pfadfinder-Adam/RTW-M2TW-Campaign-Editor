@@ -21,7 +21,9 @@ FILE = "descr_rebel_factions.txt"
 TEXTS = "rebel_faction_descr.txt"
 CATEGORIES = ("peasant_revolt", "brigands", "pirates", "gladiator_revolt")   # the vanilla files' own
 KEYS = ("rebel_type", "category", "chance", "description", "unit")
-VANILLA_UNITS = 20          # unit types per rebel type the original exes take (limits.md); none with an engine
+# unit types per rebel type the game takes - REX / M2EX too: a fixed array in the engine source
+# (rebel_faction_db.h MAX_REBEL_UNIT_TYPES 20; RebelFactionRegistry.cpp clamps to it), so no engine lifts it
+VANILLA_UNITS = 20
 RE_NAME = re.compile(r"^[A-Za-z0-9_\-]+$")
 
 
@@ -101,16 +103,13 @@ def regions_of(mod, campaign):
     return {r: (v.get("rebels") or "") for r, v in mod.regions(campaign).items()}
 
 
-def problems(mod, types, lifted=None):
+def problems(mod, types):
     """Mistakes the game stumbles on, in plain words (nothing refused that the game takes)."""
     from .units import read_units
     out = []
     edu = mod.file("edu")
     known = {u.type.lower(): u for u in read_units(mod.load(edu))} if edu else {}
     names = [r.name.lower() for r in types]
-    if lifted is None:
-        from .limits import lifted as _lifted
-        lifted = _lifted(mod, "rebel_units")
     for r in types:
         if not r.changed():
             continue
@@ -125,8 +124,8 @@ def problems(mod, types, lifted=None):
         for u in r.units:
             if known and u.lower() not in known:
                 out.append("%s: unit '%s' is not in export_descr_unit.txt" % (r.name, u))
-        if not lifted and len(set(u.lower() for u in r.units)) > VANILLA_UNITS:
-            out.append("%s: %d unit types - the game without its extender takes %d" % (
+        if len(set(u.lower() for u in r.units)) > VANILLA_UNITS:
+            out.append("%s: %d unit types - the game takes the first %d (REX / M2EX too), the rest are dropped" % (
                 r.name, len(set(u.lower() for u in r.units)), VANILLA_UNITS))
     return out
 
