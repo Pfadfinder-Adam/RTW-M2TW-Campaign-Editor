@@ -79,6 +79,8 @@ def sm_factions(plan):
     s = starts[k]
     e = starts[k + 1] if k + 1 < len(starts) else len(f)
     block = f.raw[s:e]
+    movies = movie_users([(names[n], f.texts()[starts[n]:(starts[n + 1] if n + 1 < len(starts) else len(f))])
+                          for n in range(len(starts))])
     # keep the separator comments that trail the block with it
     out = []
     for raw in block:
@@ -92,6 +94,14 @@ def sm_factions(plan):
             if m:
                 plan.note(f, "%s is a plain faction: '%s' stays the template's" % (new, m.group(0).strip(", \t")))
                 text = text[:m.start()] + text[m.end():]
+        elif len(tk) >= 2 and tk[0].endswith("_movie"):
+            # a movie of the template's own (Rome's gauls_eliminated.wmv) is not the new faction's: the movie other
+            # factions share, else none - Barbarian Invasion leaves every intro_movie empty
+            own = own_movie(tk[0], tk[1], t, movies)
+            if own != tk[1]:
+                text = text[:len(text) - len(text.lstrip())] + tk[0] + ("\t" + own if own else "")
+                plan.note(f, "%s: %s is %s's own - %s" % (new, tk[1], t, ("'%s', as other factions" % own)
+                                                         if own else "no movie (left empty)"))
         elif tk[:1] == ["primary_colour"] and plan.opts.get("primary_colour"):
             r, g, b = plan.opts["primary_colour"]
             text = re.sub(r"red\s*\d+\s*,\s*green\s*\d+\s*,\s*blue\s*\d+", "red %d, green %d, blue %d" % (r, g, b), text)
@@ -105,6 +115,29 @@ def sm_factions(plan):
     f.insert_raw(at, out)
     plan.note(f, "faction block copied from %s (before slave)" % t)
     plan.faction_count = len(names) + 1
+
+
+def movie_users(blocks):
+    """{(field, movie lower): (set of factions, the movie as written)} of '<x>_movie <path>' lines in
+    [(faction, its block's lines)]."""
+    users = {}
+    for name, lines in blocks:
+        for line in lines:
+            tk = tokens(line)
+            if len(tk) >= 2 and tk[0].endswith("_movie"):
+                users.setdefault((tk[0], tk[1].lower()), (set(), tk[1]))[0].add(name)
+    return users
+
+
+def own_movie(field, movie, template, users):
+    """The movie a new faction made from `template` gets in place of `movie`: the same when another faction shows it
+    too; when it is the template's alone, the one most other factions share for that field (2 at least: Medieval
+    II's minor_win.bik), else '' (none)."""
+    who = users.get((field, movie.lower()), (set(), movie))[0]
+    if who - {template}:
+        return movie
+    shared = [(len(f - {template}), m) for (fd, _), (f, m) in users.items() if fd == field and len(f - {template}) >= 2]
+    return max(shared)[1] if shared else ""
 
 
 def sm_factions_json(plan):
@@ -351,18 +384,36 @@ def building_battle(plan):
         return
     t, new = plan.template, plan.new
     f = plan.edit(path)
-    n = 0
+    # the pictures another faction's (or culture's) line names too: shared, never copied
+    users_of_other = {tokens(f.text(k))[1] for k in range(len(f)) if len(tokens(f.text(k))) >= 2 and
+                      tokens(f.text(k))[0] != t and "##" in f.text(k)}
+    n = copies = 0
     i = 0
     while i < len(f):
         tk = tokens(f.text(i))
         if len(tk) >= 2 and tk[0] == t and "##" in f.text(i):
-            f.insert_raw(i + 1, [_replace_word(f.raw[i], t, new)])
+            line = _replace_word(f.raw[i], t, new)
+            pic = tk[1]
+            if pic not in users_of_other:
+                # the template's own flag on its towns: a copy of its own (Art / the emblem change it there, the
+                # template's stays as it is)
+                own = own_picture_ref(pic, t, new)
+                got = next((g for g in (picture_file(d, "models_building/textures/" + pic) for d in data_roots(plan.mod))
+                            if g), None)
+                if got and own != pic:
+                    dst = os.path.join(plan.mod.data, "models_building", "textures", own + disk_tail(pic, got[1]))
+                    if not os.path.exists(dst) and os.path.normcase(os.path.abspath(dst)) not in {
+                            os.path.normcase(os.path.abspath(d)) for _, d in plan.copies}:
+                        plan.copy(got[1], dst)
+                    line = line.replace(pic, own, 1)
+                    copies += 1
+            f.insert_raw(i + 1, [line])
             n += 1
             i += 2
             continue
         i += 1
     if n:
-        plan.note(f, "%d standard line(s) copied" % n)
+        plan.note(f, "%d standard line(s) copied%s" % (n, ", %d flag picture(s) as its own" % copies if copies else ""))
 
 
 def triggers(plan, key):
@@ -451,13 +502,15 @@ def text_strings(plan):
     t, new = plan.template.upper(), plan.new.upper()
     tparts = t.split("_")
     repl = plan.display_replacements()
-    long_keys = []
+    long_keys, plain = [], []
     from . import titles
     m2_titles = any(RE_KEY.match(line) and RE_KEY.match(line).group(2).upper() == "EMT_%s%s" % (t, titles.LEADER_NAME)
                     for p in plan.mod.text_files() for line in plan.mod.load(p).texts())
     for path in plan.mod.text_files():
         if "regions_and_settlement_names" in os.path.basename(path).lower():
             continue        # region and town labels ({Baktria} the region), not the faction's strings
+        if os.path.basename(path).lower() in NOT_COPIED_TEXTS:
+            continue
         f = plan.edit(path)
         keys = set()
         for i in range(len(f)):
@@ -506,6 +559,11 @@ def text_strings(plan):
                 # the campaign screen's long text, e.g. {IMPERIAL_CAMPAIGN_<FACTION>_DESCR}
                 value, more = gap + plan.opts["long_description"].replace("\n", "\\n"), []
                 long_keys.append(new_key)
+            elif is_story(key, t) and (is_story(key, t) == "always" or is_prose(value, more)):
+                # the template's own story ('The trouser-wearing and unfeasibly moustached Gauls now...'): names
+                # swapped it would still tell of the template - a plain line of the new faction instead
+                value, more = gap + plain_text(key, plan), []
+                plain.append(new_key)
             else:
                 value = swap_names(value, repl, plan.opts.get("adjective"))
                 more = [swap_names(l, repl, plan.opts.get("adjective")) for l in more]
@@ -518,6 +576,52 @@ def text_strings(plan):
             plan.note(f, "%d string(s) added" % n)
     if long_keys:
         plan.note(None, "full description written to %s" % ", ".join(sorted(set(long_keys))))
+    if plain:
+        plan.note(None, "%d text(s) of %s's own story not copied - a plain line of %s in their place (change them in "
+                        "the text files): %s" % (len(plain), plan.template, plan.new, ", ".join(sorted(set(plain)))))
+
+
+# the template's movie subtitles (Medieval II's {Scotland_Outro_Win_1}): the new faction's movies are not its
+NOT_COPIED_TEXTS = ("factionintrosubtitles.txt",)
+
+
+def is_prose(value, more):
+    """A text that tells something (8 words or more, or more than one line) rather than names a thing ('Gallic
+    Spy', 'Your forces attack an army of Gaul')."""
+    text = value.strip()
+    return bool([m for m in more if m.strip()]) or "\\n" in text or len(text.split()) >= 8
+
+
+def is_story(key, t):
+    """'always' / 'prose' / None: whether a key is the faction's own story the game shows for it - its descriptions
+    (faction-select tooltip, campaign screen, Medieval II's strengths / weaknesses / famous unit): always; its victory
+    and defeat texts, its first advice: when they tell a story (is_prose - 'The Gauls are victorious' is swapped).
+    Other keys naming it (a building's or unit's description) are copied with the names swapped."""
+    up, t = key.upper(), t.upper()
+    if up in ("%s_DESCR" % t, "UI_FACTION_%s_DESCRIPTION" % t, "%s_STRENGTH" % t, "%s_WEAKNESS" % t, "%s_UNIT" % t) \
+            or up.endswith("_%s_DESCR" % t):
+        return "always"                     # what the faction is like ('Highland Nobles'): never the template's
+    return "prose" if re.search(r"(VICTORY|DEFEATED_BY)", up) or "INITIAL_ADVICE" in up else None
+
+
+PLAIN_TEXTS = (("DEFEATED_BY", "Victory can no longer be yours. %(name)s has won."),
+               ("SHORT_VICTORY", "%(name)s has won the short campaign."),
+               ("LONG_VICTORY", "%(name)s has won the campaign."),
+               ("VICTORY_DESCR", "%(name)s has won the campaign."),
+               ("ADVICE", "Greetings. %(name)s awaits your orders."),
+               ("STRENGTH", ""), ("WEAKNESS", ""), ("_UNIT", ""))
+
+
+def plain_text(key, plan):
+    """The new faction's plain line in place of a story of the template's (is_prose) - by what the key is for;
+    else its people's or its full name."""
+    o = plan.opts
+    name = o.get("display_name") or o.get("short_name") or plan.new
+    up = key.upper()
+    for part, text in PLAIN_TEXTS:
+        if part in up:
+            return text % {"name": name}
+    return o.get("people") or name
 
 
 # ---------------------------------------------------------------------------
@@ -634,6 +738,9 @@ def art_files(plan, campaign):
                 for n in filenames:
                     if not n.lower().endswith((".tga", ".dds", ".png", ".bmp")) or not _token_hit(n, t, longer):
                         continue
+                    if n.lower().startswith("leader_pic"):
+                        continue        # the template's leader's face: without one the select screen shows the
+                        # new faction's own leader's portrait (factionart.leader_portrait)
                     here = _in_mod(mod, data, dirpath)
                     if not from_mod and os.path.isdir(here) and _ci(here, n):
                         continue                        # the mod has its own copy of the template's picture
@@ -819,6 +926,63 @@ def own_pictures(plan):
         count += 1
     if count:
         plan.note(None, "%d picture(s) of %s's banners / loading logo copied as %s's own" % (count, t, new))
+
+
+def same_length_name(stem, owner, new, taken=()):
+    """A name as long as `stem` with `new` in place of the owner's word (#banner_symbol_gaul -> #banner_symbol_zz_n):
+    a texture name baked into a .cas model is changed in place, the model's bytes stay where they were. taken: names
+    (lower case) it must not be - a digit at its end then."""
+    own = own_picture_ref(stem, owner, new)
+    own = (own + "_" * len(stem))[:len(stem)]
+    k = 0
+    while own.lower() in taken and k < 99:
+        k += 1
+        own = own[:len(stem) - len(str(k))] + str(k)
+    return own
+
+
+def own_symbol(plan):
+    """The new faction's 3D symbol (descr_sm_factions `symbol`, the model on the faction-select screen and the
+    campaign map's faction panels) its own: the template's .cas copied under the new name with its texture name
+    changed in place, the texture copied beside it - a symbol only the template shows; a shared one stays shared."""
+    t, new, mod = plan.template, plan.new, plan.mod
+    f = plan.edit(mod.file("sm_factions"))
+    cur, line, ref, users = None, None, None, {}
+    for i in range(len(f)):
+        tk = tokens(f.text(i))
+        if len(tk) >= 2 and tk[0] == "faction":
+            cur = tk[1].rstrip(",")
+        elif len(tk) >= 2 and tk[0] == "symbol" and cur:
+            users.setdefault(tk[1].replace("\\", "/").lower(), set()).add(cur)
+            if cur == new:
+                line, ref = i, tk[1]
+    if ref is None or users.get(ref.replace("\\", "/").lower(), set()) - {t, new}:
+        return
+    got = next((g for g in (picture_file(d, ref) for d in data_roots(mod)) if g), None)
+    if not got:
+        return
+    with open(got[1], "rb") as fh:
+        raw = fh.read()
+    m = re.search(rb"textures[\\/]([^\x00\\/]{1,80}?)\.tga", raw, re.I)
+    if not m:
+        return
+    stem = m.group(1).decode("latin-1")
+    folder = os.path.dirname(got[0])
+    tex = next((g for g in (picture_file(d, folder + "/textures/" + stem + ".tga") for d in data_roots(mod)) if g),
+               None)
+    if not tex:
+        return
+    tex_dir = os.path.join(mod.data, *(folder + "/textures").split("/"))
+    taken = {n.lower().split(".")[0] for n in (os.listdir(tex_dir) if os.path.isdir(tex_dir) else [])}
+    taken |= {os.path.basename(d).lower().split(".")[0] for _, d in plan.copies}
+    new_stem = same_length_name(stem, t, new, taken | {stem.lower()})
+    cas_name = own_picture_ref(os.path.basename(got[0]), t, new)
+    plan.binary(os.path.join(mod.data, *folder.split("/"), cas_name),
+                raw[:m.start(1)] + new_stem.encode("latin-1") + raw[m.end(1):])
+    plan.copy(tex[1], os.path.join(tex_dir, new_stem + os.path.basename(tex[1])[len(stem):]))
+    new_ref = (ref.replace("\\", "/").rsplit("/", 1)[0] + "/" if "/" in ref.replace("\\", "/") else "") + cas_name
+    set_picture_ref(f, line, ref, new_ref)
+    plan.note(f, "%s's 3D symbol is its own: %s (texture %s), a copy of %s's" % (new, new_ref, new_stem, t))
 
 
 # ---------------------------------------------------------------------------
@@ -1028,9 +1192,49 @@ def medieval_lists(plan, campaign):
     faction_xml(plan, mod.file("banners_xml"), "battle banners")
     faction_lists(plan, mod.file("accents"), "voice accent")
     faction_lists(plan, mod.file("sounds_db"), "one-liners")
-    faction_xml(plan, mod.file("movies_tracks"), "movie tracks")
-    faction_xml(plan, mod.campaign_file(campaign, "descr_faction_movies.xml"), "faction movies")
+    # descr_movies_tracks.xml not copied: the template's voice track and subtitles over the intro / outro movies
+    # (scottish_intro_Subtitle_Timing); a faction it does not name plays them plain (MovieTrackDB::Resolve finds none)
+    movies = mod.campaign_file(campaign, "descr_faction_movies.xml")
+    faction_xml(plan, movies, "faction movies")
+    own_xml_movies(plan, movies)
     faction_lists(plan, mod.campaign_file(campaign, "descr_sounds_music_types.txt"), "campaign music")
+
+
+RE_MOVIE_TAG = re.compile(r"^(\s*<(intro|victory|defeat|death)>\s*)([^<]*?)(\s*</\2>.*)$", re.I)
+
+
+def own_xml_movies(plan, path):
+    """descr_faction_movies.xml: a movie of the template's alone (scotland_win.bik) in the new faction's copy becomes
+    the one other factions share (minor_win.bik), else empty - own_movie as for Rome's descr_sm_factions."""
+    if not path:
+        return
+    t, new = plan.template, plan.new
+    f = plan.edit(path)
+    blocks, cur = [], None
+    for i in range(len(f)):
+        m = re.match(r"^\s*<name>\s*([^<\s]+)\s*</name>", f.text(i), re.I)
+        if m:
+            cur = (m.group(1).lower(), [])
+            blocks.append(cur)
+            continue
+        mm = RE_MOVIE_TAG.match(f.text(i))
+        if mm and cur:
+            cur[1].append((i, mm))
+    users = {}
+    for name, tags in blocks:
+        if name == new.lower():
+            continue                                    # its own copy (just made) shares nothing yet
+        for _, mm in tags:
+            users.setdefault((mm.group(2).lower() + "_movie", mm.group(3).lower()), (set(), mm.group(3)))[0].add(name)
+    for name, tags in blocks:
+        if name != new.lower():
+            continue
+        for i, mm in tags:
+            own = own_movie(mm.group(2).lower() + "_movie", mm.group(3), t.lower(), users)
+            if own != mm.group(3):
+                f.set(i, mm.group(1) + own + mm.group(4))
+                plan.note(f, "%s: %s is %s's own - %s" % (new, mm.group(3), t, ("'%s', as other factions" % own)
+                                                         if own else "no movie (left empty)"))
 
 
 def lookup_keys(plan):
@@ -1116,6 +1320,8 @@ def campaign_description(plan, campaign):
             k = keys[src + suffix]
             value = RE_KEY.match(f.text(k)).group(3)[1:].strip()
             more = [f.text(x) for x in range(k + 1, entry_end(f.texts(), k))]
+            if suffix == "_DESCR" or is_prose(value, more):       # the template's story: never the new faction's
+                value, more = plain_text(new_key + suffix, plan), []
         if not value:
             continue
         at = entry_end(f.texts(), keys[src + suffix]) if src + suffix in keys else len(f)
