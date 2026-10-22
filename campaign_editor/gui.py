@@ -5122,6 +5122,10 @@ class App(tk.Tk):
         self.family_set = {}
         self._cmap_for = None                  # the map is read again: after Apply towns may stand elsewhere
         self.undo_stack, self.redo_stack = [], []
+        ed = self.editors.get("terrain")
+        if ed is not None and ed.mod is not None and getattr(ed, "_camp", c) != c:
+            ed.rebind(self.mod)                  # another campaign: the Terrain editor (Maps > 3D's brushes too)
+            #                                      draws and paints its map - the old one's strokes were dropped
         self.refresh_field()
         self.refresh_chosen()
         self.fill_towns()
