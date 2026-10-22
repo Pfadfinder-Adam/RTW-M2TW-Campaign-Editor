@@ -8,7 +8,7 @@ import os
 import re
 import shutil
 
-from .textio import TextFile, WriteError, make_writable, plain, readonly, refused, remove_file, replace_file
+from .textio import TextFile, WriteError, _retrying, make_writable, plain, readonly, refused, remove_file, replace_file
 
 BACKUP_DIR = "CampaignEditor_backups"
 OLD_BACKUP_DIR = "faction_tool_backups"           # up to 0.28: still listed, Restore works on both
@@ -527,9 +527,7 @@ def _roll_back(root, bdir, manifest, done, made):
         rel = os.path.relpath(path, root).replace("\\", "/")
         try:
             if rel in modified:
-                if os.path.exists(path):
-                    remove_file(path)
-                shutil.copy2(os.path.join(bdir, stored(rel)), path)
+                _put_back(os.path.join(bdir, stored(rel)), path)
             elif os.path.exists(path):
                 remove_file(path)
         except Exception:
@@ -686,9 +684,6 @@ def delete_backups(mod):
     return gone + clean_restored(mod)
 
 
-MAP_SOURCES = ("descr_regions.txt", "descr_terrain.txt", "water_surface.tga")
-
-
 def _drop_built_maps(mod, root, manifest):
     """The map.rwm the game built from a write's map pictures goes when the write is undone - else the game reads the
     undone map from it (a tester, 2026-10-22: Undo of Map from zero left the island's map.rwm). One the backup put
@@ -697,7 +692,7 @@ def _drop_built_maps(mod, root, manifest):
     folders = set()
     for rel in manifest.get("modified", []) + manifest.get("created", []):
         n = os.path.basename(rel).lower()
-        if n.startswith("map_") or n in MAP_SOURCES:
+        if n in Plan.MAP_LAYERS or n.endswith(".hgt"):          # never a faction's select map (map_<faction>.tga): not in map.rwm
             folders.add(os.path.dirname(os.path.join(root, rel)))
     if folders:
         folders.add(os.path.join(mod.data, "world", "maps", "base"))
@@ -705,6 +700,24 @@ def _drop_built_maps(mod, root, manifest):
         rwm = os.path.join(d, "map.rwm")
         if os.path.isfile(rwm) and os.path.normcase(rwm) not in back:
             remove_file(rwm)
+
+
+def _put_back(src, path):
+    """The backup's copy as path: copied beside it, then renamed over it - a new file, never written through a hard
+    link, and the mod's file is never gone half way (a copy refused or the disk full leaves it as it is)."""
+    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+    tmp = path + ".CampaignEditor_tmp"
+    try:
+        shutil.copy2(src, tmp)
+        make_writable(tmp)                       # a read-only copy: os.replace takes it, the mark comes back below
+        _retrying(lambda: os.replace(tmp, path), path)
+        shutil.copystat(src, path)
+    finally:
+        if os.path.exists(tmp):
+            try:
+                os.remove(tmp)
+            except OSError:
+                pass
 
 
 def restore(mod, bdir):
@@ -717,13 +730,18 @@ def restore(mod, bdir):
     guard.check([os.path.join(root, rel) for rel in manifest.get("modified", []) + manifest.get("created", [])],
                 guard.roots_of(mod), "restore")
     guard.check([_copy_of(bdir, rel) for rel in manifest.get("modified", [])], [os.path.dirname(bdir)], "restore")
+    # a backup whose copy of a file is gone (deleted by hand, a cleaner) is refused before anything is touched: the
+    # file was removed first and the copy then failed - the mod's file lost with no way back
+    gone = [rel for rel in manifest["modified"] if not os.path.isfile(_copy_of(bdir, rel))]
+    if gone:
+        raise WriteError("The backup %s is not whole: its copy of %s is missing. Nothing was changed - the mod's files "
+                         "stay as they are now." % (os.path.basename(bdir), ", ".join(gone[:5]) +
+                                                    (" and %d more" % (len(gone) - 5) if len(gone) > 5 else "")))
     p = root
     try:
         for rel in manifest["modified"]:
             p = os.path.join(root, rel)
-            if os.path.exists(p):
-                remove_file(p)                  # never write through a hard link (a read-only one too)
-            shutil.copy2(_copy_of(bdir, rel), p)
+            _put_back(_copy_of(bdir, rel), p)
         for rel in manifest["created"]:
             p = os.path.join(root, rel)
             if os.path.isdir(p):
