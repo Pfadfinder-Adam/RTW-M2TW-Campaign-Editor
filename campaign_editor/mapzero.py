@@ -6,8 +6,9 @@ every text the game looks up is there), the rebels with one army - the start of 
 Everything is written into the mod's campaign folder (the game reads the campaign folder before world/maps/base,
 both games; editor-notes mapzero_facts.md has every rule with the engine source's lines): the map pictures at their
 sizes for W x H (tiles / corners 2W+1 x 2H+1 / double), map_heights.hgt, descr_terrain.txt, descr_regions.txt,
-descr_strat.txt, the win conditions, the mercenaries, an empty descr_events.txt; map.rwm removed (the game builds a
-new one). Through a Plan: a backup first, Restore puts every byte back."""
+descr_strat.txt, the win conditions, the mercenaries, an empty descr_events.txt, water_surface.tga (the sea's colour
+picture, stretched over the whole map - the old one left the old coasts showing in the new sea); map.rwm removed (the
+game builds a new one). Through a Plan: a backup first, Restore puts every byte back."""
 
 import io
 import os
@@ -21,6 +22,8 @@ TOWN, PORT, RESOURCE, REBELS = (15, 12), (21, 12), (13, 10), (13, 14)
 SEA_REGION, TOWN_PX, PORT_PX = (41, 140, 233), (0, 0, 0), (255, 255, 255)
 SEA_BLUE, SHALLOW, DEEP = (0, 0, 253), (196, 0, 0), (128, 0, 0)
 DEFAULT_FACTION = {"rome": "gauls", "medieval2": "france"}
+OPEN_SEA = {"rome": (60, 132, 159), "medieval2": (97, 227, 255)}   # the vanilla water_surface.tga's most common colour
+WATER_SIZE = (256, 256)             # the games' own water_surface.tga size (a texture: power of two)
 
 
 def layout(W, H, n=1):
@@ -109,9 +112,25 @@ def _sample(mod, campaign, name, xy, corners=True):
         return None
 
 
-def pictures(W, H, region, land_ground, land_climate, sea_climate, lay=None):
+def _open_sea(mod, campaign, rome):
+    """The old water_surface.tga's most common colour (its open sea), or the game's vanilla one."""
+    try:
+        from collections import Counter
+        from .tga import read_tga
+        path = mod.campaign_file(campaign, "water_surface.tga")
+        if path:
+            im = read_tga(path)
+            seen = Counter(tuple(im.get(x, y)[:3]) for y in range(0, im.height, 2) for x in range(0, im.width, 2))
+            if seen:
+                return seen.most_common(1)[0][0]
+    except Exception:
+        pass
+    return OPEN_SEA["rome" if rome else "medieval2"]
+
+
+def pictures(W, H, region, land_ground, land_climate, sea_climate, lay=None, sea_colour=OPEN_SEA["medieval2"]):
     """{name: Pillow picture} of the new map (rows top-down as Pillow keeps them; written bottom-up); region: the one
-    region's colour, or a list of colours, one for each of lay's cells."""
+    region's colour, or a list of colours, one for each of lay's cells; sea_colour: water_surface.tga's one colour."""
     from PIL import Image
     lay = lay or layout(W, H, 1)
     land = lay["land"]
@@ -165,6 +184,9 @@ def pictures(W, H, region, land_ground, land_climate, sea_climate, lay=None):
     radar = tiles(lambda x, y: (96, 140, 70) if _land_tile(x, y, land) else (40, 80, 150))
     out["radar_map1.tga"] = radar
     out["radar_map2.tga"] = radar.resize((2 * W, 2 * H))
+    # the sea's colour picture (sea_plane.cpp, validate_file_path: the campaign folder, then base), stretched over the
+    # whole map whatever its size: the old map's kept its coasts and deeps in the new sea (the user, 2026-10-22)
+    out["water_surface.tga"] = Image.new("RGB", WATER_SIZE, tuple(sea_colour))
     return out
 
 
@@ -462,7 +484,8 @@ def make(plan, campaign, faction=None, size=SIZE, regions=1, others=0):
         next((c for _, c, _ in terrain.climates(mod)), (237, 20, 91))
     sea_climate = _sample(mod, campaign, "map_climates.tga", (0, 0)) or land_climate
     folder = mod.own(mod.campaign_dir(campaign)) if hasattr(mod, "own") else mod.campaign_dir(campaign)
-    pics = pictures(W, H, [info[r]["colour"] for r, _ in picked], land_ground, land_climate, sea_climate, lay)
+    pics = pictures(W, H, [info[r]["colour"] for r, _ in picked], land_ground, land_climate, sea_climate, lay,
+                    _open_sea(mod, campaign, rome))
     for name, im in pics.items():
         if name == "map_fog.tga" and rome:
             continue                                    # Rome has no fog picture
