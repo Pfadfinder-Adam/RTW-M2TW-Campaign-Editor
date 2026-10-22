@@ -2743,6 +2743,48 @@ def s_own_model(c, mod):
     raise Skip("no unit of %s whose model's files are on disk" % c.edited)
 
 
+@step("Recolour freely: a unit of {other} - the commonest colour of its battle texture turned round the colour "
+      "wheel, for that unit only (a model of its own)",
+      "the unit in battle: its main colour another (its light and shade kept, faces and hands as they were); "
+      "{other}'s other units of that model unchanged")
+def s_recolour_free(c, mod):
+    try:
+        from PIL import Image  # noqa: F401
+    except ImportError:
+        raise Skip("needs Pillow")
+    from . import freecolour as F
+    from . import models as MO
+    from .meshview import on_disk
+    cat = MO.catalogue(mod)
+    for u in unit_names(mod, c.other, 80):
+        if u == c.said.get("own_model"):
+            continue
+        lines = MO.unit_lines(mod, u)
+        slots = [x for x in (MO.unit_slots(lines) if lines else []) if x[0] == "soldier"]
+        info = cat.get(slots[0][2].lower()) if slots else None
+        wear = (c.other if c.other in info.textures else next((f for f in info.textures if f), "")) \
+            if info is not None and info.textures else None
+        got = on_disk(mod, info.textures.get(wear, "")) if wear is not None else None
+        if not got:
+            continue
+        im = F.R.read_picture(got[1]).convert("RGB")
+        small = im.resize((64, 64))
+        hues = {}
+        for px in small.getdata():
+            h, sat, v = F.R.hsv(px)
+            if sat >= 0.35 and v >= 0.2:
+                hues.setdefault(int(h * 12) % 12, []).append(px)
+        if not hues:
+            continue
+        pick = max(hues.values(), key=len)
+        frm = tuple(sorted(pick, key=lambda p: sum(p))[len(pick) // 2])
+        plan = Plan(mod, "recolour", "free", {})
+        F.plan_free(plan, got[1], [F.swap(frm, F.hsl_target(frm, 180))], unit=(u, "soldier", 0, wear))
+        c.said["recolour_free"] = u
+        return plan
+    raise Skip("no unit of %s whose battle texture is on disk" % c.other)
+
+
 @step("A unit made from nothing: 'CE Nothing Guard', horsemen who charge, for {new} - every line written new with "
       "the mod's usual numbers, its cost and men set, plain cards drawn, recruited where such units usually are",
       "the unit in the recruitment list of {new}'s stables / barracks, its plain 'CN' card; in battle it looks like "
@@ -2880,6 +2922,8 @@ COVERAGE = {
     "Unit editor: new unit step by step": ["s_units"],
     "Unit editor: replace the battle model": ["s_model"],
     "Unit editor: your own files for a battle model (texture, model file)": ["s_own_model"],
+    "Recolour freely (any colour of any picture; Unit editor / Models texture cards, a picture looked at closely)":
+        ["s_recolour_free"],
     "Unit editor: a new unit made from nothing": ["s_unit_nothing"],
     "Building editor: a new building made from nothing": ["s_building_nothing"],
     "Religions: a religion from nothing (drawn symbol, temples of its own)": ["s_religion_nothing"],

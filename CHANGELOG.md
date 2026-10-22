@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### Added
+- Recolour freely: any colour of any picture made another, not only the faction's colours - click a colour on a battle texture, campaign-map figure, card or button, pick the new colour or turn it with the sliders; its light and shade kept, faces left alone, several changes in a row, a brush to add or keep. On every texture card (Unit editor, Models tab) and every picture opened big; a texture of the game is copied, never written over; a unit's texture can change for that unit only. Both games, a backup, Restore gives it back.
 - Units: Delete this unit... (beside New unit) takes a unit out on Apply with its recruit lines, its men in the armies and garrisons, the mercenary pools, the rebels' lists and its cards; Restore puts it back.
 - Units: Texts players read - the unit's name, short and long description are changed right in the Units editor.
 - Units: 'Pictures for' can be 'all owners (the same picture)' - Import or Make a card puts one card / description picture in for every faction that has the unit.

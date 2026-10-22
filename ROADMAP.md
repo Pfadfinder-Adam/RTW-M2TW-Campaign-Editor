@@ -206,6 +206,7 @@ The first nine days (0.1.0 → 0.30.0): from a one-mod faction cloner to a campa
 
 ## 📦 Built, comes with the next release
 
+- 📦 Recolour freely (both games): any colour of any picture - a battle texture, a campaign-map figure, a card, a button - made another with a click on it and the new colour (or hue / saturation / lightness sliders), light and shade kept, several changes, a brush; a texture of the game copied, never written over; one unit only on request (from a Discord wish)
 - 🧪 New / Edit faction: Culture - one line written, the game follows (towns, portraits, buildings, units); what changes said first (0.35.0)
 - 🧪 Faction emblem (Rome): town flags in battle, the 3D campaign-map symbol, captains' cards and portraits from white templates; routing / rebel flags untouched (0.35.0)
 - 🧪 Faction emblem (Medieval II): the battle banner sheet from the white template of the mod's sheets, the symbol on every banner shape (0.35.0)
