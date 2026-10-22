@@ -32,6 +32,7 @@
 - New mod folder puts no switched-off engine settings files (descr_ex, descr_caps_ex) in: the mod runs on the engine's defaults as before; the editor writes the line a change needs, Check mod files' Copy them in brings the whole list.
 
 ### Fixed
+- New mod folder on the plain game: the game could not keep its built map (an error in its log, the map built again at every start) -> the new mod has the folder the game keeps it in.
 - Recolour: a faction with no secondary colour could not be previewed or written (an error) -> it recolours like any other.
 - Map from zero: the old campaign script kept running on the new map and filled the game's log with errors -> the new map gets an empty script; Undo of a map write left the map file the game had built for it -> it goes too, so the game builds the old map again.
 - Map from zero: the new sea showed the old map's coasts and deep water - the sea's colour picture (water_surface.tga, stretched over the whole map) was left as it was; the new map now writes its own in one sea colour (the old picture's open sea). Both games.

@@ -1416,6 +1416,7 @@ building smith
         self.assertIn("descr_sm_factions.txt", left)
         self.assertIn("ui/units/beta/#alpha_general.tga", left)
         self.assertNotIn("ui/units/alpha/#alpha_general.tga", left)     # unchanged: the game has it
+        self.assertTrue(os.path.isdir(os.path.join(data, "world", "maps", "base")))   # kept though empty
 
     def test_thin_mod_readers_find_the_games_pictures(self):
         """A mod folder keeps only what it changes (thin): every reader that walks a picture folder walks the game's
@@ -8867,7 +8868,7 @@ building smith
 
         v = View()
         v.shore = (type("P", (), {"width": 9, "height": 9})(), None)
-        for at, drawn in ((100, False), (299, False), (300, True), (600, True)):
+        for at, drawn in ((100, False), (499, False), (500, True), (600, True)):
             v.at = at
             self.assertEqual(bool(GM.MapView._shore_lines(v, 8, 8)), drawn, at)
         with mock.patch.object(GM, "zoom_setting", lambda key: 100):        # the modder's own zoom
