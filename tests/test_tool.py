@@ -18564,7 +18564,25 @@ building shrine
         self.assertEqual(A.toggled("stat_pri_attr", "sp", "sp", False), "no")
         self.assertEqual(A.toggled("stat_mental", "5, normal, untrained, steadfast", "steadfast", False),
                          "5, normal, untrained")
-        self.assertIn("immune_to_psychology", [w for w, _ in A.for_line("stat_mental")])
+        # the morale / ground words go on attributes: on stat_mental REX takes 'steadfast' and does nothing with it
+        # (the tester, 2026-10-22, REX's hasAttribute); REX's header was wrong
+        self.assertIn("immune_to_psychology", [w for w, _ in A.for_line("attributes")])
+        self.assertIn("desert_raider", [w for w, _ in A.for_line("attributes")])
+        self.assertEqual(A.for_line("stat_mental"), [])
+        self.assertEqual(A.misplaced("stat_mental", "6, normal, trained, steadfast, lock_morale"), ["steadfast"])
+        self.assertEqual(A.misplaced("stat_ground", "0, 0, 2, 0, forest_ambusher"), ["forest_ambusher"])
+        self.assertEqual(A.misplaced("attributes", "steadfast"), [])
+        from campaign_editor import edufields as EF
+        self.assertIn("- steadfast: does NOTHING on this line", EF.explain("stat_mental", "6, normal, trained, steadfast"))
+        from campaign_editor import check as C
+        p = mod.file("edu")
+        with open(p, "a") as fh:
+            fh.write("\ntype             ce_stead\nstat_mental\t6, normal, trained, steadfast\n"
+                     "stat_ground      0, 0, 2, 0, desert_raider\nattributes       sea_faring, elitist\n")
+        got = C.misplaced_attribute_words(ModData(self.root))
+        self.assertEqual(len(got), 2)
+        self.assertIn("ce_stead's stat_mental holds steadfast", got[0])
+        self.assertIn("ce_stead's stat_ground holds desert_raider", got[1])
 
     def test_forts_are_read_and_nobody_starts_on_them(self):
         # REX / M2TW fort lines: kept out of the character before them, their tiles taken
