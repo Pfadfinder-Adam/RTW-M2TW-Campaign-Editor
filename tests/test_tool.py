@@ -5707,6 +5707,9 @@ building smith
                 b.update()
                 b.draw()
                 pid = "work:x"
+                from campaign_editor import theme
+                card = b.cv.find_withtag("card")[0]                      # the page in the look's colours, never white
+                self.assertEqual(b.cv.itemcget(card, "fill"), theme.palette()["bg"])
                 pc = next(q for q in b.pages[0]["pieces"] if q["key"] == ok._look_key)
                 cx = next(q for q in b.pages[0]["pieces"] if q["key"] == cancel._look_key)["box"][0]
                 ox, oy, ow, oh = pc["box"]
@@ -6053,6 +6056,47 @@ building smith
         self.assertIsNone(theme.readable(rgb(theme.DARK["fg"]), dark_grey))     # what reads stays as it is
         self.assertIsNone(theme.readable(rgb(theme.LIGHT["fg"]), cream))
         self.assertEqual(theme.ink("#b00"), "#b00")                     # no window yet: the colour as given
+
+    def test_themes_as_files(self):
+        """Themes as files (Obsidian's theme browser): the editor's own read from assets/themes, the modder's saved
+        with the look now, exported as one .zip and imported back (picture too), a broken or foreign file refused,
+        colours that are not '#rrggbb' dropped, the editor's own never deleted."""
+        import zipfile
+        from unittest import mock
+        from campaign_editor import log, themes
+        home = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, home)
+        with mock.patch.object(log, "home", lambda: home):
+            names = [t["name"] for t in themes.available()]
+            for n in ("Light", "Dark", "Roman parchment", "Medieval night"):
+                self.assertIn(n, names)
+            self.assertEqual(themes.clean({"colours": {"bg": "#e8dcc0", "fg": "red", "x": "#12345"}, "base": "?",
+                                           "font": ["Georgia", 99]}),
+                             {"name": "Theme", "by": "", "base": "light", "colours": {"bg": "#e8dcc0"},
+                              "font": ["Georgia", 48]})
+            self.assertIsNone(themes.clean({"name": "no colours"}))
+            where = themes.save("My/Rome", "a tester", "dark", {"bg": "#101010"}, ["", 12])
+            self.assertEqual(os.path.basename(where), "My_Rome")
+            with open(os.path.join(where, themes.PICTURE), "wb") as fh:
+                fh.write(b"\x89PNG\r\n\x1a\n...")
+            mine = next(t for t in themes.available() if t["name"] == "My/Rome")
+            self.assertTrue(mine["own"])
+            self.assertEqual((mine["base"], mine["colours"], mine["font"]), ("dark", {"bg": "#101010"}, ["", 12]))
+            z = os.path.join(home, "send.zip")
+            self.assertTrue(themes.export(mine, z))
+            self.assertEqual(sorted(zipfile.ZipFile(z).namelist()), ["preview.png", "theme.json"])
+            self.assertTrue(themes.delete(mine))
+            self.assertNotIn("My/Rome", [t["name"] for t in themes.available()])
+            self.assertEqual(themes.import_file(z), ("My/Rome", None))
+            back = next(t for t in themes.available() if t["name"] == "My/Rome")
+            self.assertIsNotNone(back["picture"])
+            bad = os.path.join(home, "bad.json")
+            write(bad, '{"name": "x"}')
+            self.assertIsNone(themes.import_file(bad)[0])
+            write(bad, "not json")
+            self.assertIsNone(themes.import_file(bad)[0])
+            light = next(t for t in themes.available() if t["name"] == "Light")
+            self.assertFalse(themes.delete(light))
 
     def test_whole_look_own_colours_and_font(self):
         """Appearance (the user, 2026-10-22: 'the colour of the whole thing at once, as in Obsidian'): own colours

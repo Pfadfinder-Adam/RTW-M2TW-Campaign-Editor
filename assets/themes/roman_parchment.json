@@ -1,0 +1,22 @@
+{
+ "name": "Roman parchment",
+ "by": "RTW & M2TW Campaign Editor",
+ "base": "light",
+ "colours": {
+  "bg": "#e8dcc0",
+  "fg": "#3a2410",
+  "field": "#fbf5e6",
+  "muted": "#6b5a45",
+  "border": "#b49d76",
+  "select": "#8a1c1c",
+  "selectfg": "#ffffff",
+  "accent": "#e3c98f",
+  "tab": "#d9c7a0",
+  "trough": "#ddd0b3",
+  "button": "#d6c49a",
+  "active": "#e6d3a8",
+  "link": "#8a1c1c",
+  "Play.TButton": "#8a1c1c"
+ },
+ "font": null
+}

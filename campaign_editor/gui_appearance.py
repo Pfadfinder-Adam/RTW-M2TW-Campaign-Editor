@@ -29,7 +29,10 @@ class AppearancePanel(ttk.Frame):
         self._build()
 
     def _build(self):
-        ttk.Label(self, text=TITLE, font=("", 11, "bold")).pack(anchor="w")
+        head = ttk.Frame(self)
+        head.pack(fill="x")
+        ttk.Label(head, text=TITLE, font=("", 11, "bold")).pack(side="left")
+        ttk.Button(head, text="Themes...", command=self._themes).pack(side="right")
         row = ttk.Frame(self)
         row.pack(fill="x", pady=(4, 6))
         ttk.Radiobutton(row, text="Light", variable=self.v_dark, value=False, command=self._base).pack(side="left")
@@ -82,6 +85,19 @@ class AppearancePanel(ttk.Frame):
                     ttk.Button(self.rows, text="↺", width=2, command=lambda k=key: self._set(k, None)).grid(
                         row=r, column=2, sticky="w")
                 r += 1
+
+    def _themes(self):
+        from .gui_themes import open_themes
+        open_themes(self.root)
+
+    def sync(self):
+        """Shown again after the whole look changed elsewhere (a theme put on)."""
+        colours, font = theme.custom()
+        font = (list(font or []) + ["", 0])[:2]
+        self.v_dark.set(theme.dark())
+        self.v_family.set(font[0] or OWN_FONT)
+        self.v_size.set(str(font[1] or ""))
+        self._fill()
 
     def _fold(self):
         self.buttons_open = not self.buttons_open

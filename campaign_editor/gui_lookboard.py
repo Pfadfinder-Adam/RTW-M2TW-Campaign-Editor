@@ -61,6 +61,14 @@ def _alt(e):
     return bool(e.state & (0x20000 if sys.platform == "win32" else 0x0008))
 
 
+def _look_now():
+    """The look the pages' pictures are taken in (Light / Dark and the own colours): a picture of another one is
+    taken again when the board opens."""
+    from . import theme
+    colours, font = theme.custom()
+    return [theme.dark(), [list(kv) for kv in sorted(colours.items())], list(font) if font else None]
+
+
 def _words(key):
     """A piece's own words from its key ('window|boxes|class:words#n')."""
     return key.split("|")[-1].partition(":")[2] or key
@@ -254,9 +262,9 @@ class LayoutBoard(tk.Toplevel):
         self.bind("<Delete>", lambda e: self._hide_picked())
         for k, d in (("Left", (-1, 0)), ("Right", (1, 0)), ("Up", (0, -1)), ("Down", (0, 1))):
             self.bind("<%s>" % k, lambda e, d=d: self._nudge(*d, big=bool(e.state & 1)))
-        if self.pages:
+        if self.pages and all(p.get("look") == _look_now() for p in self.pages):
             self.after(50, self.fit)
-        else:
+        else:                                  # none yet, or taken in another look (light pictures on a dark board)
             self.after(150, self.refresh)
 
     # ---- the window ----
@@ -549,7 +557,7 @@ class LayoutBoard(tk.Toplevel):
         picture = snap(top)
         pieces, hidden = pieces_of(self.look, top)
         page = {"id": pid, "title": title, "group": group, "size": [top.winfo_width(), top.winfo_height()],
-                "pieces": pieces, "hidden": hidden}
+                "pieces": pieces, "hidden": hidden, "look": _look_now()}
         self._keep(page, picture)
         for key in [k for k, (pid_, _) in self.accepted.items() if pid_ == pid]:
             del self.accepted[key]
@@ -584,7 +592,9 @@ class LayoutBoard(tk.Toplevel):
         return places, total, list(zip(order, tops))
 
     def draw(self):
+        from . import theme
         cv, z = self.cv, self.zoom
+        pal = theme.palette()
         cv.delete("all")
         self._shown.clear()
         places, total, heads = self._places()
@@ -601,16 +611,16 @@ class LayoutBoard(tk.Toplevel):
             w, h = p["size"]
             cv.create_text(x * z, y * z - 3, text=p["title"], anchor="sw", fill=self.title_ink, width=max(w * z, 20),
                            font=("", title_px))
-            cv.create_rectangle(x * z, y * z, (x + w) * z, (y + h) * z, fill="#f0f0f0", outline="#777777",
+            cv.create_rectangle(x * z, y * z, (x + w) * z, (y + h) * z, fill=pal["bg"], outline=pal["border"],
                                 tags=("card", "card:" + p["id"]))
             if p["id"] not in self.pictures or self.pictures[p["id"]] is None:
                 for pc in p["pieces"]:                   # no picture: each piece drawn as a box with its words
                     bx, by, bw, bh = pc.get("was") or pc["box"]     # where the editor has it
                     cv.create_rectangle((x + bx) * z, (y + by) * z, (x + bx + bw) * z, (y + by + bh) * z,
-                                        fill="#e1e1e1", outline="#9a9a9a")
+                                        fill=pal["button"], outline=pal["border"])
                     if pc["text"] and z >= 0.3:
                         cv.create_text((x + bx + bw / 2) * z, (y + by + bh / 2) * z, text=pc["text"][:30],
-                                       font=("", max(6, int(9 * z * 1.6))), fill="#222222")
+                                       font=("", max(6, int(9 * z * 1.6))), fill=pal["fg"])
             if self.v_frames.get():
                 for pc in p["pieces"]:
                     bx, by, bw, bh = pc["box"]
@@ -704,10 +714,11 @@ class LayoutBoard(tk.Toplevel):
                 cv.create_image((x + nx) * z, (y + ny) * z, image=photo, anchor="nw", tags="draft")
             elif pic is None:                            # no picture: the piece as a box with its words
                 cv.create_rectangle((x + nx) * z, (y + ny) * z, (x + nx + nw) * z, (y + ny + nh) * z,
-                                    fill="#e1e1e1", outline="#9a9a9a", tags="draft")
+                                    fill=theme.palette()["button"], outline=theme.palette()["border"],
+                                    tags="draft")
                 if pc["text"] and z >= 0.3:
                     cv.create_text((x + nx + nw / 2) * z, (y + ny + nh / 2) * z, text=pc["text"][:30],
-                                   font=("", max(6, int(9 * z * 1.6))), fill="#222222", tags="draft")
+                                   font=("", max(6, int(9 * z * 1.6))), fill=theme.palette()["fg"], tags="draft")
             if any(entry.get(k) for k in ("text",) + LK.STYLE_KEYS) or \
                     any(k in (self.draft.get(key) or {}) for k in ("text",) + LK.STYLE_KEYS):
                 words = LK.shown_words(entry, self.look.word(pc["text"]) if pc["text"] else "")

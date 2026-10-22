@@ -73,12 +73,14 @@ def custom():
     return dict(_state["custom"]), _state["font"]
 
 
-def set_custom(root, colours=None, font=None):
-    """New own colours / font for every window (None / {} = the light or dark look as it comes), kept for every
-    start."""
+def set_custom(root, colours=None, font=None, is_dark=None):
+    """New own colours / font for every window (None / {} = the light or dark look as it comes) - over Dark or Light
+    when is_dark says which -, kept for every start."""
     settings.put("theme_colours", {k: v for k, v in (colours or {}).items() if v})
     settings.put("theme_font", list(font) if font and any(font) else None)
-    apply(root, _state["dark"])
+    if is_dark is not None:
+        settings.put("theme", "dark" if is_dark else "light")
+    apply(root, _state["dark"] if is_dark is None else bool(is_dark))
 
 
 def field():
