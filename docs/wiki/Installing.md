@@ -76,3 +76,6 @@ python3 campaign_editor.py
 
 Fedora: `sudo dnf install python3-tkinter python3-pillow-tk`; Arch: `sudo pacman -S tk python-pillow`.
 Without tkinter the tool says what to install instead of a Python error.
+
+**Changing the code:** `python -m unittest discover -s tests` and `ruff check` (`pip install ruff`; the rules are
+in `ruff.toml`) - CI runs both before it builds the exe.

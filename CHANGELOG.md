@@ -3,6 +3,8 @@
 ## Unreleased
 
 ### Added
+- Terrain > Climates > **Climate library...**: every climate of the mod with its slot (of 32 with REX / M2EX) and how many tiles of the map it covers, and what each one gives the game - the campaign map's trees and ground textures, the mountains' own textures, the battle map's ground, plants, grass and water, the weather, sounds, town trees, disasters, its name - file by file and line by line, pictures shown. In it: **New climate from this...** makes a new climate as a copy of the picked one - every block and line it has in every file copied under the new name (so battles find it), the next free slot (32 with REX / M2EX), a colour and a name players read of its own; **Change...** gives a climate's campaign-map ground texture or tree another picture or model from the mod's and the game's own, pictures shown. A backup first, Restore undoes it.
+- Maps > 3D: whatever stands on the map but has no model to draw (its file missing, its type naming none) shows as a red 3D question mark in its place, so nothing is there unseen.
 - Terrain > Climates: **Climates on the water** shows the climate under the sea too (the file has one there; new land made there gets it) and lets you paint it. Land and sea: **New land: neighbours' climate** - land made from the sea takes the climate of the land round it, not the leftover under the water (on by default).
 - Tools > Authors and sources of this mod: whose work is in your mod - what was taken, from which mod or pack, the author, a link, whether you asked; kept in Authors_and_sources.txt in the mod folder for players. Taking units, buildings, a faction, a battle model or a pack from another mod notes it by itself and asks for the author and link (nothing checked or blocked; 'Later' keeps it as it is).
 - Tools > Layout board: every page of the editor (each work, its tabs, the Tools windows) laid out side by side on one canvas - drag a button and it stays exactly where you drop it, its edges sticking to the lines other pieces stand on (pink guide lines) and, with Grid ticked, to a grid of 4 / 8 / 16 / 32 px (Alt puts it into a row instead); drag its corners to size it, the arrows nudge it; right click to rename it, give it a hover text, hide it or take it back. Your changes are drawn on the board first: Accept puts them all on the editor (kept for every start), Discard drops them; Undo / Redo, Back to how it was.
@@ -24,6 +26,8 @@
 - The game stopped? The editor notices it (after Start the game, or at its next start when it was closed) and asks once whether to send a report - the reason in one line, nothing sent without your click; can be switched off in Settings.
 - Coast & heights drawn by the graphics card straight into the window on Windows (the map, the shore line and the brush; moving, zooming and painting no longer remake a picture each time); the frame's time shows beside the zoom. Elsewhere, or if the card fails, it draws as before.
 - The editor's own look: Tools > Edit the editor's look - drag any button, tick or label anywhere, rename it, give it a hover text or a width, hide it, take it back; kept for every start. The editor's language from a language file (Settings), and Words to translate writes every word for translators.
+- Settlements: an Owner filter - pick a faction and see only the towns it holds.
+- Maps > 3D: the mouse resting on an army, agent, fleet, town, port, resource or fort shows its name beside it, as on the Map (who he is, his faction and units; the town's owner).
 
 ### Changed
 - Maps: the '?' of Bigger map (x3)... stands after the button, no longer beside the zoom's own '?'.
@@ -34,10 +38,13 @@
 - New mod folder puts no switched-off engine settings files (descr_ex, descr_caps_ex) in: the mod runs on the engine's defaults as before; the editor writes the line a change needs, Check mod files' Copy them in brings the whole list.
 
 ### Fixed
+- Maps > 3D: Rome's glass resource was never seen (its picture is see-through all over) -> it stands on the map as the game shows it.
 - Edit faction: the game a row belongs to ("Medieval II only" beside Religion on Rome) was cut off -> it stands on a line of its own.
 - Maps (and 3D): an army taken out of its town went back into it when the town was moved after -> it stays where you put it; one left in the town still goes with it.
 - Maps > 3D: a white frame showed on empty ground and none on the army or resource you had moved -> the 3D map shows the Map's changes again (and says so in its bar when it cannot).
 - Maps > 3D: thin pale lines along the edges of some ground squares on some graphics cards -> the ground is drawn without them.
+- Maps > 3D: a click on a resource, army or town made the map stall for a moment -> a click alone does nothing, and lifting something to carry it is quick.
+- Maps > 3D: a model's texture named with a path in it is found; whatever is still drawn white is named in the editor's log for a report.
 - New mod folder on the plain game: the game could not keep its built map (an error in its log, the map built again at every start) -> the new mod has the folder the game keeps it in.
 - Recolour: a faction with no secondary colour could not be previewed or written (an error) -> it recolours like any other.
 - Map from zero: the old campaign script kept running on the new map and filled the game's log with errors -> the new map gets an empty script; Undo of a map write left the map file the game had built for it -> it goes too, so the game builds the old map again.

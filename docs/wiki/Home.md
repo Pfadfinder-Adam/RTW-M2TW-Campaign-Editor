@@ -33,6 +33,29 @@ All on my YouTube channel **[Pfadfinder](https://www.youtube.com/channel/UC8j5rv
 | ![Terrain editor](https://raw.githubusercontent.com/Pfadfinder-Adam/RTW-M2TW-Campaign-Editor/main/docs/images/terrain_editor.png) | ![Units](https://raw.githubusercontent.com/Pfadfinder-Adam/RTW-M2TW-Campaign-Editor/main/docs/images/unit_editor.png) |
 | **Terrain editor** | **Units: model and voice** |
 
+## What this tool is for
+
+One goal: **a bridge between the modder and the game's files.** The editor gives you access to every corner of the
+game's data - factions, campaign map, towns, armies, characters, units, buildings, diplomacy, texts and pictures - for
+Rome: Total War (with REX support) and Medieval II (with M2EX support), and takes over the slow part: finding the
+right files and lines, keeping the tied ones in step, checking for what the game would crash on.
+
+It is for anyone who mods:
+
+- **Mod teams** - work that took hours of file digging done in minutes.
+- **Beginners** - a place to start making something of your own without learning every file format first.
+- **Players** - something of your own in your favourite mod, just for yourself: a faction you always wanted to
+  see, different starting positions, a changed map. Nothing has to be published.
+
+What it is not: a 3D modelling program. Models can be viewed and swapped between units, but making or editing
+models is left to the tools built for that. The one exception: recolouring the faction colour painted on a unit's
+texture (vanilla-style uniforms), so a new faction's troops wear its own colour (Art tab > Recolour).
+
+Medieval II keeps its data packed: the editor offers to unpack it once, with the game's own unpacker. The engines
+REX / M2EX beside the game lift every limit: with them the editor knows no limits at all (no refusal, no warning -
+their setting lines are rewritten to fit); the original exes' limits apply only without them. Not every feature
+has been confirmed in the game yet - reports welcome.
+
 ## Made to be easy
 
 The aim of this tool is to make modding friendly for everyone, not only for people who know every file of
@@ -84,11 +107,12 @@ needs are copied under its own name (Epirus cloned from Macedon gets `standard_e
 
 ## What is where
 
-- [ROADMAP](https://github.com/Pfadfinder-Adam/RTW-M2TW-Campaign-Editor/blob/main/ROADMAP.md) - what it
-  does, what is being tested, what comes next.
 - [CHANGELOG](https://github.com/Pfadfinder-Adam/RTW-M2TW-Campaign-Editor/blob/main/CHANGELOG.md) - what
   changed in each version and what was tested in the game.
-- [README](https://github.com/Pfadfinder-Adam/RTW-M2TW-Campaign-Editor#readme) - the full reference.
+- [[Every feature]] - everything the editor does, area by area.
+- [[Reference]] - how each window and button works, in full.
+- [[What it changes]] - the game files a new faction writes, and the command line.
+- [[FAQ and known limits]] - common questions and what does not work yet.
 
 The editor is free. If it saves you time, a coffee on [Ko-fi](https://ko-fi.com/pfadfinder) or [GitHub Sponsors](https://github.com/sponsors/Pfadfinder-Adam)
 keeps new features coming.

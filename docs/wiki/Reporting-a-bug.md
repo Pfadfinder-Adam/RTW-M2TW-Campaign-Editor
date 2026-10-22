@@ -27,6 +27,9 @@ When the game crashes, the tool shows an error, or something looks wrong, please
    Rather send it yourself? **Tools -> Save logs (zip)** (or Save as zip in the report window) - the same logs, the
    names cut out, saved in `CampaignEditor\CampaignEditor_logs` next to the exe.
 2. **A video or a screenshot** of what you did and what went wrong.
+   When the game itself stops (crashes), the tool notices it - right away after **Start the game**, or the next time
+   you open the tool - and asks once whether to send a report, with the reason in one line. Nothing is sent without
+   your click; **Settings** can switch the question off.
 3. Which game and mod (Rome / REX / BI / Medieval II / M2EX, the mod's name) and the editor's version (in the
    window's title).
 
@@ -36,7 +39,7 @@ game's own error.
 
 Video: [how to send a bug report and a suggestion](https://youtu.be/7MbYR9ywNsI).
 
-Every report - bug or idea - arrives as its own numbered entry with its logs and is read:
+Every report - bug or idea - arrives as its own numbered entry with its logs and is read (the search box on the Units & armies tab came from one of them):
 
 ![Reports and ideas sent from the editor](https://raw.githubusercontent.com/Pfadfinder-Adam/RTW-M2TW-Campaign-Editor/main/docs/images/reports.png)
 

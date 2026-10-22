@@ -6264,6 +6264,119 @@ building smith
         m.show_sea_climates = True
         self.assertNotEqual(m._climates(base).getpixel((4, 0)), (0, 0, 0))  # tinted like the land
 
+
+    def test_climate_passport(self):
+        """Climate library: what a climate gives, file by file - descr_climates (slot, colour, heat, winter, trees,
+        battle plants), the campaign ground textures (the 'default' block where it has none), every other file's
+        block or line naming it (a text file's {TAG} lines are not blocks); the engine's slot name counts only as a
+        block's own header ('x modifies y' is x's); free slots up to 32."""
+        from campaign_editor import climatelib as L
+        d = os.path.join(self.root, "data")
+        write(os.path.join(d, "descr_climates.txt"),
+              "climates\n{\n\tmediterranean\n\tsandy_desert\n}\n\nclimate mediterranean\n{\n\tcolour 236 0 140\n"
+              "\theat 1\n}\n\nclimate sandy_desert\n{\n\tcolour 102 45 145\n\theat 4\n\twinter\n"
+              "\tstrategy summer sparse_tree palm_a.cas 8\n\n\tbattle_vegetation\n\tdense_forest dense_pine\n"
+              "\tbattle_winter_vegetation\n\tdense_forest winter_dense_pine\n\tenv_map data/battlefield/e.dds\n}\n")
+        write(os.path.join(d, "descr_aerial_map_ground_types.txt"),
+              "climate default\n{\n\thills a_hills.tga\n\tswamp a_swamp.tga\n}\nclimate sandy_desert\n{\n"
+              "\thills sand_hills.tga snow.tga\n}\n")
+        write(os.path.join(d, "descr_geography.txt"),
+              "sandy_desert modifies default\n{\n\ttexture sand terrain/battlefield/sandy_desert/sand.tga\n}\n"
+              "rocky_desert modifies sandy_desert\n{\n\ttexture rock none\n}\n")
+        write(os.path.join(d, "descr_daytypes.txt"),
+              "daytype desert_summer\n\n\tclimates\t\tsandy_desert rocky_desert\n\tseasons summer\n")
+        write(os.path.join(d, "text", "climates.txt"), "{SANDY_DESERT}Sandy desert\n{ROCKY_DESERT}Rocky\n")
+        mod = ModData(self.root)
+        rows = L.passport(mod, "sandy_desert", "rome")
+        got = {(r.file, r.what, r.value) for r in rows}
+        self.assertIn(("descr_climates.txt", "slot", "2 of 32 (engine name sandy_desert)"), got)
+        self.assertIn(("descr_climates.txt", "colour", "102 45 145"), got)
+        self.assertIn(("descr_climates.txt", "winter", "snow in winter"), got)
+        self.assertIn(("descr_climates.txt", "trees summer sparse tree", "palm_a.cas (sprite 8)"), got)
+        self.assertIn(("descr_climates.txt", "winter dense forest", "winter_dense_pine"), got)
+        hills = [r for r in rows if r.what == "ground hills"][0]
+        self.assertEqual((hills.value, hills.note, hills.picture),
+                         ("sand_hills.tga  /  winter snow.tga", "", "terrain/aerial_map/ground_types/sand_hills.tga"))
+        swamp = [r for r in rows if r.what == "ground swamp"][0]
+        self.assertEqual((swamp.value, swamp.note), ("a_swamp.tga", "from default"))
+        geo = [r for r in rows if r.file == "descr_geography.txt"]
+        self.assertEqual([(r.what, r.value, r.line) for r in geo],
+                         [("sandy_desert modifies default", "texture sand terrain/battlefield/sandy_desert/sand.tga", 3),
+                          ("built on it", "rocky_desert modifies sandy_desert", 5)])
+        self.assertEqual(geo[0].picture, "terrain/battlefield/sandy_desert/sand.tga")
+        self.assertIn(("descr_daytypes.txt", "daytype desert_summer", "climates\t\tsandy_desert rocky_desert"), got)
+        self.assertEqual([r.value for r in rows if r.file == "text/climates.txt"], ["{SANDY_DESERT}Sandy desert"])
+        self.assertEqual(L.slot_name(0, "rome"), "default")
+        self.assertEqual(L.slot_name(12, "medieval2"), "custom_1")
+        self.assertIsNone(L.slot_name(32, "rome"))
+        lines = mod.load(mod.find("descr_climates.txt")).texts()
+        self.assertEqual(L.listed(lines), ["mediterranean", "sandy_desert"])
+        free = L.free_slots(lines, "medieval2")
+        self.assertEqual((len(free), free[0], free[-1]), (30, (2, "rocky_desert"), (31, "custom_20")))
+        # Rome's slot 0 'default' is every file's base block: not taken for the first climate's own
+        self.assertEqual(L.scan(["sea default", "{", "\tx 1", "}", "parent sea default"], ["test_climate"],
+                                ["default"]), [(2, "sea default", "x 1")])
+        self.assertEqual(L.scan(["a modifies default", "{", "\tx 1", "}"], ["test_climate"], ["default"]), [])
+
+    def test_climate_copy_and_slots_changed(self):
+        """New climate from this...: every block of the source copied under the new name right after it, the name
+        added to 'climates' lists and to lines it leads, one thing's own 'climate x' left; the new name LAST in
+        descr_climates.txt's list (the old slots kept) with its own colour; the name players read. Change...: a
+        ground slot of a climate with no block gets one (a copy of default) with only that slot changed; a tree
+        line's model. Restore puts all back."""
+        from campaign_editor import climatecopy as C, climatelib as L
+        self.assertEqual(C.copy_places(["sea dry summer", "{", "\tparent sea default", "}", "",
+                                        "\tclimates\t\tdry wet", "\tclimates wet, dry, cold", "\tdry any palm",
+                                        "\tclimate\t\tdry", "x modifies dry", "{", "}",
+                                        '<climate id="dry">', "<p/>", "</climate>", '<climate id="z" parent="dry"/>',
+                                        "<climate>", "<name>dry</name>", "<summer/>", "</climate>"], "dry", "hot"),
+                         [(4, ["sea hot summer", "{", "\tparent sea default", "}"]),
+                          (5, None, "\tclimates\t\tdry hot wet"), (6, None, "\tclimates wet, dry, hot, cold"),
+                          (8, ["\thot any palm"]), (15, ['<climate id="hot">', "<p/>", "</climate>"]),
+                          (20, ["<climate>", "<name>hot</name>", "<summer/>", "</climate>"])])
+        d = os.path.join(self.root, "data")
+        write(os.path.join(d, "descr_climates.txt"),
+              "climates\n{\n\tmediterranean\n\tdry\n}\n\nclimate mediterranean\n{\n\tcolour 236 0 140\n\theat 1\n}\n"
+              "\nclimate dry\n{\n\tcolour 102 45 145\n\theat 4\n\tstrategy summer sparse_tree palm_a.cas 8\n}\n")
+        write(os.path.join(d, "descr_aerial_map_ground_types.txt"),
+              "climate default\n{\n\thills a_hills.tga\n\tswamp a_swamp.tga\t\tsnow.tga\n}\n")
+        write(os.path.join(d, "descr_daytypes.txt"), "daytype hot_summer\n\tclimates\t\tdry mediterranean\n")
+        write(os.path.join(d, "text", "climates.txt"), "{DRY}\tDry land\n")
+        before = tree_hash(self.root)
+        mod = ModData(self.root)
+        self.assertTrue(C.problems(mod, "dry", "Bad Name", (1, 2, 3)))
+        self.assertTrue(C.problems(mod, "dry", "mediterranean", (1, 2, 3)))
+        self.assertTrue(C.problems(mod, "dry", "hot", (236, 0, 140)))
+        self.assertEqual(C.problems(mod, "dry", "hot", (1, 2, 3)), [])
+        plan = Plan(mod, "climate", "hot")
+        C.write_copy(plan, "dry", "hot", (1, 2, 3), "Hot land", "rome")
+        plan.apply()
+        mod = ModData(self.root)
+        lines = mod.load(mod.find("descr_climates.txt")).texts()
+        self.assertEqual(L.listed(lines), ["mediterranean", "dry", "hot"])
+        b = L.climates_block(lines, "hot")
+        self.assertEqual((b["colour"], b["heat"], [t[2] for t in b["trees"]]), ((1, 2, 3), "4", ["palm_a.cas"]))
+        self.assertEqual(L.climates_block(lines, "dry")["colour"], (102, 45, 145))
+        self.assertIn("\tclimates\t\tdry hot mediterranean", mod.load(mod.find("descr_daytypes.txt")).texts())
+        self.assertIn("{hot}\tHot land", mod.load(mod.find("text/climates.txt")).texts())
+        plan = Plan(mod, "climate", "hot")
+        C.set_ground(plan, "hot", "hills", "sand_hills.tga")
+        C.set_tree(plan, "hot", lines.index("\tstrategy summer sparse_tree palm_a.cas 8", lines.index("climate hot")) + 1,
+                   "palm_b.cas")
+        plan.apply()
+        mod = ModData(self.root)
+        got = L.aerial_blocks(mod.load(mod.find("descr_aerial_map_ground_types.txt")).texts())
+        self.assertEqual({k: v[:2] for k, v in got["hot"].items()},
+                         {"hills": ("sand_hills.tga", None), "swamp": ("a_swamp.tga", "snow.tga")})
+        self.assertEqual(got["default"]["hills"][:2], ("a_hills.tga", None))
+        lines = mod.load(mod.find("descr_climates.txt")).texts()
+        self.assertEqual([t[2] for t in L.climates_block(lines, "hot")["trees"]], ["palm_b.cas"])
+        self.assertEqual([t[2] for t in L.climates_block(lines, "dry")["trees"]], ["palm_a.cas"])
+        self.assertEqual(C.pool(mod, "nothing_here"), [])
+        for bk in backups(mod):
+            restore(ModData(self.root), bk)
+        self.assertEqual({k: v for k, v in tree_hash(self.root).items() if "_backups" not in k}, before)
+
     def test_land_brush_coast_is_smooth_not_in_steps(self):
         """A report ('where is the smoothing?'): the land brush made land tile by tile, its coast ran in tile-sized
         steps. The coast round the brush's tiles now follows a smooth curve at half-tile level, as the games' own
@@ -10322,8 +10435,9 @@ building smith
             data.set_strat(mod, "test", (3, 0))                           # moved
             self.assertTrue(np.allclose(data.objects[None][0, [0, 2]], [3.5, 3.5]))
             self.assertIs(data._objs[1], loader)
-            self.assertTrue(data.lift_out(lambda o: True))               # taken into the hand (3D carry)
-            self.assertEqual((data.objects, sorted(data.ghost)), ({}, [None]))
+            with mock.patch.object(MM, "build_each", side_effect=AssertionError("laid anew")):
+                self.assertTrue(data.lift_out(lambda o: True))           # taken into the hand (3D carry): the
+            self.assertEqual((data.objects, sorted(data.ghost)), ({}, [None]))     # pieces laid before, joined
             data.put_back()                                               # Esc: back where it stood
             self.assertEqual((sorted(data.objects), data.ghost), ([None], {}))
             # let go on another tile: only what was carried is laid again there, the map is not laid anew (a
@@ -10684,6 +10798,48 @@ building smith
         self.assertEqual((float(ship[1]), float(ship[8])), (0.0, 3))  # on the water, the armies' layer
         self.assertAlmostEqual(float(ship[2]), 0.5 - 0.25)            # scaled by half
 
+    def test_map_in_3d_shows_a_red_question_mark_where_no_model_is(self):
+        """A tester: a resource's frame showed on empty ground - something stood there that the 3D map did not draw.
+        Whatever stands on the map with no model to draw (its file not found, its type naming none) gets a red '?'
+        in its place, facing the camera; the model is still listed as missing. A texture see-through all over (Rome's
+        glass: alpha 122 everywhere - the model was never seen) is drawn solid."""
+        try:
+            import numpy as np
+        except ImportError:
+            self.skipTest("NumPy not installed")
+        from campaign_editor import mapmodels as MM
+        from campaign_editor import mapobjects3d as O
+        loader = MM.Loader(ModData(self.root))
+        parts = loader.parts("models_strat/no_such.CAS")
+        self.assertEqual([t for t, _ in parts], [MM.MISSING])
+        v = parts[0][1]
+        self.assertEqual(v.shape[1], 8)
+        self.assertGreater(float(v[:, 1].max()), 0.7)                 # about a tile high, standing on the ground
+        self.assertGreaterEqual(float(v[:, 1].min()), 0.0)
+        self.assertTrue((v[:, 5] > 0.9).any())                        # a face looking south, at the camera
+        self.assertIn("models_strat/no_such.CAS", loader.missing)
+        self.assertEqual(loader.picture(MM.MISSING)[0, 0].tolist(), list(MM.MISSING_RGBA))
+        try:
+            from PIL import Image
+        except ImportError:
+            Image = None
+        if Image is not None:
+            rel = "models_strat/textures/resource_glass.tga"
+            os.makedirs(os.path.join(self.root, "data", "models_strat", "textures"), exist_ok=True)
+            Image.fromarray(np.full((4, 4, 4), (60, 160, 170, 122), np.uint8), "RGBA").save(
+                os.path.join(self.root, "data", rel))
+            self.assertEqual(int(MM.Loader(ModData(self.root)).picture(rel)[..., 3].min()), 255)
+        # a resource whose type has no model stands as the '?'
+        mod = ModData(self.root)
+        camp = mod.campaign_file("test", "descr_strat.txt")
+        with open(camp) as fh:
+            text = fh.read()
+        write(camp, text.replace("\n;#####>", "\nresource\tglass, 3, 2\n;#####>", 1))
+        mod = ModData(self.root)
+        objs = O.objects(mod, "test", Strat(mod.load(camp)))
+        self.assertIn({"kind": "resource", "model": MM.MISSING, "texture": None, "xy": (3, 2), "scale": 1.0,
+                       "faction": None}, objs)
+
     def test_map_in_3d_port_dock_as_the_engine(self):
         """Report #329: a port's land part on its tile, its sea part on the dock - the sea tile beside it with the most
         sea around it (the engine's setup_orientation, its count not started again when it loses) - both turned so
@@ -10703,6 +10859,26 @@ building smith
         west = np.zeros((5, 5), bool)
         west[2, 1] = west[2, 0] = True
         self.assertEqual(MM._port_dock(2, 2, west), (90, (1, 2)))
+
+    def test_map_in_3d_texture_names_as_the_game_finds_them(self):
+        """A model's part names its texture plainly, without an ending, or with a path (data\\models_strat\\...):
+        each found where the game finds it; one not found is listed (it is drawn white - an HLR tester)."""
+        try:
+            import numpy  # noqa: F401
+        except ImportError:
+            self.skipTest("NumPy not installed")
+        from campaign_editor import mapmodels as MM
+        have = {"models_strat/textures/pot.tga", "models_strat/textures/basket.tga"}
+        loader = MM.Loader(None)
+        loader.picture = lambda rel: True if rel in have else None
+        self.assertEqual(loader._texture("models_strat/resource_pot.cas", "pot.tga"), "models_strat/textures/pot.tga")
+        self.assertEqual(loader._texture("models_strat/resource_pot.cas", "basket"), "models_strat/textures/basket.tga")
+        self.assertEqual(loader._texture("models_strat/resource_pot.cas", "data\\models_strat\\textures\\pot.tga"),
+                         "models_strat/textures/pot.tga")
+        self.assertEqual(loader._texture("models_strat/resource_pot.cas", "C:\\work\\tex\\basket.tga"),
+                         "models_strat/textures/basket.tga")
+        self.assertIsNone(loader._texture("models_strat/resource_pot.cas", "lid.tga"))
+        self.assertEqual(loader.missing, {"lid.tga"})
 
     def test_map_in_3d_carries_a_figure_as_the_map(self):
         """The user, 2026-10-17: figures moved on the 3D map as on the Map - the left button on one (an army in a
@@ -10742,6 +10918,31 @@ building smith
         # what is carried: the 3D map's own objects of that thing on that tile
         pick = Map3DView._picks("place", ("port", "Latium"), (3, 3))
         self.assertTrue(pick({"kind": "port_sea", "xy": (3, 3)}) and not pick({"kind": "town", "xy": (3, 3)}))
+        # a click alone lifts nothing (a tester: a stall at every click on a resource); the mouse moved with the
+        # button held lifts it
+        lifted = []
+        me = SimpleNamespace(app=app, _tile=lambda x, y: (1, 1), _map_lists=lambda: None, _carry=None,
+                             _things_at=lambda t: [("res", "r7", "gold")], DRAG_START=4, _paint=False,
+                             _carry_start=lambda e: lifted.append((e.x, e.y)), _tip_hide=lambda: None,
+                             _hover=lambda e: None)
+        Map3DView._carry_press(me, SimpleNamespace(x=10, y=10))
+        Map3DView._drag_paint(me, SimpleNamespace(x=12, y=11))          # a hand's tremble: still a click
+        self.assertEqual(lifted, [])
+        Map3DView._drag_paint(me, SimpleNamespace(x=15, y=10))
+        self.assertEqual(lifted, [(15, 10)])
+        # the hover's words: a character's name and what he is, a town's name and owner, a resource's name
+        app._map_chars["rome:0"].update(kind="general", faction="romans_julii", army=True, units=5)
+        mv.cmap, mv.owners = SimpleNamespace(info={"Latium": {"settlement": "Roma"}}), {"Latium": "romans_senate"}
+        app.res_shown = lambda: [{"id": "f3", "kind": "fort", "owner": "gauls", "xy": (1, 1)}]
+        import sys
+        from unittest import mock
+        fake = SimpleNamespace(hover_name=lambda ch: "Captain " + ch["name"])     # gui_map needs Pillow's ImageTk
+        with mock.patch.dict(sys.modules, {"campaign_editor.gui_map": fake}):
+            text = Map3DView._tip_text(SimpleNamespace(app=app), [("char", "rome:0", "Flavius"),
+                                                                 ("place", ("city", "Latium"), "Latium town"),
+                                                                 ("res", "f3", "fort")])
+        self.assertEqual(text.splitlines(), ["Captain Flavius", "   general of romans_julii, 5 unit(s)",
+                                             "Roma (Latium) - town", "   owner romans_senate", "fort of gauls"])
 
     def test_map_in_3d_figures_face_the_camera(self):
         """Reports #330 / #331: the figures on the 3D map stood with their backs to the camera, in Rome and in
@@ -20954,3 +21155,18 @@ building castle_port
             self.assertEqual([u["unit"] for u in v.level["units"]], ["rebel spear"])
         finally:
             root.destroy()
+
+    def test_settlements_filter_by_owner(self):
+        """Report #295: Settlements shows only the towns one faction holds (england: England's towns only)."""
+        try:
+            from campaign_editor.gui_settlements import owners_of, of_owner
+        except ImportError as e:
+            self.skipTest("no tkinter: %s" % e)
+        rows = [{"region": "London_Province", "owner": "england"},
+                {"region": "Paris_Province", "owner": "france"},
+                {"region": "York_Province", "owner": "england"},
+                {"region": "Rennes_Province", "owner": "rebels"}]
+        self.assertEqual(owners_of(rows), ["(all)", "england", "france", "rebels"])
+        self.assertEqual([r["region"] for r in of_owner(rows, "england")], ["London_Province", "York_Province"])
+        self.assertEqual(len(of_owner(rows, "(all)")), 4)
+        self.assertEqual(of_owner(rows, "spain"), [])

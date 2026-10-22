@@ -519,6 +519,15 @@ def nearest_region(cmap, xy, reach=60):
     return None
 
 
+def ground_file(name):
+    """The path under data/ of a picture named in descr_aerial_map_ground_types.txt: the game puts the name after
+    data/terrain/aerial_map/ground_types/ as it stands, so a mod may climb out with '../' (HLR names
+    '../../../../data/terrain/aerial_map/ground_types/x.tga' - the same folder reached from the game's root)."""
+    import posixpath
+    p = posixpath.normpath("data/terrain/aerial_map/ground_types/" + name.replace("\\", "/"))
+    return p[5:] if p.lower().startswith("data/") else p.lstrip("./")
+
+
 def land_climate(cmap, xy, reach=3):
     """The climate (map_climates.tga colour) most land tiles round xy have, ring by ring up to reach, or None. New
     land takes it: what lies under the sea is mostly leftovers of old coasts (vanilla Rome: 11 climates under its
