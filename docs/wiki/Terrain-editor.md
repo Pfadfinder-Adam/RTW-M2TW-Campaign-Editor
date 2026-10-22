@@ -79,7 +79,14 @@ smooths, levels) the land while you hold it. Both work on the water too, as in t
 sheet at height 0: press on the sea and lift its floor - out of the water it becomes land (its tile joins the region
 picked in *new land joins*, else the nearest; its ground follows), and land pushed under becomes water; never under a
 town, port or character (the bar says why). The heights are kept exactly (`map_heights.hgt`, no 29-metre steps). It
-is the same editor as Coast & heights: its strokes, Undo and Apply are shared.
+is the same editor as Coast & heights: its strokes, Undo and Apply are shared. The new land shows its own ground
+and climate while you paint (the climate most land round it has, with *New land: neighbours' climate*), and nothing
+is made again when the stroke ends.
+**Paint** (the tick; it was called Heights brush) paints more than the heights: **brush** picks what - **Heights**
+as above, or tile by tile **Ground**, **Rivers, cliffs, volcanoes...**, **Climates** (each with the Terrain tab's own
+palette), **Land (tiles)** or **Sea (tiles)** (the Land and sea tile brushes). A white square on the ground shows the
+tiles it paints (size 1 one tile, 2 a square of 3 x 3...); the ground and climate show at once, the mountains,
+rivers, trees and borders a moment after the stroke. The Terrain editor's Undo, Preview and Apply are shared.
 **Whole map** puts the view back. It needs a graphics card with OpenGL 3.3 (any from the last fifteen years); without
 one the bar says why. The game's own **mountains, hills and volcanoes** stand on it too
 (`descr_aerial_map_tile_models.txt`, the models in `terrain/aerial_map/tile_models`), placed as the game places them:

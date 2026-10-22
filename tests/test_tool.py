@@ -11108,9 +11108,33 @@ building smith
                              _paint=True, _grab=None, gl=SimpleNamespace(coast_frozen=True, models_stale=False),
                              _coast_was=(), _coast_now=lambda ed: next(coast), _stamp=lambda: "now",
                              rebuild=lambda: self.fail("made again"), _lay_models=lambda: laid.append(1),
-                             _sharp_later=lambda: None)
+                             _sharp_later=lambda: None, v_paint=SimpleNamespace(get=lambda: "heights"))
         Map3DView._paint_end(me, SimpleNamespace(x=0, y=0))
         self.assertEqual((laid, me._ground_stale, me.gl.models_stale, me._for), ([1], True, True, "now"))
+        # Paint's tile brushes on the 3D map (the user, 2026-10-22: every brush of the 2D map there, seen at once):
+        # the Terrain editor paints the square of tiles under the mouse with the pick made here, the card takes
+        # those points (and a tile round them: the shore) at once; the same tile again paints nothing more
+        from campaign_editor.gui_map3d import PAINTS, SWATCHED
+        self.assertEqual([k for k, _ in PAINTS], ["heights", "ground", "features", "climate", "land", "sea"])
+        calls, sent = [], []
+        ed = SimpleNamespace(v_brush=SimpleNamespace(get=lambda: 2),
+                             paint=lambda tiles, what, colour: calls.append((what, colour, sorted(tiles))) or
+                             [(t, colour) for t in tiles],
+                             paint_coast=lambda tiles, mode: calls.append((mode, None, sorted(tiles))) or [])
+        me = SimpleNamespace(app=SimpleNamespace(editors={"terrain": ed}), _paint=True, _mouse=(5, 5),
+                             _point=lambda x, y: ((0, 0, 0), (7.0, 9.0)), _tiles_brush=Map3DView._tiles_brush,
+                             v_paint=SimpleNamespace(get=lambda: "climate"),
+                             v_pick={k: SimpleNamespace(get=lambda: "10,20,30") for k in SWATCHED},
+                             _send_points=lambda ed, *box: sent.append(box), draw=lambda half=False: None,
+                             lbl=SimpleNamespace(configure=lambda **k: None))
+        Map3DView._tiles_tick(me)
+        self.assertEqual(calls, [("climate", (10, 20, 30), [(x, y) for x in (2, 3, 4) for y in (3, 4, 5)])])
+        self.assertEqual(sent, [(2, 12, 4, 14)])
+        Map3DView._tiles_tick(me)                                       # the same tile: nothing more
+        self.assertEqual(len(calls), 1)
+        me.v_paint, me._last_tile = SimpleNamespace(get=lambda: "land"), None
+        Map3DView._tiles_tick(me)
+        self.assertEqual(calls[-1][:2], ("land", None))                 # the Land and sea brush, by tile
         # the hover's words: a character's name and what he is, a town's name and owner, a resource's name
         app._map_chars["rome:0"].update(kind="general", faction="romans_julii", army=True, units=5)
         mv.cmap, mv.owners = SimpleNamespace(info={"Latium": {"settlement": "Roma"}}), {"Latium": "romans_senate"}
