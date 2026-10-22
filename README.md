@@ -2,7 +2,7 @@
 
 **An editor for the campaigns of Rome: Total War (with REX) and Medieval II: Total War (with M2EX)** - factions,
 the campaign map, towns, armies, characters, units, buildings, diplomacy, texts and pictures, in a window, with a
-preview of every change and a backup you can always go back to. Version **0.35.1**.
+preview of every change and a backup you can always go back to. Version **0.35.2**.
 
 [![Download](https://img.shields.io/github/v/release/Pfadfinder-Adam/RTW-M2TW-Campaign-Editor?label=Download&style=for-the-badge)](../../releases)
 [![Wiki](https://img.shields.io/badge/Guide-Wiki-2b6cb0?style=for-the-badge)](../../wiki)
@@ -88,6 +88,11 @@ from its own `data`, and so does the editor). Medieval II keeps its data packed:
 with the game's own unpacker.
 
 ## ✨ What's new
+
+**0.35.2** ([release](../../releases/tag/v0.35.2)) - fixes: the map no longer stops drawing while a town waits for
+Apply; a name with a letter like 'ė' no longer stops a write; a mod built on the plain game no longer gets the game's
+whole campaign folder copied in; Coast & heights is quick on a big map; Check mod files names a faction a quick battle
+would crash on; many smaller fixes from reports.
 
 **0.35.1** ([release](../../releases/tag/v0.35.1)) - fixes: the **crash doctor** says in one line why the game
 stopped (Report a bug, from the game's own log); game crashes after bringing a faction or giving a town to a faction
