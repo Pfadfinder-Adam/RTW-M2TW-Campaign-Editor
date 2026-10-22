@@ -37,7 +37,12 @@ shows it; **All the editor's own** takes them off), **Copy its look** / **Paste 
 emoji on another piece), Hide, Back into its row, Back to how it was, Show it in the editor; right click a page: refresh it, show it in the editor, its pieces
 back to how they were. Your changes are a draft drawn on the board (the piece where it goes, its old place greyed):
 **Accept** puts them all on the editor and keeps them in the same `CampaignEditor_look.json`, **Discard** drops
-them, **Undo** / **Redo** step through them; after Accept, **Undo** and **Back to how it was...** take it back. The questions and file pickers Windows draws itself are not on the board.
+them, **Undo** / **Redo** step through them; after Accept, **Undo** and **Back to how it was...** take it back.
+**Appearance** on the board's bar opens a panel at its side for the whole editor at once (as Obsidian's Appearance):
+Light or Dark, a font and size for every window, and a swatch for each colour - background, words, fields and lists,
+buttons, tabs, the picked line, links... - and, folded under them, for each button with a colour of its own (Play,
+Report a bug...). Click a swatch to pick a new colour: every window takes it at once and keeps it for every start;
+its arrow gives the look's own colour back, **All back to the look as it comes** all of them. The questions and file pickers Windows draws itself are not on the board.
 
 **Settings > Language of the window** puts a language on every window, the hover texts and the menus; **Add a
 language file...** puts one in. **Words to translate...** writes every word of the windows into a file - fill in the

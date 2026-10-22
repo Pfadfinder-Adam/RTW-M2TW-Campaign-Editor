@@ -6054,6 +6054,62 @@ building smith
         self.assertIsNone(theme.readable(rgb(theme.LIGHT["fg"]), cream))
         self.assertEqual(theme.ink("#b00"), "#b00")                     # no window yet: the colour as given
 
+    def test_whole_look_own_colours_and_font(self):
+        """Appearance (the user, 2026-10-22: 'the colour of the whole thing at once, as in Obsidian'): own colours
+        over the light look recolour every window - ttk styles and plain tk widgets -, a coloured button takes its
+        own colour with words that read on it, a font for every window; all back gives the look as it comes."""
+        try:
+            import tkinter as tk
+            from tkinter import font as tkfont
+            from tkinter import ttk
+            root = tk.Tk()
+        except Exception as e:
+            self.skipTest("no window: %s" % e)
+        from unittest import mock
+        from campaign_editor import gui_appearance, log, settings, theme
+        home = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, home)
+        kept = dict(theme._state)
+        try:
+            with mock.patch.object(log, "home", lambda: home), mock.patch.object(settings, "_data", {}):
+                theme._state.update(root=None, done={}, custom={}, font=None, fonts0={}, seen=[])
+                theme.apply(root, False)
+                lab = tk.Label(root, text="Faction:")
+                lab.pack()
+                root.update()
+                size0 = tkfont.nametofont("TkDefaultFont", root=root).cget("size")
+                theme.set_custom(root, {"bg": "#e8dcc0", "fg": "#3a2410", "Play.TButton": "#f0e000"},
+                                 ["", 13])
+                root.update()
+                st = ttk.Style(root)
+                self.assertEqual(st.lookup(".", "background"), "#e8dcc0")
+                self.assertEqual(str(lab.cget("background")), "#e8dcc0")
+                self.assertEqual(str(lab.cget("foreground")), "#3a2410")
+                self.assertEqual(st.lookup("Play.TButton", "background"), "#f0e000")
+                self.assertEqual(st.lookup("Play.TButton", "foreground"), "#000000")     # black reads on yellow
+                self.assertEqual(tkfont.nametofont("TkDefaultFont", root=root).cget("size"), 13)
+                self.assertEqual(settings.get("theme_colours")["bg"], "#e8dcc0")
+                panel = gui_appearance.AppearancePanel(root, root)
+                panel.pack()
+                root.update()
+                panel._set("bg", None)                                    # its arrow: the look's own again
+                root.update()
+                self.assertEqual(str(lab.cget("background")), theme.LIGHT["bg"])
+                self.assertEqual(str(lab.cget("foreground")), "#3a2410")
+                panel._all_back()
+                root.update()
+                self.assertEqual(theme.custom(), ({}, None))
+                self.assertEqual(str(lab.cget("foreground")), theme.LIGHT["fg"])
+                self.assertEqual(st.lookup("Play.TButton", "background"), theme.COLOURED["Play.TButton"][0])
+                self.assertEqual(tkfont.nametofont("TkDefaultFont", root=root).cget("size"), size0)
+        finally:
+            theme._state.clear()
+            theme._state.update(kept)
+            try:
+                root.destroy()
+            except Exception:
+                pass
+
     def test_the_editor_checks_itself(self):
         """`campaign_editor.py selfcheck` (CI runs it on the built exe): modules, bundled files, the tiny mod."""
         from campaign_editor import selfcheck

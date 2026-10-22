@@ -27,6 +27,7 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, simpledialog, ttk
 
 from . import board as B
+from . import gui_appearance
 from . import look as LK
 from .gui_look import PIECES, YELLOW, all_widgets, ask_style, can_move
 
@@ -260,12 +261,14 @@ class LayoutBoard(tk.Toplevel):
 
     # ---- the window ----
     def _build(self):
+        from . import theme
         bar = ttk.Frame(self, padding=(6, 4))
         bar.pack(fill="x")
         for text, cmd in (("Refresh all pages", self.refresh), ("Undo", self.undo), ("Redo", self.redo),
-                          ("Fit", self.fit)):
+                          ("Fit", self.fit), ("Appearance", self.appearance)):
             ttk.Button(bar, text=text, command=cmd).pack(side="left", padx=(0, 4))
-        self.b_accept = ttk.Button(bar, text="Accept", command=self.accept, state="disabled", style="Play.TButton")
+        self.b_accept = ttk.Button(bar, text="Accept", command=self.accept, state="disabled")
+        theme.paint(self.b_accept, "#316434")              # green, greyed while there is nothing to accept
         self.b_accept.pack(side="left", padx=(4, 4))
         self.b_discard = ttk.Button(bar, text="Discard", command=self.discard, state="disabled")
         self.b_discard.pack(side="left", padx=(0, 4))
@@ -293,6 +296,8 @@ class LayoutBoard(tk.Toplevel):
         xs = ttk.Scrollbar(body, orient="horizontal", command=self.cv.xview)
         self.cv.configure(yscrollcommand=lambda *a: (ys.set(*a), self._later_pictures()),
                           xscrollcommand=lambda *a: (xs.set(*a), self._later_pictures()))
+        self.side = None                       # the Appearance panel, when shown
+        self.ys = ys
         ys.pack(side="right", fill="y")
         xs.pack(side="bottom", fill="x")
         self.cv.pack(fill="both", expand=True)
@@ -312,6 +317,37 @@ class LayoutBoard(tk.Toplevel):
         cv.bind("<Button-4>", lambda e: self._wheel(e, 1))
         cv.bind("<Button-5>", lambda e: self._wheel(e, -1))
         cv.bind("<Configure>", lambda e: self._later_pictures())
+
+    def appearance(self):
+        """The Appearance panel at the board's side (shown / hidden): the whole editor's colours and font."""
+        if self.side is not None:
+            self.side.destroy()
+            self.side = None
+            return
+        self.side = gui_appearance.AppearancePanel(self.ys.master, self.app, on_change=self._look_changed)
+        for w in all_widgets(self.side):
+            w._look_skip = True
+        self.side.pack(side="right", fill="y", before=self.ys)
+
+    def _look_changed(self):
+        """The whole look changed: the board's ground follows it, every page's picture is taken again once the
+        changes stop for a moment."""
+        from . import theme
+        self.ground = "#25272b" if theme.dark() else "#c9ccd2"
+        self.title_ink = "#eeeeee" if theme.dark() else "#111111"
+        self.cv.configure(background=self.ground)
+        self.draw()
+        if getattr(self, "_theme_job", None):
+            self.after_cancel(self._theme_job)
+        self.v_line.set("The editor's look changed - the pages' pictures are taken again in a moment.")
+        self._theme_job = self.after(1500, self._theme_pictures)
+
+    def _theme_pictures(self):
+        self._theme_job = None
+        if self._busy:
+            self._theme_job = self.after(1500, self._theme_pictures)
+            return
+        self.refresh()
 
     def close(self):
         if self.draft:
