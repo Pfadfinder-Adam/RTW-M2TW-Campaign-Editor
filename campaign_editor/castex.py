@@ -90,9 +90,19 @@ def _texture_there(mod, cas_rel, tex):
         if base.lower().endswith(".tga"):
             forms.append(base[:-4] + ".dds")
         for f in forms:
-            if mod.find(f):
+            if mod.find(f) or _packed(mod, f):
                 return True
     return False
+
+
+def _packed(mod, rel):
+    """In one of the mod's packs (HLR keeps its towns' textures in data/packs - a tester, 2026-10-22: 90 textures
+    named missing that the game finds there)."""
+    from .gamepacks import in_packs
+    try:
+        return in_packs(mod.roots() if hasattr(mod, "roots") else [mod.data], rel)
+    except Exception:
+        return False
 
 
 def missing(mod):
