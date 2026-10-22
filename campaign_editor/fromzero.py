@@ -9,6 +9,7 @@ whole culture, not one faction's.
 
 import re
 
+from .namelists import Kept
 from .textio import tokens
 
 ALIKE = 60          # traces.NEAR: two colours this close look alike on the map
@@ -74,7 +75,7 @@ def culture_name_list(mod, culture, most=0.75):
             for x in lists:
                 if i < len(x) and x[i].lower() not in seen:
                     seen.add(x[i].lower())
-                    got.append(x[i])
+                    got.append(Kept(x[i]))      # the game's own keys, as written (Rome's 'Skílas', 'of Itius Portis')
         out[pool] = got
     if len(owners) > 1:
         men = out["characters"]

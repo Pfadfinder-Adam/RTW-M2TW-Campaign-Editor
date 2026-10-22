@@ -55,7 +55,8 @@ def problems(pools):
     for pool in POOLS:
         for n in pools.get(pool) or []:
             k = key_of(n)
-            if RE_BAD_KEY.search(k):
+            if RE_BAD_KEY.search(k) and not isinstance(n, Kept):    # a key the mod's lists hold already: the game
+                # reads it there (vanilla Rome's 'Skílas', 'Cisantaxma.', 'of Itius Portis')
                 out.append("%s: '%s' - only Latin letters, digits, ' and - (the game's files and its "
                            "font take no others)" % (TITLES[pool].lower(), n))
     return out
