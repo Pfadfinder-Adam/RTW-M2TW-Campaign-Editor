@@ -321,3 +321,17 @@ the box of every sprite on it; the mouse over a box names it. **Find** looks thr
 sprite big; its right click saves it, or the whole page, as a PNG. Nothing here writes the mod.
 
 The idea and the first map of the file's format come from Wholesome Queen's *RTW Sprite & HUD Studio*.
+
+### Campaign HUD
+
+The third tab of **Interface** draws the campaign map's bottom panel as the game does (both games, the engines' own
+places), from the mod's own pictures. It lies on a board, as on Obsidian Canvas:
+
+- **the wheel** zooms in and out at the mouse (Shift: in small steps); the **middle** or **right** button, or **Space**
+  held with the left one, moves the board; the arrow keys move it too;
+- **Fit** (Shift+1) shows everything, **1:1** (Shift+0) one screen pixel per HUD pixel, Shift+2 zooms to the piece you
+  picked; **+** and **-** sit beside them in the board's corner;
+- **Screenshot over it...** lays your game screenshot exactly over the HUD (the HUD is stretched to its size, as the game
+  stretches it). Drag the screenshot aside to see both side by side; it lands on the grid's dots and sticks to the HUD's
+  edges and middle, so dragged back it sits exactly on it again. **Snap to grid** off or **Alt** held: it stays where you
+  let go. Over the HUD it is see-through (the slider, [ and ]); beside it, whole. O shows or hides it.

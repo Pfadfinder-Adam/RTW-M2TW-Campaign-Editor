@@ -73,7 +73,10 @@ class AnimSet:
         return out
 
     def record(self, name):
-        got = next((v for k, v in self.skeletons().items() if k.lower() == name.lower()), None)
+        """A skeleton's record: this very name's, else one alike but for the letter case (the game tells them apart:
+        MTW2_Halberd_Primary, the man, and MTW2_Halberd_primary, his halberd)."""
+        sks = self.skeletons()
+        got = sks.get(name) or next((v for k, v in sks.items() if k.lower() == name.lower()), None)
         if got is None:
             return None
         return self.data["skeletons.dat"][got[0]:got[0] + got[1]]

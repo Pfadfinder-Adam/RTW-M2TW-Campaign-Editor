@@ -35,7 +35,7 @@ from .strat import Strat, first_names
 from .textio import tokens
 from .units import faction_units, read_units
 
-VERSION = "0.35.1"
+VERSION = "0.35.3"
 KOFI = "https://ko-fi.com/pfadfinder"
 SPONSORS = "https://github.com/sponsors/Pfadfinder-Adam"
 DISCORD = "https://discord.gg/uqA9MEn4Z"
