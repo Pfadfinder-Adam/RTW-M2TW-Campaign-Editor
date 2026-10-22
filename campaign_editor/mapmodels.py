@@ -16,8 +16,43 @@ Our world: x east, y up, z SOUTH from the map's top; the models' z (the game's n
 import numpy as np
 
 from . import tilemodels as TM
+from .mapobjects3d import MISSING
 
 KIND = {"town": 1, "wall": 1, "port": 1, "port_sea": 1, "fort": 1, "watchtower": 1, "resource": 2, "character": 3}
+
+# what stands on the map with no model the 3D map can draw (not named, not found, unreadable): a red question mark
+# in its place, so it is seen (a tester: a resource's frame on empty ground, nothing to tell why)
+MISSING_RGBA = (215, 30, 30, 255)
+
+
+def question_mark():
+    """[(MISSING, vertices (n, 8))] - a red '?' about a tile high, its face to the camera (south): a hook of
+    boxes along an arc, a stem, a dot."""
+    import math
+    path = [(0.18 * math.cos(math.radians(a)), 0.68 + 0.16 * math.sin(math.radians(a)))
+            for a in range(160, -100, -20)]
+    path += [(0.0, 0.34)]
+    segs = list(zip(path, path[1:])) + [((0.0, 0.10), (0.0, 0.20))]
+    tris = []
+    for (x0, y0), (x1, y1) in segs:
+        dx, dy = x1 - x0, y1 - y0
+        n = math.hypot(dx, dy) or 1.0
+        ox, oy = -dy / n * 0.045, dx / n * 0.045                # half the stroke's width, across it
+        ex, ey = dx / n * 0.02, dy / n * 0.02                    # a little past each end: no gaps at the bends
+        a, b = (x0 - ex, y0 - ey), (x1 + ex, y1 + ey)
+        q = [(a[0] + ox, a[1] + oy), (b[0] + ox, b[1] + oy), (b[0] - ox, b[1] - oy), (a[0] - ox, a[1] - oy)]
+        for z, nz in ((0.04, 1.0), (-0.04, -1.0)):               # its front (south, +z) and back
+            f = [(x, y, z) for x, y in q]
+            tris += [(f[0], f[1], f[2], (0, 0, nz)), (f[0], f[2], f[3], (0, 0, nz))]
+        for i in range(4):                                       # its sides
+            (x0_, y0_), (x1_, y1_) = q[i], q[(i + 1) % 4]
+            sx, sy = y1_ - y0_, -(x1_ - x0_)
+            m = math.hypot(sx, sy) or 1.0
+            c = [(x0_, y0_, 0.04), (x1_, y1_, 0.04), (x1_, y1_, -0.04), (x0_, y0_, -0.04)]
+            nrm = (sx / m, sy / m, 0)
+            tris += [(c[0], c[1], c[2], nrm), (c[0], c[2], c[3], nrm)]
+    v = [list(p) + list(nrm) + [0.5, 0.5] for *pts, nrm in tris for p in pts]
+    return [(MISSING, np.array(v, np.float32))]
 
 
 class Loader:
@@ -31,6 +66,8 @@ class Loader:
         """A texture as an (h, w, 4) uint8 array, or None."""
         if rel is None:
             return None
+        if rel == MISSING:
+            return np.full((4, 4, 4), MISSING_RGBA, np.uint8)
         key = rel.lower()
         if key not in self._pics:
             from . import models as MO
@@ -38,7 +75,13 @@ class Loader:
                 im = MO.texture_image(self.mod, rel)
             except Exception:
                 im = None
-            self._pics[key] = np.asarray(im, np.uint8) if im is not None else None
+            arr = np.asarray(im, np.uint8) if im is not None else None
+            if arr is not None and arr.ndim == 3 and arr.shape[2] == 4 and arr[..., 3].max() < 128:
+                # see-through all over (Rome's glass: alpha 122 everywhere) - the cut-out at half would leave
+                # nothing of the model (a tester: the glass was not on the map); drawn solid instead
+                arr = arr.copy()
+                arr[..., 3] = 255
+            self._pics[key] = arr
         return self._pics[key]
 
     def _texture(self, model, name):
@@ -77,7 +120,9 @@ class Loader:
             except Exception:
                 out = []
         if not out:
-            self.missing.add(model)
+            if model != MISSING:
+                self.missing.add(model)
+            out = question_mark()
         self._models[key] = out
         return out
 
@@ -254,4 +299,4 @@ def build_each(objs, loader, heights, yscale):
     return each
 
 
-__all__ = ["Loader", "build", "build_each", "join", "KIND"]
+__all__ = ["Loader", "build", "build_each", "join", "KIND", "MISSING", "question_mark"]

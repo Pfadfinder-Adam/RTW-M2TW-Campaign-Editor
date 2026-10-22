@@ -10630,6 +10630,48 @@ building smith
         self.assertEqual((float(ship[1]), float(ship[8])), (0.0, 3))  # on the water, the armies' layer
         self.assertAlmostEqual(float(ship[2]), 0.5 - 0.25)            # scaled by half
 
+    def test_map_in_3d_shows_a_red_question_mark_where_no_model_is(self):
+        """A tester: a resource's frame showed on empty ground - something stood there that the 3D map did not draw.
+        Whatever stands on the map with no model to draw (its file not found, its type naming none) gets a red '?'
+        in its place, facing the camera; the model is still listed as missing. A texture see-through all over (Rome's
+        glass: alpha 122 everywhere - the model was never seen) is drawn solid."""
+        try:
+            import numpy as np
+        except ImportError:
+            self.skipTest("NumPy not installed")
+        from campaign_editor import mapmodels as MM
+        from campaign_editor import mapobjects3d as O
+        loader = MM.Loader(ModData(self.root))
+        parts = loader.parts("models_strat/no_such.CAS")
+        self.assertEqual([t for t, _ in parts], [MM.MISSING])
+        v = parts[0][1]
+        self.assertEqual(v.shape[1], 8)
+        self.assertGreater(float(v[:, 1].max()), 0.7)                 # about a tile high, standing on the ground
+        self.assertGreaterEqual(float(v[:, 1].min()), 0.0)
+        self.assertTrue((v[:, 5] > 0.9).any())                        # a face looking south, at the camera
+        self.assertIn("models_strat/no_such.CAS", loader.missing)
+        self.assertEqual(loader.picture(MM.MISSING)[0, 0].tolist(), list(MM.MISSING_RGBA))
+        try:
+            from PIL import Image
+        except ImportError:
+            Image = None
+        if Image is not None:
+            rel = "models_strat/textures/resource_glass.tga"
+            os.makedirs(os.path.join(self.root, "data", "models_strat", "textures"), exist_ok=True)
+            Image.fromarray(np.full((4, 4, 4), (60, 160, 170, 122), np.uint8), "RGBA").save(
+                os.path.join(self.root, "data", rel))
+            self.assertEqual(int(MM.Loader(ModData(self.root)).picture(rel)[..., 3].min()), 255)
+        # a resource whose type has no model stands as the '?'
+        mod = ModData(self.root)
+        camp = mod.campaign_file("test", "descr_strat.txt")
+        with open(camp) as fh:
+            text = fh.read()
+        write(camp, text.replace("\n;#####>", "\nresource\tglass, 3, 2\n;#####>", 1))
+        mod = ModData(self.root)
+        objs = O.objects(mod, "test", Strat(mod.load(camp)))
+        self.assertIn({"kind": "resource", "model": MM.MISSING, "texture": None, "xy": (3, 2), "scale": 1.0,
+                       "faction": None}, objs)
+
     def test_map_in_3d_port_dock_as_the_engine(self):
         """Report #329: a port's land part on its tile, its sea part on the dock - the sea tile beside it with the most
         sea around it (the engine's setup_orientation, its count not started again when it loses) - both turned so

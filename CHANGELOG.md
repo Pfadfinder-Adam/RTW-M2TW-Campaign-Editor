@@ -4,6 +4,7 @@
 
 ### Added
 - Terrain > Climates > **Climate library...**: every climate of the mod with its slot (of 32 with REX / M2EX) and how many tiles of the map it covers, and what each one gives the game - the campaign map's trees and ground textures, the mountains' own textures, the battle map's ground, plants, grass and water, the weather, sounds, town trees, disasters, its name - file by file and line by line, pictures shown. Only looking for now.
+- Maps > 3D: whatever stands on the map but has no model to draw (its file missing, its type naming none) shows as a red 3D question mark in its place, so nothing is there unseen.
 - Terrain > Climates: **Climates on the water** shows the climate under the sea too (the file has one there; new land made there gets it) and lets you paint it. Land and sea: **New land: neighbours' climate** - land made from the sea takes the climate of the land round it, not the leftover under the water (on by default).
 - Tools > Authors and sources of this mod: whose work is in your mod - what was taken, from which mod or pack, the author, a link, whether you asked; kept in Authors_and_sources.txt in the mod folder for players. Taking units, buildings, a faction, a battle model or a pack from another mod notes it by itself and asks for the author and link (nothing checked or blocked; 'Later' keeps it as it is).
 - Tools > Layout board: every page of the editor (each work, its tabs, the Tools windows) laid out side by side on one canvas - drag a button into another place in its row, or with Alt exactly where you drop it; drag its corners to size it; right click to rename it, give it a hover text, hide it or take it back. Each change shows in the editor at once and is kept for every start; Undo / Redo, Back to how it was.
@@ -37,6 +38,7 @@
 - New mod folder puts no switched-off engine settings files (descr_ex, descr_caps_ex) in: the mod runs on the engine's defaults as before; the editor writes the line a change needs, Check mod files' Copy them in brings the whole list.
 
 ### Fixed
+- Maps > 3D: Rome's glass resource was never seen (its picture is see-through all over) -> it stands on the map as the game shows it.
 - Edit faction: the game a row belongs to ("Medieval II only" beside Religion on Rome) was cut off -> it stands on a line of its own.
 - Maps (and 3D): an army taken out of its town went back into it when the town was moved after -> it stays where you put it; one left in the town still goes with it.
 - Maps > 3D: a white frame showed on empty ground and none on the army or resource you had moved -> the 3D map shows the Map's changes again (and says so in its bar when it cannot).

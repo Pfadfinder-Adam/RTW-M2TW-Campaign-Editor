@@ -16,6 +16,9 @@ import re
 
 from .textio import strip_comment
 
+# what stands on the map with no model the 3D map can draw: mapmodels draws a red question mark for it
+MISSING = "ce:missing"
+
 
 
 def _rel(path):
@@ -231,17 +234,16 @@ def objects(mod, campaign, strat, moved=None):
     for fo in strat.forts:
         if fo.kind != "landmark":
             continue
-        item = (kinds.get(fo.type) or {}).get("item")
-        if item:
-            rel = item[5:] if item.lower().startswith("data/") else item
-            out.append({"kind": "landmark", "model": rel, "texture": None, "xy": tuple(fo.xy), "scale": 1.0,
-                        "faction": None})
+        item = (kinds.get(fo.type) or {}).get("item") or MISSING        # no model of its own: the red '?'
+        rel = item[5:] if item.lower().startswith("data/") else item
+        out.append({"kind": "landmark", "model": rel, "texture": None, "xy": tuple(fo.xy), "scale": 1.0,
+                    "faction": None})
     # resources (their lines in descr_strat: 'resource gold, 83, 128')
     res = resource_models(mod)
     for line in strat.lines:
         m = re.match(r"\s*resource\s+([\w\-]+)\s*,\s*(\d+)\s*,\s*(\d+)", strip_comment(line))
-        if m and res.get(m.group(1)):
-            out.append({"kind": "resource", "model": res[m.group(1)], "texture": None,
+        if m:                                             # no model of its type: the red '?'
+            out.append({"kind": "resource", "model": res.get(m.group(1)) or MISSING, "texture": None,
                         "xy": (int(m.group(2)), int(m.group(3))), "scale": 1.0, "faction": None})
     # characters: the faction's figure of their type, in its texture
     scales = _strat_scales(mod)
@@ -260,7 +262,10 @@ def objects(mod, campaign, strat, moved=None):
                 kind = "general"
             names = figs.get(CHAR_TYPES.get(kind, kind)) or figs.get("general") or []
             info = SM.mesh_info(mod, names[0]) if names else None
-            if info is None or not info.meshes:
+            if info is None or not info.meshes:              # no figure to draw: the red '?' where he stands
+                stood.add(tuple(c.xy))
+                out.append({"kind": "character", "model": MISSING, "texture": None, "xy": tuple(c.xy), "scale": 1.0,
+                            "skeleton": None, "faction": fb.name, "in_town": tuple(c.xy) in towns})
                 continue
             tex = info.textures.get(fb.name) or info.textures.get("") or next(iter(info.textures.values()), None)
             sc, skel = scales.get(names[0], (1.0, None))
