@@ -1,5 +1,8 @@
 """The maps' review (2026-10-22): the Terrain editor, the land and sea, the heights, the regions' map pictures."""
 
+import os
+import shutil
+import tempfile
 import unittest
 from types import SimpleNamespace
 from unittest import mock
@@ -104,6 +107,42 @@ class ClimatesViewTest(unittest.TestCase):
             del cm._climates_fast
             self.assertIsNone(ImageChops.difference(fast, slow).getbbox(), sea)
         self.assertIsNotNone(cm._climates_fast(False))
+
+
+class ResourceOnWastelandTest(unittest.TestCase):
+    def setUp(self):
+        from campaign_editor.minimod import make
+        self.root = tempfile.mkdtemp()
+        make(self.root)
+
+    def tearDown(self):
+        shutil.rmtree(self.root)
+
+    def test_a_resource_put_on_a_wasteland_is_warned_in_medieval2(self):
+        """Medieval II refuses a resource in a region without a town (report #186): one moved or added there on the
+        map went in silently - only Check mod files named it after the write. Now the write says so (kept: freedom)."""
+        from campaign_editor import regiondelete as RD, resources as RS
+        from campaign_editor.minimod import write
+        from campaign_editor.moddata import ModData
+        from campaign_editor.plan import Plan
+        write(os.path.join(self.root, "data", "descr_ex.txt"), "max_factions 31\n")
+        write(os.path.join(self.root, "data", "descr_religions.txt"), "religions\n{\n\tcatholic\n}\n")
+        mod = ModData(self.root)
+        land = sorted(set(RD.region_pixels(mod, "test", "B_R")) - {mod.city_tiles("test")["B_R"]})
+        plan = Plan(mod, "delete", "B_R", {})
+        RD.delete(plan, "test", "B_R", waste=True)
+        plan.apply()
+        mod = ModData(self.root)
+        kind = next(iter(RS.types(mod)), "silk")
+        plan = Plan(mod, "resources", "test", {})
+        RS.apply(plan, "test", {"added": [{"type": kind, "xy": land[0]}]})
+        self.assertTrue(any("B_R, a wasteland" in w for _, w in plan.warnings), plan.warnings)
+        self.assertIn(kind, [r.kind for r in RS.read(plan.files[mod.campaign_file("test", "descr_strat.txt")])])
+        os.remove(os.path.join(self.root, "data", "descr_religions.txt"))             # Rome: nothing said
+        mod = ModData(self.root)
+        plan = Plan(mod, "resources", "test", {})
+        RS.apply(plan, "test", {"added": [{"type": kind, "xy": land[0]}]})
+        self.assertFalse(any("wasteland" in w for _, w in plan.warnings))
 
 
 if __name__ == "__main__":
