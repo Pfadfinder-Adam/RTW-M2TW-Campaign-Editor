@@ -143,6 +143,10 @@ def build(mod, campaign, template, new, opts):
     if not opts.get("bring"):                    # brought from another mod: it owns its own units (factionbring)
         clone.edu_ownership(plan)
     clone.edb_factions(plan)
+    if opts.get("from_zero") and opts.get("common_units", True) and not opts.get("bring"):
+        # New faction > From zero: only the units its culture shares, not the template's own (Roster gives its own)
+        from .fromzero import take_template_units
+        take_template_units(plan, campaign, opts.get("culture") or mod.culture(template))
     clone.texture_lines(plan, "model_battle")
     clone.texture_lines(plan, "model_strat")
     from .modeldb import plan_add_faction

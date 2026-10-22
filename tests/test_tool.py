@@ -402,6 +402,22 @@ class ToolTest(unittest.TestCase):
                                                     "start": {"regions": ["B_R"], "leader": {"name": "Boris"}}})
         self.assertIn("recoloured in its own colours right after it is written", plan.report())
         self.assertNotIn("Art > Recolour all its pictures", plan.report())
+        # stage 4: the units its culture shares, not the template's own - too few shared: the template's stay
+        self.assertEqual(Z.template_units(mod, "alpha", "eastern"), (["alpha general"], []))
+        self.assertIn("keeps alpha's own units (1): its culture shares only 0", plan.report())
+        with open(os.path.join(self.root, "data", "export_descr_unit.txt"), "a", encoding="latin-1") as fh:
+            fh.write("".join("\ntype\t\teast unit %d\ndictionary\teast_%d\nownership\teastern\n" % (i, i)
+                             for i in range(6)))
+        mod = ModData(self.root)
+        start = {"regions": ["B_R"], "leader": {"name": "Boris"}}
+        plan = build(mod, "test", "alpha", "beta", {"display_name": "Betaland", "from_zero": "eastern",
+                                                    "start": start})
+        edu = "\n".join(plan.files[mod.file("edu")].texts())
+        self.assertNotIn("beta", edu)                       # alpha general stays alpha's alone
+        self.assertIn("beta has the 6 unit(s) its culture shares, not alpha's own 1 (alpha general)", plan.report())
+        plan = build(mod, "test", "alpha", "beta", {"display_name": "Betaland", "from_zero": "eastern",
+                                                    "common_units": False, "start": start})
+        self.assertIn("ownership\talpha, beta", "\n".join(plan.files[mod.file("edu")].texts()))
         try:
             from PIL import Image, ImageDraw
         except ImportError:

@@ -43,14 +43,15 @@ def _owned(mod):
 
 def frame_faction(mod, campaign, culture):
     """The faction of the culture the new one's lines are made from: one in the campaign before one that is not,
-    then the one with the most units of its own (its lines in the game's lists are the fullest), then by name.
-    None: the culture has no faction."""
+    then the one sharing the most units with its culture (the new faction starts with those - take_template_units),
+    then the one with the most units, then by name. None: the culture has no faction."""
     from .build import _in_campaign
     owned = _owned(mod)
     got = culture_factions(mod, culture)
     if not got:
         return None
-    return sorted(got, key=lambda f: (not _in_campaign(mod, campaign, f), -owned.get(f, 0), f))[0]
+    return sorted(got, key=lambda f: (not _in_campaign(mod, campaign, f), -len(template_units(mod, f, culture)[1]),
+                                      -owned.get(f, 0), f))[0]
 
 
 def _share(mine, theirs):
@@ -183,3 +184,54 @@ def symbols_alike(picture, logos, most=0.95):
         if k >= most:
             got.append((f, k))
     return sorted(got, key=lambda fk: -fk[1])
+
+
+MIN_COMMON = 6      # fewer units shared by the culture than this: the template's own stay (a faction needs an army)
+
+
+def template_units(mod, template, culture):
+    """(own, common): the template's units only it has - its ownership names it, but no other faction of the
+    culture, nor the culture, nor 'all' - and those it shares with its culture (non-combatants left out)."""
+    from . import roster as R
+    path = mod.file("edu")
+    if not path:
+        return [], []
+    f = mod.load(path)
+    others = set(culture_factions(mod, culture)) - {template}
+    own, common = [], []
+    for blk in R._edu_blocks(f):
+        cat_i = R.unit_line(f, blk, "category")
+        if cat_i is not None and tokens(f.text(cat_i))[1:2] == ["non_combatant"]:
+            continue
+        names = set(R.ownership(f, blk))
+        if template in names and not (names & others) and culture not in names and "all" not in names:
+            own.append(blk[0])
+        elif template in names or culture in names or "all" in names:
+            common.append(blk[0])
+    return own, common
+
+
+def take_template_units(plan, campaign, culture):
+    """New faction > From zero: the units only its frame has are not the new faction's (its ownership, recruit
+    lines) - it starts with what the whole culture shares; Roster > By buildings gives it units of its own. A
+    culture that shares fewer than MIN_COMMON units: the frame's own stay (said)."""
+    from . import roster as R
+    own, common = template_units(plan.mod, plan.template, culture)
+    if not own:
+        return []
+    if len(common) < MIN_COMMON:
+        plan.note(None, "%s keeps %s's own units (%d): its culture shares only %d - Roster takes out what it should "
+                        "not have" % (plan.new, plan.template, len(own), len(common)))
+        return []
+    for unit in own:
+        R.take_unit(plan, plan.new, unit, campaign)
+    start = plan.opts.get("start") or {}
+    used = {u for c in start.get("characters") or [] for u in c.get("units") or []}
+    used |= {u for g in (start.get("garrisons") or {}).values() for u in (g or [])
+             if isinstance(u, str)}
+    kept = sorted(used & set(own))
+    plan.note(None, "%s has the %d unit(s) its culture shares, not %s's own %d (%s) - Roster > By buildings gives "
+                    "it units of its own%s" % (plan.new, len(common), plan.template, len(own), ", ".join(own[:6]) +
+                                                (" ..." if len(own) > 6 else ""),
+                                                "; its starting armies keep %s" % ", ".join(kept) if kept else ""))
+    return own

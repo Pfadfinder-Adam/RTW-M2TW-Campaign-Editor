@@ -6653,6 +6653,7 @@ class App(tk.Tk):
             opts["bring"] = {k: v for k, v in self.bring.items() if k != "for"}
         if self.zero:                                   # New faction > From zero (traces.plan_note says so)
             opts["from_zero"] = self.zero.get("culture") or True
+            opts["common_units"] = self.zero.get("common_units", True)
         self.zero_sync()
         return v["template"], v["name"].lower(), opts
 
@@ -7314,7 +7315,7 @@ class App(tk.Tk):
         yet (Start the game said 'changes not written', a second Create would make it again; the user, 2026-10-15).
         The form is emptied and the work goes on in Edit faction on the faction made - create, then edit."""
         self.bring = None
-        self.zero = None
+        zero, self.zero = self.zero, None
         self.lbl_bring.configure(text="")
         self.b_unbring.pack_forget()
         self.v["name"].set("")
@@ -7328,6 +7329,14 @@ class App(tk.Tk):
         self.template_changed()
         self.status.set("%s is made - it opens here in Edit faction (start a NEW campaign to see it in the game)."
                         % name)
+        if zero:                        # from zero: its units next - the Roster's By buildings
+            try:
+                self.select_tab("Roster")
+                self.roster_editor.tabs.select(self.roster_editor.by_buildings)
+                self.status.set("%s is made from zero - give it units of its own here: Roster > By buildings (a unit "
+                                "added to a level reaches every level above). Start a NEW campaign to see it." % name)
+            except (tk.TclError, ValueError, AttributeError) as e:
+                log.write("Roster after a faction from zero: %s" % e)
 
     def _menu_hint(self, menu):
         try:
