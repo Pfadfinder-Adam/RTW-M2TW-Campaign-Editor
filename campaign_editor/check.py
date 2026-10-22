@@ -577,6 +577,25 @@ def check_mod(mod, campaign, deep=False, progress=None, found=None):
     for p in untouched_problems(mod):
         bad(p)
 
+    # ---- what the factions the editor made still share with another faction (none stops the game) ----
+    from . import traces
+    try:
+        made = traces.made_factions(mod)
+    except Exception:
+        made = {}
+    for fac, tmpl in sorted(made.items()):
+        step("Traces of another faction in %s..." % fac)
+        try:
+            lines = traces.summary(traces.traces(mod, campaign, fac))
+        except Exception as e:
+            lines = ["(not read: %s)" % e]
+        if lines:
+            say("")
+            say("TRACES OF ANOTHER FACTION in %s (made from %s; nothing here stops the game - for a faction of its "
+                "own: Art > Faction emblem, Recolour all its pictures..., Name list..., Roster):" % (fac, tmpl))
+            for line in lines:
+                say("    " + line)
+
     # ---- deep: rehearse the tool's work for every faction ----
     if deep:
         say("")

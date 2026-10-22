@@ -4,6 +4,8 @@
 
 ### Added
 - Maps > 3D: **Ctrl+Z / Ctrl+Y** take back (or do again) what was done on the 3D map - a brush stroke, regions painted, a figure carried; with a tile brush in hand the mouse resting on a tile says its ground, climate and region.
+- Check mod files: **TRACES OF ANOTHER FACTION** - for each faction made with New faction, what it still shares with the faction it was made from or another one: pictures and unit cards pixel for pixel, battle textures, the 3D symbol, movies, colours too close, texts naming another faction, most of the name list; with where in the editor each is made its own (only information - nothing there stops the game). New faction's own report ends with the same list.
+- New faction: **People (plural)** - what its people are called in the texts players read ("the Scots"); left empty the editor makes it from the name.
 - Maps > 3D: Paint > **Regions** - the Map's Edit regions brush right on the 3D map (paint tiles into the region picked, the region colours shown over the map, the borders drawn again after the stroke); **Alt + click** picks the tile's own region, ground, mark or climate for the brush.
 - Maps > 3D > Layers: **colours over the map** - each tile in its climate's colour (the sea's too: what land raised there gets) or its region's, following the brushes while you paint; picking the Climates brush shows the climates by itself.
 - Maps > 3D: **Paint** (was Heights brush) paints right on the 3D map - the heights, or tile by tile the ground, rivers / cliffs / volcanoes, climates, land or sea, each picked in 'brush' with the Terrain editor's own palette; Undo, Preview and Apply shared with the Terrain editor, the painted ground shows at once.

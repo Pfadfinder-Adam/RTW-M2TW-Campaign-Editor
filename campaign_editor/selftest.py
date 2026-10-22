@@ -2866,6 +2866,8 @@ LOOK = "only shows, writes nothing - tried in the window by check-scripts/smoke.
 COVERAGE = {
     "Draw from the map (faction-select map)": ["s_select_map_drawn"],
     "New faction": ["s_new_faction"],
+    "New faction keeps nothing of the template's own (story texts, people, movies, leader's face, town flag, 3D "
+    "symbol, select map)": ["s_new_faction"],
     "New mod folder": RUN + " (CE_Test is made with it)",
     "Edit faction (names, colours, money, towns, garrisons)": ["s_edit"],
     "Victory conditions": ["s_victory"],
@@ -2978,6 +2980,7 @@ COVERAGE = {
     "Make the campaign map 3 x bigger": RUN + " (the x3 copy, when asked)",
     "Check mod files": RUN + " (after every step)",
     "Check mod files: Take them out (untouched copies)": ["s_untouched_copies"],
+    "Check mod files: Traces of another faction": RUN + " (the test mod's new factions are listed after every step)",
     "Restore a backup": RUN + " (check-scripts/testmod.py restores every step byte for byte)",
     "The game's log in plain words": LOOK,
     "View in 3D, play a sound": LOOK,
