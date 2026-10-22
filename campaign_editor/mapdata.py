@@ -141,7 +141,7 @@ class CampaignMap:
             im = self.heights_view()                    # the rivers over it too (a tester: 'no rivers in Terrain')
             return self._rivers(im) if rivers else im
         climates = bool(getattr(self, "show_climates", False))
-        key = (bool(relief), bool(rivers), climates)
+        key = (bool(relief), bool(rivers), climates, climates and bool(getattr(self, "show_sea_climates", False)))
         cache = self.__dict__.setdefault("_backgrounds", {})
         if key not in cache:
             # everything worked out per tile, then blown up: each square one colour, nothing
@@ -176,13 +176,15 @@ class CampaignMap:
         return im
 
     def _climates(self, im):
-        """Each land tile tinted in its map_climates.tga colour (the Terrain editor's Climates mode)."""
+        """Each land tile tinted in its map_climates.tga colour (the Terrain editor's Climates mode); the sea tiles
+        too when show_sea_climates (the file has a climate under the sea as well - what new land gets)."""
         over = Image.new("RGB", (self.w, self.h))
         mask = Image.new("L", (self.w, self.h))
         cols, keep = [], []
+        sea_too = bool(getattr(self, "show_sea_climates", False))
         for y in range(self.h - 1, -1, -1):
             for x in range(self.w):
-                c = None if self.is_sea(x, y) else self.climate_at(x, y)
+                c = None if not sea_too and self.is_sea(x, y) else self.climate_at(x, y)
                 cols.append(c or (0, 0, 0))
                 keep.append(170 if c else 0)
         over.putdata(cols)
