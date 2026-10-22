@@ -36,6 +36,10 @@ TITLE = "Layout board"
 WINDOWS = (("settings_window", "Settings"), ("show_help", "Help"), ("mod_zero_window", "A mod from zero"),
            ("game_log_window", "The game's log in plain words"), ("show_log", "Log"),
            ("credits_window", "Credits"))          # (Game manifest asks for a folder first: not gathered)
+# the windows the works open, laid out too once a mod is loaded (the user, 2026-10-22: 'every page and window
+# already laid out'): (App method, title on the board); a town's window shows the first town
+MOD_WINDOWS = (("town_window", "A town"), ("rebels_window", "Rebels"), ("mercenaries_window", "Mercenaries"),
+               ("map_size_window", "Change the map's size"), ("sources_window", "Authors and sources"))
 TAB_WORKS = ("map", "edit", "new")             # works whose tabs are pages of their own
 SKIP_TABS = ("3D",)                            # starts the graphics card's map: shown when opened, not gathered
 WAIT_WORK, WAIT_TAB, WAIT_WINDOW = 350, 220, 450   # ms a page is given to draw itself before its picture
@@ -418,7 +422,15 @@ class LayoutBoard(tk.Toplevel):
                 else:
                     out.append(("work:" + k, app.WORK_TITLES.get(k, k), "Works"))
         out += [("window:" + m, t, "Windows") for m, t in WINDOWS if hasattr(app, m)]
+        if getattr(app, "mod", None) is not None:
+            out += [("window:" + m, t, "Windows of the works") for m, t in MOD_WINDOWS if hasattr(app, m)]
         return out
+
+    def _first_town(self):
+        try:
+            return sorted(self.app.owners_after())[0]
+        except Exception:                                   # noqa: BLE001 - no campaign, no towns
+            return None
 
     def _open(self, pid):
         """The page shown in the editor: a work (and its tab), or a Tools window (-> the window, or None)."""
@@ -442,6 +454,11 @@ class LayoutBoard(tk.Toplevel):
         fn = getattr(app, name, None)
         if fn is None:
             return None
+        if name == "town_window":
+            region = self._first_town()
+            if region is None:
+                return None
+            fn = (lambda f=fn, r=region: f(r))
         with _quiet():                                   # a window that would ask first (no game log yet): not shown
             app.once(name, fn)()
         for w in app.winfo_children():
@@ -1305,4 +1322,4 @@ def open_board(app):
     return b
 
 
-__all__ = ["LayoutBoard", "open_board", "snap", "pieces_of", "WINDOWS"]
+__all__ = ["LayoutBoard", "open_board", "snap", "pieces_of", "WINDOWS", "MOD_WINDOWS"]

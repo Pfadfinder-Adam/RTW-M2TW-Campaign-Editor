@@ -4,8 +4,9 @@ per colour of the light / dark look (theme.NAMES) and one per button with a colo
 a click picks a new colour, its arrow takes it back; a font and a size for every window; Light / Dark. Each change is
 put on every window at once (theme.set_custom) and kept for every start. The layout board shows it at its side."""
 
+import os
 import tkinter as tk
-from tkinter import colorchooser, ttk
+from tkinter import colorchooser, filedialog, messagebox, simpledialog, ttk
 from tkinter import font as tkfont
 
 from . import settings, theme
@@ -54,7 +55,10 @@ class AppearancePanel(ttk.Frame):
         self.rows.pack(fill="x")
         ttk.Button(self, text="All back to the look as it comes", command=self._all_back).pack(anchor="w",
                                                                                             pady=(10, 0))
+        self.snip_box = ttk.Frame(self)
+        self.snip_box.pack(fill="x", pady=(12, 0))
         self._fill()
+        self._snippets()
 
     def _fill(self):
         for w in self.rows.winfo_children():
@@ -85,6 +89,97 @@ class AppearancePanel(ttk.Frame):
                     ttk.Button(self.rows, text="↺", width=2, command=lambda k=key: self._set(k, None)).grid(
                         row=r, column=2, sticky="w")
                 r += 1
+
+    # ---- snippets: sets of button changes switched on and off (Obsidian's CSS snippets) ----
+    def _snippets(self):
+        box = self.snip_box
+        for w in box.winfo_children():
+            w.destroy()
+        look = getattr(self.root, "look", None)
+        if look is None:
+            return
+        from . import look as LK
+        ttk.Label(box, text="Snippets - sets of button changes", font=("", 9, "bold")).pack(anchor="w")
+        snips = LK.snippets()
+        if not snips:
+            ttk.Label(box, text="None yet: move your changes into one below.", foreground=theme.palette()["muted"]
+                      ).pack(anchor="w")
+        for s in snips:
+            row = ttk.Frame(box)
+            row.pack(fill="x")
+            v = tk.BooleanVar(row, value=s["on"])
+            ttk.Checkbutton(row, text="%s  (%d)" % (s["name"], len(s["pieces"])), variable=v,
+                            command=lambda s_=s, v_=v: self._switch(s_, v_.get())).pack(side="left")
+            ttk.Button(row, text="✕", width=2, command=lambda s_=s: self._drop(s_)).pack(side="right")
+            ttk.Button(row, text="Export...", command=lambda s_=s: self._export(s_)).pack(side="right", padx=(0, 4))
+        row = ttk.Frame(box)
+        row.pack(fill="x", pady=(4, 0))
+        ttk.Button(row, text="Move my changes into a snippet...", command=self._own_to_snippet).pack(side="left")
+        ttk.Button(row, text="Import...", command=self._import).pack(side="left", padx=(4, 0))
+
+    def _switch(self, s, on):
+        from . import look as LK
+        LK.set_snippet_on(s["path"], on)
+        self.root.look.relayer()
+        self._snippets()
+
+    def _drop(self, s):
+        if not messagebox.askyesno(TITLE, "Delete the snippet '%s'? Its changes go with it." % s["name"],
+                                   parent=self.winfo_toplevel()):
+            return
+        import os
+        try:
+            os.remove(s["path"])
+        except OSError:
+            pass
+        self.root.look.relayer()
+        self._snippets()
+
+    def _export(self, s):
+        import shutil
+        path = filedialog.asksaveasfilename(parent=self.winfo_toplevel(), title="Export a snippet",
+                                            defaultextension=".json", initialfile=os.path.basename(s["path"]),
+                                            filetypes=(("Snippet", "*.json"),))
+        if path:
+            try:
+                shutil.copyfile(s["path"], path)
+            except OSError as e:
+                messagebox.showerror(TITLE, "It could not be written: %s" % e, parent=self.winfo_toplevel())
+
+    def _import(self):
+        from . import look as LK
+        path = filedialog.askopenfilename(parent=self.winfo_toplevel(), title="Import a snippet",
+                                          filetypes=(("Snippet or look", "*.json"),))
+        if not path:
+            return
+        got = LK.load(path)
+        if not got["pieces"]:
+            messagebox.showinfo(TITLE, "There are no button changes in that file.", parent=self.winfo_toplevel())
+            return
+        name = os.path.splitext(os.path.basename(path))[0]
+        try:
+            import json
+            with open(path, encoding="utf-8") as fh:
+                name = json.load(fh).get("name") or name
+        except (OSError, ValueError, AttributeError):
+            pass
+        LK.save_snippet(str(name), got, on=True)
+        self.root.look.relayer()
+        self._snippets()
+
+    def _own_to_snippet(self):
+        look = self.root.look
+        if not look.own["pieces"]:
+            messagebox.showinfo(TITLE, "You have no button changes of your own now (they may all be in snippets "
+                                       "already).", parent=self.winfo_toplevel())
+            return
+        name = simpledialog.askstring(TITLE, "The snippet's name (your %d button changes go into it; switch it "
+                                             "off to see the editor without them):" % len(look.own["pieces"]),
+                                      parent=self.winfo_toplevel())
+        if name and name.strip():
+            if look.own_to_snippet(name.strip()) is None:
+                messagebox.showerror(TITLE, "The snippet could not be written.", parent=self.winfo_toplevel())
+            self._snippets()
 
     def _themes(self):
         from .gui_themes import open_themes

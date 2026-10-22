@@ -3873,6 +3873,39 @@ building smith
         finally:
             app.destroy()
 
+    def test_layout_board_lays_out_the_windows_of_the_works(self):
+        """With a mod loaded the layout board lays out the windows the works open too (the user: 'every page and
+        window already laid out'): a town's (the first town), Rebels, Mercenaries, the map's size, Authors and
+        sources - each one opens as a window of its own for its picture."""
+        try:
+            from unittest import mock
+            from campaign_editor import gui
+            app = gui.App()
+        except Exception as e:                        # no tkinter / no display
+            self.skipTest("no tkinter window: %s" % e)
+        from campaign_editor import gui_lookboard as GB, minimod
+        try:
+            with mock.patch("tkinter.messagebox.showinfo"), mock.patch("tkinter.messagebox.showerror"), \
+                    mock.patch("tkinter.messagebox.askyesno", return_value=False):
+                app.v_path.set(minimod.make(os.path.join(self.root, "mini")))
+                app.load()
+                app.update()
+                b = GB.LayoutBoard.__new__(GB.LayoutBoard)
+                b.app = app
+                steps = [s for s in b._steps() if s[2] == "Windows of the works"]
+                self.assertEqual([s[0] for s in steps], ["window:" + m for m, _ in GB.MOD_WINDOWS])
+                for pid, title, _ in steps:
+                    top = b._open(pid)
+                    app.update()
+                    self.assertIsNotNone(top, title)
+                    self.assertIsNot(top, app)
+                    top.destroy()
+        finally:
+            try:
+                app.destroy()
+            except Exception:
+                pass
+
     def test_mod_from_zero_steps(self):
         """Tools > A mod from zero, step by step (the user, 2026-10-21): the six steps in order, each saying how far
         the loaded mod is, each button opening the editor's own work for it."""
@@ -5647,6 +5680,63 @@ building smith
                 self.assertEqual(str(play.cget("style")), "Play.TButton")
                 self.assertEqual(str(play.cget("text")), "Play")
                 self.assertNotEqual(str(lab.cget("foreground")), "#aa0000")
+        finally:
+            try:
+                root.destroy()
+            except Exception:
+                pass
+
+    def test_editor_look_snippets_switched_on_and_off(self):
+        """Snippets (Obsidian's CSS snippets): sets of button changes, each switched on / off, the own look over
+        them; a part a snippet gives that the own look takes away ('off': a piece a snippet hides shown again); the
+        own changes moved into a snippet change nothing on the screen; switching it off takes them away."""
+        from campaign_editor import look as LK
+        snips = [{"on": True, "pieces": {"a": {"hidden": True}, "b": {"xy": [5, 5], "up": 1}}, "order": []},
+                 {"on": False, "pieces": {"a": {"text": "never"}}, "order": []}]
+        own = {"pieces": {"a": {"off": ["hidden"], "bg": "#101010"}, "b": {"to": "c", "where": "after"}},
+               "order": ["b"]}
+        got = LK.layered(own, snips)
+        self.assertEqual(got["pieces"]["a"], {"bg": "#101010"})
+        self.assertEqual(got["pieces"]["b"], {"to": "c", "where": "after"})       # the own place wins whole
+        self.assertEqual(got["order"], ["b"])
+        self.assertEqual(LK.own_part({"hidden": True, "text": "x"}, {"text": "x", "bg": "#000000"}),
+                         {"bg": "#000000", "off": ["hidden"]})
+        self.assertEqual(LK.own_part({"xy": [1, 2], "up": 1}, {"xy": [1, 2], "up": 2}), {"xy": [1, 2], "up": 2})
+        try:
+            import tkinter as tk
+            from tkinter import ttk
+            root = tk.Tk()
+        except Exception as e:
+            self.skipTest("no window: %s" % e)
+        from unittest import mock
+        from campaign_editor import gui_look as GL
+        from campaign_editor import log
+        home = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, home)
+        try:
+            with mock.patch.object(log, "home", lambda: home):
+                look = GL.install(root)
+                save = ttk.Button(root, text="Save")
+                save.pack()
+                root.update()
+                look.change_key(save._look_key, text="Keep", hidden=True)
+                root.update()
+                self.assertEqual(save.winfo_manager(), "")
+                path = look.own_to_snippet("Mine")
+                root.update()
+                self.assertTrue(path and os.path.isfile(path))
+                self.assertEqual(look.own["pieces"], {})
+                self.assertEqual(save.winfo_manager(), "")                # still hidden: the snippet is on
+                look.change_key(save._look_key, hidden=None)             # shown again over the snippet
+                root.update()
+                self.assertEqual(save.winfo_manager(), "pack")
+                self.assertEqual(look.own["pieces"][save._look_key], {"off": ["hidden"]})
+                self.assertEqual(str(save.cget("text")), "Keep")
+                LK.set_snippet_on(path, False)
+                look.relayer()
+                root.update()
+                self.assertEqual(str(save.cget("text")), "Save")         # the snippet off: its words gone
+                self.assertFalse(LK.snippets()[0]["on"])
         finally:
             try:
                 root.destroy()
