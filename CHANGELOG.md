@@ -46,6 +46,7 @@
 - New mod folder puts no switched-off engine settings files (descr_ex, descr_caps_ex) in: the mod runs on the engine's defaults as before; the editor writes the line a change needs, Check mod files' Copy them in brings the whole list.
 
 ### Fixed
+- Terrain / Maps > 3D: a big Ground brush over the sea lagged (each tile turned into land one at a time) -> the brush's tiles turn together, about three times faster.
 - Maps > 3D: land raised out of the water with the heights brush made the map stall at the stroke's end, then its ground texture changed to the new climate -> the new land shows its own ground and climate while you paint, and nothing is made again after.
 - Maps > 3D: Rome's glass resource was never seen (its picture is see-through all over) -> it stands on the map as the game shows it.
 - Edit faction: the game a row belongs to ("Medieval II only" beside Religion on Rome) was cut off -> it stands on a line of its own.

@@ -11270,6 +11270,29 @@ building smith
         self.assertEqual((undone, later), (["undo", "redo"], ["after", "load", "load"]))
         self.assertFalse(Map3DView.undo_step(me, redo=True))        # the regions again: the window's Redo
         self.assertFalse(Map3DView.undo_step(me, redo=True))        # nothing of its own left
+        # the Ground brush over the sea: every tile it turns into land goes to the Land and sea brush in ONE call
+        # (the shore risen and smoothed once - tile by tile a big brush lagged), then gets its ground
+        try:
+            from campaign_editor.gui_terrain import TerrainEditor
+        except ImportError:
+            TerrainEditor = None
+        if TerrainEditor is not None:
+            from unittest import mock
+            coast, laid = [], []
+            sea = {(1, 0), (2, 0), (3, 0)}
+            te = SimpleNamespace(_bound=lambda: True, v_what=SimpleNamespace(get=lambda: "ground"),
+                                 _current=lambda what, t: (64, 0, 0) if t in sea else (0, 128, 128),
+                                 cmap=SimpleNamespace(is_sea=lambda x, y: (x, y) in sea, __dict__={}),
+                                 paint_coast=lambda tiles, mode: coast.append((sorted(tiles), mode)) or
+                                 [(t, None) for t in tiles if t != (3, 0)], _coast_why="a town stands there",
+                                 standing=set(), _lay_tile=lambda what, t, c: laid.append(t), ground={}, climate={},
+                                 features={}, pending=lambda: 3,
+                                 app=SimpleNamespace(status=SimpleNamespace(set=lambda t: None), _mark_work=lambda: None))
+            with mock.patch("campaign_editor.terrain.paint_problem", lambda *a: None):
+                took = TerrainEditor.paint(te, [(0, 0), (1, 0), (2, 0), (3, 0)], colour=(101, 124, 0))
+            self.assertEqual(coast, [([(1, 0), (2, 0), (3, 0)], "land")])
+            self.assertEqual(laid, [(0, 0), (1, 0), (2, 0)])                    # (3, 0) refused: stays sea
+            self.assertEqual(len(took), 3)
         # a tile brush in hand: what the tile is, beside the mouse
         cm = SimpleNamespace(w=9, h=9, ground_at=lambda x, y: (0, 128, 128), climate_at=lambda x, y: (1, 2, 3),
                              region_at=lambda x, y: "Latium")
