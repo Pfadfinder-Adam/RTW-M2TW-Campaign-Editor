@@ -262,7 +262,8 @@ class ModelViewer(tk.Toplevel):
             what, f = self.anims[self.v_skel.get()][i - 1]
             self.anim_key = what
             try:
-                self.anim = EN.anim(self.mod, self.engine["moves"][f]) if self.engine else AN.find(self.mod, f)
+                self.anim = EN.anim(self.mod, self.engine["moves"][f]) if self.engine else \
+                    AN.find(self.mod, f, self._scale(self.v_skel.get()))
             except (OSError, ValueError):
                 self.anim = None
             if self.engine:
@@ -345,7 +346,7 @@ class ModelViewer(tk.Toplevel):
             return (EN.pose(self.mesh, self.anim, self.engine["base"], self.frame)
                     if self.anim is not None and self.engine["base"] is not None else None), None
         anim, frame = self.anim, self.frame
-        if anim is None and self.mesh.parents:
+        if anim is None and MV.is_animal(self.mesh):
             anim, frame = self._idle(self.v_skel.get()), 0
         if anim is None:
             return None, None
@@ -356,38 +357,49 @@ class ModelViewer(tk.Toplevel):
             except Exception as e:
                 return None, "the animation could not be put on the model: %s" % e
         sk = self.v_skel.get()
-        if sk not in self._base:
-            self._base[sk] = AN.base_pose(self.mod, sk)
-        base = self._base[sk]
-        if base is None:
-            return None, "no base pose (the skeleton's 'default' animation) - the model stays as it is"
-        got = MV.pose_mesh(self.mesh, pose, base, self._held(sk, anim, frame))
-        return (got, None) if got is not None else (None, "the animation does not fit the model's bones")
+        skel = self._skel(sk)
+        if skel is None:
+            return None, "its skeleton %s could not be read (not in the animation set the game loads, no .cas file of " \
+                         "it) - the model stays as it is" % sk
+        got = MV.pose_mesh(self.mesh, pose, skel, self._attached(sk, frame))
+        return (got, None) if got is not None else (
+            None, "the animation has %d bones, its skeleton %d - the model stays as it is" % (len(pose.rotations),
+                                                                                              len(skel)))
 
-    def _held(self, skeleton, anim, frame):
-        """{weapon bone: turn} - each weapon's and the shield's own move in the hand, from its skeleton's animation
-        of the same name as the man's (the modeldb / descr_model_battle names those skeletons per man's skeleton):
-        a skirmisher's javelin turns point first for the throw."""
-        held = (getattr(self.info, "weapons", {}) or {}).get((skeleton or "").lower())
-        if not held or anim is None or not self.mesh.bone_names:
-            return None
-        key = (self.anim_key or "stand_a_idle").lower() if self.anim is not None else "stand_a_idle"
-        parts = MV.weapon_bones(self.mesh)
-        shield = next((h for h in held if "shield" in h.lower()), None)
-        weapon = next((h for h in held if h is not shield), None)
-        out = {}
-        for wsk, bones in ((weapon, parts["weapon"]), (shield, parts["shield"])):
-            f = self._moves_of(wsk).get(key) if wsk else None
+    def _skel(self, sk):
+        """The skeleton of this name as the game has it (animations.skeleton), read once."""
+        if sk not in self._base:
             try:
-                wa = AN.find(self.mod, f) if f else None
+                self._base[sk] = AN.skeleton(self.mod, sk) if sk else None
+            except (OSError, ValueError):
+                self._base[sk] = None
+        return self._base[sk]
+
+    def _scale(self, sk):
+        """The scale its skeleton's animations are kept at (Rome keeps several of one animation)."""
+        got = self._skel(sk) if sk and not self.engine else None
+        return got.scale if got is not None else None
+
+    def _attached(self, skeleton, frame):
+        """[(Skeleton, Pose or None)] - the weapons' and the shield's own skeletons (the modeldb / descr_model_battle
+        names them per man's skeleton) in their frame of the man's move, as the game plays them: the animation of
+        the same name, else their 'default' one (a skirmisher's javelin turns point first for the throw)."""
+        held = (getattr(self.info, "weapons", {}) or {}).get((skeleton or "").lower()) or []
+        key = (self.anim_key or "stand_a_idle").lower() if self.anim is not None else "stand_a_idle"
+        out = []
+        for wsk in held:
+            a = self._skel(wsk)
+            if a is None:
+                continue
+            moves = self._moves_of(wsk)
+            own = moves.get(key)                    # its 'default' plays its first frame (SKELETON_STATE pose)
+            f = own or moves.get("default")
+            try:
+                wa = AN.find(self.mod, f, a.scale) if f else None
             except (OSError, ValueError):
                 wa = None
-            if wa is None or not bones:
-                continue
-            q = MV.weapon_turn(wa, frame * wa.frames / max(1, anim.frames))
-            for b in bones:
-                out[b] = q
-        return out or None
+            out.append((a, MV.Pose.of(wa, min(frame, wa.frames - 1) if own else 0) if wa is not None else None))
+        return out
 
     def _secondary(self):
         """Whether the skeleton picked is the model's second (its second weapon in hand: a knight's sword)."""
@@ -408,7 +420,7 @@ class ModelViewer(tk.Toplevel):
         moves = self._moves_of(skeleton) if skeleton else {}
         f = moves.get("stand_a_idle") or moves.get("stand")          # Medieval II's / Rome's standing move
         try:
-            return AN.find(self.mod, f) if f else None
+            return AN.find(self.mod, f, self._scale(skeleton)) if f else None
         except (OSError, ValueError):
             return None
 
@@ -424,16 +436,12 @@ class ModelViewer(tk.Toplevel):
         sk = next((k for k in self.mount[0].skeletons if self._moves_of(k)), None)
         if sk is None:
             return mm
-        base = None
-        if not cas:
-            if sk not in self._base:
-                self._base[sk] = AN.base_pose(self.mod, sk)
-            base = self._base[sk]
+        base = None if cas else self._skel(sk)
         anim, frame = None, 0
         f = self._moves_of(sk).get((self.anim_key or "").lower()) if self.anim is not None else None
         if f:
             try:
-                anim = AN.find(self.mod, f)
+                anim = AN.find(self.mod, f, self._scale(sk))
             except (OSError, ValueError):
                 anim = None
             if anim is not None:
@@ -475,7 +483,7 @@ class ModelViewer(tk.Toplevel):
             known = {}
         return {"eng": eng, "crew": crew if known else None, "moves": mv, "base": base,
                 "points": EN.points_of(mod, eng), "crew_moves": known,
-                "crew_base": AN.base_pose(mod, sk) if known else None, "crew_anims": {}}
+                "crew_base": AN.skeleton(mod, sk) if known else None, "crew_anims": {}}
 
     def _state(self):
         """(engine state, crew state, where the crew stands) of the move picked (standing when none)."""

@@ -68,7 +68,7 @@ class Mesh:
         self.one_texture = False
         self.texture_ref = None
         self.skin = None                # Medieval II: [(primary bone, secondary bone, weight, weight)] per point
-        self.parents = None             # Medieval II: its skeleton's bone tree (None: a man's, M2_PARENTS)
+        self.parents = None             # a siege engine's: its .cas animation's bone tree (engines.rigged)
         self.joints = None              # posed: every bone's place in the model (pose_mesh)
         self.turns = None               # posed: every bone's turn in the model
         self.bone_names = {}            # Medieval II: {bone number: name} as the file lists them (its first one)
@@ -304,7 +304,6 @@ def read(data):
         m.skin = [(b[4 * i + 2], b[4 * i + 1], w[i][0], w[i][1]) for i in range(count)]
         m.bone_aliases = _bone_names(data, every=True)
         m.bone_names = {k: v[0] for k, v in m.bone_aliases.items()}
-        _animal_tree(m, m.bone_names)
     # the texture the file itself names (a siege engine's: siege_engines/textures/siege_catapult.texture - its
     # descr_engines block has no texture line); bump maps and overlays left out
     for hit in re.finditer(rb"[A-Za-z0-9_ /\\.-]{4,160}?\.texture", data[-20000:]):
@@ -335,26 +334,11 @@ def _bone_names(data, every=False):
     return out
 
 
-# Medieval II's horses (fs_horse and its children): the 23 bones in the animations' order (as the mount meshes list
-# them) and each one's parent - worked out on a mailed horse running (the leg roots on Spine1 / the saddle stretch
-# the mesh least: 0.05 against 0.24 on a man's tree)
-HORSE_BONES = ("bone_H_Saddle", "bone_Spine", "bone_Spine1", "bone_Neck", "bone_Head", "bone_RightArm",
-               "bone_RightForeArm", "bone_RightHand", "bone_RightFingerBase", "bone_LeftArm", "bone_LeftForeArm",
-               "bone_LeftHand", "bone_LeftFingerBase", "bone_Tail1", "bone_Tail2", "bone_RightUpLeg", "bone_RightLeg",
-               "bone_RightFoot", "bone_RightToeBase", "bone_LeftUpLeg", "bone_LeftLeg", "bone_LeftFoot",
-               "bone_LeftToeBase")
-HORSE_PARENTS = (-1, 0, 1, 2, 3, 2, 5, 6, 7, 2, 9, 10, 11, 0, 13, 0, 15, 16, 17, 0, 19, 20, 21)
-
-
-def _animal_tree(mesh, names):
-    """A horse's mesh gets the horse's bone tree, its points' bone numbers put in the animations' order (some files
-    list the bones by name - mailed_horse_lod0 - not in that order)."""
-    by_name = {n.lower(): k for k, n in names.items()}
-    if not all(b.lower() in by_name for b in HORSE_BONES):
-        return
-    to = {by_name[b.lower()]: i for i, b in enumerate(HORSE_BONES)}
-    mesh.skin = [(to.get(b0, 0), to.get(b1, 0), w0, w1) for b0, b1, w0, w1 in mesh.skin]
-    mesh.parents = HORSE_PARENTS
+def is_animal(mesh):
+    """Whether a Medieval II mesh is a beast's (a horse, camel, elephant): its bones name no pelvis - a man's do. A
+    beast with no animation picked stands in its idle move (its file's own pose has the legs stiff)."""
+    names = getattr(mesh, "bone_aliases", None) or {}
+    return bool(mesh.skin and names) and not any("pelvis" in n.lower() for v in names.values() for n in v)
 
 
 # ---------------------------------------------------------------------------
@@ -469,31 +453,6 @@ def _qmul(a, b):
             aw * bz + ax * by - ay * bx + az * bw, aw * bw - ax * bx - ay * by - az * bz)
 
 
-def weapon_turn(anim, frame):
-    """A weapon skeleton's animation (2 bones: its grip and the weapon) at a frame as one turn in the hand - the
-    javelin's throw holds the weapon bone half round (1, 0, 0, 0): point first. Its offsets are not used (the grip
-    stays in the hand: its 'default' puts it at the base pose's right hand)."""
-    p = Pose.of(anim, frame)
-    q = (0.0, 0.0, 0.0, 1.0)
-    for r in p.rotations[:2]:
-        q = _qmul(q, r)
-    return q
-
-
-def weapon_bones(mesh):
-    """{'weapon': [bone numbers], 'shield': [...]} of a man's mesh from its bone names (bone_weapon01 / 02 / 03,
-    bone_shield...; the numbers a file gives two names keep the shield's)."""
-    out = {"weapon": [], "shield": []}
-    shields = shield_slots(mesh)
-    for k, nm in sorted(mesh.bone_names.items()):
-        if k < len(M2_PARENTS):
-            continue
-        part = "shield" if k in shields else "weapon"
-        if k not in out[part]:
-            out[part].append(k)
-    return out
-
-
 def shield_slots(mesh):
     """The bone numbers any of whose names says shield (the game binds a weapon part by its name, never by a
     point's second bone - the engine source)."""
@@ -519,8 +478,9 @@ POSES = ("t", "frame")                              # Rome: the T pose (the skel
 
 
 class Pose:
-    """A frame of an animation (animations.Anim): each bone's own turn and the offsets of its first bones (Rome: the
-    pelvis alone, as a rule) - the bones in the animation's order (Rome: the model's without its Scene Root)."""
+    """A frame of an animation (animations.Anim): each bone's own turn and its offset from its parent - None for a
+    bone the animation carries none for (it stands at its base pose; Rome: every bone but the pelvis, as a rule) - the
+    bones in the animation's order (Rome: the model's without its Scene Root)."""
 
     def __init__(self, rotations, offsets=()):
         self.rotations, self.offsets = list(rotations), list(offsets)
@@ -537,7 +497,8 @@ class Pose:
         k %= anim.frames
         n = (k + 1) % anim.frames
         rots = [_blend(a, b, t) for a, b in zip(anim.rotations(k), anim.rotations(n))]
-        offs = [tuple(a[i] + (b[i] - a[i]) * t for i in range(3)) for a, b in zip(anim.offsets(k), anim.offsets(n))]
+        offs = [None if a is None or b is None else tuple(a[i] + (b[i] - a[i]) * t for i in range(3))
+                for a, b in zip(anim.offsets(k), anim.offsets(n))]
         return cls(rots, offs)
 
 
@@ -570,7 +531,7 @@ def read_cas(data, pose="t"):
             t = rest[i]         # of its own - read as one, all the parts fell onto one point (a tester's picture)
         if isinstance(pose, Pose) and 1 <= i <= len(pose.rotations):   # an animation's frame: bone 0 = Scene Root
             q = pose.rotations[i - 1]
-            if i - 1 < len(pose.offsets):
+            if i - 1 < len(pose.offsets) and pose.offsets[i - 1] is not None:
                 t = pose.offsets[i - 1]
         par = parents[i] if i and parents[i] < i else None
         if par is None:
@@ -648,6 +609,7 @@ class CasAnim:
         self.name, self.names, self.bones, self.kind = name, names, nb, nb
         self.parents = tuple(-1 if i == 0 or parents[i] >= i else parents[i] for i in range(nb))
         self.frames = max([1] + [max(nq, npos) for nq, npos, _, _ in recs])
+        self.rest = list(rest)
         self._rot, self._off = [], []
         for i, (nq, npos, qo, po) in enumerate(recs):
             self._rot.append([struct.unpack_from("<4f", data, base + qo + 16 * k) for k in range(nq)] or
@@ -695,62 +657,126 @@ def _cas_parts(data, nb, rest_at, rot, where):
     return m
 
 
-# Medieval II's 20 animated bones (pelvis, rthigh, rlowerleg, rfoot, abs, torso, head, jaw, eyebrow, rclavical,
-# rupperarm, relbow, rhand, lclavical, lupperarm, lelbow, lhand, lthigh, llowerleg, lfoot) and each one's parent;
-# a mesh's bones 20 on (weapons, shield) are held by the hand each of their points names as its second bone
-M2_PARENTS = (-1, 0, 1, 2, 0, 4, 5, 6, 6, 5, 9, 10, 11, 5, 13, 14, 15, 0, 17, 18)
+class _Rig:
+    """A mesh put on a skeleton once, as the game skins it: a point's bone number is its skeleton's bone of that
+    number (the mesh's palette is the skeleton's bones, in their order); each point's two slots of the palette and
+    their shares. A bone past the skeleton's (a weapon's, the shield's) is its attachment skeleton's bone of the same
+    name when one of `attached` has it (the game's SoldierAttachment: matched by name) - a slot of its own after the
+    skeleton's - else it rides the hand holding it."""
+
+    def __init__(self, mesh, skel, attached):
+        n = len(skel)
+        aliases = getattr(mesh, "bone_aliases", None) or {k: [v] for k, v in (mesh.bone_names or {}).items()}
+        self.n, self.extra = n, []                     # extra: (mesh slot, attachment number, its bone)
+        own = {}
+        for ai, a in enumerate(attached):
+            if a is None or not len(a) or skel.bone(a.names[0]) is None:
+                continue
+            for b in range(1, len(a)):
+                for k, v in sorted(aliases.items()):
+                    if k >= n and k not in own and any(x.lower() == a.names[b].lower() for x in v):
+                        own[k] = n + len(self.extra)
+                        self.extra.append((k, ai, b))
+        shields = shield_slots(mesh)
+        rhand = next((i for i, nm in enumerate(skel.names) if "rhand" in nm.lower().replace("_", "")), 0)
+        lhand = next((i for i, nm in enumerate(skel.names) if "lhand" in nm.lower().replace("_", "")), rhand)
+        i0, i1, p0, p1 = [], [], [], []
+        for b0, b1, w0, w1 in mesh.skin:
+            s0 = own.get(b0, b0 if b0 < n else None)
+            s1 = b1 if b1 < n else None
+            if s0 is None:
+                # a weapon or shield with no skeleton of its own here: the hand holding it - a shield the left hand
+                # (a Discord modder's shield floated beside the head, its points' second bone the belly), else the
+                # hand its points name as their second bone, else the right hand (a knight's lance names the pelvis)
+                s0 = lhand if b0 in shields else (s1 if s1 else rhand)
+            if s1 is None:
+                s1 = s0
+            if w0 <= 0 and w1 <= 0:             # no weights (a shield, a quiver): all on its bone
+                w0 = 1.0
+            w0, w1 = max(w0, 0.0), (0.0 if s1 == s0 else max(w1, 0.0))
+            tw = (w0 + w1) or 1.0
+            i0.append(s0)
+            i1.append(s1)
+            p0.append(w0 / tw)
+            p1.append(w1 / tw)
+        self.i0, self.i1, self.p0, self.p1 = i0, i1, p0, p1
 
 
-def _world(rotations, offsets, parents=M2_PARENTS):
-    """Every bone's turn and place in the model from their own turns and offsets (Medieval II's tree: a man's, or
-    the skeleton's own - a horse's)."""
-    rot, where = [], []
-    for b, par in enumerate(parents):
-        q, t = rotations[b], offsets[b]
-        if par < 0:
-            rot.append(q)
-            where.append(t)
-        else:
-            o = _qrot(rot[par], t)
-            where.append(tuple(where[par][k] + o[k] for k in range(3)))
-            rot.append(_qmul(rot[par], q))
-    return rot, where
+def _rig(mesh, skel, attached):
+    got = getattr(mesh, "_rig", None)
+    key = (id(skel), tuple(id(a) for a in attached), id(mesh.skin))
+    if got is None or got[0] != key:
+        got = mesh._rig = (key, _Rig(mesh, skel, attached))
+    return got[1]
 
 
-def pose_mesh(mesh, pose, base, held=None):
-    """A Medieval II mesh in an animation's frame (a Pose): each point taken from its bones' place in the base pose
-    (base = (rotations, offsets): the skeleton's default animation, the pose the mesh is made in) to their place in
-    the frame, by its two weights. None when the mesh has no bones or the animation another skeleton's count.
-    held {weapon bone number (20 on): turn}: a weapon's own move in the hand (its skeleton's animation of the same
-    name - weapon_turn), laid on it at the hand: a javelin turned point first for the throw (without it a
-    skirmisher threw it blunt end first - the user). A weapon bone not in held stays as the hand holds it."""
-    parents = mesh.parents or M2_PARENTS
-    n = len(parents)
-    if not mesh.skin or len(pose.rotations) < n or len(base[0]) < n or len(base[1]) < n:
+def _palette(q, t, bind):
+    """A bone's skinning matrix (12 numbers: the 3 x 3 turn row by row, then the shift): its bind, then its turn q
+    and place t in the frame."""
+    r = _qmat(q)
+    out = [0.0] * 12
+    for i in range(3):
+        for j in range(3):
+            out[3 * i + j] = r[3 * i] * bind[j] + r[3 * i + 1] * bind[4 + j] + r[3 * i + 2] * bind[8 + j]
+        out[9 + i] = r[3 * i] * bind[3] + r[3 * i + 1] * bind[7] + r[3 * i + 2] * bind[11] + t[i]
+    return tuple(out)
+
+
+def _child_offset(b, t):
+    """An attachment's (weapon's) own bone offset as the game lays it on (skeleton.cpp, pose with a child skeleton:
+    'translation on bones used for attachments does not seem to be in the correct coordinate system')."""
+    if b == 1:
+        return (-t[2], t[1], t[0])
+    return (-t[0], t[2], t[1])
+
+
+def pose_mesh(mesh, pose, skel, attached=()):
+    """A Medieval II mesh in an animation's frame (a Pose) on its skeleton (animations.Skeleton) as the game skins
+    it: every bone placed from its parent by the frame's turn and offset (its base pose where the frame has none),
+    each point taken by its two bones' binds and frame places, by its weights. None when the mesh has no bones or
+    the animation has fewer bones than the skeleton. attached [(Skeleton, Pose or None)]: the weapons' and the
+    shield's own skeletons (the model's skeleton_attachment lines) in their frame of the same move - each hangs on the
+    man's bone its first bone names (a bow in the left hand) and its other bones move as their own animation says (a
+    javelin turned point first for the throw; without one it stays as the hand holds it)."""
+    n = len(skel)
+    if not mesh.skin or len(pose.rotations) < n:
         return None
-    offsets = list(pose.offsets[:n]) + list(base[1][len(pose.offsets):n])    # bones the frame does not move
-    brot, bwhere = _world(base[0], base[1], parents)
-    rot, where = _world(pose.rotations, offsets, parents)
-    # each bone's move from the base pose to the frame as one matrix + shift, made once (the point by point
-    # quaternion turns took twice as long - the play has to be quick)
-    mats = {}
-    for b in range(n):
-        q = _qmul(rot[b], (-brot[b][0], -brot[b][1], -brot[b][2], brot[b][3]))
-        m = _qmat(q)
-        bw = bwhere[b]
-        mats[b] = m + tuple(where[b][k] - (m[3 * k] * bw[0] + m[3 * k + 1] * bw[1] + m[3 * k + 2] * bw[2])
-                            for k in range(3))
+    rot, where = _world(pose.rotations, skel.offsets(pose.offsets), skel.parents)
+    table = [_palette(rot[b], where[b], skel.binds[b]) for b in range(n)]
+    sks = [a for a, _ in attached]
+    rig = _rig(mesh, skel, sks)
+    worlds = {}
+    for k, ai, b in rig.extra:
+        a, ap = attached[ai]
+        if ai not in worlds:
+            h = skel.bone(a.names[0])
+            ar, aw = [rot[h]], [where[h]]                   # its first bone is the hand: where the man has it
+            for c in range(1, len(a)):
+                q = ap.rotations[c] if ap is not None and c < len(ap.rotations) else (0.0, 0.0, 0.0, 1.0)
+                t = ap.offsets[c] if ap is not None and c < len(ap.offsets) else None
+                t = _child_offset(c, t) if t is not None else a.rest[c]
+                par = a.parents[c]
+                o = _qrot(ar[par], t)
+                aw.append(tuple(aw[par][i] + o[i] for i in range(3)))
+                ar.append(_qmul(ar[par], q))
+            worlds[ai] = (ar, aw)
+        ar, aw = worlds[ai]
+        table.append(_palette(ar[b], aw[b], a.binds[b]))
     if _fast is not None and not getattr(mesh, "pure", False):
-        held_mats = {}
-        for wb, h in _weapon_pairs(mesh, n):
-            if held and wb in held:
-                q = _qmul(_qmul(rot[h], (-brot[h][0], -brot[h][1], -brot[h][2], brot[h][3])), held[wb])
-                m3, bw = _qmat(q), bwhere[h]
-                held_mats[(wb, h)] = m3 + tuple(where[h][k] - (m3[3 * k] * bw[0] + m3[3 * k + 1] * bw[1] +
-                                                               m3[3 * k + 2] * bw[2]) for k in range(3))
-        out = _fast.pose(mesh, n, mats, held_mats)
+        out = _fast.pose(mesh, rig, table)
     else:
-        out = _pose_points(mesh, n, mats, held, rot, brot, where, bwhere)
+        out = []
+        for v, s0, s1, p, r in zip(mesh.positions, rig.i0, rig.i1, rig.p0, rig.p1):
+            x, y, z = v
+            a = table[s0]
+            if r <= 0:
+                out.append((a[0] * x + a[1] * y + a[2] * z + a[9], a[3] * x + a[4] * y + a[5] * z + a[10],
+                            a[6] * x + a[7] * y + a[8] * z + a[11]))
+                continue
+            c = table[s1]
+            out.append((p * (a[0] * x + a[1] * y + a[2] * z + a[9]) + r * (c[0] * x + c[1] * y + c[2] * z + c[9]),
+                        p * (a[3] * x + a[4] * y + a[5] * z + a[10]) + r * (c[3] * x + c[4] * y + c[5] * z + c[10]),
+                        p * (a[6] * x + a[7] * y + a[8] * z + a[11]) + r * (c[6] * x + c[7] * y + c[8] * z + c[11])))
     m = Mesh(mesh.groups, out, mesh.uvs)
     m.one_texture, m.texture_ref, m.skin, m.parents = mesh.one_texture, mesh.texture_ref, mesh.skin, mesh.parents
     m.bone_names, m.bone_aliases = mesh.bone_names, getattr(mesh, "bone_aliases", {})
@@ -758,73 +784,9 @@ def pose_mesh(mesh, pose, base, held=None):
     return m
 
 
-RIGHT_HAND = 12                         # bone_rhand of a man's 20
-LEFT_HAND = 16                          # bone_lhand: the game's shield skeleton holds the shield there
-
-
-def hand_of(second, n):
-    """The bone holding a weapon point: the hand its second bone names, else the right hand - a knight's lance and
-    sword name only the pelvis there (held by the pelvis they hung in the air - the user); not a man's tree: 0."""
-    if 0 < second < n:
-        return second
-    return RIGHT_HAND if n == len(M2_PARENTS) else 0
-
-
-def holder(b0, b1, n, shields):
-    """The bone holding a weapon / shield point: a shield the left hand (a Discord modder's shield floated beside
-    the head - its points' second bone, weightless, named the belly), anything else hand_of."""
-    if b0 in shields and n == len(M2_PARENTS):
-        return LEFT_HAND
-    return hand_of(b1, n)
-
-
-def _weapon_pairs(mesh, n):
-    """The (weapon bone, the hand holding it) pairs of a mesh's points, found once."""
-    got = getattr(mesh, "_pairs", None)
-    if got is None or got[0] != n:
-        sh = shield_slots(mesh)
-        got = mesh._pairs = (n, sorted({(b0, holder(b0, b1, n, sh)) for b0, b1, _, _ in mesh.skin if b0 >= n}))
-    return got[1]
-
-
-def _pose_points(mesh, n, mats, held, rot, brot, where, bwhere):
-    """pose_mesh's points one by one (no NumPy)."""
-    out = []
-    sh = shield_slots(mesh)
-    for v, (b0, b1, w0, w1) in zip(mesh.positions, mesh.skin):
-        if b0 >= n and held and b0 in held:          # a weapon with a move of its own in the hand holding it
-            h = holder(b0, b1, n, sh)
-            a = mats.get((b0, h))
-            if a is None:
-                q = _qmul(_qmul(rot[h], (-brot[h][0], -brot[h][1], -brot[h][2], brot[h][3])), held[b0])
-                m3, bw = _qmat(q), bwhere[h]
-                a = mats[(b0, h)] = m3 + tuple(where[h][k] - (m3[3 * k] * bw[0] + m3[3 * k + 1] * bw[1] +
-                                                              m3[3 * k + 2] * bw[2]) for k in range(3))
-            x, y, z = v
-            out.append((a[0] * x + a[1] * y + a[2] * z + a[9], a[3] * x + a[4] * y + a[5] * z + a[10],
-                        a[6] * x + a[7] * y + a[8] * z + a[11]))
-            continue
-        if b0 >= n:                                  # a weapon's or the shield's point: the hand holding it
-            b0 = holder(b0, b1, n, sh)
-        if b1 >= n:
-            b1 = b0
-        if w0 <= 0 and w1 <= 0:                      # no weights (a shield, a quiver): all on its bone
-            w0 = 1.0
-        x, y, z = v
-        if w1 <= 0 or b1 == b0:
-            a = mats[b0]
-            out.append((a[0] * x + a[1] * y + a[2] * z + a[9], a[3] * x + a[4] * y + a[5] * z + a[10],
-                        a[6] * x + a[7] * y + a[8] * z + a[11]))
-            continue
-        if w0 <= 0:
-            w0 = 0.0
-        tw = w0 + w1
-        a, c = mats[b0], mats[b1]
-        p, r = w0 / tw, w1 / tw
-        out.append((p * (a[0] * x + a[1] * y + a[2] * z + a[9]) + r * (c[0] * x + c[1] * y + c[2] * z + c[9]),
-                    p * (a[3] * x + a[4] * y + a[5] * z + a[10]) + r * (c[3] * x + c[4] * y + c[5] * z + c[10]),
-                    p * (a[6] * x + a[7] * y + a[8] * z + a[11]) + r * (c[6] * x + c[7] * y + c[8] * z + c[11])))
-    return out
+def _world(rotations, offsets, parents):
+    from .animations import world
+    return world(parents, rotations, offsets)
 
 
 _CACHE = {}

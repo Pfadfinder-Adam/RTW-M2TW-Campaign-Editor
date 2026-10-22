@@ -288,15 +288,15 @@ def model_figure(mod, info, faction=None, size=(640, 800), yaw=35.0, pitch=8.0, 
     for sk in info.skeletons:
         moves = AN.of_skeleton(mod, sk)
         f = next((f for want in stand for what, f in moves if what.lower() == want), None)
-        anim = AN.find(mod, f) if f else None
+        skel = None if path.lower().endswith(".cas") else AN.skeleton(mod, sk)
+        anim = AN.find(mod, f, skel.scale if skel else None) if f else None
         if anim is None:
             continue
         pose = MV.Pose.of(anim, 0)
         if path.lower().endswith(".cas"):
             man = MV.read_posed(path, pose)
         else:
-            base = AN.base_pose(mod, sk)
-            man = (MV.pose_mesh(mesh, pose, base) if base else None) or mesh
+            man = (MV.pose_mesh(mesh, pose, skel) if skel else None) or mesh
         break
     pick = lambda table: table.get(faction) or table.get("") or next(iter(table.values()), None)
     tex = MO.texture_image(mod, pick(info.textures)) if info.textures else None

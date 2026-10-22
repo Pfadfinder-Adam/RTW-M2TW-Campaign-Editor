@@ -179,7 +179,10 @@ def pose(mesh, an, base, frame):
     m = rigged(mesh, an)
     if m is None or base is None:
         return mesh
-    got = MV.pose_mesh(m, MV.Pose.of(an, frame), (base.rotations(0), base.offsets(0)))
+    from .animations import Skeleton
+    sk = Skeleton("", an.parents, base.offsets(0), getattr(an, "names", None))
+    sk.binds = Skeleton.from_anim("", sk, base).binds
+    got = MV.pose_mesh(m, MV.Pose.of(an, frame), sk)
     return got or mesh
 
 

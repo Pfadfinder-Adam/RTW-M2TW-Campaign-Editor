@@ -224,7 +224,7 @@ def take_template_units(plan, campaign, culture):
                         "not have" % (plan.new, plan.template, len(own), len(common)))
         return []
     for unit in own:
-        R.take_unit(plan, plan.new, unit, campaign)
+        R.take_unit(plan, plan.new, unit, campaign, culture)
     start = plan.opts.get("start") or {}
     used = {u for c in start.get("characters") or [] for u in c.get("units") or []}
     used |= {u for g in (start.get("garrisons") or {}).values() for u in (g or [])
