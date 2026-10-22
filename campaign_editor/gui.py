@@ -1022,6 +1022,8 @@ class App(tk.Tk):
         menu.add_command(label="Settings...", command=self.once("settings_window", self.settings_window))
         menu.add_command(label="Edit the editor's look (move, rename, hide its buttons)...",
                          command=lambda: self.look.edit(True))
+        menu.add_command(label="Layout board - every page side by side (move, size, rename its buttons)...",
+                         command=self.layout_board)
         menu.add_command(label="Help", command=self.once("show_help", self.show_help))
         menu.add_command(label="A mod from zero, step by step...", command=self.once(
             "mod_zero", self.mod_zero_window))
@@ -2822,6 +2824,11 @@ class App(tk.Tk):
         """Everything the tool keeps between starts, in one window."""
         from .gui_settings import SettingsWindow
         SettingsWindow(self)
+
+    def layout_board(self):
+        """Every page of the editor laid out on one canvas, its buttons moved and sized there (gui_lookboard)."""
+        from .gui_lookboard import open_board
+        return open_board(self)
 
     def show_help(self):
         self.show_text("Help", HELP)

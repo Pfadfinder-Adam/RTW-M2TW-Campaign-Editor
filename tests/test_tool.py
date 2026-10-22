@@ -5323,6 +5323,116 @@ building smith
             except Exception:
                 pass
 
+    def test_layout_board_maths(self):
+        """The layout board (the user, 2026-10-22: every page of the editor laid out on one canvas): the page cards
+        in rows by kind, the piece under the mouse (the smallest), the piece a dropped one stands beside (before /
+        after by the half), the box a free piece goes into (the first round it that holds it), a piece in a row or
+        free - never both."""
+        from campaign_editor import look as LK
+        places, total, tops = LK.lay_cards([[("a", 1000, 800), ("b", 1000, 800), ("c", 1000, 800)], [("d", 500, 400)]],
+                                           row_width=2200, gap=100, head=50)
+        self.assertEqual(places["a"], (0, 100))
+        self.assertEqual(places["b"], (1100, 100))
+        self.assertEqual(places["c"], (0, 1050))                 # wrapped: past the row's width
+        self.assertEqual(tops, [0, 2050])
+        self.assertEqual(places["d"], (0, 2150))
+        self.assertEqual(total, (2100, 2550))
+        bar = {"key": "bar", "box": [0, 0, 400, 30]}
+        load = {"key": "load", "box": [10, 5, 50, 20]}
+        save = {"key": "save", "box": [70, 5, 50, 20]}
+        far = {"key": "far", "box": [10, 300, 50, 20]}
+        pieces = [bar, load, save, far]
+        self.assertIs(LK.piece_at(pieces, 20, 10), load)          # the smallest holding the point
+        self.assertIs(LK.piece_at(pieces, 200, 10), bar)
+        self.assertIsNone(LK.piece_at(pieces, 500, 500))
+        t, where = LK.drop_beside(pieces, load, 110, 15)          # bar holds load: skipped
+        self.assertEqual((t["key"], where), ("save", "after"))
+        t, where = LK.drop_beside(pieces, load, 72, 15)
+        self.assertEqual((t["key"], where), ("save", "before"))
+        t, where = LK.drop_beside(pieces, save, 30, 290)
+        self.assertEqual((t["key"], where), ("far", "before"))
+        boxes = [[0, 0, 400, 30], [0, 0, 1000, 800]]             # its bar, the window
+        self.assertEqual(LK.free_spot(boxes, 300, 4, 50, 20), (0, 300, 4))
+        self.assertEqual(LK.free_spot(boxes, 300, 200, 50, 20), (1, 300, 200))
+        self.assertEqual(LK.free_spot(boxes, 990, 200, 50, 20), (1, 990, 200))   # holds it nowhere: the last
+        look = {"pieces": {}, "order": []}
+        LK.set_entry(look, "k", {"xy": [3, 4], "up": 1, "size": [80, 30]})
+        LK.set_entry(look, "k", dict(look["pieces"]["k"], to="other", where="after"))
+        self.assertEqual(look["pieces"]["k"], {"size": [80, 30], "to": "other", "where": "after"})
+        LK.set_entry(look, "k", {"up": 2})
+        self.assertNotIn("k", look["pieces"])                     # 'up' means nothing without 'xy'
+
+    def test_editor_look_free_place_size_and_redo(self):
+        """The look's free place and size (the layout board): a piece put at x, y of its own box, or of a box round
+        it (a copy stands there, the piece hidden); sized in pixels (a wrapping bar gives the size itself, a packed
+        piece grows by inner padding); Undo / Redo; Back to how it was takes it all back; the board reads each
+        piece's box and the boxes round it."""
+        try:
+            import tkinter as tk
+            from tkinter import ttk
+            root = tk.Tk()
+        except Exception as e:
+            self.skipTest("no window: %s" % e)
+        from unittest import mock
+        from campaign_editor import gui_look as GL
+        from campaign_editor import gui_lookboard as GB
+        from campaign_editor import log
+        from campaign_editor.gui_util import flow
+        home = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, home)
+        try:
+            with mock.patch.object(log, "home", lambda: home):
+                root.geometry("600x300")
+                look = GL.install(root)
+                bar = ttk.Frame(root)
+                bar.pack(fill="x")
+                for t in ("Load", "Save"):
+                    ttk.Button(bar, text=t).pack(side="left")
+                flow(bar)
+                box = ttk.Frame(root, height=200)
+                box.pack(fill="both", expand=True)
+                ok = ttk.Button(box, text="OK")
+                ok.pack(side="left")
+                root.update()
+                load, save = look.by_key["main||TButton:Load"], look.by_key["main||TButton:Save"]
+                got, _ = GB.pieces_of(look, root)
+                keys = {p["key"]: p for p in got}
+                self.assertEqual(keys["main||TButton:OK"]["boxes"][0][1], box.winfo_y())    # its own box first
+                look.change_key(ok._look_key, xy=[50, 60])                                 # free in its own box
+                root.update()
+                self.assertEqual(ok.winfo_manager(), "place")
+                self.assertEqual((ok.winfo_x(), ok.winfo_y()), (50, 60))
+                look.change_key(load._look_key, xy=[300, 150], up=1)                       # out of its bar: a copy
+                root.update()
+                copy_ = look.clones[str(load)]
+                self.assertIs(copy_.master, root)
+                self.assertEqual((copy_.winfo_x(), copy_.winfo_y()), (300, 150))
+                self.assertNotIn(load, [it[0] for it in bar._flow_items])
+                look.change_key(save._look_key, size=[140, 40])                            # in a wrapping bar
+                root.update()
+                self.assertEqual((save.winfo_width(), save.winfo_height()), (140, 40))
+                look.change_key(ok._look_key, xy=None, size=[ok.winfo_reqwidth() + 40, 0])  # back in its row, wider
+                root.update()
+                self.assertEqual(ok.winfo_manager(), "pack")
+                self.assertEqual(int(ok.pack_info()["ipadx"]), 20)
+                self.assertTrue(look.do_undo())
+                root.update()
+                self.assertEqual(ok.winfo_manager(), "place")
+                self.assertTrue(look.do_redo())
+                root.update()
+                self.assertEqual(ok.winfo_manager(), "pack")
+                look.back_all()
+                root.update()
+                self.assertEqual(look.clones, {})
+                self.assertEqual([it[0] for it in bar._flow_items], [load, save])
+                self.assertNotEqual(save.winfo_width(), 140)
+                self.assertEqual(int(ok.pack_info()["ipadx"]), 0)
+        finally:
+            try:
+                root.destroy()
+            except Exception:
+                pass
+
     def test_editor_words_to_translate(self):
         """Words to translate: every whole English word of the windows read from the code (buttons, titles, hover
         texts), each with its translation so far; a language file read, a broken one refused."""

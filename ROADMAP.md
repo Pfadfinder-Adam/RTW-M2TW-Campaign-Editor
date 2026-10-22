@@ -433,6 +433,7 @@ The first nine days (0.1.0 → 0.30.0): from a one-mod faction cloner to a campa
 - 🧪 Alliances and wars at the start (both games): one status per faction that pulls the AI feelings along, every value in words; Medieval II's diplomacy read as the game writes it (`faction_standings`), a new Medieval II faction at war with the rebels (0.23.0)
 - 🧪 Victory conditions on the Faction tab: regions to hold and take, factions to outlive, Rome's goal - long and short campaign (0.23.0)
 - ✅ Wonders on the Map (Rome): shown, dragged, added, removed; the map's real size shown (0.25.0)
+- 📦 The layout board: every page of the editor side by side on one canvas - buttons dragged into their rows or anywhere (Alt), sized by their corners, renamed, hidden; shown in the editor at once
 - 📦 The editor's own look: Tools > Edit the editor's look - any button, tick or label dragged anywhere, renamed, given a hover text or width, hidden, taken back; the window's language from a language file (Settings), Words to translate for the community
 - 🧪 A Settings window (look, language, game folder, the map's look, report contact, set-up questions, folders); Check mod renamed Check mod files (0.24.0)
 - 🧪 The family tree folded behind a Family tree button on the Faction tab; hover texts on the work buttons (0.23.0)
