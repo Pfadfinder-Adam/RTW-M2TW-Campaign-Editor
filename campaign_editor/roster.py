@@ -454,7 +454,9 @@ def take_unit(plan, faction, unit, campaign=None, culture=None):
     if edb_p:
         e = plan.edit(edb_p)
         gone = []
-        for i, _, chain, level in reversed([r for r in recruit_lines(e, RECRUIT_KEYS) if r[1] == unit]):
+        mine = [r for r in recruit_lines(e, RECRUIT_KEYS) if r[1] == unit]
+        wide = any(covers(factions_in(e.text(i)), faction, culture) in ("culture", "all") for i, _, _, _ in mine)
+        for i, _, chain, level in reversed(mine):
             names = factions_in(e.text(i))
             if names and faction in names:
                 rest = [n for n in names if n != faction]
@@ -471,15 +473,15 @@ def take_unit(plan, faction, unit, campaign=None, culture=None):
         cultures = mod.factions()
         if faction not in dict(cultures):
             cultures = cultures + [(faction, culture)]
-        for i, _, chain, level in reversed([r for r in recruit_lines(e) if r[1] == unit]):
+        for i, _, chain, level in reversed([r for r in recruit_lines(e) if r[1] == unit] if wide else []):
             if covers(factions_in(e.text(i)), faction, culture) in ("culture", "all"):
                 where = "%s/%s" % (chain, level)
                 if _shut_line(plan, e, i, faction, culture, cultures, where, unit) and where not in gone:
                     gone.append(where)
         if gone:
             plan.note(e, "%s no longer recruited by %s in %s" % (unit, faction, ", ".join(reversed(gone))))
-    for camp in ([campaign] if campaign else mod.campaigns()):
-        n = _units_in_armies(mod, camp, faction, unit)
+    for camp in ([campaign] if campaign else mod.campaigns()) if faction in dict(mod.factions()) else []:
+        n = _units_in_armies(mod, camp, faction, unit)          # (a faction being made has no armies there yet)
         if n:
             plan.warn(None, "%s: %d of %s's armies in %s start with %s - they keep it"
                       % (unit, n, faction, camp, unit))
