@@ -700,8 +700,14 @@ uint mix3(uint a, uint b, uint c) {
     x ^= x >> 13; x *= 0x5bd1e995u; x ^= x >> 15;
     return x;
 }
-vec3 pic(uint l, vec2 t) { return dec(texture(ground, vec3(t * rep[l], float(l))).rgb); }
+vec2 tdx, tdy;
+// the picture's mip level from slopes taken once, before any discard or branch: a texture() inside them has no
+// sure slope where a 2 x 2 pixel block straddles a half-tile's edge - some cards then drew a thin pale line along
+// the edges of blended half-tiles and of tile models' tiles (a tester: faint squares on the ground)
+vec3 pic(uint l, vec2 t) { return dec(textureGrad(ground, vec3(t * rep[l], float(l)), tdx * rep[l], tdy * rep[l]).rgb); }
 void main() {
+    tdx = dFdx(g * 0.5);
+    tdy = dFdy(g * 0.5);
     if (mode == 0) {
         ivec2 vs = textureSize(voids, 0);
         uint k = texelFetch(voids, clamp(ivec2(floor(g * 0.5)), ivec2(0), vs - 1), 0).r;
