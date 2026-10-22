@@ -167,14 +167,18 @@ class HudPanel(ttk.Frame):
         self.show()
         m = tk.Menu(self, tearoff=False)
         p = self.picked
-        if p and p.get("sprite"):
-            m.add_command(label=p["piece"], state="disabled")
+        sx, sy = self._factor()
+        under = [q for q in (H.pieces_at(self.mod, e.x / sx, e.y / sy, self.items) if sx and sy else [])
+                 if q.get("sprite")]
+        for q in under:                     # the piece on top and those under it (a ring over its button's picture)
+            also = H.sharing(q, self.items)
+            m.add_command(label=q["piece"] + ("  (also the %s - a new picture changes both)" % ", ".join(
+                x["piece"] for x in also) if also else ""), state="disabled")
+            m.add_command(label="    Replace its picture...", command=lambda q=q: self._on_sheet(q, "replace"))
+            m.add_command(label="    Place and size on its sheet...", command=lambda q=q: self._on_sheet(q, "place"))
+            m.add_command(label="    Show it on the Sprite sheets tab", command=lambda q=q: self._on_sheet(q, "show"))
             m.add_separator()
-            m.add_command(label="Replace its picture...", command=lambda: self._on_sheet(p, "replace"))
-            m.add_command(label="Place and size on its sheet...", command=lambda: self._on_sheet(p, "place"))
-            m.add_command(label="Show it on the Sprite sheets tab", command=lambda: self._on_sheet(p, "show"))
-            m.add_separator()
-        elif p:
+        if p and not under:
             m.add_command(label="%s - drawn by the game, not a sprite" % p["piece"], state="disabled")
             m.add_separator()
         m.add_command(label="Save the whole HUD as PNG...", command=self.save_png)

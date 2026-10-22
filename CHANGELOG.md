@@ -29,6 +29,9 @@
 - New mod folder puts no switched-off engine settings files (descr_ex, descr_caps_ex) in: the mod runs on the engine's defaults as before; the editor writes the line a change needs, Check mod files' Copy them in brings the whole list.
 
 ### Fixed
+- Campaign HUD (Rome): the four tabs were too wide and read 'Settlement' and a 4th 'Army' -> as in the game: Army, Town, Agents and an empty one, at their places.
+- Campaign HUD: a right click names every piece under it (a ring and its button's picture) and says when a picture is shared by two buttons; Undo / Redo redraw the view.
+- Units / Buildings: after Apply or Undo the form went blank -> the unit on show stays on show.
 - New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
 - Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
 - New faction: the form jumped a line when the template hint came or went -> it stays put.
@@ -78,6 +81,9 @@
 - **Changed**: the faction-select map and minimap use the 3D map's picture where a ground's texture was not found; a name given twice in a faction gets a free one instead of a refused write.
 
 ### Fixed
+- Campaign HUD (Rome): the four tabs were too wide and read 'Settlement' and a 4th 'Army' -> as in the game: Army, Town, Agents and an empty one, at their places.
+- Campaign HUD: a right click names every piece under it (a ring and its button's picture) and says when a picture is shared by two buttons; Undo / Redo redraw the view.
+- Units / Buildings: after Apply or Undo the form went blank -> the unit on show stays on show.
 - New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
 - Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
 - New faction: the form jumped a line when the template hint came or went -> it stays put.
@@ -356,6 +362,9 @@
   line of the block** in both editors; the editor remembers whether it was open.
 
 ### Fixed
+- Campaign HUD (Rome): the four tabs were too wide and read 'Settlement' and a 4th 'Army' -> as in the game: Army, Town, Agents and an empty one, at their places.
+- Campaign HUD: a right click names every piece under it (a ring and its button's picture) and says when a picture is shared by two buttons; Undo / Redo redraw the view.
+- Units / Buildings: after Apply or Undo the form went blank -> the unit on show stays on show.
 - New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
 - Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
 - New faction: the form jumped a line when the template hint came or went -> it stays put.
@@ -792,6 +801,9 @@
   release's page.
 
 ### Fixed
+- Campaign HUD (Rome): the four tabs were too wide and read 'Settlement' and a 4th 'Army' -> as in the game: Army, Town, Agents and an empty one, at their places.
+- Campaign HUD: a right click names every piece under it (a ring and its button's picture) and says when a picture is shared by two buttons; Undo / Redo redraw the view.
+- Units / Buildings: after Apply or Undo the form went blank -> the unit on show stays on show.
 - New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
 - Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
 - New faction: the form jumped a line when the template hint came or went -> it stays put.
@@ -1078,6 +1090,9 @@
   test mod.
 
 ### Fixed
+- Campaign HUD (Rome): the four tabs were too wide and read 'Settlement' and a 4th 'Army' -> as in the game: Army, Town, Agents and an empty one, at their places.
+- Campaign HUD: a right click names every piece under it (a ring and its button's picture) and says when a picture is shared by two buttons; Undo / Redo redraw the view.
+- Units / Buildings: after Apply or Undo the form went blank -> the unit on show stays on show.
 - New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
 - Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
 - New faction: the form jumped a line when the template hint came or went -> it stays put.
@@ -1174,6 +1189,9 @@
 - Long explanations at the top of Mercenaries, Map size and the 3 x bigger map are one line now; the rest shows on the '?'.
 
 ### Fixed
+- Campaign HUD (Rome): the four tabs were too wide and read 'Settlement' and a 4th 'Army' -> as in the game: Army, Town, Agents and an empty one, at their places.
+- Campaign HUD: a right click names every piece under it (a ring and its button's picture) and says when a picture is shared by two buttons; Undo / Redo redraw the view.
+- Units / Buildings: after Apply or Undo the form went blank -> the unit on show stays on show.
 - New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
 - Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
 - New faction: the form jumped a line when the template hint came or went -> it stays put.
@@ -1199,6 +1217,9 @@
 ## 0.30.1 - 2026-10-07
 
 ### Fixed
+- Campaign HUD (Rome): the four tabs were too wide and read 'Settlement' and a 4th 'Army' -> as in the game: Army, Town, Agents and an empty one, at their places.
+- Campaign HUD: a right click names every piece under it (a ring and its button's picture) and says when a picture is shared by two buttons; Undo / Redo redraw the view.
+- Units / Buildings: after Apply or Undo the form went blank -> the unit on show stays on show.
 - New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
 - Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
 - New faction: the form jumped a line when the template hint came or went -> it stays put.
@@ -1217,6 +1238,9 @@
 ## 0.30.0 - 2026-10-07
 
 ### Fixed
+- Campaign HUD (Rome): the four tabs were too wide and read 'Settlement' and a 4th 'Army' -> as in the game: Army, Town, Agents and an empty one, at their places.
+- Campaign HUD: a right click names every piece under it (a ring and its button's picture) and says when a picture is shared by two buttons; Undo / Redo redraw the view.
+- Units / Buildings: after Apply or Undo the form went blank -> the unit on show stays on show.
 - New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
 - Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
 - New faction: the form jumped a line when the template hint came or went -> it stays put.
@@ -1782,6 +1806,9 @@
   tree), so the pictures, the battle model and the voice have the room; Add line... opens them.
 
 ### Fixed
+- Campaign HUD (Rome): the four tabs were too wide and read 'Settlement' and a 4th 'Army' -> as in the game: Army, Town, Agents and an empty one, at their places.
+- Campaign HUD: a right click names every piece under it (a ring and its button's picture) and says when a picture is shared by two buttons; Undo / Redo redraw the view.
+- Units / Buildings: after Apply or Undo the form went blank -> the unit on show stays on show.
 - New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
 - Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
 - New faction: the form jumped a line when the template hint came or went -> it stays put.
@@ -2148,6 +2175,9 @@
   starts from there. 'Not now' asks with the next version, 'Don't ask again' never; Settings > Folders has the button.
 
 ### Fixed
+- Campaign HUD (Rome): the four tabs were too wide and read 'Settlement' and a 4th 'Army' -> as in the game: Army, Town, Agents and an empty one, at their places.
+- Campaign HUD: a right click names every piece under it (a ring and its button's picture) and says when a picture is shared by two buttons; Undo / Redo redraw the view.
+- Units / Buildings: after Apply or Undo the form went blank -> the unit on show stays on show.
 - New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
 - Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
 - New faction: the form jumped a line when the template hint came or went -> it stays put.
@@ -2212,6 +2242,9 @@
   list opens on the add-on of the loaded game.
 
 ### Fixed
+- Campaign HUD (Rome): the four tabs were too wide and read 'Settlement' and a 4th 'Army' -> as in the game: Army, Town, Agents and an empty one, at their places.
+- Campaign HUD: a right click names every piece under it (a ring and its button's picture) and says when a picture is shared by two buttons; Undo / Redo redraw the view.
+- Units / Buildings: after Apply or Undo the form went blank -> the unit on show stays on show.
 - New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
 - Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
 - New faction: the form jumped a line when the template hint came or went -> it stays put.
@@ -2285,6 +2318,9 @@
   faction a script names that the mod lacks. "Open another log..." reads any other one.
 
 ### Fixed
+- Campaign HUD (Rome): the four tabs were too wide and read 'Settlement' and a 4th 'Army' -> as in the game: Army, Town, Agents and an empty one, at their places.
+- Campaign HUD: a right click names every piece under it (a ring and its button's picture) and says when a picture is shared by two buttons; Undo / Redo redraw the view.
+- Units / Buildings: after Apply or Undo the form went blank -> the unit on show stays on show.
 - New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
 - Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
 - New faction: the form jumped a line when the template hint came or went -> it stays put.
@@ -2317,6 +2353,9 @@
   resource, a region's last land, a river tile, or a port's last land. Undo / Redo stroke, Preview, one backup.
 
 ### Fixed
+- Campaign HUD (Rome): the four tabs were too wide and read 'Settlement' and a 4th 'Army' -> as in the game: Army, Town, Agents and an empty one, at their places.
+- Campaign HUD: a right click names every piece under it (a ring and its button's picture) and says when a picture is shared by two buttons; Undo / Redo redraw the view.
+- Units / Buildings: after Apply or Undo the form went blank -> the unit on show stays on show.
 - New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
 - Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
 - New faction: the form jumped a line when the template hint came or went -> it stays put.
@@ -2366,6 +2405,9 @@
   one over the armies, agents and fleets (name, tile, or a unit inside the army, e.g. "knight").
 
 ### Fixed
+- Campaign HUD (Rome): the four tabs were too wide and read 'Settlement' and a 4th 'Army' -> as in the game: Army, Town, Agents and an empty one, at their places.
+- Campaign HUD: a right click names every piece under it (a ring and its button's picture) and says when a picture is shared by two buttons; Undo / Redo redraw the view.
+- Units / Buildings: after Apply or Undo the form went blank -> the unit on show stays on show.
 - New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
 - Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
 - New faction: the form jumped a line when the template hint came or went -> it stays put.
@@ -2431,6 +2473,9 @@
   and the Victory block.
 
 ### Fixed
+- Campaign HUD (Rome): the four tabs were too wide and read 'Settlement' and a 4th 'Army' -> as in the game: Army, Town, Agents and an empty one, at their places.
+- Campaign HUD: a right click names every piece under it (a ring and its button's picture) and says when a picture is shared by two buttons; Undo / Redo redraw the view.
+- Units / Buildings: after Apply or Undo the form went blank -> the unit on show stays on show.
 - New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
 - Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
 - New faction: the form jumped a line when the template hint came or went -> it stays put.
@@ -2515,6 +2560,9 @@
   out (and the names of services in it) scared people off; the wiki page keeps the details.
 
 ### Fixed
+- Campaign HUD (Rome): the four tabs were too wide and read 'Settlement' and a 4th 'Army' -> as in the game: Army, Town, Agents and an empty one, at their places.
+- Campaign HUD: a right click names every piece under it (a ring and its button's picture) and says when a picture is shared by two buttons; Undo / Redo redraw the view.
+- Units / Buildings: after Apply or Undo the form went blank -> the unit on show stays on show.
 - New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
 - Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
 - New faction: the form jumped a line when the template hint came or went -> it stays put.
@@ -2581,6 +2629,9 @@
   of its template's); drawing one from the faction's towns comes back in a later release.
 
 ### Fixed
+- Campaign HUD (Rome): the four tabs were too wide and read 'Settlement' and a 4th 'Army' -> as in the game: Army, Town, Agents and an empty one, at their places.
+- Campaign HUD: a right click names every piece under it (a ring and its button's picture) and says when a picture is shared by two buttons; Undo / Redo redraw the view.
+- Units / Buildings: after Apply or Undo the form went blank -> the unit on show stays on show.
 - New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
 - Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
 - New faction: the form jumped a line when the template hint came or went -> it stays put.
@@ -2664,6 +2715,9 @@
   mod does not have are refused - as is leaving out the governor's chain.
 
 ### Fixed
+- Campaign HUD (Rome): the four tabs were too wide and read 'Settlement' and a 4th 'Army' -> as in the game: Army, Town, Agents and an empty one, at their places.
+- Campaign HUD: a right click names every piece under it (a ring and its button's picture) and says when a picture is shared by two buttons; Undo / Redo redraw the view.
+- Units / Buildings: after Apply or Undo the form went blank -> the unit on show stays on show.
 - New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
 - Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
 - New faction: the form jumped a line when the template hint came or went -> it stays put.
@@ -2709,6 +2763,9 @@
   and New religion. The files keep the internal name.
 
 ### Fixed
+- Campaign HUD (Rome): the four tabs were too wide and read 'Settlement' and a 4th 'Army' -> as in the game: Army, Town, Agents and an empty one, at their places.
+- Campaign HUD: a right click names every piece under it (a ring and its button's picture) and says when a picture is shared by two buttons; Undo / Redo redraw the view.
+- Units / Buildings: after Apply or Undo the form went blank -> the unit on show stays on show.
 - New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
 - Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
 - New faction: the form jumped a line when the template hint came or went -> it stays put.
@@ -2737,6 +2794,9 @@
 ## 0.19.0 - 2026-09-30
 
 ### Fixed
+- Campaign HUD (Rome): the four tabs were too wide and read 'Settlement' and a 4th 'Army' -> as in the game: Army, Town, Agents and an empty one, at their places.
+- Campaign HUD: a right click names every piece under it (a ring and its button's picture) and says when a picture is shared by two buttons; Undo / Redo redraw the view.
+- Units / Buildings: after Apply or Undo the form went blank -> the unit on show stays on show.
 - New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
 - Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
 - New faction: the form jumped a line when the template hint came or went -> it stays put.
@@ -2790,6 +2850,9 @@
 - **An icon of its own** for the exe and the window: a gear ring round a Roman "R" and a medieval "M" (drawn for the editor, no game pictures).
 
 ### Fixed
+- Campaign HUD (Rome): the four tabs were too wide and read 'Settlement' and a 4th 'Army' -> as in the game: Army, Town, Agents and an empty one, at their places.
+- Campaign HUD: a right click names every piece under it (a ring and its button's picture) and says when a picture is shared by two buttons; Undo / Redo redraw the view.
+- Units / Buildings: after Apply or Undo the form went blank -> the unit on show stays on show.
 - New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
 - Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
 - New faction: the form jumped a line when the template hint came or went -> it stays put.
@@ -2806,6 +2869,9 @@
 ## 0.18.1 - 2026-09-30
 
 ### Fixed
+- Campaign HUD (Rome): the four tabs were too wide and read 'Settlement' and a 4th 'Army' -> as in the game: Army, Town, Agents and an empty one, at their places.
+- Campaign HUD: a right click names every piece under it (a ring and its button's picture) and says when a picture is shared by two buttons; Undo / Redo redraw the view.
+- Units / Buildings: after Apply or Undo the form went blank -> the unit on show stays on show.
 - New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
 - Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
 - New faction: the form jumped a line when the template hint came or went -> it stays put.
@@ -2826,6 +2892,9 @@
   built from its code must stay open under GPL-3.0 and keep the author's copyright notice.
 
 ### Fixed (from the user's tests)
+- Campaign HUD (Rome): the four tabs were too wide and read 'Settlement' and a 4th 'Army' -> as in the game: Army, Town, Agents and an empty one, at their places.
+- Campaign HUD: a right click names every piece under it (a ring and its button's picture) and says when a picture is shared by two buttons; Undo / Redo redraw the view.
+- Units / Buildings: after Apply or Undo the form went blank -> the unit on show stays on show.
 - New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
 - Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
 - New faction: the form jumped a line when the template hint came or went -> it stays put.
@@ -2847,6 +2916,9 @@
   towns list, or more room for the roster cards.
 
 ### Fixed (from the modders' guides, checked on the vanilla files)
+- Campaign HUD (Rome): the four tabs were too wide and read 'Settlement' and a 4th 'Army' -> as in the game: Army, Town, Agents and an empty one, at their places.
+- Campaign HUD: a right click names every piece under it (a ring and its button's picture) and says when a picture is shared by two buttons; Undo / Redo redraw the view.
+- Units / Buildings: after Apply or Undo the form went blank -> the unit on show stays on show.
 - New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
 - Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
 - New faction: the form jumped a line when the template hint came or went -> it stays put.
@@ -2916,6 +2988,9 @@ Asked on Discord: where are the rebels?
   and Medieval II (rebels take a town, a captain and a new army written, Restore byte-exact) and in the window.
 
 ### Fixed
+- Campaign HUD (Rome): the four tabs were too wide and read 'Settlement' and a 4th 'Army' -> as in the game: Army, Town, Agents and an empty one, at their places.
+- Campaign HUD: a right click names every piece under it (a ring and its button's picture) and says when a picture is shared by two buttons; Undo / Redo redraw the view.
+- Units / Buildings: after Apply or Undo the form went blank -> the unit on show stays on show.
 - New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
 - Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
 - New faction: the form jumped a line when the template hint came or went -> it stays put.
@@ -2934,6 +3009,9 @@ Asked on Discord: where are the rebels?
 REX's new features, read from REX's own notes, and two things the tool got wrong on Medieval II.
 
 ### Fixed
+- Campaign HUD (Rome): the four tabs were too wide and read 'Settlement' and a 4th 'Army' -> as in the game: Army, Town, Agents and an empty one, at their places.
+- Campaign HUD: a right click names every piece under it (a ring and its button's picture) and says when a picture is shared by two buttons; Undo / Redo redraw the view.
+- Units / Buildings: after Apply or Undo the form went blank -> the unit on show stays on show.
 - New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
 - Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
 - New faction: the form jumped a line when the template hint came or went -> it stays put.
@@ -2974,6 +3052,9 @@ and ran with the changes, and its own log converts buildings the same way the to
 building not specified ... building will disappear during conversion").
 
 ### Fixed
+- Campaign HUD (Rome): the four tabs were too wide and read 'Settlement' and a 4th 'Army' -> as in the game: Army, Town, Agents and an empty one, at their places.
+- Campaign HUD: a right click names every piece under it (a ring and its button's picture) and says when a picture is shared by two buttons; Undo / Redo redraw the view.
+- Units / Buildings: after Apply or Undo the form went blank -> the unit on show stays on show.
 - New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
 - Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
 - New faction: the form jumped a line when the template hint came or went -> it stays put.
@@ -3005,6 +3086,9 @@ building not specified ... building will disappear during conversion").
   warning that one was missing.
 
 ### Fixed
+- Campaign HUD (Rome): the four tabs were too wide and read 'Settlement' and a 4th 'Army' -> as in the game: Army, Town, Agents and an empty one, at their places.
+- Campaign HUD: a right click names every piece under it (a ring and its button's picture) and says when a picture is shared by two buttons; Undo / Redo redraw the view.
+- Units / Buildings: after Apply or Undo the form went blank -> the unit on show stays on show.
 - New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
 - Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
 - New faction: the form jumped a line when the template hint came or went -> it stays put.
@@ -3048,6 +3132,9 @@ building not specified ... building will disappear during conversion").
 ## 0.14.1 - 2026-09-29
 
 ### Fixed
+- Campaign HUD (Rome): the four tabs were too wide and read 'Settlement' and a 4th 'Army' -> as in the game: Army, Town, Agents and an empty one, at their places.
+- Campaign HUD: a right click names every piece under it (a ring and its button's picture) and says when a picture is shared by two buttons; Undo / Redo redraw the view.
+- Units / Buildings: after Apply or Undo the form went blank -> the unit on show stays on show.
 - New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
 - Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
 - New faction: the form jumped a line when the template hint came or went -> it stays put.
@@ -3105,6 +3192,9 @@ plain Rome copy (the julii taking Mediolanium); not yet tested in the game.
   town has now ("(shown: Medhlan)"). A name set in Names by culture... shows on the map the moment OK is pressed.
 
 ### Fixed
+- Campaign HUD (Rome): the four tabs were too wide and read 'Settlement' and a 4th 'Army' -> as in the game: Army, Town, Agents and an empty one, at their places.
+- Campaign HUD: a right click names every piece under it (a ring and its button's picture) and says when a picture is shared by two buttons; Undo / Redo redraw the view.
+- Units / Buildings: after Apply or Undo the form went blank -> the unit on show stays on show.
 - New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
 - Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
 - New faction: the form jumped a line when the template hint came or went -> it stays put.
@@ -3145,6 +3235,9 @@ Medieval II copies, in the window on Linux and with the deep Check; the flag sym
   Two writes made by one Apply are undone in the right order.
 
 ### Fixed
+- Campaign HUD (Rome): the four tabs were too wide and read 'Settlement' and a 4th 'Army' -> as in the game: Army, Town, Agents and an empty one, at their places.
+- Campaign HUD: a right click names every piece under it (a ring and its button's picture) and says when a picture is shared by two buttons; Undo / Redo redraw the view.
+- Units / Buildings: after Apply or Undo the form went blank -> the unit on show stays on show.
 - New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
 - Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
 - New faction: the form jumped a line when the template hint came or went -> it stays put.
@@ -3192,6 +3285,9 @@ its own pictures shown everywhere, the painted terrain drawn; the bugs he found 
   `RTW-M2TW-Campaign-Editor-files`; a log an older version left there moves into `logs` by itself.
 
 ### Fixed
+- Campaign HUD (Rome): the four tabs were too wide and read 'Settlement' and a 4th 'Army' -> as in the game: Army, Town, Agents and an empty one, at their places.
+- Campaign HUD: a right click names every piece under it (a ring and its button's picture) and says when a picture is shared by two buttons; Undo / Redo redraw the view.
+- Units / Buildings: after Apply or Undo the form went blank -> the unit on show stays on show.
 - New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
 - Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
 - New faction: the form jumped a line when the template hint came or went -> it stays put.
@@ -3246,6 +3342,9 @@ its own pictures shown everywhere, the painted terrain drawn; the bugs he found 
 - The map draws each feature in its own colour (rivers, fords, sources, cliffs, volcanoes).
 
 ### Fixed
+- Campaign HUD (Rome): the four tabs were too wide and read 'Settlement' and a 4th 'Army' -> as in the game: Army, Town, Agents and an empty one, at their places.
+- Campaign HUD: a right click names every piece under it (a ring and its button's picture) and says when a picture is shared by two buttons; Undo / Redo redraw the view.
+- Units / Buildings: after Apply or Undo the form went blank -> the unit on show stays on show.
 - New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
 - Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
 - New faction: the form jumped a line when the template hint came or went -> it stays put.
@@ -3259,6 +3358,9 @@ its own pictures shown everywhere, the painted terrain drawn; the bugs he found 
 ## 0.9.4 - 2026-09-29
 
 ### Fixed
+- Campaign HUD (Rome): the four tabs were too wide and read 'Settlement' and a 4th 'Army' -> as in the game: Army, Town, Agents and an empty one, at their places.
+- Campaign HUD: a right click names every piece under it (a ring and its button's picture) and says when a picture is shared by two buttons; Undo / Redo redraw the view.
+- Units / Buildings: after Apply or Undo the form went blank -> the unit on show stays on show.
 - New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
 - Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
 - New faction: the form jumped a line when the template hint came or went -> it stays put.
@@ -3303,6 +3405,9 @@ its own pictures shown everywhere, the painted terrain drawn; the bugs he found 
   `descr_regions.txt` lines of a region of the map (builder, rebels, region tags, triumph, farming).
 
 ### Fixed
+- Campaign HUD (Rome): the four tabs were too wide and read 'Settlement' and a 4th 'Army' -> as in the game: Army, Town, Agents and an empty one, at their places.
+- Campaign HUD: a right click names every piece under it (a ring and its button's picture) and says when a picture is shared by two buttons; Undo / Redo redraw the view.
+- Units / Buildings: after Apply or Undo the form went blank -> the unit on show stays on show.
 - New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
 - Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
 - New faction: the form jumped a line when the template hint came or went -> it stays put.
@@ -3329,6 +3434,9 @@ its own pictures shown everywhere, the painted terrain drawn; the bugs he found 
 - README: how to install (the exe in a folder of its own) and what the tool does with your own pictures.
 
 ### Fixed
+- Campaign HUD (Rome): the four tabs were too wide and read 'Settlement' and a 4th 'Army' -> as in the game: Army, Town, Agents and an empty one, at their places.
+- Campaign HUD: a right click names every piece under it (a ring and its button's picture) and says when a picture is shared by two buttons; Undo / Redo redraw the view.
+- Units / Buildings: after Apply or Undo the form went blank -> the unit on show stays on show.
 - New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
 - Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
 - New faction: the form jumped a line when the template hint came or went -> it stays put.
@@ -3352,6 +3460,9 @@ its own pictures shown everywhere, the painted terrain drawn; the bugs he found 
   Checked on the vanilla files of both games (julii, england): preview, write, Restore byte for byte.
 
 ### Fixed
+- Campaign HUD (Rome): the four tabs were too wide and read 'Settlement' and a 4th 'Army' -> as in the game: Army, Town, Agents and an empty one, at their places.
+- Campaign HUD: a right click names every piece under it (a ring and its button's picture) and says when a picture is shared by two buttons; Undo / Redo redraw the view.
+- Units / Buildings: after Apply or Undo the form went blank -> the unit on show stays on show.
 - New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
 - Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
 - New faction: the form jumped a line when the template hint came or went -> it stays put.
@@ -3366,6 +3477,9 @@ its own pictures shown everywhere, the painted terrain drawn; the bugs he found 
 ## 0.7.5 - 2026-09-29
 
 ### Fixed
+- Campaign HUD (Rome): the four tabs were too wide and read 'Settlement' and a 4th 'Army' -> as in the game: Army, Town, Agents and an empty one, at their places.
+- Campaign HUD: a right click names every piece under it (a ring and its button's picture) and says when a picture is shared by two buttons; Undo / Redo redraw the view.
+- Units / Buildings: after Apply or Undo the form went blank -> the unit on show stays on show.
 - New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
 - Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
 - New faction: the form jumped a line when the template hint came or went -> it stays put.
@@ -3386,6 +3500,9 @@ its own pictures shown everywhere, the painted terrain drawn; the bugs he found 
 ## 0.7.4 - 2026-09-28
 
 ### Fixed
+- Campaign HUD (Rome): the four tabs were too wide and read 'Settlement' and a 4th 'Army' -> as in the game: Army, Town, Agents and an empty one, at their places.
+- Campaign HUD: a right click names every piece under it (a ring and its button's picture) and says when a picture is shared by two buttons; Undo / Redo redraw the view.
+- Units / Buildings: after Apply or Undo the form went blank -> the unit on show stays on show.
 - New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
 - Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
 - New faction: the form jumped a line when the template hint came or went -> it stays put.
@@ -3414,6 +3531,9 @@ its own pictures shown everywhere, the painted terrain drawn; the bugs he found 
 ## 0.7.1 - 2026-09-28
 
 ### Fixed
+- Campaign HUD (Rome): the four tabs were too wide and read 'Settlement' and a 4th 'Army' -> as in the game: Army, Town, Agents and an empty one, at their places.
+- Campaign HUD: a right click names every piece under it (a ring and its button's picture) and says when a picture is shared by two buttons; Undo / Redo redraw the view.
+- Units / Buildings: after Apply or Undo the form went blank -> the unit on show stays on show.
 - New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
 - Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
 - New faction: the form jumped a line when the template hint came or went -> it stays put.
@@ -3443,6 +3563,9 @@ The first release since 0.1.2: it holds 0.2.0 - 0.6.0 below (those were test bui
   zeroed dialog cannot break the game.
 
 ### Fixed
+- Campaign HUD (Rome): the four tabs were too wide and read 'Settlement' and a 4th 'Army' -> as in the game: Army, Town, Agents and an empty one, at their places.
+- Campaign HUD: a right click names every piece under it (a ring and its button's picture) and says when a picture is shared by two buttons; Undo / Redo redraw the view.
+- Units / Buildings: after Apply or Undo the form went blank -> the unit on show stays on show.
 - New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
 - Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
 - New faction: the form jumped a line when the template hint came or went -> it stays put.
@@ -3588,6 +3711,9 @@ Fixes from a run through every part of the tool as a user (vanilla and HLR).
   texts, pictures).
 
 ### Fixed
+- Campaign HUD (Rome): the four tabs were too wide and read 'Settlement' and a 4th 'Army' -> as in the game: Army, Town, Agents and an empty one, at their places.
+- Campaign HUD: a right click names every piece under it (a ring and its button's picture) and says when a picture is shared by two buttons; Undo / Redo redraw the view.
+- Units / Buildings: after Apply or Undo the form went blank -> the unit on show stays on show.
 - New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
 - Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
 - New faction: the form jumped a line when the template hint came or went -> it stays put.
@@ -3615,6 +3741,9 @@ Fixes from a run through every part of the tool as a user (vanilla and HLR).
 - A template fills the new faction's empty fields (money, colours).
 
 ### Fixed
+- Campaign HUD (Rome): the four tabs were too wide and read 'Settlement' and a 4th 'Army' -> as in the game: Army, Town, Agents and an empty one, at their places.
+- Campaign HUD: a right click names every piece under it (a ring and its button's picture) and says when a picture is shared by two buttons; Undo / Redo redraw the view.
+- Units / Buildings: after Apply or Undo the form went blank -> the unit on show stays on show.
 - New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
 - Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
 - New faction: the form jumped a line when the template hint came or went -> it stays put.

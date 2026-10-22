@@ -453,6 +453,8 @@ class RecordEditor(ttk.Frame):
     work = None                                         # the file as typed in the notepad (or None: as on disk)
 
     def load(self, mod):
+        was = self.current[0] if self.current and self.mod is not None and mod is not None and \
+            os.path.normcase(os.path.abspath(mod.data)) == os.path.normcase(os.path.abspath(self.mod.data)) else None
         self.mod = mod
         self.work = None
         self.changes, self.imports, self.current, self.copy_ops = {}, [], None, []
@@ -473,6 +475,8 @@ class RecordEditor(ttk.Frame):
             w.destroy()
         self.title.configure(text="Pick one on the left" if self.blocks else "No %s in this mod" % (
             "export_descr_unit.txt" if self.kind == "unit" else "export_descr_buildings.txt"))
+        if was:                             # read again after a write or an Undo: the one on show stays on show (the
+            self.pick(was)                  # tester, 2026-10-22: the form went blank until the unit was clicked)
 
     def _fill_filters(self):
         """The Show list: by owner (faction or culture), by kind, mercenaries apart."""

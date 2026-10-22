@@ -3585,6 +3585,27 @@ building smith
         self.assertEqual(me.text_edits, {"some_unit": "A Brand New Name"})
         self.assertEqual([p for p, _ in E.UNIT_TEXT_PARTS], ["", "_descr_short", "_descr"])
 
+    def test_rome_hud_tabs_as_the_game_shows_them(self):
+        """The tester's game at 1600 x 900, 2026-10-22: Rome's four tabs read 'Army / Town / Agents / (empty)' and
+        span 333 of the 1024 canvas; the editor drew 'Settlement' and a 4th 'Army', 384 wide. A ring shared by two
+        buttons is said; every piece under the click is offered."""
+        from campaign_editor import hudlayout as H
+        g = lambda w: (None, (0, 0, w, 25))
+        sheets = {}
+        from unittest import mock
+        with mock.patch.object(H, "find", lambda sh, sheet, n: g(20)):
+            tabs = H._rome_tabs(sheets, 0)
+        self.assertEqual(sorted(t["word"] for t in tabs), sorted(["Army", "Town", "Agents", ""]))
+        xs = [t["box"][0] for t in tabs]
+        right = max(t["box"][0] + t["box"][2] for t in tabs)
+        self.assertLessEqual(abs((right - min(xs)) - 333), 4)
+        ring = {"piece": "end turn ring", "sprite": "BUTTON_OUTER_RING_MED", "sheet": "strat3", "box": (961, 709, 60, 60)}
+        face = {"piece": "end turn", "sprite": "END_TURN_BUTTON_IMAGE", "sheet": "strat3", "box": (965, 712, 52, 53)}
+        other = {"piece": "faction ring", "sprite": "BUTTON_OUTER_RING_MED", "sheet": "strat3", "box": (900, 709, 60, 60)}
+        items = [face, ring, other]
+        self.assertEqual([p["piece"] for p in H.pieces_at(None, 990, 740, items)], ["end turn ring", "end turn"])
+        self.assertEqual([p["piece"] for p in H.sharing(ring, items)], ["faction ring"])
+
     def test_campaign_hud_laid_out_as_the_engine(self):
         """Interface > Campaign HUD (the engines' places, hudlayout): the HUD's bottom at 768, its top 768 - the LEFT
         panel's height, the MIDDLE panel on the bottom, the pieces from the mod's own sheet; a changed page shows."""
