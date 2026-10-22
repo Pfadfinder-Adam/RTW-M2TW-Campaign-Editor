@@ -15244,6 +15244,18 @@ building smith
         self.assertEqual(len(a.offsets(0)), 2)
         self.assertIsNone(AN.find(mod, "data/animations/none.cas"))
 
+    def test_view_in_3d_says_why_a_model_has_no_animation(self):
+        """The user, 2026-10-22: 'the editor sometimes hides the animation' - View in 3D now says why there is none:
+        a skeleton nobody lists, or its files in no pack and not loose."""
+        from campaign_editor import animations as AN
+        d = os.path.join(self.root, "data")
+        write(os.path.join(d, "descr_skeleton.txt"), "type\t\tfs_x\nanim\t\tstand\tdata/animations/gone.cas\n")
+        mod = ModData(self.root)
+        self.assertEqual(AN.of_skeleton(mod, "fs_x"), [])
+        self.assertIn("none of its 1 animation files is loose", AN.why_none(mod, "fs_x"))
+        self.assertIn("data/animations/gone.cas", AN.why_none(mod, "fs_x"))
+        self.assertIn("neither in descr_skeleton.txt", AN.why_none(mod, "fs_nobody"))
+
     def test_tile_models_read_from_the_games_packs(self):
         """A tester's photo (ROCSS, Medieval II): the 3D map's rivers were blue squares - the mod has no
         descr_aerial_map_tile_models.txt of its own, the game keeps it in its packs, and the editor looked for it

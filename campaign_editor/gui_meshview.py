@@ -118,6 +118,7 @@ class ModelViewer(tk.Toplevel):
             cp = ttk.Combobox(side, textvariable=self.v_pose, values=POSE_WORDS, state="readonly", width=22)
             cp.pack(anchor="w")
             cp.bind("<<ComboboxSelected>>", lambda e: self.load())
+        self._skeletons_shown = list(info.skeletons)
         self._anim_box(side)
         self.v_weapons = tk.BooleanVar(value=True)
         ttk.Checkbutton(side, text="Weapons and shield", variable=self.v_weapons,
@@ -186,9 +187,17 @@ class ModelViewer(tk.Toplevel):
 
     # -- animations ---------------------------------------------------------------------------------------------
     def _anim_box(self, side):
-        """Skeleton + Animation pickers, Play / Pause and the frame - only when the packs hold the model's skeleton's
-        animations."""
-        self.anims = {}                             # skeleton -> [(what, file)]
+        """Skeleton + Animation pickers, Play / Pause and the frame - when the packs hold the model's skeleton's
+        animations; else one grey line saying why there are none (the user, 2026-10-22: 'the editor sometimes hides
+        the animation' - the box went away without a word). Built in its own frame, built again when another armour
+        level brings other skeletons (_armour_picked)."""
+        if getattr(self, "anim_frame", None) is None:
+            self.anim_frame = ttk.Frame(side)
+            self.anim_frame.pack(anchor="w", fill="x")
+        for w in self.anim_frame.winfo_children():
+            w.destroy()
+        side = self.anim_frame
+        self.anims, why = {}, []                             # skeleton -> [(what, file)]
         if self.engine:                             # a siege engine: its states (engines.STATES), loose .cas files
             mv = self.engine["moves"]
             self.anims[self.engine["eng"].skeleton] = [(words, est) for words, est, _, _ in EN.STATES
@@ -196,14 +205,23 @@ class ModelViewer(tk.Toplevel):
         for sk in ([] if self.engine else self.info.skeletons):
             try:
                 got = AN.of_skeleton(self.mod, sk)
-            except (OSError, ValueError):
+                if not got:
+                    why.append(AN.why_none(self.mod, sk))
+            except (OSError, ValueError) as e:
                 got = []
+                why.append("%s: %s" % (sk, e))
             if got and sk not in self.anims:
                 self.anims[sk] = got
         self.v_skel = tk.StringVar(value=next(iter(self.anims), ""))
         self.v_anim = tk.StringVar(value=NO_ANIM)
         self.v_frame = tk.IntVar(value=0)
         if not self.anims:
+            if self.engine:
+                why = ["the engine's moves (descr_engine_skeleton.txt) are not found"]
+            if why:                                 # a battle model with skeletons: say why it stands still
+                ttk.Label(side, text="Animation").pack(anchor="w", pady=(8, 0))
+                ttk.Label(side, text="none - " + "; ".join(dict.fromkeys(why)), foreground="#555",
+                          wraplength=230, justify="left").pack(anchor="w")
             return
         ttk.Label(side, text="Animation").pack(anchor="w", pady=(8, 0))
         if len(self.anims) > 1:                     # Rome's spearmen: the spear's skeleton and the sword's
@@ -569,6 +587,11 @@ class ModelViewer(tk.Toplevel):
         if self.v_fac.get() not in facs:
             self.v_fac.set(facs[0])
         self._tex = {}
+        if [k.lower() for k in info.skeletons] != [k.lower() for k in self._skeletons_shown]:
+            self._stop()                            # other skeletons: their own animations (the box built again)
+            self.anim, self.anim_key, self.frame = None, None, 0
+            self._skeletons_shown = list(info.skeletons)
+            self._anim_box(None)
         self.load()
 
     def _lod_name(self, i):
