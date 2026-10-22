@@ -200,7 +200,9 @@ class CampaignMap:
         took a second on a big map (HLR) at every stroke in the Climates mode; None when the pictures are not the
         map's size (the loop then)."""
         size = (2 * self.w + 1, 2 * self.h + 1)
-        c, g = self.mod._optional_map(self.campaign, "map_climates.tga"), self.ground
+        if getattr(self, "mod", None) is None or getattr(self, "regions_img", None) is None:
+            return None                                 # a map made by hand (tests): the loop
+        c, g = self.mod._optional_map(self.campaign, "map_climates.tga"), getattr(self, "ground", None)
         if c is None or (c.width, c.height) != size or (not sea_too and (g is None or (g.width, g.height) != size)):
             return None
         box = (0, 0, 2 * self.w, 2 * self.h)
