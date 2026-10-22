@@ -355,6 +355,7 @@ class App(tk.Tk):
         self.new_religions = []         # Medieval II: new religions waiting for Apply (religions.py specs)
         self.culture_names = {}         # {settlement: {culture or '*': name}} (REX renames the town for its owner)
         self.name_list = {}             # {faction or '(new)': {pool: [names]}} a name list of its own (Name list...)
+        self.zero = None                # New faction > From zero...: {'culture', 'frame', 'campaign', ...} (gui_fromzero)
         # resources on the map: moved {index: (x, y)}, removed [index], added [{type, xy}], region tags {region: text}
         self.res_moves, self.res_removed, self.res_added, self.region_tags = {}, [], [], {}
         # forts and watchtowers the same way: moved {line: (x, y)}, removed [line], added [{kind, xy}] (forts.py)
@@ -554,6 +555,11 @@ class App(tk.Tk):
         self.bring_row = ttk.Frame(lf)
         self.bring_row.grid(row=row, column=1, sticky="w", padx=4, pady=(0, 2))
         row += 1
+        b_zero = ttk.Button(self.bring_row, text="From zero...", command=self.from_zero)
+        b_zero.pack(side="left", padx=(0, theme.BUTTON_GAP))
+        tip(b_zero, "A new faction with nothing of an existing one, step by step: its culture, names, colours away "
+                    "from every faction's, its own emblem on every sign, a name list of the whole culture; Apply "
+                    "creates it and recolours every picture it gets in its colours.")
         b_from = ttk.Button(self.bring_row, text="From another mod...", command=self.bring_faction)
         b_from.pack(side="left")
         from .gui_util import tip as _tip_bring
@@ -563,7 +569,8 @@ class App(tk.Tk):
                     "its select map is drawn from this map.")
         self.lbl_bring = ttk.Label(self.bring_row, text="")
         self.lbl_bring.pack(side="left", padx=(6, 0))
-        self.b_unbring = ttk.Button(self.bring_row, text="Forget it", command=lambda: self.set_bring(None))
+        self.b_unbring = ttk.Button(self.bring_row, text="Forget it",
+                                    command=lambda: self.unzero() if self.zero else self.set_bring(None))
         self.e_name = ttk.Entry(lf, textvariable=self.v["name"])
         field("Internal name", self.e_name)
         # Rename... beside its label, not at the row's end (there it widened the whole box - the user, 2026-10-10)
@@ -1830,6 +1837,7 @@ class App(tk.Tk):
         st["editing_now"] = copy.deepcopy(self.editing_now)
         st["baseline"] = getattr(self, "_baseline", None)
         st["victory"] = (self.victory.faction, copy.deepcopy(self.victory.cond))
+        st["zero"] = copy.deepcopy(self.zero)
         return st
 
     def _bring_side(self, st):
@@ -1854,6 +1862,8 @@ class App(tk.Tk):
             else:
                 setattr(self, k, st[k])
         self.editing_now, self._baseline = st["editing_now"], st["baseline"]
+        self.zero = st.get("zero")
+        self._from_zero_look()
         t = self.v["template"].get().strip()
         if t:
             self.load_victory(t)
@@ -5465,13 +5475,17 @@ class App(tk.Tk):
             self.bring = None
             self.lbl_bring.configure(text="")
             self.b_unbring.pack_forget()
+        if not keep_bring and getattr(self, "zero", None):
+            self.zero = None                    # (its recolour, kept for Apply, then finds no faction from zero)
+            self.lbl_bring.configure(text="")
+            self.b_unbring.pack_forget()
 
     def _from_zero_look(self):
         """A faction brought from another mod is made from zero: nothing of the template is seen (the user,
         2026-10-15, again: 'why does it still say Gauls - misleading'). The template row, 'Copy art named after the
         template' and 'template's relations' are put away - the template only gives the lines in the game's lists,
         inside; the relations are neutral, its own pictures come along. Everything back for a plain copy."""
-        brought = not self.editing() and bool(getattr(self, "bring", None))
+        brought = not self.editing() and bool(getattr(self, "bring", None) or getattr(self, "zero", None))
         for w in (self.lbl_template, self.cb_template):
             w.grid_remove() if brought else w.grid()
         if brought:
@@ -5480,11 +5494,48 @@ class App(tk.Tk):
             self.chk_art.grid_remove()
             self.dip_buttons[1].pack_forget()
             self.lf2.configure(text="Leader and heir (names from its own name list)")
+            if self.zero:
+                self.lbl_bring.configure(text="from zero - %s culture" % self.zero.get("culture"))
+                if not self.b_unbring.winfo_manager():
+                    self.b_unbring.pack(side="left", padx=(6, 0))
         elif not self.editing():
             self.chk_art.grid()
             if not self.dip_buttons[1].winfo_manager():
                 self.dip_buttons[1].pack(side="left")
             self.lf2.configure(text="Leader and heir (names must come from the template's name list)")
+
+    def from_zero(self):
+        """New faction > From zero...: the steps (gui_fromzero), then this form."""
+        from .gui_fromzero import open_from_zero
+        if self.bring:
+            self.set_bring(None)
+        open_from_zero(self)
+
+    def zero_sync(self):
+        """A faction from zero: its name, colours and emblem pictures as the form has them now, for the recolour
+        Apply makes after creating it (gui_fromzero.keep_recolour reads them at the write)."""
+        z = self.zero
+        if not z or self.editing():
+            return
+        z["new"] = self.v["name"].get().strip().lower()
+        z["to"] = (self.colours.get("primary"), self.colours.get("secondary"))
+        z["art"] = list(self.art_replace)
+
+    def _drop_zero(self):
+        from .gui_fromzero import RECOLOUR_KEY
+        self.zero = None
+        if RECOLOUR_KEY in self.session_parts():
+            self.session_drop(RECOLOUR_KEY)
+        self.lbl_bring.configure(text="")
+        self.b_unbring.pack_forget()
+
+    def unzero(self):
+        """Forget it beside 'from zero': a copy of a template again (the form stays as it is, the template row back,
+        nothing recoloured by itself)."""
+        self._drop_zero()
+        self._from_zero_look()
+        self.status.set("New faction: a copy of the template again (%s) - its pictures are not recoloured by "
+                        "themselves now." % self.v["template"].get())
 
     def set_bring(self, picked):
         """The faction brought from another mod (None: forget it - the New faction is a copy of the template again).
@@ -6600,6 +6651,9 @@ class App(tk.Tk):
         }
         if self.bring:                                  # a faction of another mod (factionbring.overlay)
             opts["bring"] = {k: v for k, v in self.bring.items() if k != "for"}
+        if self.zero:                                   # New faction > From zero (traces.plan_note says so)
+            opts["from_zero"] = self.zero.get("culture") or True
+        self.zero_sync()
         return v["template"], v["name"].lower(), opts
 
     def gather_edit(self):
@@ -7260,6 +7314,7 @@ class App(tk.Tk):
         yet (Start the game said 'changes not written', a second Create would make it again; the user, 2026-10-15).
         The form is emptied and the work goes on in Edit faction on the faction made - create, then edit."""
         self.bring = None
+        self.zero = None
         self.lbl_bring.configure(text="")
         self.b_unbring.pack_forget()
         self.v["name"].set("")

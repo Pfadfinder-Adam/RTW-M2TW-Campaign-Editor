@@ -293,12 +293,18 @@ def plan_note(plan):
     pics = [d for _, d in plan.copies if not re.search(r"[\\/]ui[\\/]unit(s|_info)[\\/]", d)]
     cards = [d for _, d in plan.copies if re.search(r"[\\/]ui[\\/]unit(s|_info)[\\/]", d)]
     parts = []
-    if pics:
+    zero = plan.opts.get("from_zero")
+    if zero and (pics or cards):
+        # New faction > From zero: its emblem drawn on the signs, the rest recoloured by the part after this one
+        parts.append("%d picture(s) and its men's textures copied from it - recoloured in its own colours right "
+                     "after it is written (the same Apply)%s" % (len(pics) + len(cards), "" if plan.opts.get("art")
+                                                                   else "; no emblem picked: its signs are %s's" % t))
+    elif pics:
         parts.append("%d picture(s) copied from it (buttons, logos, banners, captain cards, figures) - Art > "
                      "Faction emblem draws them all from one symbol of its own" % len(pics))
-    if cards:
+    if cards and not zero:
         parts.append("its unit cards - Art > Recolour all its pictures...")
-    tex = [x for x in texture_traces(plan.mod, new, plan.edit) if x["other"] == t]
+    tex = [] if zero else [x for x in texture_traces(plan.mod, new, plan.edit) if x["other"] == t]
     if tex:
         parts.append("%d battle / campaign-map texture(s) its men share with it - Recolour gives them copies in its "
                      "own colours" % sum(x["count"] for x in tex))

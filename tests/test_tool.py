@@ -362,6 +362,57 @@ class ToolTest(unittest.TestCase):
                                           "b": {"primary_colour": (10, 200, 10), "secondary_colour": (0, 0, 0)}},
                                          "a"), [])
 
+    def test_new_faction_from_zero_picks(self):
+        """New faction > From zero (the user, 2026-10-22): the faction its lines are made from picked behind the
+        culture, colours away from every faction's, a name list mixed from the whole culture (no one faction's most of
+        it), the internal name made from the name; its plan says its pictures are recoloured in the same Apply."""
+        from campaign_editor import fromzero as Z
+        mod = ModData(self.root)
+        self.assertEqual(Z.culture_factions(mod, "eastern"), ["alpha"])
+        self.assertEqual(Z.frame_faction(mod, "test", "eastern"), "alpha")
+        self.assertIsNone(Z.frame_faction(mod, "test", "nobody"))
+        self.assertEqual(Z.colours_alike(mod, (3, 3, 3), (5, 5, 5)), [("alpha", "both")])
+        self.assertEqual(Z.colours_alike(mod, (3, 3, 3), (250, 250, 250)), [("alpha", "primary")])
+        self.assertEqual(Z.colours_alike(mod, (200, 30, 30)), [])
+        free = Z.free_colours(mod, 4)
+        self.assertEqual(len(free), 4)
+        self.assertTrue(all(not Z.colours_alike(mod, p, s) for p, s in free))
+        self.assertEqual(Z.internal_of("Kingdom of Zorga!"), "kingdom_of_zorga")
+        self.assertEqual(Z.internal_of("1st Legion"), "f_1st_legion")
+
+        class Mod:                                  # three factions of one culture, one with a long list
+            pools = {"a": {"characters": ["A%d" % i for i in range(40)] + ["Common"], "surnames": ["Sa"]},
+                     "b": {"characters": ["B%d" % i for i in range(5)] + ["Common"], "women": ["Wb"]},
+                     "c": {"characters": ["C%d" % i for i in range(5)]}, "d": {"characters": ["D1"]}}
+
+            def factions(self):
+                return [("a", "x"), ("b", "x"), ("c", "x"), ("d", "y"), ("slave", "x")]
+
+            def name_pool(self, f):
+                return self.pools.get(f, {})
+        pools, owners = Z.culture_name_list(Mod(), "x")
+        self.assertEqual(owners, ["a", "b", "c"])
+        men = pools["characters"]
+        self.assertEqual(len(men), len({n.lower() for n in men}))
+        self.assertNotIn("D1", men)
+        self.assertTrue(all(Z._share(men, Mod.pools[f]["characters"]) <= 0.75 for f in owners))
+        self.assertIn("B0", men)
+        self.assertEqual((pools["surnames"], pools["women"]), (["Sa"], ["Wb"]))
+        plan = build(mod, "test", "alpha", "beta", {"display_name": "Betaland", "from_zero": "eastern",
+                                                    "start": {"regions": ["B_R"], "leader": {"name": "Boris"}}})
+        self.assertIn("recoloured in its own colours right after it is written", plan.report())
+        self.assertNotIn("Art > Recolour all its pictures", plan.report())
+        try:
+            from PIL import Image, ImageDraw
+        except ImportError:
+            return
+        a = Image.new("RGBA", (64, 64), (0, 0, 0, 0))
+        ImageDraw.Draw(a).polygon([(32, 4), (60, 60), (4, 60)], fill=(255, 255, 255, 255))
+        b = Image.new("RGBA", (64, 64), (0, 0, 0, 0))
+        ImageDraw.Draw(b).ellipse((4, 4, 30, 30), fill=(255, 255, 255, 255))
+        self.assertGreater(Z.shape_likeness(a, a.convert("LA").convert("RGBA")), 0.99)
+        self.assertEqual([f for f, _ in Z.symbols_alike(a, {"t": a, "o": b})], ["t"])
+
     def test_people_word_of_a_faction(self):
         from campaign_editor.build import people_word
         self.assertEqual(people_word({"display_name": "Scotland", "adjective": "Scottish"}), "Scots")

@@ -3002,6 +3002,8 @@ COVERAGE = {
     "Make the campaign map 3 x bigger": RUN + " (the x3 copy, when asked)",
     "Check mod files": RUN + " (after every step)",
     "Check mod files: Take them out (untouched copies)": ["s_untouched_copies"],
+    "New faction > From zero... (culture, names, free colours, emblem, the culture's names; recoloured in the same "
+    "Apply)": ["s_new_faction", "s_recolour"],
     "Check mod files: Traces of another faction": RUN + " (the test mod's new factions are listed after every step)",
     "Restore a backup": RUN + " (check-scripts/testmod.py restores every step byte for byte)",
     "The game's log in plain words": LOOK,

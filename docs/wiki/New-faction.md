@@ -3,6 +3,26 @@
 A new faction is **cloned from a template** - a faction that already works in the game. The clone starts in
 the game at once, so you can test every change after that straight away. The template is never changed.
 
+## From zero
+
+**New faction > From zero...** makes a faction with nothing of an existing one, step by step:
+
+1. **Culture** - its towns on the map, portraits, agents, the buildings and units open to it. A faction of that
+   culture lends the new one its lines in the game's lists, inside the files only; it is never shown as a template.
+2. **Names** - full, short, adjective, people (plural); the internal name is made from them.
+3. **Colours** - pick them, or click one of the free pairs (none near any faction's). Colours like another
+   faction's are said.
+4. **Emblem** - your symbol (a square PNG with a clear background is best), fitted once and made into every sign:
+   menu buttons, loading screen, logos, the flag on the map, its 3D symbol, banners, captains' cards. A must - a
+   symbol that looks like another faction's is said.
+5. **Name list** - mixed from every faction of the culture, so it is no one faction's list (Name list... to type
+   your own).
+
+**Fill the form** puts it all on the New faction tab: pick its towns, capital and leader there, then **Create
+faction**. One Apply writes it with its emblem and recolours every picture it got (cards, battle textures,
+sprites) in its own colours. Check mod files lists anything it still shares (TRACES OF ANOTHER FACTION).
+**Forget it** makes it a plain copy of the template again.
+
 ## Steps
 
 1. **Factions** at the top, its **New faction** tab; load the mod, pick the campaign.
