@@ -11170,7 +11170,8 @@ building smith
                               status=SimpleNamespace(set=said.append))
         for to in ((5, 6), (9, 9), (1, 1)):
             me = SimpleNamespace(app=app, _carry=("char", "rome:0", "Flavius", (1, 1)), _tile=lambda x, y, t=to: t,
-                                 _carry_stop=lambda back=True: None, load=lambda: done.append("laid"))
+                                 _carry_stop=lambda back=True: None, load=lambda: done.append("laid"),
+                                 _did=lambda kind: None)
             Map3DView._carry_end(me, SimpleNamespace(x=0, y=0))
         self.assertEqual(done, [("rome:0", (5, 6)), "laid"])         # refused at sea, nothing on its own tile
         self.assertEqual(said, ["Flavius cannot stand at 9, 9: that is sea"])
@@ -11183,7 +11184,8 @@ building smith
         for carried, to in ((("place", ("city", "Latium"), "Latium town", (3, 3)), (4, 4)),
                             (("res", "r7", "gold", (1, 1)), (2, 2)), (("res", "r7", "gold", (1, 1)), (6, 1))):
             me = SimpleNamespace(app=app, _carry=carried, _tile=lambda x, y, t=to: t,
-                                 _carry_stop=lambda back=True: None, load=lambda: done.append("laid"))
+                                 _carry_stop=lambda back=True: None, load=lambda: done.append("laid"),
+                                 _did=lambda kind: None)
             Map3DView._carry_end(me, SimpleNamespace(x=0, y=0))
         self.assertEqual(done, [("city", "Latium", (4, 4)), "laid", ("r7", (6, 1)), "laid"])
         self.assertEqual(said[-1], "gold cannot stand at 2, 2: taken")
@@ -11254,6 +11256,28 @@ building smith
                              lbl=SimpleNamespace(configure=lambda **k: None))
         Map3DView._eyedrop(me, SimpleNamespace(x=1, y=1))
         self.assertEqual(picked, ["0,128,128"])
+        # Ctrl+Z / Ctrl+Y on the 3D tab: a stroke of the Terrain editor's brushes goes back there (the map made
+        # from its pictures again), regions painted or a figure carried by the window's own Undo
+        undone, later = [], []
+        ed = SimpleNamespace(undo_stroke=lambda: undone.append("undo"), redo_stroke=lambda: undone.append("redo"))
+        me = SimpleNamespace(app=SimpleNamespace(editors={"terrain": ed}), after_idle=later.append,
+                             load="load", _after_undo="after")
+        Map3DView._did(me, "terrain")
+        Map3DView._did(me, "app")
+        self.assertFalse(Map3DView.undo_step(me))                   # the regions: the window's Undo, then the map
+        self.assertTrue(Map3DView.undo_step(me))                    # the stroke: the Terrain editor's
+        self.assertTrue(Map3DView.undo_step(me, redo=True))
+        self.assertEqual((undone, later), (["undo", "redo"], ["after", "load", "load"]))
+        self.assertFalse(Map3DView.undo_step(me, redo=True))        # the regions again: the window's Redo
+        self.assertFalse(Map3DView.undo_step(me, redo=True))        # nothing of its own left
+        # a tile brush in hand: what the tile is, beside the mouse
+        cm = SimpleNamespace(w=9, h=9, ground_at=lambda x, y: (0, 128, 128), climate_at=lambda x, y: (1, 2, 3),
+                             region_at=lambda x, y: "Latium")
+        me = SimpleNamespace(app=SimpleNamespace(editors={"terrain": SimpleNamespace(cmap=cm, mod=None)},
+                                                 region_paint={(4, 4): "Etruria"}))
+        self.assertEqual(Map3DView._paint_tip(me, (3, 3)).splitlines(),
+                         ["tile 3, 3", "ground: low fertility", "climate: 1 2 3", "region: Latium"])
+        self.assertTrue(Map3DView._paint_tip(me, (4, 4)).endswith("region: Etruria"))     # painted, not written
         # the colours over the map (Layers): what the brushes left, sent to the card - none takes them off
         tints = []
         me = SimpleNamespace(gl=SimpleNamespace(set_tint=tints.append, data=SimpleNamespace(

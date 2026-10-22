@@ -638,6 +638,15 @@ class Map3DView(ttk.Frame):
     def _hover(self, e):
         self._mouse = None if e is None else (e.x, e.y)
         self._draw_ring()
+        if e is not None and self._carry is None and self.v_brush_on.get() and self.v_paint.get() != "heights" \
+                and not self._paint:
+            t = self._tile(e.x, e.y) if self._on() else None
+            text = self._paint_tip(t) if t is not None else ""
+            if text:
+                self._tip_show(e, text)
+            else:
+                self._tip_hide()
+            return
         if e is None or self._carry is not None or self.v_brush_on.get():
             self._tip_hide()
             return
@@ -896,6 +905,7 @@ class Map3DView(ttk.Frame):
             app.status.set("%s cannot stand at %d, %d: %s" % (name, tile[0], tile[1], why))
             return
         self._carry_stop(back=False)
+        self._did("app")                                 # the Map's move: the window's own Undo takes it back
         self._hover_gen = getattr(self, "_hover_gen", 0) + 1   # what stands where has changed
         if what == "char":
             app._map_moved(key, tile)
@@ -973,7 +983,12 @@ class Map3DView(ttk.Frame):
         ed = self._terrain()
         if ed is None:
             return
-        ed._stroke()                                     # one Undo step a stroke, as on the 2D map
+        if self.v_paint.get() == "regions":              # the Map's own Undo (region_paint is one of its steps)
+            self.app.remember()
+            self._did("app")
+        else:
+            ed._stroke()                                 # one Undo step a stroke, as on the 2D map
+            self._did("terrain")
         self._paint, self._mouse = True, (e.x, e.y)
         self.gl.coast_frozen = True                      # the whole shore is not traced at every tick, only at the end
         self._coast_was = self._coast_now(ed)
@@ -1110,6 +1125,62 @@ class Map3DView(ttk.Frame):
             self._send_heights(ed, got[1])
             self.draw(half=True)
         self.after(50, self._puff)
+
+    def _did(self, kind):
+        """A step done here, for Ctrl+Z / Ctrl+Y on this tab: 'terrain' (the Terrain editor's stroke) or 'app' (the
+        window's own Undo: regions painted, a figure carried)."""
+        self._kinds = getattr(self, "_kinds", [])[-299:] + [kind]
+        self._kinds_redo = []
+
+    def undo_step(self, redo=False):
+        """Ctrl+Z / Ctrl+Y (or the bottom Undo / Redo) on the 3D tab: the newest step done here taken back (or done
+        again) where it was kept - True when done here, False: the window's own Undo does it (then the map follows)."""
+        back, fwd = (getattr(self, "_kinds_redo", []), getattr(self, "_kinds", [])) if redo else \
+            (getattr(self, "_kinds", []), getattr(self, "_kinds_redo", []))
+        if not back:
+            self.after_idle(self._after_undo)
+            return False
+        kind = back.pop()
+        fwd.append(kind)
+        ed = self.app.editors.get("terrain")
+        if kind == "terrain" and ed is not None:
+            (ed.redo_stroke if redo else ed.undo_stroke)()
+            self.after_idle(self.load)                   # the strokes' pictures back: the map made from them
+            return True
+        self.after_idle(self._after_undo)
+        return False
+
+    def _after_undo(self):
+        """The window's Undo / Redo took back regions painted or a figure carried: the borders and colours over the
+        map follow, what stands on the map is laid again - the map itself not made again."""
+        if self.gl is None or not self.winfo_exists():
+            return
+        self._ground_stale, self.gl.models_stale = True, True
+        self._for = self._stamp()
+        self._lay_models()
+        if self.v_tint.get() != "none":
+            self._send_tint(draw=False)
+        self.load()
+
+    def _paint_tip(self, t):
+        """What a tile is, beside the mouse while a tile brush is in hand: its ground, climate and region (as the
+        brushes left them, not written yet)."""
+        from . import terrain as T
+        ed = self.app.editors.get("terrain")
+        cm = getattr(ed, "cmap", None)
+        if cm is None or not (0 <= t[0] < cm.w and 0 <= t[1] < cm.h):
+            return ""
+        got = getattr(self, "_climate_names", None)
+        if got is None or got[0] is not ed.mod:          # read once a mod, not at every move
+            self._climate_names = (ed.mod, {tuple(c): n for n, c, _ in T.climates(ed.mod)} if ed.mod else {})
+        climates = self._climate_names[1]
+        g, c = cm.ground_at(*t), cm.climate_at(*t)
+        region = (getattr(self.app, "region_paint", None) or {}).get(tuple(t)) or cm.region_at(*t)
+        lines = ["tile %d, %d" % tuple(t), "ground: %s" % T.GROUND.get(g, "?" if g is None else "%d %d %d" % g[:3])]
+        if c is not None:
+            lines.append("climate: %s" % climates.get(tuple(c[:3]), "%d %d %d" % tuple(c[:3])))
+        lines.append("region: %s" % (region or "the sea"))
+        return "\n".join(lines)
 
     def _eyedrop(self, e):
         """Alt + click: the brush picks the tile's own - its region (Regions), ground, mark or climate."""
