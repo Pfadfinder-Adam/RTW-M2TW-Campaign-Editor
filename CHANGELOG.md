@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.35.3 - 2026-10-22
+
+### In short
+- **Fixed**: a game that stopped reading the factions after two changes kept for one Apply (a garrison's units under an agent); the ground colours mixed up in the Terrain editor and the 3D map.
+- **Added**: war dogs and pigs listed in Units > Battle model with their own texture and View in 3D.
+- **Changed**: nothing else - this release holds only these fixes.
+
+### Fixed
+- Two changes kept for one Apply (a town's new garrison and new agents on the Map) could leave the garrison's units under an agent - the game then stopped reading the factions there: the factions after it were missing, the rebels' towns empty and playing one of them crashed -> the units stay with their army; Check mod files names such a line and a write never makes a new one.
+- Terrain editor and the 3D map: the ground colours were mixed up - high fertility was shown as low fertility, low fertility as sparse forest, sparse forest as high fertility (and its trees stood on the wrong tiles), impassable sea painted a colour the game does not know -> every ground is read and painted with the games' own colours.
+- Units > Battle model: war dogs and pigs had no picture of their own, only their handlers' - the animals are listed now with their own texture, View in 3D and Save its files; chariots and siege engines show their texture too, as do soldiers whose model has no texture line (Rome).
+
 ## 0.35.2 - 2026-10-22
 
 ### In short
