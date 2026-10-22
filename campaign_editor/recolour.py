@@ -43,6 +43,11 @@ def faction_colours(mod):
     return {k: (v[0], v[1]) for k, v in out.items() if v[0]}
 
 
+def colour_pair(cols):
+    """A faction's (primary, secondary) as tuples to compare; a missing secondary stays None."""
+    return tuple(tuple(c) if c else None for c in cols)
+
+
 def hsv(rgb):
     return colorsys.rgb_to_hsv(*[c / 255.0 for c in rgb])
 

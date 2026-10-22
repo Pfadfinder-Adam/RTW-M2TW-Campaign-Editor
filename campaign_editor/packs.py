@@ -30,6 +30,7 @@ import os
 import re
 import zipfile
 
+from .guard import safe_rel
 from .textio import strip_comment, tokens
 
 PACK_VERSION = 1
@@ -987,8 +988,14 @@ def read_pack(path):
     with zipfile.ZipFile(path) as z:
         manifest = json.loads(z.read("manifest.json").decode("utf-8"))
         files = {n[6:]: z.read(n) for n in z.namelist() if n.startswith("files/") and not n.endswith("/")}
-    if manifest.get("pack") != PACK_VERSION:
+    if not isinstance(manifest, dict) or manifest.get("pack") != PACK_VERSION:
         raise ValueError("not a unit pack of this tool (or a newer one)")
+    bad = sorted(rel for rel in files if not safe_rel(rel))
+    if bad:
+        # a pack's files go under the mod's data folder; '../' out of it reached the game's folder (the guard lets a
+        # write there) - a crafted pack could put a .dll beside the game's exe
+        raise ValueError("this pack names files outside a mod's data folder (%s) - it was not made by this editor; "
+                         "nothing was taken from it" % ", ".join(bad[:3]))
     return manifest, files
 
 

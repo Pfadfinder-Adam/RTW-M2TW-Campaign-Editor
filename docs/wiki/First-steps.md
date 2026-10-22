@@ -18,7 +18,7 @@ Every change waits until you press **Preview changes** (shows every file and lin
 **Tools > Edit the editor's look...** turns the windows into a layout you can change: a click picks a button, tick or
 label (a yellow frame); drag it with the left button before or after any other piece, in any bar of any window (in a
 bar of another part of the window a copy of it stands there - it does the same and greys out with it); its right
-click renames it, gives it a hover text or a width, hides it or takes it back. The small bar beside it holds **Undo**,
+click renames it, gives it a hover text, a width or its own colours, font and emoji, hides it or takes it back. The small bar beside it holds **Undo**,
 **Hidden pieces...** (show one again), **Back to how it was**, **Save my look...** and **Load a look...** (to share
 one). The look is kept for every start in `CampaignEditor_look.json`; a piece whose words a new version of the editor
 changes simply goes back to its place.
@@ -26,13 +26,35 @@ changes simply goes back to its place.
 **Tools > Layout board...** does the same on one big canvas, with every page already laid out: each work of the
 main window, the tabs of Maps and Factions and the Tools windows side by side (the editor opens each one in turn the
 first time and keeps their pictures; **Refresh all pages** takes them again, after you load a mod for example). The
-wheel zooms, the middle button moves the board. Drag a button, tick or label with the left button: it goes into the
-row beside the piece nearest to where you drop it - hold **Alt** (or tick **Free place**) and it stays exactly where
-you drop it. Drag a corner of the picked piece to size it; the arrows move a free piece a pixel (Shift: ten). Right
-click a piece: Rename, Hover text, Size in pixels, Width in letters, Hide, Back into its row, Back to how it was,
-Show it in the editor; right click a page: refresh it, show it in the editor, its pieces back to how they were. Each
-change is made in the editor at once and kept in the same `CampaignEditor_look.json`; **Undo** / **Redo** and
-**Back to how it was...** take it back. The questions and file pickers Windows draws itself are not on the board.
+wheel zooms, the middle button moves the board. Drag a button, tick or label with the left button: it stays exactly
+where you drop it. On the way its edges and middle stick to the lines the other pieces (and the window's edges)
+stand on - a pink line shows which - and, with **Grid** ticked, to a grid (4, 8, 16 or 32 px; **Stick to lines**
+turns the lines off). Hold **Alt** (or tick **In a row**) to put it into the row beside the piece nearest to where
+you drop it instead. Drag a corner of the picked piece to size it (it sticks the same way); the arrows move it a
+pixel (Shift: ten). Right click a piece: Rename, Hover text, Size in pixels, Width in letters, **Colours, font and
+emoji...** (its background and words' colour, a font, size and bold / italic, an emoji before its words - a preview
+shows it; **All the editor's own** takes them off), **Copy its look** / **Paste the look** (the same colours, font and
+emoji on another piece), Hide, Back into its row, Back to how it was, Show it in the editor; right click a page: refresh it, show it in the editor, its pieces
+back to how they were. Your changes are a draft drawn on the board (the piece where it goes, its old place greyed):
+**Accept** puts them all on the editor and keeps them in the same `CampaignEditor_look.json`, **Discard** drops
+them, **Undo** / **Redo** step through them; after Accept, **Undo** and **Back to how it was...** take it back.
+**Appearance** on the board's bar opens a panel at its side for the whole editor at once (as Obsidian's Appearance):
+Light or Dark, a font and size for every window, and a swatch for each colour - background, words, fields and lists,
+buttons, tabs, the picked line, links... - and, folded under them, for each button with a colour of its own (Play,
+Report a bug...). Click a swatch to pick a new colour: every window takes it at once and keeps it for every start;
+its arrow gives the look's own colour back, **All back to the look as it comes** all of them.
+**Themes...** (there, or in **Settings > Look**) shows every theme as a card with a picture: the editor's own (Light,
+Dark, Roman parchment, Medieval night, Byzantine purple) and yours. **Use** puts one on the whole editor; **Save the
+look now as a theme...** keeps the colours and font now in force, with a picture of the editor, under a name;
+**Export...** writes a theme into one .zip to send (Discord, a friend) and **Import a theme...** takes one sent to
+you. Your themes are kept in `CampaignEditor_themes/`.
+**Snippets** (under the colours in Appearance) are sets of button changes, each with its own tick, as Obsidian's CSS
+snippets: **Move my changes into a snippet...** puts every button change you made so far into one under a name
+(nothing changes on the screen), and its tick then switches them all off and on again. **Import...** takes a snippet
+someone sent (or a saved look), **Export...** writes one to send, ✕ deletes it. Changes you make later stay your own,
+over the snippets - a button a snippet hides can be shown again. Snippets are kept in `CampaignEditor_snippets/`.
+With a mod loaded the board also lays out the windows the works open: a town's window, Rebels, Mercenaries, the
+map's size, Authors and sources. The questions and file pickers Windows draws itself are not on the board.
 
 **Settings > Language of the window** puts a language on every window, the hover texts and the menus; **Add a
 language file...** puts one in. **Words to translate...** writes every word of the windows into a file - fill in the

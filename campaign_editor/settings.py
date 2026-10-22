@@ -18,7 +18,7 @@ KINDS = {"game": str, "games": list, "campaigns": dict, "mod_data": str, "fixes_
          "theme": str, "map_look": dict, "banner_grid": str, "map_legend": (bool, int), "art_map_open": (bool, int),
          "level_follows_population": (bool, int), "reports_check": (bool, int), "report_contact_keep": (bool, int),
          "release_check": (bool, int), "release_checked_at": (int, float), "release_latest": dict,
-         "editor_list_width_": int, "byfaction_faction": str, "byfaction_everyone": (bool, int), "suggest_units_lo": int, "suggest_units_hi": int, "suggest_upkeep": int}
+         "editor_list_width_": int, "byfaction_faction": str, "byfaction_everyone": (bool, int), "suggest_units_lo": int, "sources_remind": (bool, int), "suggest_units_hi": int, "suggest_upkeep": int}
 
 
 def _kind(key, default):
@@ -68,8 +68,17 @@ def put(key, value):
     p = _path()
     if not p:
         return
+    # written beside and renamed over: the editor closed (or the PC off) half way through a write left a cut file,
+    # read back as broken - every setting gone (the games list, the theme, the reports' contact...)
+    tmp = p + ".tmp"
     try:
-        with open(p, "w", encoding="utf-8") as fh:
+        with open(tmp, "w", encoding="utf-8") as fh:
             json.dump(d, fh, indent=1)
-    except OSError:
-        pass
+        os.replace(tmp, p)
+    except (OSError, TypeError, ValueError) as e:
+        if not isinstance(e, OSError):
+            d.pop(key, None)                     # a value JSON cannot hold: not kept, the others still are
+        try:
+            os.remove(tmp)
+        except OSError:
+            pass

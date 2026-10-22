@@ -215,10 +215,11 @@ def check_mod(mod, campaign, deep=False, progress=None, found=None):
         for father, younger, older in wrong[:3]:
             bad("%s: %s's children - %s is written before the older %s; the game wants them oldest first ('... is "
                 "supposed to be younger than ...')" % (fb.name, father, younger, older))
-    from .family import dropped_records
+    from .family import child_ages, dropped_records
+    ages = child_ages(mod)
     for fb in s.factions:                           # records the game leaves out of the family tree
         try:
-            gone = dropped_records(read_family(strat_f, fb.name))
+            gone = dropped_records(read_family(strat_f, fb.name), ages)
         except Exception:
             continue
         for name, why in gone[:5]:
@@ -278,7 +279,7 @@ def check_mod(mod, campaign, deep=False, progress=None, found=None):
         # medieval2.exe, REX, M2EX) - every faction may have it
         say("    note: %d unit(s) without an ownership line (the game gives them to every faction: 'Ownership "
             "missing ... using all'), e.g. %s" % (len(no_owner), ", ".join(no_owner[:3])))
-    from .units import edu_problems
+    from .units import edu_problems, officers_over
     from .limits import engine_of, game_kind
     from .units import projectile_names, unit_card
     from .models import mount_classes
@@ -288,6 +289,11 @@ def check_mod(mod, campaign, deep=False, progress=None, found=None):
         bad(m)
     if len(unit_problems) > 12:
         bad("... and %d more export_descr_unit.txt problem(s) of the same kinds (the game stops at the start on each)" % (len(unit_problems) - 12))
+    if engine_of(mod):                              # REX / M2EX keep 3 officers and ignore the rest (unit_db.cpp)
+        many = officers_over(mod.load(mod.file("edu")).texts())
+        if many:
+            say("    note: %d unit(s) with more than 3 officer lines - %s keeps the first 3 and ignores the rest "
+                "(a log line, no stop), e.g. %s" % (len(many), engine_of(mod)[:-4], ", ".join(many[:3])))
     no_card = [u.type for u in units if u.category != "non_combatant" and not unit_card(mod, u)]
     if no_card:                                     # not a crash: logs/missing_images.txt + the generic card
         say("    note: %d unit(s) without a card of their own - the game shows its generic card (and lists them in "
@@ -577,6 +583,25 @@ def check_mod(mod, campaign, deep=False, progress=None, found=None):
     for p in untouched_problems(mod):
         bad(p)
 
+    # ---- what the factions the editor made still share with another faction (none stops the game) ----
+    from . import traces
+    try:
+        made = traces.made_factions(mod)
+    except Exception:
+        made = {}
+    for fac, tmpl in sorted(made.items()):
+        step("Traces of another faction in %s..." % fac)
+        try:
+            lines = traces.summary(traces.traces(mod, campaign, fac))
+        except Exception as e:
+            lines = ["(not read: %s)" % e]
+        if lines:
+            say("")
+            say("TRACES OF ANOTHER FACTION in %s (made from %s; nothing here stops the game - for a faction of its "
+                "own: Art > Faction emblem, Recolour all its pictures..., Name list..., Roster):" % (fac, tmpl))
+            for line in lines:
+                say("    " + line)
+
     # ---- deep: rehearse the tool's work for every faction ----
     if deep:
         say("")
@@ -672,12 +697,14 @@ def ai_label_problems(mod, strat_f):
 def skeleton_problems(mod):
     """[(model, [skeletons])] of descr_model_battle.txt naming a skeleton descr_skeleton.txt lacks - the game stops
     at the start: "Unable to find skeleton '...'" (a report: models brought from a mod with animations of its
-    own). [] when no descr_skeleton.txt is read."""
-    from .animations import skeletons
-    from .animpacks import skeleton_names
+    own). [] when no descr_skeleton.txt is read. Names compared EXACTLY, letter case too: the engine finds a
+    skeleton by its RESOURCE_ID (anim_db.h skeleton_get; report R-20261022-948516)."""
+    from .animations import _skeleton_table
+    from .animpacks import loaded_set
     from .models import TEXT_FILE
     from .packs import _block_lines, type_blocks
-    known = set(skeletons(mod)) | skeleton_names(mod)       # descr_skeleton's and the animation set the game loads
+    loaded = loaded_set(mod)
+    known = set(_skeleton_table(mod, "descr_skeleton.txt")) | (set(loaded.skeletons()) if loaded else set())
     path = mod.find(TEXT_FILE)
     if not known or not path:
         return []
@@ -688,7 +715,7 @@ def skeleton_problems(mod):
         for line in _block_lines(f, span):
             code = strip_comment(line).strip().split(None, 1)
             if len(code) == 2 and code[0].lower().startswith("skeleton") and "attachment" not in code[0].lower():
-                gone += [x.strip() for x in code[1].split(",") if x.strip() and x.strip().lower() not in known]
+                gone += [x.strip() for x in code[1].split(",") if x.strip() and x.strip() not in known]
         if gone:
             out.append((name, sorted(set(gone))))
     return out
@@ -877,8 +904,9 @@ def hidden_resources(mod):
 def engine_limits(mod, campaign, regions, units, blds, img):
     """[(message, fault)] - the counts against the game's limits: factions against the engine's own
     max_factions (limits.faction_limit), the rest against the original exe's hard limits
-    (limits.HARD_LIMITS). Over a limit is a fault on the original exe; with REX / M2EX beside the data there is
-    no limit at all - one line says so (limits.md THE RULE)."""
+    (limits.HARD_LIMITS). Over a limit is a fault on the original exe; with REX / M2EX beside the data only what
+    the engine source keeps is said (limits.md THE RULE, 2026-10-22): officers 3, rebel unit types 20, stacks 20
+    / 40 - the rest grows."""
     from .limits import HARD_LIMITS, LIMIT_WORDS, faction_limit, game_kind
     kind = game_kind(mod)
     hard = HARD_LIMITS.get(kind, {})
@@ -888,9 +916,11 @@ def engine_limits(mod, campaign, regions, units, blds, img):
               "chains": len(blds), "levels": max((len(b.levels) for b in blds), default=0),
               "hidden_resources": len(hidden_resources(mod))}
     exe = "Rome" if kind == "rome" else "Medieval II"
-    if engine:                  # the user's rule: REX / M2EX = no limits at all - no fault, no warning, no count
-        out = [("LIMITS: none - %s beside the game (factions, regions, religions, cultures, units, buildings: no "
-                "limit; max_factions follows the factions on every Apply)" % engine[:-4], False)]
+    if engine:                  # REX / M2EX: what the engine source lifts grows; what it keeps is said
+        out = [("LIMITS with %s beside the game (engine source): regions, map size, units, religions, building "
+                "chains, levels, hidden resources - no limit; max_factions follows the factions on every Apply. "
+                "Kept: 3 officers per unit and 20 unit types per rebel type (the rest ignored, a log line), "
+                "stacks of 20 (40 with the Army Size option)" % engine[:-4], False)]
         big = big_stacks(mod, campaign)
         if big:
             how = ("Options > Game Settings > Army Size = 40 units, before a NEW campaign" if kind != "rome" else

@@ -317,26 +317,146 @@ def give_unit(plan, faction, unit):
         elif not reachable:
             plan.warn(e, "%s: recruited only in %s, which %s cannot build - give it one of those levels"
                       % (unit, ", ".join(sorted({"%s/%s" % (c, l) for _, _, c, l in lines})), faction))
+    give_cards(plan, faction, unit)
+
+
+def new_recruit_line(f, faction, unit, chain, level):
+    """A recruit line for the faction alone in a level that has none for the unit: the key and numbers of another
+    line of the unit (the nearest level of the same chain below first, then any) - its town's pool as the mod gives
+    it - else the game's plain ones; the other line's conditions are left out (they are for its own place)."""
+    lines = recruit_lines(f)
+    mine = [r for r in lines if r[1] == unit]
+    order = [r[3] for r in lines if r[2] == chain]
+    below = [r for r in mine if r[2] == chain and r[3] in order and order.index(r[3]) <= order.index(level)] \
+        if level in order else []
+    src = (below[-1] if below else None) or next((r for r in mine if r[2] == chain), None) or \
+        (mine[0] if mine else None)
+    if src is not None:
+        code = strip_comment(f.text(src[0])).strip()
+        head = re.split(r"\s+requires\b", code, maxsplit=1)[0].rstrip()
+        return "%s  requires factions { %s, }" % (head, faction)
+    from .editors import recruit_text
+    return recruit_text(recruit_dialect(f), unit, "0", factions=[faction])
+
+
+def set_recruit(plan, faction, chain, level, unit, give=True):
+    """One building level recruits the unit for the faction (give) or no longer does (take). Give: a line that
+    names the unit there takes the faction in (one per level, as give_unit), else a new line of the faction's own
+    (new_recruit_line); the unit becomes the faction's (ownership, cards) when it is not yet. Take: the faction out
+    of that level's lines (a culture or 'all' written out as the other factions), a line left with none goes; the
+    unit stays the faction's (other levels, armies). The game trains only what the town's CURRENT level lists
+    (rules.md, report #283): the Roster's building view picks a level and every one above it, each a call here.
+    True when the file changed."""
+    mod = plan.mod
+    e = plan.edit(mod.file("edb"))
+    heads = level_heads(e)
+    if (chain, level) not in heads:
+        raise ValueError("no building level %s in %s" % (level, chain))
+    culture = mod.culture(faction)
+    here = [r for r in recruit_lines(e) if r[1] == unit and (r[2], r[3]) == (chain, level)]
+    let_in = [r for r in here if covers(factions_in(e.text(r[0])), faction, culture)]
+    where = "%s/%s" % (chain, level)
+    if give:
+        given = plan.__dict__.setdefault("_roster_given", set())    # once per unit, not once per level
+        if mod.file("edu") and (faction, unit) not in given:
+            given.add((faction, unit))
+            own_unit(plan, faction, unit, True)
+            give_cards(plan, faction, unit)
+        if let_in:
+            return False
+        if here:
+            i = here[0][0]
+            if len(factions_groups(e.text(i))) > 1:
+                plan.warn(e, "%s: the recruit line has several faction groups - %s joins the first one and its "
+                             "conditions" % (where, faction))
+            e.set(i, add_faction(e.text(i), faction))
+        else:
+            from .editors import building_blocks, line_place
+            line = new_recruit_line(e, faction, unit, chain, level)
+            blk = next(b for b in building_blocks(e) if b[0] == chain)
+            at, make = line_place(e, "building", blk, "capability", level, line.split()[0])
+            e.insert(at, make(line))
+        plan.note(e, "%s recruited by %s in %s" % (unit, faction, where))
+        if not covers(factions_in(e.text(level_heads(e)[(chain, level)])), faction, culture):
+            # a level above the ones it builds: the line waits there for the day it may (report #283)
+            plan.note(e, "%s: %s may not build this level yet - the line counts once it may" % (where, faction))
+        return True
+    if not let_in:
+        return False
+    cultures = mod.factions()
+    for i, _, _, _ in reversed(let_in):
+        _shut_line(plan, e, i, faction, culture, cultures, where, unit)
+    plan.note(e, "%s no longer recruited by %s in %s" % (unit, faction, where))
+    return True
+
+
+def _shut_line(plan, e, i, faction, culture, cultures, where, unit):
+    """One recruit line no longer lets the faction in: its name out, a culture or 'all' written out as the other
+    factions, a line with no factions list given one of the others; a line left with none goes; a line of several
+    REX groups that lets it in by a group of its own (or its culture) is left for a person (warned)."""
+    text = e.text(i)
+    names = factions_in(text)
+    now = covers(names, faction, culture)
+    if names is None:                               # no factions list: everyone - a list of the others
+        code = strip_comment(text).rstrip()
+        rest = [n for n, _ in cultures if n != faction]
+        body = "factions { %s}" % "".join("%s, " % n for n in rest)
+        if re.search(r"\srequires\s", code + " "):
+            code = re.sub(r"\srequires\s", " requires %s and " % body, code, count=1)
+        else:
+            code = "%s  requires %s" % (code, body)
+        e.set(i, code + text[len(strip_comment(text).rstrip()):])
+        plan.warn(e, "%s: the %s line was for everyone - written out as the other factions, so that only %s "
+                     "loses it" % (where, unit, faction))
+    elif len(factions_groups(text)) > 1:
+        new = drop_faction(text, faction) if now == "own" else None
+        if new is None:
+            plan.warn(e, "%s: a recruit line of several faction groups lets %s in - rewrite it in Buildings"
+                      % (where, faction))
+            return False
+        e.set(i, new)
+    else:
+        rest = _spelled_out(names, faction, cultures)
+        if rest:
+            e.set(i, with_factions(text, rest))
+        else:
+            e.delete(i, i + 1)
+        if now in ("culture", "all"):
+            plan.warn(e, "%s: '%s' on the %s line written out as the other factions, so that only %s loses it"
+                      % (where, " ".join(names), unit, faction))
+    return True
+
+
+def give_cards(plan, faction, unit):
+    """The unit's cards into the faction's folders, from its owners' (give_unit, set_recruit)."""
+    mod = plan.mod
     f = plan.edit(mod.file("edu"))
     blk = _find_unit(f, unit)
     dic = dictionary(f, blk)
     if dic:
-        cultures = mod.factions()
-        owners = [o for o, c in cultures if o != faction and covers(ownership(f, blk), o, c) in ("own", "culture")]
+        owners = [o for o, c in mod.factions() if o != faction and covers(ownership(f, blk), o, c) in ("own", "culture")]
         copy_cards(plan, faction, dic, owners)
 
 
-def take_unit(plan, faction, unit, campaign=None):
+def take_unit(plan, faction, unit, campaign=None, culture=None):
     """The unit is no longer the faction's: ownership, the faction's name out of
-    the recruit lines (a line left with no faction goes), a warning for its armies
-    that hold the unit (they keep it; the game lets them)."""
+    the recruit lines (a line left with no faction goes), a recruit line that still
+    lets it in by its culture, 'all' or no factions list written out as the other
+    factions (Medieval II stops at a town whose building recruits a unit the
+    faction's ownership does not allow - settlement.cpp 'Settlement recruitment
+    availability included unit'), a warning for its armies that hold the unit
+    (they keep it; the game lets them). culture: the faction's when the mod does
+    not know it yet (a faction being made)."""
     mod = plan.mod
+    culture = culture or mod.culture(faction)
     own_unit(plan, faction, unit, False)
     edb_p = mod.file("edb")
     if edb_p:
         e = plan.edit(edb_p)
         gone = []
-        for i, _, chain, level in reversed([r for r in recruit_lines(e, RECRUIT_KEYS) if r[1] == unit]):
+        mine = [r for r in recruit_lines(e, RECRUIT_KEYS) if r[1] == unit]
+        wide = any(covers(factions_in(e.text(i)), faction, culture) in ("culture", "all") for i, _, _, _ in mine)
+        for i, _, chain, level in reversed(mine):
             names = factions_in(e.text(i))
             if names and faction in names:
                 rest = [n for n in names if n != faction]
@@ -350,10 +470,18 @@ def take_unit(plan, faction, unit, campaign=None):
                 else:
                     e.delete(i, i + 1)
                 gone.append("%s/%s" % (chain, level))
+        cultures = mod.factions()
+        if faction not in dict(cultures):
+            cultures = cultures + [(faction, culture)]
+        for i, _, chain, level in reversed([r for r in recruit_lines(e) if r[1] == unit] if wide else []):
+            if covers(factions_in(e.text(i)), faction, culture) in ("culture", "all"):
+                where = "%s/%s" % (chain, level)
+                if _shut_line(plan, e, i, faction, culture, cultures, where, unit) and where not in gone:
+                    gone.append(where)
         if gone:
             plan.note(e, "%s no longer recruited by %s in %s" % (unit, faction, ", ".join(reversed(gone))))
-    for camp in ([campaign] if campaign else mod.campaigns()):
-        n = _units_in_armies(mod, camp, faction, unit)
+    for camp in ([campaign] if campaign else mod.campaigns()) if faction in dict(mod.factions()) else []:
+        n = _units_in_armies(mod, camp, faction, unit)          # (a faction being made has no armies there yet)
         if n:
             plan.warn(None, "%s: %d of %s's armies in %s start with %s - they keep it"
                       % (unit, n, faction, camp, unit))
@@ -464,12 +592,21 @@ def set_level(plan, faction, chain, level, give=True, campaign=None):
     return True
 
 
+def recruit_key(chain, level, unit):
+    """The change key of one level's recruit line of a unit (the Roster's building view)."""
+    return "recruit:%s:%s:%s" % (chain, level, unit)
+
+
 def apply(plan, faction, changes, campaign=None):
-    """changes = {'unit:<type>': bool, 'building:<chain>:<level>': bool} (True = give)."""
-    for key, give in sorted(changes.items()):
+    """changes = {'unit:<type>': bool, 'building:<chain>:<level>': bool, 'recruit:<chain>:<level>:<type>': bool}
+    (True = give). Building levels first, so that a recruit line lands in a level the faction may build."""
+    for key, give in sorted(changes.items(), key=lambda kv: (not kv[0].startswith("building:"), kv[0])):
         kind, _, rest = key.partition(":")
         if kind == "unit":
             (give_unit if give else take_unit)(plan, faction, rest, *([] if give else [campaign]))
         elif kind == "building":
             chain, _, level = rest.partition(":")
             set_level(plan, faction, chain, level, give, campaign)
+        elif kind == "recruit":
+            chain, level, unit = rest.split(":", 2)
+            set_recruit(plan, faction, chain, level, unit, give)

@@ -119,6 +119,20 @@ TYPE_LINES_OF = {"cavalry": [(), ("mount",), ("mounted_engine", "mount")], "sieg
                  "handler": [("animal",)]}
 
 
+def officers_over(lines, most=3):
+    """The unit types of export_descr_unit.txt lines with more than `most` officer lines."""
+    out, cur, n = [], None, 0
+    for line in list(lines) + ["type"]:
+        t = line.split(";", 1)[0].split()
+        if t[:1] == ["type"]:
+            if cur and n > most:
+                out.append(cur)
+            cur, n = " ".join(t[1:]), 0
+        elif t[:1] == ["officer"]:
+            n += 1
+    return out
+
+
 def edu_problems(lines, factions, kind="rome", engine=None, projectiles=None, mounts=None):
     """What the games' own export_descr_unit readers refuse, per unit and in their words (each a Script Error - the
     game stops): a missing line, an ownership naming no faction / culture / all. Without an engine also: soldiers
@@ -129,7 +143,8 @@ def edu_problems(lines, factions, kind="rome", engine=None, projectiles=None, mo
     of descr_projectile(_new).txt) - a weapon firing a projectile there is not. Also (every game and engine): a
     mount / engine / ship / animal line the unit's category does not take, or two of them ('Missing attributes
     field'), a handler without its animal line, and - mounts given (descr_mount.txt's types) - a mount there is not;
-    a missile weapon (not 'prec') with ammo below 2 (REX: 0) and, in Rome without REX, a range below 20 m (REX: 0)."""
+    a missile weapon (not 'prec') with ammo below 2 (REX / M2EX: 0) and, in Rome without REX, a range below 20 m (REX:
+    0)."""
     owners = {f for f, _ in factions} | {c for _, c in factions if c} | {"all"}
     blocks, cur = [], None
     for n, l in enumerate(lines, 1):
@@ -195,10 +210,10 @@ def edu_problems(lines, factions, kind="rome", engine=None, projectiles=None, mo
             if len(f) < 5 or not f[2] or f[2] == "no" or "prec" in attr or not (f[3].isdigit() and f[4].isdigit()):
                 continue
             rng, ammo = int(f[3]), int(f[4])
-            if engine == "REX.exe":
+            if engine:                     # REX / M2EX: 1 at least (rules_db.cpp, game_rtw unit_db.cpp)
                 if ammo == 0:
                     say(b, "Missile ammo amount is less than the absolute minimum of 1 on unit type '%s'." % name)
-                if rng == 0:
+                if rng == 0 and engine == "REX.exe":       # M2EX's range check is commented out (rules_db.cpp)
                     say(b, "Missile range is less than the absolute minimum of 1m on unit type '%s'." % name)
                 continue
             if min(max(ammo, 1), 127) < 2:

@@ -166,6 +166,9 @@ def _bats(base_dir, base_name, name, game):
     return out
 
 
+RWM_DIR = "world/maps/base"      # where the game saves a thin mod's built map
+
+
 def create_mod(data_dir, name, copy_all=False, progress=None):
     """Make <game>/<name> from the mod (or plain game) that data_dir belongs to.
     Returns (new data folder, summary dict)."""
@@ -188,6 +191,10 @@ def create_mod(data_dir, name, copy_all=False, progress=None):
     os.makedirs(target)
     if not base_name:
         os.makedirs(os.path.join(target, "data", "text"))
+        # the game keeps its built map (map.rwm) in the mod's world/maps/base when the campaign folder holds none of
+        # its sources; with no such folder it cannot save it ('WORLD_MAP failed to open save file' in its log, the
+        # map built again at every start - the tester's thin mod, 2026-10-22)
+        os.makedirs(os.path.join(target, "data", RWM_DIR))
     try:
         starts = _m2_start(game, base_dir, base_name, name) if m2 else _bats(base_dir, base_name, name, game)
         for src_root, dst_root in sources:
@@ -263,7 +270,8 @@ def slim(data_dir):
         os.remove(p)
         removed += 1
     for dirpath, dirnames, filenames in os.walk(data_dir, topdown=False):
-        if dirpath != data_dir and not os.listdir(dirpath):
+        if dirpath != data_dir and not os.listdir(dirpath) and \
+                os.path.relpath(dirpath, data_dir).replace(os.sep, "/").lower() != RWM_DIR:
             os.rmdir(dirpath)
     return removed
 

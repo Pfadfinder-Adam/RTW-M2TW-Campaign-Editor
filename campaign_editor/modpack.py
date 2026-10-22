@@ -19,6 +19,7 @@ import os
 import struct
 import zipfile
 
+from .guard import safe_rel
 from .moddata import _ci
 from .textio import TextFile
 
@@ -69,7 +70,8 @@ def read(path):
         raise ValueError("no data folder in this pack (and nothing that looks like one: ui/, text/, world/...)")
     files, left = {}, []
     for n, data in raw.items():
-        if n.startswith(prefix) and len(n) > len(prefix):
+        # never a path out of data/ ('data/../../d3d9.dll' reached the game's folder, beside its exe): left out, named
+        if n.startswith(prefix) and len(n) > len(prefix) and safe_rel(n[len(prefix):]):
             files[n[len(prefix):]] = data
         else:
             left.append(n)

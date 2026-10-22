@@ -48,7 +48,19 @@ def notes(changelog, version, repo):
     return "\n".join(out) + "\n"
 
 
+def code_version(gui_text):
+    """The VERSION the editor says of itself (campaign_editor/gui.py), or None."""
+    m = re.search(r'^VERSION\s*=\s*"([^"]+)"', gui_text, re.M)
+    return m.group(1) if m else None
+
+
 if __name__ == "__main__":
+    # an exe that names an older version of itself keeps telling its users a newer one is out (the new-version
+    # check) - no release unless the code was given this version too
+    with open("campaign_editor/gui.py", encoding="utf-8") as fh:
+        have = code_version(fh.read())
+    if have != sys.argv[1].strip().lstrip("v"):
+        sys.exit("campaign_editor/gui.py says VERSION = %r, not %r - set it first" % (have, sys.argv[1]))
     with open("CHANGELOG.md", encoding="utf-8") as fh:
         text = notes(fh.read(), sys.argv[1], sys.argv[2])
     with open("release_notes.md", "w", encoding="utf-8") as fh:

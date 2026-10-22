@@ -10,7 +10,7 @@ The rebels are never playable and have no capital, leader or heir.
 
 ## Edit faction tab (the faction itself)
 
-- Names, tooltip and campaign-screen text, colours, AI, money (denari), playable.
+- Names, tooltip and campaign-screen text, colours, AI, money (denari), playable, religion (Medieval II).
 - **Culture**: the faction's culture (`descr_sm_factions.txt`). The game takes from it the look of its towns, forts and ports on the map, its portraits and agents' pictures, the buildings and units open to that culture and the event pictures (Rome: the voices too). Preview says which units it gains or loses and which buildings in its towns the new culture cannot build (they stay). A new faction keeps its template's culture unless another is picked.
 - **Rename...** beside the internal name changes the faction's code name (`egypt` -> `kemet`) in every file of the
   mod at once: the campaign, units, buildings, names, banners, models, texts' keys; its pictures are copied under
@@ -66,7 +66,8 @@ bailey, a village city none). Only the kind's own buildings are offered afterwar
   group** (every region a faction holds), or **On the map...** - click towns there, their regions turn yellow.
 - **Art**: see [[Faction art]].
 - **Models**: who is shown by which figure on the campaign map, their textures, 3D - see [[Faction art]].
-- **Roster**: give or take units and building levels - see [[Units and buildings]].
+- **Roster**: give or take units and building levels; **By buildings**: a building's levels and their units -
+  click a unit to add it to a level and every level above - see [[Units and buildings]].
 - **Family**: characters, traits, the family tree - see [[Characters and portraits]].
 
 **Preview changes**, then **Apply changes**. One Apply writes every tab at once, with a backup. Picking

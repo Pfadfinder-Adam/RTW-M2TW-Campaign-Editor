@@ -265,15 +265,19 @@ def read_file(path, entry):
 
 def packs(roots):
     """Every .pack / .pak the game reads beside these data folders (the mod's first): data/packs (REX / M2EX mods)
-    and packs beside data (Medieval II's own <game>/packs), each folder's in name order."""
+    and packs beside data (Medieval II's own <game>/packs). In one folder the .pack files go in REVERSE name order,
+    as the engine mounts them (engine source core/io/io_vfs.cpp: 'reverse-alphabetically so override packs (sorting
+    after data.pack) get higher priority'), then Rome's .pak in name order."""
     out = []
     for root in roots:
         for base in (root, os.path.dirname(os.path.abspath(root))):
             folder = next((os.path.join(base, d) for d in ("packs", "Packs", "PACKS")
                            if os.path.isdir(os.path.join(base, d))), None)
             if folder:
-                out += [os.path.join(folder, n) for n in sorted(os.listdir(folder))
-                        if n.lower().endswith((".pack", ".pak")) and os.path.join(folder, n) not in out]
+                names = os.listdir(folder)
+                mine = sorted((n for n in names if n.lower().endswith(".pack")), key=str.lower, reverse=True)
+                mine += sorted((n for n in names if n.lower().endswith(".pak")), key=str.lower)
+                out += [os.path.join(folder, n) for n in mine if os.path.join(folder, n) not in out]
     return out
 
 

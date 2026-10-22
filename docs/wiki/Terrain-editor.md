@@ -3,7 +3,9 @@
 The **Terrain** and **Coast & heights** tabs of the **Maps** (beside its Map) paint the campaign map itself:
 **Terrain** has Ground, Rivers / cliffs / volcanoes and Climates, **Coast & heights** everything of `map_heights` -
 Land and sea (the coast) and Heights. They are one editor shown in two tabs: one Undo / Redo, one Apply. The Map
-tab's own switches (Layers, Edit regions, Select, Merge regions, Signs and tools, Find) are not shown here.
+tab's own switches (Layers, Edit regions, Select, Merge regions, Signs and tools, Find) are not shown here. On
+Windows, Coast & heights is drawn by the graphics card straight into the window (the frame's time beside the zoom);
+elsewhere, or if the card fails, it draws as before.
 
 **Videos:** [editing rivers, fords, cliffs](https://youtu.be/z0T723riXaU) · [editing a height map](https://youtu.be/mTdRAWympuw) (both checked in the game on Rome
 and Medieval II).
@@ -23,7 +25,10 @@ and Medieval II).
   is for the other modes).
 - **Climates**: the mod's own climates (`descr_climates.txt`, in its colours) - what grows on the campaign
   and battle maps, the snow in winter, the heat that tires men in battle. While this mode is on the map shows
-  each land tile in its climate's colour. The sea keeps its climate. A new climate of your own is not in yet.
+  each land tile in its climate's colour; **Climates on the water** shows the climate under the sea too (the file
+  keeps one there: land made there starts with it) and lets you paint it. **Climate library...** lists every climate
+  of the mod, how many tiles it covers and what it gives the game, file by file; **New climate from this...** makes a
+  new climate as a copy of the picked one, **Change...** gives a climate's ground texture or tree another picture.
 - **Heights** (`map_heights.tga`): a spray brush. Hold the left button: the land under the brush rises
   (**Raise**) or sinks (**Lower**) the more the longer you hold; the middle of the brush does the most, the
   edge fades out. **Smooth** evens out bumps, **Level to height** brings the land towards the height set
@@ -34,10 +39,11 @@ and Medieval II).
   the map gives the point under the mouse exactly: land - its grey (0 = the lowest land, still above the
   water) and about how many metres; water - its blue and the sea floor's depth (the water's surface is 0); and
   what `map_heights.hgt` holds there. While this mode is on the map shows the heights as the file has them:
-  land grey - black low, white high (brightened a little so the low land is not all black) - and the sea blue.
+  land grey - black low, white high (brightened a little so the low land is not all black) - and the sea blue, with
+  no towns, ports or other signs.
   Only land is changed; the coast stays.
 
-**Find** above the map finds a town, port or character by name. Left drag paints (brush 1-12), right click picks the ground of a tile, right drag moves the map, **Rivers** (rivers, fords and cliffs over the ground - also on the map drawn point by point) and **Grid** on
+Left drag paints (brush 1-24), right click picks the ground of a tile, right drag moves the map, **Rivers** (rivers, fords and cliffs over the ground - also on the map drawn point by point) and **Grid** on
 or off.
 
 ![Land and sea: a new island in the Black Sea](https://raw.githubusercontent.com/Pfadfinder-Adam/RTW-M2TW-Campaign-Editor/main/docs/images/land_and_sea.png)
@@ -61,7 +67,7 @@ wheel turned goes nearer or farther, the arrow keys (or W A S D) move too; the l
 moves - an army, agent or fleet, a town, a port (a new region's too), a resource, a fort or watchtower, a wonder, a
 special place - to another tile: it goes with the mouse, standing on the ground of the tile under it, a white frame on
 that tile. The mouse resting on anything that can be carried shows the same white frame round it (bigger round a town
-or a port) and a hand; the Map's own check refuses a tile the
+or a port), its name beside it as on the Map, and a hand; the Map's own check refuses a tile the
 game would not take (it goes back, Esc too), and the move is the Map's (Undo, Preview, Apply); an army in a town stands
 on its roofs, as in the game's own editor. Another mod or campaign loaded while the tab is open is drawn at once;
 the relief stands as high as in the game;
@@ -73,7 +79,20 @@ smooths, levels) the land while you hold it. Both work on the water too, as in t
 sheet at height 0: press on the sea and lift its floor - out of the water it becomes land (its tile joins the region
 picked in *new land joins*, else the nearest; its ground follows), and land pushed under becomes water; never under a
 town, port or character (the bar says why). The heights are kept exactly (`map_heights.hgt`, no 29-metre steps). It
-is the same editor as Coast & heights: its strokes, Undo and Apply are shared.
+is the same editor as Coast & heights: its strokes, Undo and Apply are shared. The new land shows its own ground
+and climate while you paint (the climate most land round it has, with *New land: neighbours' climate*), and nothing
+is made again when the stroke ends.
+**Paint** (the tick; it was called Heights brush) paints more than the heights: **brush** picks what - **Heights**
+as above, or tile by tile **Ground**, **Rivers, cliffs, volcanoes...**, **Climates** (each with the Terrain tab's own
+palette), **Regions** (the Map's Edit regions brush: the tiles go to the region picked in *paint with*, kept for
+Apply), **Land (tiles)** or **Sea (tiles)** (the Land and sea tile brushes); **Alt + click** picks the tile's own
+region, ground, mark or climate; the mouse resting on a tile says its ground, climate and region; **Ctrl+Z /
+Ctrl+Y** on the 3D tab take back or do again the newest stroke, regions painted or figure carried there. A white square on the ground shows the
+tiles it paints (size 1 one tile, 2 a square of 3 x 3...); the ground and climate show at once, the mountains,
+rivers, trees and borders a moment after the stroke. The Terrain editor's Undo, Preview and Apply are shared.
+**Layers > colours over the map** lays each tile's climate colour (the sea's too - what land raised there will
+get) or its region's colour over the 3D map, and follows the brushes as you paint; picking the Climates brush turns
+the climates on by itself.
 **Whole map** puts the view back. It needs a graphics card with OpenGL 3.3 (any from the last fifteen years); without
 one the bar says why. The game's own **mountains, hills and volcanoes** stand on it too
 (`descr_aerial_map_tile_models.txt`, the models in `terrain/aerial_map/tile_models`), placed as the game places them:
@@ -90,7 +109,7 @@ sparse forest tile, a dense one filled with trees and a canopy that joins its de
 climate named on the `strategy` lines of `descr_climates.txt` (winter's where the climate has them), leaning with the
 wind while **The surf and the trees move** is ticked. The game rolls its own dice for their spots, so the forests
 match the game's but not tree for tree. What `descr_strat.txt` puts on the map stands there as the game's own
-models: each **town** by its level and its owner's culture with the walls it has built, its **port** looking out to
+models (anything with no model to draw stands as a red question mark): each **town** by its level and its owner's culture with the walls it has built, its **port** looking out to
 the sea, forts and watchtowers, the **resources**, and every **army, agent and fleet** off the towns in its
 faction's model and colours, standing on the ground, turned as the game draws them. What you add, move or take
 away on the Map (or keep in another window) shows here before you write it. The **roads** run from town to town
@@ -127,7 +146,7 @@ minimap picture - its size and border kept. Restore takes it back.
   water along the new shore), and a town, port, character, fort, resource or river keeps a little land round it.
   **Smooth the coast** rounds the coast under the brush the same way - the longer you hold, the smoother (a stepped
   coast becomes a curve; small capes and bays ease out). While these brushes are picked the map is shown **by
-  points** (land grey, water blue, each point centred on its place; no towns, ports or other signs), and from 300 % zoom a light **Shore line** shows
+  points** (land grey, water blue, each point centred on its place; no towns, ports or other signs), and from 500 % zoom a light **Shore line** shows
   the shore exactly as the game will draw it (in every mode of the tab; the tick is beside *Find ground...*; the zoom
   it starts from is in Settings > Campaign map).
 - **Pull** and **Push** (beside the shape brush): *pull* grabs the coast under the brush and drags it with the mouse,
@@ -143,7 +162,8 @@ minimap picture - its size and border kept. Restore takes it back.
   2, 8, 12, 14, then 16 grey steps from the sea - so an island never lies flat on the water; new sea: the sea's
   depth). The coast round the painted tiles is drawn the way the games' own maps are: on a smooth curve between
   the tiles (half a tile fine), not in tile-sized steps - a one-tile islet stays a small oval, a one-tile strait
-  stays open, and every tile stays what you painted. The minimap (radar_map1 / radar_map2.tga) is drawn again on the
+  stays open, and every tile stays what you painted. **New land: neighbours' climate** (on by default) gives new land
+  the climate of the land round it, not the one left under the water. The minimap (radar_map1 / radar_map2.tga) is drawn again on the
   changed tiles from the nearest tile of the same ground. **The coast pen** (land point / water point) draws the coast by hand on
   the heights' points - a tile is 3 x 3 of them, its middle its own, the sides and corners shared with its
   neighbours; the map is shown point by point while the pen is picked, and touching a tile's middle turns the whole

@@ -10,10 +10,14 @@ row (card, description picture, battle model, voice; a second row on a narrow wi
 **?** beside a line's name says what each of its values means - stat_pri's attack, charge bonus, missile, range,
 ammunition..., stat_cost's turns, price, upkeep..., every word of attributes - from the game's own notes. The lists filter (**Show**: a faction or a culture - the units naming it; a mod's units anyone may hire, `ownership all`, under **everyone's units** - a category, mercenaries apart) and sort; drag the line between the list and the rest (its grip drawn in the text's colour) to make the list wider - the width is kept.
 
-- **Texts players read** (Buildings, under the pictures): a level's name, short description and
-  description for a culture or a faction (**Texts for**; * = it has texts of its own). The game shows the
-  faction's texts first, else its culture's, else the plain ones; a change is written to `export_buildings.txt`
-  on Apply, with a backup. Both games.
+- **Texts players read** (under the pictures): on a unit, its name, short and long description
+  (`export_units.txt`); on a building, a level's name, short description and description for a culture or a
+  faction (**Texts for**; * = it has texts of its own - the game shows the faction's texts first, else its
+  culture's, else the plain ones; `export_buildings.txt`). Written on Apply, with a backup. Both games.
+- **The lines as text**: in the Stats window, **Fields**, **Text: this block** or **Text: the whole file** - the
+  lines as written in the file (line numbers, colours, Undo, Find, a wrong line underlined red); both views show
+  the same changes and Apply writes them. **Open in Notepad++...** opens the file at the block's line. A right click
+  on a line says what it means, its form and the words it takes.
 - **Pictures as the game shows them**: a unit's card and its description picture come from a faction that owns it
   (or the mercenaries' folder) - when there is none, the box says so; a building level opens on a **Culture** that
   builds it, and a culture that never builds it is marked *(never builds it)* (the game has only stand-in texts for
@@ -46,6 +50,9 @@ ammunition..., stat_cost's turns, price, upkeep..., every word of attributes - f
   someone who builds it may own), its names and texts, and its pictures: yours, or plain ones the editor draws
   with the level's initials for every culture that builds it (Medieval II also the small picture of the
   construction queue).
+- **Delete this unit...** (beside New unit step by step) takes the unit out on Apply with its recruit lines, its
+  men in every army and garrison, the mercenary pools, the rebels' lists and its cards (a backup first; Restore
+  puts it back).
 - **Bring from another mod...** copies units or building chains from another mod of the same game, step by
   step, with everything they need - see [[Move units and buildings between mods]].
 - **Where it can be built...** (a building) / **Where it is recruited...** (a unit): a window of its own - the
@@ -105,16 +112,13 @@ ammunition..., stat_cost's turns, price, upkeep..., every word of attributes - f
   campaign's or the battle's, of the faction's culture; for a picture the game's scroll paper it is shown on in the
   unit's details); a Medieval II picture can take the game's frame round it. **Size** beside the title: the mod's own
   size, or x2, x3, x4 for sharper cards and pictures (kept for the next unit; look at them in the game). Cards and
-  pictures each keep their own ground and size. **Use it** waits for Preview / Apply
+  pictures each keep their own ground and size. **Painted look** turns the 3D view into flat brush areas with a thin
+  dark line, so the card looks painted. **Use it** waits for Preview / Apply
   like **Import...** (the faction **Pictures for** names, a backup first); **Save a copy...** keeps a PNG.
   **Pictures for** (a unit with more than one owner): the faction whose card / description picture is shown and
   put in - each faction has its own (the game reads ui/units/<faction> and ui/unit_info/<faction>); the other
   owners keep theirs. Pick **all owners (the same picture)** to put one card / description picture in for every
   owner at once.
-  **Texts players read** (under the pictures): the unit's name, short and long description from export_units.txt,
-  changed here and written on Apply. **Delete this unit...** (beside New unit step by step) takes the unit out on
-  Apply with its recruit lines, its men in every army and garrison, the mercenary pools, the rebels' lists and its
-  cards (a backup first; Restore puts it back).
   The window stands beside the 3D view and follows it: turn the man or pick another frame there and the card is
   taken again by itself (**Take the 3D view again** does it at once and says what it took). How much of him and
   nearer / up / right are kept for the next unit (cards and pictures apart).
@@ -173,9 +177,25 @@ town holding two. A mod that wants more temples names the extra chains without "
 
 ## Roster (Edit faction)
 
-Every unit and building level of the mod and whether the faction has it. **Give** / **Take away**. A unit is
-the faction's only when three places agree, and Apply keeps them in step: its `ownership`, the recruit lines
-that let the faction train it, and its cards.
+Two tabs. **Units and levels**: every unit and building level of the mod and whether the faction has it.
+**Give** / **Take away**. A unit is the faction's only when three places agree, and Apply keeps them in step:
+its `ownership`, the recruit lines that let the faction train it, and its cards.
+
+**By buildings**: the faction's buildings as the game shows them. Pick a building on the left, a level of it in
+the middle - the units it recruits there are cards. On the right, **All units** lists every unit of the mod: a
+click adds it to the picked level **and every level above it** in that building. The game trains only what the
+town's building has at its *current* level, so a unit written into one level alone disappears once the building
+grows - this tab never leaves it like that. A level that has no line for the unit gets one for this faction alone
+(with the pool numbers of the unit's line one level lower, if it has one); a line for other factions takes this
+faction in. A unit that is not the faction's yet becomes its own (ownership, cards).
+
+- the **x** on a card takes the unit from that level and the levels above (the ones below keep it);
+- **+ Building** lists the buildings the faction may not build yet: a click lets it build every level;
+- the **x** on a building takes it away; the **+ / x** on a level gives it with the levels below / takes it with
+  the levels above (the game builds a chain level by level - a gap stops it).
+
+Green = added, red = taken away; nothing is written before **Preview changes** / **Apply changes**, and Undo
+works. Both tabs share the same changes.
 
 ## Unit packs
 

@@ -216,6 +216,9 @@ def plan_pools(plan, campaign, pools):
         if op is None or p.name != op.name or units or q.regions:
             check.append(q)
     why = problems(mod, campaign, check)
+    names = [p.name.lower() for p in pools if p.regions]
+    why += ["two pools are called %s" % q.name for q in check
+            if names.count(q.name.lower()) > 1 and "two pools are called %s" % q.name not in why]
     if why:
         raise ValueError("; ".join(why))
     keep = {p.start for p in pools if p.start is not None and p.regions}

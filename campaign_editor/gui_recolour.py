@@ -502,8 +502,8 @@ class _Recolour(AutoKeep):
         self.status.configure(text="recolouring %d picture(s)..." % len(items))
         self.update_idletasks()
         done = R.plan_recolour(plan, items, self.source, self.target, self._from_of())
-        now = tuple(tuple(c) if c else None for c in self.colours.get(self.faction, (None, None)))
-        if self.v_set.get() and not self.pending and tuple(tuple(c) for c in self.target) != now:
+        now = R.colour_pair(self.colours.get(self.faction, (None, None)))
+        if self.v_set.get() and not self.pending and R.colour_pair(self.target) != now:
             # the pictures and the faction's own colour lines move together (our rule: a change pulls along
             # what is tied to it - a tester found the colours unchanged after a recolour)
             from .edit import set_faction_colours

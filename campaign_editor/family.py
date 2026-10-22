@@ -304,15 +304,24 @@ def children_order_problems(fam):
     return out
 
 
-# a record is a child below these ages (RomeTW.exe's own record maker, 2026-10-14: girls under 12, boys under 16)
+# a record is a child below these ages (RomeTW.exe's own record maker, 2026-10-14: girls under 12, boys under 16) -
+# the defaults only: a mod sets them (limits.family_age: REX descr_ex.txt, Medieval II descr_campaign_db.xml, whose
+# vanilla copy says 16 for girls too; engine source character_db.cpp)
 CHILD_AGE = {"female": 12, "male": 16}
 
 
-def dropped_records(fam):
+def child_ages(mod):
+    """{'female': age, 'male': age} below which a record is a child, as this mod sets them."""
+    from .limits import family_age
+    return {"female": family_age(mod, "daughters_age_of_consent"), "male": family_age(mod, "age_of_manhood")}
+
+
+def dropped_records(fam, ages=None):
     """[(name, 'woman' | 'child')]: the records off the map the game leaves out when it reads the family tree, in
     the games' own order (RomeTW.exe / medieval2.exe / REX / M2EX): a woman with no husband and no father ('is
     neither married, nor has a father and will be ommited from the game'), then a child (a girl under 12, a boy
     under 16) with no father ('The child character record %s has no father and will be ommited')."""
+    ages = ages or CHILD_AGE
     wives = {w for _, w, _ in fam["tree"] if w}
     kids = {k for _, _, ks in fam["tree"] for k in ks}
     out = []
@@ -321,7 +330,7 @@ def dropped_records(fam):
             continue
         if p.sex == "female" and p.name not in wives:
             out.append((p.name, "woman"))
-        elif p.age is not None and p.age < CHILD_AGE.get(p.sex, 16):
+        elif p.age is not None and p.age < ages.get(p.sex, ages["male"]):
             out.append((p.name, "child"))
     return out
 
@@ -413,12 +422,36 @@ def default_record_age(sex, most=MAX_RECORD_AGE):
     return most if sex == "male" else 20
 
 
+def campaign_db_number(mod, tag, default):
+    """A number of Medieval II's descr_campaign_db.xml (<tag uint="N"/>), the mod's copy else the game's."""
+    import re
+    from .campaignrules import game_data
+    from .moddata import _ci
+    game = game_data(mod)
+    for p in (mod.find("descr_campaign_db.xml"), _ci(game, "descr_campaign_db.xml") if game else None):
+        if p:
+            with open(p, encoding="latin-1") as fh:
+                m = re.search(r"<%s\s+(?:uint|int)=\"(\d+)" % re.escape(tag), fh.read())
+            return int(m.group(1)) if m else default
+    return default
+
+
 def limit_warnings(mod, tree, changes, people, renames=None, old_tree=None):
     """Ancillaries and children over what the game takes (limits.ex_setting: REX's descr_ex.txt
     max_num_ancillaries / max_num_children, else the original game's 8 / 4)."""
-    from .limits import engine_of, ex_setting
+    from .limits import engine_of, ex_setting, game_kind
     out = []
-    if engine_of(mod):                  # REX / M2EX: no limit - apply() rewrites the line instead (limits.raise_setting)
+    if game_kind(mod) == "medieval2":   # descr_campaign_db.xml decides, any exe (campaign_db.cpp; children raised there)
+        most = campaign_db_number(mod, "max_number_of_ancillaries", 8)
+        for key, ch in (changes or {}).items():
+            ancs = ch.get("ancillaries")
+            if ancs is not None and len(ancs) > most:
+                p = people.get(key)
+                out.append("%s: %d ancillaries - the game keeps at most %d (max_number_of_ancillaries in "
+                           "descr_campaign_db.xml, 8 when it has none)"
+                           % ((renames or {}).get(p.name, p.name) if p else key, len(ancs), most))
+        return out
+    if engine_of(mod):                  # REX: the descr_ex.txt lines are rewritten to fit (limits.raise_setting)
         return out
     most = ex_setting(mod, "max_num_ancillaries")
     for key, ch in (changes or {}).items():
@@ -482,6 +515,9 @@ def _engine_settings(plan, tree, changes):
     from .limits import engine_of, ex_setting, game_kind, raise_setting
     if game_kind(plan.mod) == "medieval2":
         _campaign_db_children(plan, tree)
+        # Medieval II never reads descr_ex.txt's max_num_* (engine source: only game_rtw uses them) - its children
+        # and ancillaries live in descr_campaign_db.xml (campaign_db.cpp); the children follow above
+        return
     if not engine_of(plan.mod):
         return
     ancs = max((len(ch.get("ancillaries") or []) for ch in (changes or {}).values()), default=0)

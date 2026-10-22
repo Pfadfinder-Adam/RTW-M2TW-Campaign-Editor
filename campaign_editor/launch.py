@@ -214,6 +214,14 @@ def _cfg_problems(path, base):
     return out
 
 
+def bat_command(bat):
+    """The command line that runs a start script, as one string handed to Windows as it is. cmd /c "<path>" keeps the
+    quotes only when the path holds none of & ( ) @ ^ | < >: under 'Program Files (x86)' (Steam's own folder) cmd took
+    the quotes off and stopped at the first space ('C:\\Program' is not recognized). /s with the path quoted twice:
+    cmd takes off the outer pair, the inner pair stays around the path."""
+    return 'cmd /s /c ""%s""' % bat
+
+
 def start(how):
     """Start it (start_line's answer) and return at once - the game runs on its own. Windows only: elsewhere
     OSError names the line to start by hand."""
@@ -222,7 +230,7 @@ def start(how):
         raise OSError("the game starts on Windows - start it by hand: %s" % line)
     hidden = getattr(subprocess, "CREATE_NO_WINDOW", 0)
     if "bat" in how:                              # the script goes to the game folder itself (cd /d %~dp0..)
-        return subprocess.Popen(["cmd", "/c", how["bat"]], cwd=os.path.dirname(how["bat"]), creationflags=hidden)
+        return subprocess.Popen(bat_command(how["bat"]), cwd=os.path.dirname(how["bat"]), creationflags=hidden)
     try:
         return subprocess.Popen([how["exe"]] + how["args"], cwd=how["cwd"])
     except OSError as e:

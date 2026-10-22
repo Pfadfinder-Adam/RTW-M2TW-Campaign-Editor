@@ -34,10 +34,13 @@ TAG = "CELookEdit"
 
 class Look:
     """The look of one editor run: the file's changes, the language's words, the widgets seen."""
+    _styles = 0                                   # pieces' own ttk styles made (each a new name: CE<n>.<style>)
 
     def __init__(self, root):
         self.root = root
-        self.data = LK.load()
+        self.own = LK.load()                      # the modder's own changes (CampaignEditor_look.json)
+        self.snips = LK.snippets()                # sets of changes switched on / off, under the own ones
+        self.data = LK.layered(self.own, self.snips)   # the look in force
         self.words = {}
         self.seen_words = set()                   # English words seen in the windows (for 'Words to translate')
         self.by_key = {}                          # key -> widget (the newest of that key)
@@ -144,7 +147,7 @@ class Look:
         cls = w.winfo_class()
         e = self.data["pieces"].get(getattr(w, "_look_key", None), {})
         if hasattr(w, "_look_text"):
-            want = e.get("text") or self.word(w._look_text)
+            want = LK.shown_words(e, self.word(w._look_text))
             cur = str(w.cget("text"))
             shown = getattr(w, "_look_shown", w._look_text)
             if cur == shown and want != cur:          # never over words the code put there since
@@ -191,6 +194,7 @@ class Look:
     def _put_on(self, w):
         e = self.data["pieces"].get(w._look_key, {})
         self._words_on(w)
+        self._paint(w, e)
         if "width" in e:
             try:
                 w.configure(width=e["width"])
@@ -215,6 +219,71 @@ class Look:
             if not self._move_now(w, e["to"], e.get("where", "after")):
                 if w._look_key not in self.waiting:
                     self.waiting.append(w._look_key)
+
+    def _paint(self, w, e):
+        """The piece's own colours and font (a ttk piece gets a style of its own built on the one it has, so the
+        theme's look stays under it; a tk one its options); none asked: nothing."""
+        bg, fg = e.get("bg"), e.get("fg")
+        if not (bg or fg or e.get("font")):
+            return
+        from tkinter import font as tkfont
+        try:
+            if isinstance(w, ttk.Widget):
+                st = ttk.Style(w)
+                if not hasattr(w, "_look_style0"):
+                    w._look_style0 = str(w.cget("style"))
+                base = w._look_style0 or w.winfo_class()
+                now = tkfont.Font(root=w, font=st.lookup(base, "font") or "TkDefaultFont").actual()
+                Look._styles += 1
+                name = "CE%d.%s" % (Look._styles, base)
+                kw, mp = {}, {}
+                if bg:
+                    kw.update(background=bg, fieldbackground=bg)
+                    deep = LK.deeper(_rgb(w, bg))
+                    mp["background"] = [("pressed", deep), ("active", deep)]
+                if fg:
+                    kw["foreground"] = fg
+                    mp["foreground"] = [("active", fg)]
+                font = LK.font_of(e.get("font"), (now["family"], now["size"]))
+                if font:
+                    kw["font"] = font
+                st.configure(name, **kw)
+                if mp:
+                    st.map(name, **mp)
+                w.configure(style=name)
+            else:
+                opts = [o for o in ("background", "foreground", "activebackground", "activeforeground", "font")
+                        if o in w.keys()]
+                if not hasattr(w, "_look_paint0"):
+                    w._look_paint0 = {o: w.cget(o) for o in opts}
+                now = tkfont.Font(root=w, font=w._look_paint0.get("font") or "TkDefaultFont").actual()
+                kw = {}
+                if bg:
+                    kw.update(background=bg, activebackground=LK.deeper(_rgb(w, bg)))
+                if fg:
+                    kw.update(foreground=fg, activeforeground=fg)
+                font = LK.font_of(e.get("font"), (now["family"], now["size"]))
+                if font:
+                    kw["font"] = font
+                w.configure(**{k: v for k, v in kw.items() if k in opts})
+                from . import theme
+                theme.leave_alone(w)                      # the dark look never recolours the modder's colours
+        except tk.TclError:
+            pass
+
+    def _unpaint(self, w):
+        """The piece's own colours and font taken off (the theme's again)."""
+        try:
+            if hasattr(w, "_look_style0"):
+                w.configure(style=w._look_style0)
+                del w._look_style0
+            if hasattr(w, "_look_paint0"):
+                w.configure(**w._look_paint0)
+                del w._look_paint0
+                from . import theme
+                theme._state.get("keep", set()).discard(str(w))
+        except tk.TclError:
+            pass
 
     def _free(self, w, e):
         """The piece free at x, y of its own box (up 0) or of the box `up` boxes around it (a copy stands there: Tk
@@ -353,6 +422,7 @@ class Look:
             except tk.TclError:
                 pass
         w._look_tip = ""
+        self._unpaint(w)
         if hasattr(w, "_look_size"):
             del w._look_size
         home = getattr(w, "_look_home", None)
@@ -435,8 +505,10 @@ class Look:
         self._set(key, new)
 
     def _set(self, key, entry):
-        LK.set_entry(self.data, key, entry)
-        LK.save(self.data)
+        base = LK.layered({"pieces": {}, "order": []}, self.snips)["pieces"].get(key) if self.snips else None
+        LK.set_entry(self.own, key, LK.own_part(base, entry))
+        LK.save(self.own)
+        self.data = LK.layered(self.own, self.snips)
         w = self.by_key.get(key)
         try:
             if w is not None and w.winfo_exists():
@@ -463,6 +535,37 @@ class Look:
         self.undo.append((key, copy.deepcopy(self.data["pieces"].get(key))))
         self._set(key, new)
         return True
+
+    def relayer(self):
+        """The snippets read again (one switched on / off, added, deleted): every piece whose look changed put
+        back and its new look put on."""
+        old = self.data["pieces"]
+        self.snips = LK.snippets()
+        self.data = LK.layered(self.own, self.snips)
+        new = self.data["pieces"]
+        for key in [k for k in set(old) | set(new) if old.get(k) != new.get(k)]:
+            w = self.by_key.get(key)
+            try:
+                if w is not None and w.winfo_exists():
+                    self.back_home(w)
+                    self._put_on(w)
+            except tk.TclError:
+                pass
+            for f in list(self.on_change):
+                f(key)
+        self._try_waiting()
+
+    def own_to_snippet(self, name):
+        """The modder's own changes moved into a new snippet (switched on: nothing changes on the screen) -> its
+        path or None."""
+        path = LK.save_snippet(name, self.own, on=True)
+        if path:
+            self.own = {"pieces": {}, "order": []}
+            LK.save(self.own)
+            self.undo.clear()
+            self.redo.clear()
+            self.relayer()
+        return path
 
     def back_all(self):
         """Every change of the look taken back (one Undo step each)."""
@@ -646,6 +749,7 @@ class Look:
             m.add_command(label="Rename...", command=lambda: self._rename(w))
         m.add_command(label="Hover text...", command=lambda: self._tip(w))
         m.add_command(label="Width...", command=lambda: self._width(w))
+        m.add_command(label="Colours, font and emoji...", command=lambda: self._style_dialog(w))
         m.add_command(label="Hide", command=lambda: self.change(w, hidden=True))
         m.add_separator()
         m.add_command(label="Back to how it was", command=lambda: self._back_one(w),
@@ -686,6 +790,12 @@ class Look:
             messagebox.showinfo(TITLE, "A whole number of letters, or nothing.", parent=w.winfo_toplevel())
             return
         self.change(w, width=int(got) if got else None)
+
+    def _style_dialog(self, w):
+        e = self.data["pieces"].get(w._look_key, {})
+        got = ask_style(w.winfo_toplevel(), e, getattr(w, "_look_text", "") or w.winfo_class())
+        if got is not None:
+            self.change(w, **got)
 
     def _target(self, w, x, y):
         """(the piece under the mouse, 'before' / 'after' by which half of it) - not the dragged one."""
@@ -911,6 +1021,116 @@ def follow(w, c):
         pass
 
 
+def _rgb(w, colour):
+    try:
+        r, g, b = w.winfo_rgb(colour)
+        return r >> 8, g >> 8, b >> 8
+    except tk.TclError:
+        return (128, 128, 128)
+
+
+# emoji a Windows font draws in Tk (one colour, as the words); the field takes any other one typed or pasted
+EMOJI = ("❓", "❗", "⭐", "✔", "✖", "➕", "➖", "⚙", "⚔", "⚑", "⚠", "⚓", "☠", "♛", "♜", "☀", "☁", "✎",
+         "✉", "⌛", "⏩", "⏪", "↺", "↻", "⬆", "⬇", "⬅", "➡", "♻", "☰", "🏰", "🗺", "🛡", "📜", "💾", "📂",
+         "🔍", "🎨", "🖌", "🧭", "👑", "🐎", "🏹", "⛵", "🔥", "💰", "📦", "🧪", "🔧", "🗑", "▶", "■", "●", "◆")
+FONT_STYLES = (("plain", ""), ("bold", "bold"), ("italic", "italic"), ("bold italic", "bold italic"))
+
+
+def ask_style(parent, entry, words):
+    """A small window for a piece's colours, font and emoji, a preview of it in the middle (entry: its look now).
+    -> {'bg', 'fg', 'font', 'emoji'} (None = the editor's own) or None when closed without OK."""
+    from tkinter import colorchooser
+    from tkinter import font as tkfont
+    win = tk.Toplevel(parent)
+    win.title("Colours, font and emoji")
+    win.transient(parent)
+    win._look_skip = True
+    now = {"bg": entry.get("bg"), "fg": entry.get("fg")}
+    spec = (list(entry.get("font") or []) + ["", 0, ""])[:3]
+    v_family = tk.StringVar(win, value=spec[0] or "(the editor's)")
+    v_size = tk.StringVar(win, value=str(spec[1] or ""))
+    v_style = tk.StringVar(win, value=next((n for n, s in FONT_STYLES if s == (spec[2] or "")), "plain"))
+    v_emoji = tk.StringVar(win, value=entry.get("emoji") or "")
+    got = {}
+    outer = ttk.Frame(win, padding=10)
+    outer.pack(fill="both", expand=True)
+    body = ttk.Frame(outer)
+    body.pack(anchor="w")
+    preview = tk.Label(body, text=words, relief="raised", padx=10, pady=4)
+    preview.grid(row=0, column=0, columnspan=4, pady=(0, 10))
+    from . import theme
+    theme.leave_alone(preview)
+    plain = {"bg": preview.cget("background"), "fg": preview.cget("foreground")}
+    base_font = tkfont.nametofont("TkDefaultFont").actual()
+
+    def show(*_):
+        size = v_size.get().strip()
+        family = v_family.get()
+        f = LK.font_of([("" if family.startswith("(") else family), int(size) if size.isdigit() else 0,
+                        dict(FONT_STYLES).get(v_style.get(), "")], (base_font["family"], base_font["size"]))
+        preview.configure(text=LK.shown_words({"emoji": v_emoji.get().strip()}, words),
+                          background=now["bg"] or plain["bg"], foreground=now["fg"] or plain["fg"],
+                          font=f or "TkDefaultFont")
+
+    def colour(which, label):
+        c = colorchooser.askcolor(color=now[which] or None, parent=win, title=label)
+        if c and c[1]:
+            now[which] = c[1]
+            show()
+
+    def no_colour(which):
+        now[which] = None
+        show()
+
+    for row, (which, label) in enumerate((("bg", "Background"), ("fg", "Words' colour")), start=1):
+        ttk.Label(body, text=label).grid(row=row, column=0, sticky="w")
+        ttk.Button(body, text="Pick...", command=lambda w_=which, l_=label: colour(w_, l_)).grid(row=row, column=1)
+        ttk.Button(body, text="The theme's", command=lambda w_=which: no_colour(w_)).grid(row=row, column=2)
+    ttk.Label(body, text="Font").grid(row=3, column=0, sticky="w", pady=(8, 0))
+    families = ["(the editor's)"] + sorted(f for f in set(tkfont.families(win)) if not f.startswith("@"))
+    cb = ttk.Combobox(body, textvariable=v_family, values=families, width=24)
+    cb.grid(row=3, column=1, columnspan=2, sticky="we", pady=(8, 0))
+    sb = ttk.Spinbox(body, from_=0, to=72, textvariable=v_size, width=4)
+    sb.grid(row=3, column=3, padx=(4, 0), pady=(8, 0))
+    st = ttk.Combobox(body, textvariable=v_style, values=[n for n, _ in FONT_STYLES], width=12, state="readonly")
+    st.grid(row=4, column=1, sticky="w")
+    ttk.Label(body, text="size (empty: the editor's)").grid(row=4, column=2, columnspan=2, sticky="w")
+    ttk.Label(body, text="Emoji before its words").grid(row=5, column=0, sticky="w", pady=(8, 0))
+    ttk.Entry(body, textvariable=v_emoji, width=8).grid(row=5, column=1, sticky="w", pady=(8, 0))
+    ttk.Button(body, text="None", command=lambda: v_emoji.set("")).grid(row=5, column=2, sticky="w", pady=(8, 0))
+    grid = ttk.Frame(outer)                               # its own box: the form's columns keep their width
+    grid.pack(anchor="w", pady=(4, 0))
+    for i, em in enumerate(EMOJI):
+        tk.Button(grid, text=em, width=2, relief="flat", command=lambda e_=em: v_emoji.set(e_)).grid(
+            row=i // 14, column=i % 14)
+    for v in (v_family, v_size, v_style, v_emoji):
+        v.trace_add("write", show)
+    bar = ttk.Frame(outer)
+    bar.pack(anchor="e", pady=(10, 0))
+
+    def ok():
+        size = v_size.get().strip()
+        family = v_family.get().strip()
+        font = ["" if family.startswith("(") else family, int(size) if size.isdigit() else 0,
+                dict(FONT_STYLES).get(v_style.get(), "")]
+        got.update(bg=now["bg"], fg=now["fg"], font=font if any(font) else None,
+                   emoji=v_emoji.get().strip() or None)
+        win.destroy()
+
+    def all_back():
+        got.update({k: None for k in LK.STYLE_KEYS})
+        win.destroy()
+
+    ttk.Button(bar, text="All the editor's own", command=all_back).pack(side="left", padx=(0, 12))
+    ttk.Button(bar, text="OK", command=ok).pack(side="left", padx=(0, 4))
+    ttk.Button(bar, text="Cancel", command=win.destroy).pack(side="left")
+    win.bind("<Escape>", lambda e: win.destroy())
+    show()
+    win.grab_set()
+    win.wait_window()
+    return got or None
+
+
 def install(root):
     """The look on every window from now on; the edit mode's mouse on the tag every widget gets while it is on."""
     look = root.look = Look(root)
@@ -930,4 +1150,4 @@ def word(text):
     return look.word(text) if look is not None else text
 
 
-__all__ = ["install", "Look", "piece_key", "move", "make_copy", "word"]
+__all__ = ["install", "Look", "piece_key", "move", "make_copy", "word", "ask_style", "EMOJI"]

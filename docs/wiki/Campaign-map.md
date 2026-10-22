@@ -5,10 +5,6 @@ Big maps load too - a tester's mod with a map of 5456 x 2464 tiles (map_regions.
 
 ## Looking around
 
-- **Wonders (Rome)**: a double click on one opens its window as the game shows it (picture, title, what it does,
-  descriptions) with **View it in 3D**; **Put a wonder here** (right click on land) places one of the game's seven
-  - Rome's exe and REX know no other types ("dont recognise this wonder type"), so a new wonder is one of them,
-  its model, picture and texts changed if you like.
 - **Special places** (both games, with REX / M2EX): a right click on land > **Special place here...** - a model of
   the campaign map (a tower, fort, keep, wonder, mine... any `.cas` under `models_strat`, or your own) drawn on that
   tile by the engine, and a window of its own like a wonder's: its name on a hover, a double click opens it at the
@@ -31,7 +27,7 @@ Big maps load too - a tester's mod with a map of 5456 x 2464 tiles (map_regions.
   the name shown for its owner), a port, a general, agent or
   fleet, a unit in an army (e.g. "hastati"), a fort, a resource. Pick a hit (click, or Down then Enter) and
   the map zooms in close on it and a ring blinks round it for a few seconds ([video](https://youtu.be/6WAdnGovGzA)).
-- **The tab row and the side column**: the map's zoom and switches (Layers, Edit regions, Select...) stand in the tabs' own row, right of the tabs (the Terrain, Coast and heights and 3D tabs put their brushes there too); the legend (or the brush colours) stands in a column on the right, gone when hidden - the map has the whole height of the window.
+- **The tab row and the side column**: the map's zoom and switches (Layers, Edit regions, Select...) stand in the tabs' own row, right of the tabs (the Terrain, Coast & heights and 3D tabs put their brushes there too); the legend (or the brush colours) stands in a column on the right, gone when hidden - the map has the whole height of the window.
 - **The legend is a palette**: the signs on a button (+) are tools - click one (it turns yellow), then click
   the map to make one there: a **town** (first its region's names; then the click puts the town and the land
   around it becomes the new region's - paint more with a left drag), a **port** (click a coastal land tile: the
@@ -76,10 +72,10 @@ Big maps load too - a tester's mod with a map of 5456 x 2464 tiles (map_regions.
   general with his own name and a star on the map, not a captain; Rome's rebels keep a captain); on a new character
   not written yet - **Take it out**.
 - **Layers** (a panel under its button - it stays open while you tick, a second press or a click aside closes it):
-  **Colours**, one mode at a time - **Political** (the owners), **Diplomacy** (how the faction stands towards each owner), **Religion** (Medieval II: each region in its main religion's colour, paler where the majority is small; the legend counts the regions), **None** (the ground only);
+  **Colours**, one mode at a time - **Political** (the owners), **Religion** (Medieval II: each region in its main religion's colour, paler where the majority is small; the legend counts the regions), **None** (the ground only);
   **Shown**: borders, towns and ports (their squares and anchors - off for a clean look at the land), town
   names, the rebels' land coloured (it is barely tinted otherwise, so the factions stand out), characters,
-  resources, relief, rivers, a tile grid when zoomed in. The mouse over a man shows his name beside it, over a resource its name as players see it.
+  resources, the tiles the scripts name (see *Scripts on the map* below), relief, rivers, a tile grid when zoomed in. The mouse over a man shows his name beside it, over a resource its name as players see it.
 - The line under the map describes the tile under the mouse: region, owner, ground, and whether an army may
   stand there.
 
@@ -173,7 +169,7 @@ resources and forts get a yellow frame; the **right button drags the map**. A **
 
 Untick **Select** and nothing stays selected (the same everywhere: switching **Layers > Resources** or **Edit regions** off drops what was picked or waiting for a click, hiding the legend puts its picked tool down).
 
-The same window is in **Tools** and on the Buildings tab (**Many towns at once...**). All towns of the campaign on the
+The same window is on Edit faction's Buildings tab (**Many towns at once...**). All towns of the campaign on the
 left - filter them by owner, level, city / castle (Medieval II) or name, **Add all shown** - the chosen ones on the
 right, with **What happens** in each:
 
@@ -185,7 +181,7 @@ right, with **What happens** in each:
   allow (tick the box to put it in anyway - the game loads such a building, the owner just cannot build it again),
   a port building where the town has no port on the map. **Take a building out** removes a chain. The governor's
   building (walls / castle) follows the town's level and is not offered.
-- **Garrisons**: units per town *from 3 to 6* (any range up to 20) and the upkeep they may cost together per town
+- **Garrisons**: units per town *from 3 to 6* (any range up to 20 - 40 with REX / M2EX) and the upkeep they may cost together per town
   (750 at first; 1000... - empty for no limit). **Draw the garrisons** picks them at random from the units each owner may
   recruit (its `ownership` and a recruit line of some building; generals' bodyguards and - unless ticked - siege
   engines left out); a rebel town draws from its region's rebel type (`descr_rebel_factions.txt` - the units the game
@@ -322,53 +318,23 @@ tool's block), with a backup like every write. Needs REX (Rome) or M2EX (Medieva
 The window shows it at once: take a town for a faction (on the Edit / New faction tab or by clicking it on the Map) and its
 label on the map changes to the name for that faction's culture; the towns list shows the name a town has now.
 
-**All towns' names...** (on the Edit / New faction tab, in the per-town dialog and under **Tools**) shows every town in one
+**All towns' names...** (on the Edit / New faction tab, and **All towns...** in the per-town dialog) shows every town in one
 table: one column per culture plus *every other*, the owner, its culture and the name shown now. Sort by any
-column, filter by a culture (towns with or without a name for it), by the owner's culture, by what waits for Apply,
+column, filter by a culture (towns with or without a name for it), by the owner's culture, by the owner
+(one faction's towns only), by what waits for Apply,
 or search. Double click a culture's cell to type a name in place (Enter keeps it, Esc drops it, an empty cell
 removes it). Towns the mod's own campaign script renames are shown grey and are not edited here.
 
 ## Make the map 3 x bigger
 
-**Bigger map (x3)...** (on the map's bar, beside the zoom) turns every tile into a 3 x 3 block (both games). Its window says the map's
-size now and after, asks for its values - fields for the hills and mountains (times higher), the smoothing of the lines (coast, rivers drawn as sea, borders, ground, climates: 1 smooth as water finds its level - the default, 0.67 lighter, 0 winding with every old tile's corner kept), narrow rivers kept open, crags on mountains, river valleys and volcano cones; each shows its default and range, a ? says what was tried in the game, **Back to the defaults** resets them; the shore by the water is the games' own and is not among them - and leads through **five steps**, one press each (**Do step N**): 1 the grid (every tile a 3 x 3 block, everything on
-the map moved to its block's middle), 2 smoothing (coast, region borders - a border along a river stays on it -,
-ground, climates), 3 heights (every sea point under the water and no land point under it: no saw teeth, no holes;
-the ground's sea follows), 4 rivers (one pixel wide, on land only, ending on the last land tile at the water),
-5 objects (towns, ports, armies, agents, fleets, resources on tiles they may stand on). Each step is written with
-a backup and checked; between the steps the map is in Maps - look at it and fix what you want by hand
-(borders after step 2, the coast before step 3, the ground after step 3), then the next step. Steps 2 and 3 take a
-minute or two. The window may be closed between the steps: opened again it goes on where it stopped. **Show every
-change...** lists the next step's files first; **Put the old map back** undoes every step at once (later: Tools >
-Restore a backup...). Towns, ports, armies,
-agents, fleets, resources, forts, watchtowers, wonders and event positions keep their places; every town keeps its
-own region all round it, every port stands on the shore touching the sea and its region; the coast winds with bays
-and capes, not in squares, and the heights follow the same coast; the borders between regions wind too, and every
-region stays in as many pieces as before; a border that ran along a river stays on the new river (each bank
-its own region's), and no lone pixel sticks out of a border; every tile keeps the ground type and climate of the old tile it lies in (a
-forest stays a forest), the edges between them not in 3 x 3 steps; mountains only where the new heights stand high (a range's low edge becomes hills, or the ground beside it); land bridges stay unbroken; the relief is made the natural way - bent with the ground, crags on the mountains (plains stay flat), volcanoes
-keep their cones, lakes get gentle banks, the shore takes the original map's own heights for three points on each side of the water's edge - the land by its real distance from the water, capes as low as the original's, the sea by the shore as deep as before, not three times deeper - and blends into the bigger map beyond them (no teeth along a diagonal coast, no flickering wedges or triangles of water cut into it, no islets, small pools on the land, slivers or land bridges in
-navigable rivers; a river ends on the land touching the water, never on it; small islands and lakes keep their size and come out round, capes one tile wide stay whole; the sea along the coast is shallow; no cliffs and no beach - paint them where wanted), every
-river in its valley, no slope steeper than the old map's steepest, the land round a town smooth -, and `map_heights.hgt` (the game's own
-copy of the heights, read instead of the picture) is written at the new size; the hills, mountains and sea floor are
-made 3 x higher so the slopes stay as steep (**Hills 3 x higher**; or keep the old heights, a flatter world: **Heights as they are**); rivers stay
-1 pixel wide, bend round their corners and meander gently on straight runs, and run on to the new coast (stopping
-there); every picture of the map and `descr_terrain.txt` follow, `map.rwm` is
-removed. One backup; Put the old map back (or Restore) gives it all back.
+**Bigger map (x3)...** (on the map's bar, beside the zoom) turns every tile into a 3 x 3 block (both games), in five
+steps you look over one by one; towns, armies, resources, the coast, heights, rivers, the map's pictures and the
+campaign's scripts follow. The window, its steps and values, and what each file becomes: [[Bigger map x3]].
 
-**Look it over yourself.** The new map is drawn from the old one by rules, and no rule gets every map 100 % right -
-here and there a coast, a river or a border can come out a pixel off. When the map is written, a message says what
-to look at in Maps and in the game: coasts and river mouths (a stray pixel of land in the water or of water
-on the land), navigable rivers and narrow straits (still open), borders along rivers, every port on the coast, every
-town with its own land round it, mountains and passes. Small things are quick to fix by hand: the Map tab's
-**Paint with** brush for borders, the Terrain tab's Land and sea, heights and ground brushes for the rest. The
-message also lists what the editor could not do itself (script lines with tiles it cannot read for sure, a port it
-could not place).
+**Map from zero...** beside it puts a small new map in the campaign's place - an island, a region with its town,
+a port and a resource, a faction and the rebels, or as many regions and factions as you ask - to grow yourself
+(a backup first; Restore puts the old map back). More in [[Reference]].
 
-![The coast of Italy made 3 x bigger: before (squares), after (smooth)](https://raw.githubusercontent.com/Pfadfinder-Adam/RTW-M2TW-Campaign-Editor/main/docs/images/bigger_map_coast.png)
-![Regions 3 x bigger: in squares (left), the natural way - winding coast and borders (right)](https://raw.githubusercontent.com/Pfadfinder-Adam/RTW-M2TW-Campaign-Editor/main/docs/images/bigger_map_natural.png)
-The campaign's scripts follow too: every place on the campaign map in `campaign_script.txt` (spawned armies and characters, `reposition_character`, `move`, the camera, `reveal_tile`, forts and resources made by `console_command`, 'near a tile' distances, 'in a rectangle' sizes) goes to its block; battle positions in the same script stay. Lua / Squirrel scripts that place things by tile (not the engines' own interface scripts) move too; lines the editor cannot read for sure are listed to check by hand.
-Past 510 tiles the original exes need REX / M2EX.
 The map's real size is shown under the map, bottom left.
 
 **Save picture...** under the map saves the whole map as it is drawn now - the layers, colours and borders that
@@ -405,7 +371,7 @@ ground, climates, features, fog, roughness, the campaign's `disasters.tga` and r
 size), or cuts them off with a number below 0. **Drag the edges on the map itself**: while the window is open the
 map's edges are an orange frame with a grip on each side - drag one out and the new sea shows blue, drag it in and
 the part cut off shows dark; the window's numbers follow the mouse (typed numbers move the frame too). Paint land on
-the new water with Maps and the Terrain tab.
+the new water with Coast & heights' *Land and sea*.
 Towns, ports, armies, agents, resources, forts, events and the campaign's scripts move with the map (grown at the
 left or the bottom, every place moves by as many tiles); distances and rectangle sizes in scripts stay.
 `descr_terrain.txt` gets the new size and `map.rwm` goes. What stands on the part cut off - a town, a port, an army,
@@ -447,5 +413,7 @@ tile stays seen; several on one tile stand side by side. The mouse on one shows 
 ## Wonders (Rome)
 
 The wonders (`landmark` lines of `descr_strat.txt`) show as golden pyramids - drag one;
-a double click (or the right click's *about it*) opens its window as the game shows it, with **View it in 3D**; the
-right click on free land has **Put a wonder here**, on a wonder **Delete from the map**.
+a double click (or the right click's *about it*) opens its window as the game shows it (picture, title, what it does,
+descriptions), with **View it in 3D**; the right click on free land has **Put a wonder here** - one of the game's
+seven: Rome's exe and REX know no other types ("dont recognise this wonder type"), so a new wonder is one of them,
+its model, picture and texts changed if you like -, on a wonder **Delete from the map**.

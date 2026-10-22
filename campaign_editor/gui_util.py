@@ -782,10 +782,14 @@ def flow(frame, top=False):
     def reflow(_=None, again=False):
         if again:                                   # its pieces changed (gui_look moved one in or out)
             state["key"] = None
+        if not frame.winfo_exists():
+            return
         width = frame.winfo_width()
         if width <= 1:
             width = max(frame.winfo_toplevel().winfo_width() - 20, 200)
         live = [it for it in items if it[0].winfo_exists()]
+        if not live:                                # its pieces gone (a palette filled anew): nothing to lay out
+            return
         # a size the modder gave it (gui_look) instead of what its words ask for
         sizes = [getattr(w, "_look_size", None) or (w.winfo_reqwidth(), w.winfo_reqheight()) for w, _, _, _ in live]
         sizes = [(s[0], s[1], a, b, side) for s, (w, a, b, side) in zip(sizes, live)]

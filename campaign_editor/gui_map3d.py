@@ -29,12 +29,29 @@ HINT = ("The campaign map in 3D, drawn by the graphics card the way the games dr
         "(the sea left out shows the sea floor; the surf can stand still). What the brushes of Terrain and Coast & "
         "heights painted shows here before it is written. Right drag: move over the map; the wheel held down and "
         "dragged: turn and look up or down; the wheel turned: nearer / farther; the arrow keys or W A S D move too. "
-        "Heights brush: the left button raises or lowers the land under the circle while held (Ctrl + wheel or [ ] "
-        "for its size) - the brush of Coast & heights, its Undo and Apply shared. The relief stands as "
+        "Paint: the left button raises or lowers the land under the circle while held (Ctrl + wheel or [ ] "
+        "for its size), or paints the ground, rivers and cliffs, climates, land or sea tile by tile ('brush' picks "
+        "which) - the brushes of Terrain and Coast & heights, their Undo and Apply shared; what is painted shows at "
+        "once. The relief stands as "
         "high as in the game; the towns, ports, resources, armies, agents and fleets stand as descr_strat.txt will have them (what the Map moved or added before the write included), with the roads and region borders. "
-        "The left button carries an army, agent or fleet (one in a town stands on its roofs) to another tile: a white "
+        "The mouse resting on an army, agent, fleet, town, port, resource or fort shows its name beside it. "
+        "The left button held and moved carries an army, agent or fleet (one in a town stands on its roofs) to another "
+        "tile (a click alone moves nothing): a white "
         "frame shows the tile it goes to; the same move as on the Map (Undo, Preview, Apply), refused where the game "
         "would not take it; Esc puts it back.")
+
+
+# colours laid over the map to see what is painted (Layers)
+TINTS = (("none", "None"), ("climates", "Climates (the sea's too)"), ("regions", "Regions"))
+TINT_TIPS = {"climates": "Each tile in its climate's colour (map_climates.tga, descr_climates.txt's colours), the "
+                         "sea's too: land raised there takes the climate most land round it has, unless one was "
+                         "painted on that water first.",
+             "regions": "Each land tile in its region's colour (map_regions.tga): the region it belongs to."}
+
+# what Paint paints on the 3D map: the heights (by point), or one of the Terrain editor's tile brushes
+PAINTS = (("heights", "Heights"), ("ground", "Ground"), ("features", "Rivers, cliffs, volcanoes..."),
+          ("climate", "Climates"), ("regions", "Regions"), ("land", "Land (tiles)"), ("sea", "Sea (tiles)"))
+SWATCHED = ("ground", "features", "climate")       # these paint a colour picked from the Terrain editor's palette
 
 
 def tile_of(hx, hy):
@@ -62,12 +79,19 @@ class Map3DView(ttk.Frame):
         from .gui_util import DropPanel
         self.v_show = {key: tk.BooleanVar(value=True) for key, _ in LAYERS}
         self.v_moving = tk.BooleanVar(value=True)
+        self.v_tint = tk.StringVar(value="none")        # colours over the map: 'none' | 'climates' | 'regions'
 
         def build_layers(f):
             for key, label in LAYERS:
                 ttk.Checkbutton(f, text=label, variable=self.v_show[key], command=self._layers_changed).pack(anchor="w")
             ttk.Checkbutton(f, text="The surf and the trees move", variable=self.v_moving,
                             command=self._layers_changed).pack(anchor="w")
+            ttk.Separator(f).pack(fill="x", pady=4)
+            ttk.Label(f, text="colours over the map:").pack(anchor="w")
+            from .gui_util import tip as tip_
+            for val, text in TINTS:
+                tip_(ttk.Radiobutton(f, text=text, value=val, variable=self.v_tint, command=self._send_tint),
+                     TINT_TIPS.get(val, "")).pack(anchor="w")
         lb = ttk.Button(bar, text="Layers \u25be")
         lb.pack(side="left", padx=(theme.BUTTON_GAP * 2, 0))
         self._layers_panel = DropPanel(lb, build_layers)
@@ -75,10 +99,14 @@ class Map3DView(ttk.Frame):
         # land changing under the circle while the button is held, not when the stroke ends
         self.v_brush_on = tk.BooleanVar(value=False)
         self.v_how = tk.StringVar(value="grab")         # 'grab': the game's (hold and move up / down); 'spray'
+        # what the brush paints: the heights, or the Terrain editor's tile brushes - each with its own pick here
+        self.v_paint = tk.StringVar(value="heights")
+        self.v_pick = {k: tk.StringVar() for k, _ in PAINTS if k in SWATCHED}
         self._paint, self._mouse, self._ring, self._grab, self._carry = False, None, None, None, None
         from .gui_util import tip as _tip
-        _tip(ttk.Checkbutton(bar, text="Heights brush", variable=self.v_brush_on, command=self._brush_toggled),
-             "Grab and drag (the game's own): press the left button where the land should rise or sink and move "
+        _tip(ttk.Checkbutton(bar, text="Paint", variable=self.v_brush_on, command=self._brush_toggled),
+             "Paint right on the 3D map - 'brush' picks what: the heights, the ground, rivers / cliffs / volcanoes, "
+             "the climates, or land and sea tile by tile; what is painted shows at once. Heights - grab and drag (the game's own): press the left button where the land should rise or sink and move "
              "the mouse up or down while holding it - the land under the circle goes with it, most in the middle. "
              "Spray: the left button raises (or lowers, smooths, levels) the land while held. Both work on the "
              "water too: the sea's floor raised out of the water becomes land (its tile joins a region), land "
@@ -127,9 +155,11 @@ class Map3DView(ttk.Frame):
         c.bind("<ButtonRelease-2>", self._release)
         c.bind("<Motion>", self._hover)
         c.bind("<ButtonPress-1>", self._paint_start)
+        c.bind("<Alt-ButtonPress-1>", self._eyedrop)
         c.bind("<B1-Motion>", self._drag_paint)
         c.bind("<ButtonRelease-1>", self._paint_end)
         c.bind("<Leave>", lambda e: self._hover(None))
+        self.bind("<Unmap>", lambda e: self._tip_hide(), add="+")     # another tab: the hover's box goes too
         c.bind("<Escape>", lambda e: self._carry_stop())
         c.bind("<Control-MouseWheel>", lambda e: self._resize(1 if e.delta > 0 else -1))
         c.bind("<Control-Button-4>", lambda e: self._resize(1))
@@ -204,7 +234,8 @@ class Map3DView(ttk.Frame):
             work = (len(getattr(ed, "_undo", ())), len(getattr(ed, "_redo", ())),
                     tuple(len(getattr(ed, k, ())) for k in ("heights", "ground", "features", "climate", "coast")),
                     tuple(len(v) for v in (getattr(ed, "cpx", {}) or {}).values()), id(getattr(ed, "mod", None)))
-        return (getattr(mod, "data", None), self.app.v_campaign.get(), work, self.v_winter.get())
+        painted = tuple(sorted((getattr(self.app, "region_paint", None) or {}).items()))     # Edit regions'
+        return (getattr(mod, "data", None), self.app.v_campaign.get(), work, self.v_winter.get(), hash(painted))
 
     def _strat(self):
         """(descr_strat as Apply will leave it - the Map's armies, agents, fleets, towns and resources added, moved
@@ -224,7 +255,9 @@ class Map3DView(ttk.Frame):
             if f is None:
                 return None, moved
             return Strat(f), (hash(f.dump()), moved)
-        except Exception:                                # nothing to write yet, a half-made change: the file
+        except Exception as e:                           # a half-made change: the file - said, else the 3D map
+            if "Nothing to write" not in str(e):         # and the Map disagree unseen (a tester: an army shown back
+                self.lbl.configure(text="the Map's changes are not shown here: %s" % e)    # in its town)
             return None, moved
 
     def load(self):
@@ -289,9 +322,19 @@ class Map3DView(ttk.Frame):
                 return
             if self._gpu_ready(got["data"], stamp, got["time"]):
                 self._strat_for = key
+                self.after(100, self._lists_later)
         th = threading.Thread(target=work, daemon=True)
         th.start()
         self.after(250, done)
+
+    def _lists_later(self):
+        """The Map's lists read once the picture shows, so the first hover's names and the first carry do not wait
+        for them."""
+        try:
+            if self.app.mod is not None and self.winfo_viewable():
+                self._map_lists()
+        except Exception:                                # the hover then shows nothing until the Map is read
+            pass
 
     def _gpu_ready(self, data, stamp, took):
         """The card takes the map (main thread: OpenGL lives here) - False when it cannot (said in the bar)."""
@@ -310,6 +353,16 @@ class Map3DView(ttk.Frame):
             self.gcam = glmap.Camera(data)
         notes = "; ".join(data.notes)
         self.lbl.configure(text="made in %.1f s%s" % (took, (" - " + notes) if notes else ""))
+        missing = getattr(data, "objects_missing", None)
+        if missing:                                      # drawn white on the map: each named for a report
+            try:
+                from . import log
+                log.write("Maps > 3D: %d model(s) / texture(s) of what stands on the map not found (drawn white or "
+                          "left out): %s" % (len(missing), ", ".join(missing)))
+            except Exception:
+                pass
+        if self.v_tint.get() != "none":
+            self._send_tint(draw=False)
         self.draw()
         self._animate()
         return True
@@ -465,6 +518,70 @@ class Map3DView(ttk.Frame):
         if ed is None:
             ttk.Label(f, text="load a mod first").pack(anchor="w")
             return
+        ttk.Label(f, text="paint:").pack(anchor="w")
+        row = ttk.Frame(f)
+        row.pack(anchor="w")
+        body = ttk.Frame(f)
+
+        def picked():
+            tint = {"climate": "climates", "regions": "regions"}.get(self.v_paint.get())
+            if tint and self.v_tint.get() != tint:
+                self.v_tint.set(tint)                    # what is painted is seen (the climates on the sea too)
+                self._send_tint()
+            for w in body.winfo_children():
+                w.destroy()
+            self._brush_body(body, ed)
+            self._draw_ring()
+        for val, text in PAINTS:
+            ttk.Radiobutton(row, text=text, value=val, variable=self.v_paint, command=picked).pack(side="left", padx=2)
+        ttk.Separator(f).pack(fill="x", pady=4)
+        body.pack(anchor="w", fill="x")
+        self._brush_body(body, ed)
+
+    def _brush_body(self, f, ed):
+        """The choices of the brush picked: the heights' ways, or the palette of a tile brush (the Terrain editor's
+        own list), the land brush's region and climate."""
+        what = self.v_paint.get()
+        if what != "heights":
+            if what == "regions":
+                self._map_lists()                        # the Map's regions read (its Edit regions brush)
+                app = self.app
+                _, _, cols = app.region_brush()
+                from .regionedit import SEA
+                new = [r["name"] + "  (new)" for r in getattr(app, "new_regions", [])]
+                ttk.Label(f, text="paint with (Alt + click on the map picks a tile's region):").pack(anchor="w")
+                ttk.Combobox(f, textvariable=app.v_paint, state="readonly", width=30,
+                             values=new + sorted(c for c in cols if c != SEA) + [SEA]).pack(anchor="w")
+                ttk.Label(f, text="the Map's Edit regions brush: towns and ports keep their tiles; Apply writes it",
+                          foreground=theme.palette()["muted"]).pack(anchor="w")
+            elif what in SWATCHED:
+                var = self.v_pick[what]
+                values = []
+                for label, colours in ed.swatches(what):
+                    ttk.Label(f, text=label + ":").pack(anchor="w")
+                    box = ttk.Frame(f)
+                    box.pack(anchor="w", fill="x")
+                    for c, name, look in colours:
+                        b = ttk.Radiobutton(box, text=name, value="%d,%d,%d" % c, variable=var, cursor="hand2",
+                                            style=theme.colour_style("#%02x%02x%02x" % look, "Toolbutton"))
+                        b.pack(side="left", padx=1, pady=1)
+                        values.append(b.cget("value"))
+                    from .gui_util import flow
+                    flow(box)
+                if values and var.get() not in values:
+                    var.set(values[0])
+                if not values:
+                    ttk.Label(f, text="this mod has none to paint").pack(anchor="w")
+            else:
+                ttk.Label(f, text="new land joins: %s (Coast & heights > Land and sea)" %
+                          ed.v_coast_region.get()).pack(anchor="w")
+                ttk.Checkbutton(f, text="New land: neighbours' climate", variable=ed.v_land_climate).pack(anchor="w")
+            row = ttk.Frame(f)
+            row.pack(anchor="w", pady=(4, 0))
+            ttk.Label(row, text="size (tiles: 1 one tile, 2 a square of 3 x 3...)").pack(side="left")
+            ttk.Spinbox(row, from_=1, to=24, width=4, textvariable=ed.v_brush,
+                        command=self._draw_ring).pack(side="left", padx=(4, 0))
+            return
         for val, text in (("grab", "Grab and drag (the game's): press, move the mouse up / down"),
                           ("spray", "Spray: works while the button is held")):
             ttk.Radiobutton(f, text=text, value=val, variable=self.v_how).pack(anchor="w")
@@ -521,6 +638,102 @@ class Map3DView(ttk.Frame):
     def _hover(self, e):
         self._mouse = None if e is None else (e.x, e.y)
         self._draw_ring()
+        if e is not None and self._carry is None and self.v_brush_on.get() and self.v_paint.get() != "heights" \
+                and not self._paint:
+            t = self._tile(e.x, e.y) if self._on() else None
+            text = self._paint_tip(t) if t is not None else ""
+            if text:
+                self._tip_show(e, text)
+            else:
+                self._tip_hide()
+            return
+        if e is None or self._carry is not None or self.v_brush_on.get():
+            self._tip_hide()
+            return
+        got = getattr(self, "_hover_at", None)           # what _hover_frame found under the mouse just now
+        here = got[2] if got is not None and self._on() else []
+        self._tip_show(e, self._tip_text(here))
+
+    def _tip_text(self, here):
+        """What the mouse rests on in a few lines, as the Map's name beside the mouse: a character's name (an army
+        with no named man: its captain), what he is, of which faction, his army's units; a town's name and owner; a
+        resource's name; a fort's owner."""
+        from .gui_map import hover_name
+        app = self.app
+        mv = getattr(app, "map_view", None)
+        cm = getattr(mv, "cmap", None)
+        lines = []
+        for what, key, name in here:
+            if what == "char":
+                ch = (getattr(app, "_map_chars", None) or {}).get(key) or {}
+                lines.append(hover_name(ch) or name)
+                lines.append("   %s of %s%s" % (ch.get("kind") or "character", ch.get("faction") or "?",
+                                                ", %d unit(s)" % ch["units"] if ch.get("army") and ch.get("units")
+                                                else ""))
+            elif what == "place":
+                kind, region = key
+                info = (getattr(cm, "info", None) or {}).get(region, {}) if cm is not None else {}
+                town = info.get("settlement") or region
+                owner = (getattr(mv, "owners", None) or {}).get(region)
+                lines.append("%s%s - %s" % (town, " (%s)" % region if town != region else "",
+                                            "town" if kind == "city" else "port"))
+                if owner:
+                    lines.append("   owner %s" % owner)
+            elif what == "res":
+                r = next((r for r in app.res_shown() if r["id"] == key), None) if hasattr(app, "res_shown") else None
+                if r is not None and str(key).startswith(("r", "n")):
+                    from .resources import shown_name
+                    try:
+                        lines.append("%s (resource)" % shown_name(app.mod, r["kind"]))
+                    except Exception:
+                        lines.append("%s (resource)" % r["kind"])
+                elif r is not None:
+                    lines.append("%s%s" % (r.get("type") if r["kind"] == "landmark" and r.get("type") else r["kind"],
+                                           " of %s" % r["owner"] if r.get("owner") else ""))
+                else:
+                    lines.append(name)
+            else:
+                lines.append(name)
+        return "\n".join(lines)
+
+    def _tip_show(self, e, text):
+        """The words beside the mouse in a small box (the Map's look); none: the box goes. A window of its own: the
+        card draws over the canvas, so nothing drawn on the canvas would show."""
+        if not text:
+            self._tip_hide()
+            return
+        tw = getattr(self, "_tipwin", None)
+        try:
+            if tw is None or not tw.winfo_exists():
+                tw = self._tipwin = tk.Toplevel(self)
+                tw.wm_overrideredirect(True)
+                try:
+                    tw.wm_attributes("-topmost", True)
+                except tk.TclError:
+                    pass
+                tw.configure(background="#8a7a52")
+                self._tiplbl = tk.Label(tw, justify="left", background="#2a2418", foreground="#f4ecd0",
+                                        font=("", 9, "bold"), padx=4, pady=2)
+                self._tiplbl.pack(padx=1, pady=1)
+            if self._tiplbl.cget("text") != text:
+                self._tiplbl.configure(text=text)
+            x, y = e.x_root + 14, e.y_root + 20
+            tw.update_idletasks()
+            sw, sh = tw.winfo_screenwidth(), tw.winfo_screenheight()
+            w, h = tw.winfo_reqwidth(), tw.winfo_reqheight()
+            x, y = min(x, sw - w - 4), (y if y + h < sh - 4 else e.y_root - h - 14)     # kept on the screen
+            tw.wm_geometry("+%d+%d" % (x, y))
+            tw.deiconify()
+        except tk.TclError:
+            self._tipwin = None
+
+    def _tip_hide(self):
+        tw = getattr(self, "_tipwin", None)
+        if tw is not None:
+            try:
+                tw.withdraw()
+            except tk.TclError:
+                self._tipwin = None
 
     def _tile(self, x, y):
         got = self._point(x, y)
@@ -603,19 +816,34 @@ class Map3DView(ttk.Frame):
             kinds = ("town", "wall") if key[0] == "city" else ("port", "port_sea")
         return lambda o: o["kind"] in kinds and tuple(o["xy"]) == tile
 
-    def _carry_start(self, e):
-        """The left button on anything the Map moves - an army, agent or fleet (an army in a town: on the town), a
-        town, a port, a resource, a fort: it is lifted and goes with the mouse, drawn where it would stand, until let
-        go (report #331: everything on the map, as on the Map; following the mouse, no wait)."""
-        app, tile = self.app, self._tile(e.x, e.y)
+    # the mouse moves this many pixels with the left button held before a figure is lifted: a click alone lifts
+    # nothing (a tester: a stall at every click on a resource)
+    DRAG_START = 4
+
+    def _map_lists(self):
+        """The Map's lists of what stands where and its moves, read once (the 3D map's hover and carry use them)."""
+        app = self.app
+        if getattr(app, "_map_moved", None) is None or getattr(getattr(app, "map_view", None), "cmap", None) is None:
+            app.show_map()
+
+    def _carry_press(self, e):
+        """The left button pressed: what stands on that tile is remembered; it is lifted only once the mouse moves
+        with the button held (_carry_start)."""
+        tile = self._tile(e.x, e.y)
+        self._pressed = None
         if tile is None:
             return
-        if getattr(app, "_map_moved", None) is None or getattr(getattr(app, "map_view", None), "cmap", None) is None:
-            app.show_map()                               # the Map's lists of what stands where and its moves
+        self._map_lists()
         here = self._things_at(tile)
-        if not here:
-            return
-        what, key, name = here[0]
+        if here:
+            self._pressed = (e.x, e.y, here[0], tile)
+
+    def _carry_start(self, e):
+        """The left button held on anything the Map moves - an army, agent or fleet (an army in a town: on the town),
+        a town, a port, a resource, a fort - and the mouse moved: it is lifted and goes with the mouse, drawn where it
+        would stand, until let go (report #331: everything on the map, as on the Map; following the mouse, no wait)."""
+        x0, y0, (what, key, name), tile = self._pressed
+        self._pressed = None
         self._carry, self._mouse = (what, key, name, tile), (e.x, e.y)
         self.gl.ghost_shift = (0.0, 0.0, 0.0)
         if self.gl.data.lift_out(self._picks(what, key, tile)):
@@ -677,6 +905,7 @@ class Map3DView(ttk.Frame):
             app.status.set("%s cannot stand at %d, %d: %s" % (name, tile[0], tile[1], why))
             return
         self._carry_stop(back=False)
+        self._did("app")                                 # the Map's move: the window's own Undo takes it back
         self._hover_gen = getattr(self, "_hover_gen", 0) + 1   # what stands where has changed
         if what == "char":
             app._map_moved(key, tile)
@@ -728,6 +957,8 @@ class Map3DView(ttk.Frame):
         ed = self.app.editors.get("terrain")
         if got is None or ed is None:
             return []
+        if self.v_paint.get() != "heights":              # the tile brush: the square of tiles it paints
+            return self._draw_frame(tile_of(*got[1]), grow=self._tiles_brush(ed) - 1) or []
         import math
         import numpy as np
         try:
@@ -743,18 +974,31 @@ class Map3DView(ttk.Frame):
 
     def _paint_start(self, e):
         self.canvas.focus_set()
+        self._tip_hide()
         if not self._on():
             return
         if not self.v_brush_on.get():
-            self._carry_start(e)
+            self._carry_press(e)
             return
         ed = self._terrain()
         if ed is None:
             return
-        ed._stroke()                                     # one Undo step a stroke, as on the 2D map
+        if self.v_paint.get() == "regions":              # the Map's own Undo (region_paint is one of its steps)
+            self.app.remember()
+            self._did("app")
+        else:
+            ed._stroke()                                 # one Undo step a stroke, as on the 2D map
+            self._did("terrain")
         self._paint, self._mouse = True, (e.x, e.y)
         self.gl.coast_frozen = True                      # the whole shore is not traced at every tick, only at the end
         self._coast_was = self._coast_now(ed)
+        if self.v_paint.get() != "heights":              # a tile brush: the tiles under it now, then as it moves
+            self._last_tile = None
+            if self.v_paint.get() == "regions":          # the Map's Edit regions brush, made once a stroke
+                self._map_lists()
+                self._regions = self.app.region_brush()[0] if getattr(self.app, "_cmap", None) is not None else None
+            self._tiles_tick()
+            return
         if self.v_how.get() == "grab":                   # the game's: the land under the circle held, then moved
             got = self._point(e.x, e.y)
             self._grab = (e.y, got[1]) if got is not None and ed.grab(*got[1]) else None
@@ -764,11 +1008,20 @@ class Map3DView(ttk.Frame):
     def _drag_paint(self, e):
         """The mouse moved with the left button held: the grabbed land goes up or down with it (the higher the mouse,
         the higher the land - as smooth as the mouse), else the spray follows the mouse; a carried figure's frame too."""
+        if self._paint and self.v_paint.get() != "heights":
+            self._mouse = (e.x, e.y)                     # the newest place only: done when the window is free
+            if getattr(self, "_tiles_job", None) is None:
+                self._tiles_job = self.after_idle(self._tiles_tick)
+            return
         if self._paint and self._grab is not None:
             self._grab_y = e.y                           # the newest place only: done when the window is free
             if getattr(self, "_grab_job", None) is None:
                 self._grab_job = self.after_idle(self._grab_tick)
             return
+        pressed = getattr(self, "_pressed", None)
+        if pressed is not None and max(abs(e.x - pressed[0]), abs(e.y - pressed[1])) >= self.DRAG_START:
+            self._tip_hide()
+            self._carry_start(e)
         if self._carry is not None:
             self._carry_follow(e)
             return
@@ -794,6 +1047,7 @@ class Map3DView(ttk.Frame):
             self.draw(half=True)
 
     def _paint_end(self, e):
+        self._pressed = None                             # a click alone: nothing lifted, nothing laid again
         if self._carry is not None:
             self._carry_end(e)
             return
@@ -802,9 +1056,14 @@ class Map3DView(ttk.Frame):
             if self.gl is not None:
                 self.gl.coast_frozen = False             # the shore traced again at the next frame
             ed = self.app.editors.get("terrain")
-            if ed is not None and self._coast_now(ed) != getattr(self, "_coast_was", None):
-                self.rebuild()                           # land out of the water (or under it): its ground, its tile
-                return
+            if self.v_paint.get() != "heights" or \
+                    ed is not None and self._coast_now(ed) != getattr(self, "_coast_was", None):
+                # land out of the water (or under it): its ground and climate were shown while painting; what the
+                # mountains, trees and borders stand on read again in the thread - the map not made again (the
+                # user, 2026-10-22: a lag at the stroke's end, then the new land's texture popping in)
+                self._ground_stale = True
+                if self.gl is not None:
+                    self.gl.models_stale = True
             self._for = self._stamp()                    # the card already shows what was painted
             self._lay_models()                           # the mountains and hills laid again on the new relief
             self._sharp_later()
@@ -821,9 +1080,14 @@ class Map3DView(ttk.Frame):
         if gl is None or not gl.models_stale or getattr(self, "_laying", False):
             return
         self._laying, got = True, {}
+        ground, self._ground_stale = getattr(self, "_ground_stale", False), False
+        mod, camp = self._source(), self.app.v_campaign.get()
+        painted = dict(getattr(self.app, "region_paint", None) or {})
 
         def work():
             try:
+                if ground:
+                    got["layers"] = gl.data.refresh_ground(mod, camp, painted)
                 gl.data.place_models()
             except Exception as e:                       # said in the bar, never a crash
                 got["error"] = str(e)
@@ -838,9 +1102,12 @@ class Map3DView(ttk.Frame):
             if "error" in got:
                 self.lbl.configure(text="the mountains and hills could not be laid again: %s" % got["error"])
                 return
+            if "layers" in got:
+                gl.set_layers(0, 0, got["layers"])
+                gl.coast_dirty = True                    # rivers and cliffs painted: the shore's strips leave them
             gl.models_placed()
             self.draw()
-            if gl.models_stale:                          # painted again meanwhile
+            if gl.models_stale or getattr(self, "_ground_stale", False):     # painted again meanwhile
                 self._lay_models()
         gl.models_stale = False
         th = threading.Thread(target=work, daemon=True)
@@ -859,16 +1126,141 @@ class Map3DView(ttk.Frame):
             self.draw(half=True)
         self.after(50, self._puff)
 
+    def _did(self, kind):
+        """A step done here, for Ctrl+Z / Ctrl+Y on this tab: 'terrain' (the Terrain editor's stroke) or 'app' (the
+        window's own Undo: regions painted, a figure carried)."""
+        self._kinds = getattr(self, "_kinds", [])[-299:] + [kind]
+        self._kinds_redo = []
+
+    def undo_step(self, redo=False):
+        """Ctrl+Z / Ctrl+Y (or the bottom Undo / Redo) on the 3D tab: the newest step done here taken back (or done
+        again) where it was kept - True when done here, False: the window's own Undo does it (then the map follows)."""
+        back, fwd = (getattr(self, "_kinds_redo", []), getattr(self, "_kinds", [])) if redo else \
+            (getattr(self, "_kinds", []), getattr(self, "_kinds_redo", []))
+        if not back:
+            self.after_idle(self._after_undo)
+            return False
+        kind = back.pop()
+        fwd.append(kind)
+        ed = self.app.editors.get("terrain")
+        if kind == "terrain" and ed is not None:
+            (ed.redo_stroke if redo else ed.undo_stroke)()
+            self.after_idle(self.load)                   # the strokes' pictures back: the map made from them
+            return True
+        self.after_idle(self._after_undo)
+        return False
+
+    def _after_undo(self):
+        """The window's Undo / Redo took back regions painted or a figure carried: the borders and colours over the
+        map follow, what stands on the map is laid again - the map itself not made again."""
+        if self.gl is None or not self.winfo_exists():
+            return
+        self._ground_stale, self.gl.models_stale = True, True
+        self._for = self._stamp()
+        self._lay_models()
+        if self.v_tint.get() != "none":
+            self._send_tint(draw=False)
+        self.load()
+
+    def _paint_tip(self, t):
+        """What a tile is, beside the mouse while a tile brush is in hand: its ground, climate and region (as the
+        brushes left them, not written yet)."""
+        from . import terrain as T
+        ed = self.app.editors.get("terrain")
+        cm = getattr(ed, "cmap", None)
+        if cm is None or not (0 <= t[0] < cm.w and 0 <= t[1] < cm.h):
+            return ""
+        got = getattr(self, "_climate_names", None)
+        if got is None or got[0] is not ed.mod:          # read once a mod, not at every move
+            self._climate_names = (ed.mod, {tuple(c): n for n, c, _ in T.climates(ed.mod)} if ed.mod else {})
+        climates = self._climate_names[1]
+        g, c = cm.ground_at(*t), cm.climate_at(*t)
+        region = (getattr(self.app, "region_paint", None) or {}).get(tuple(t)) or cm.region_at(*t)
+        lines = ["tile %d, %d" % tuple(t), "ground: %s" % T.GROUND.get(g, "?" if g is None else "%d %d %d" % g[:3])]
+        if c is not None:
+            lines.append("climate: %s" % climates.get(tuple(c[:3]), "%d %d %d" % tuple(c[:3])))
+        lines.append("region: %s" % (region or "the sea"))
+        return "\n".join(lines)
+
+    def _eyedrop(self, e):
+        """Alt + click: the brush picks the tile's own - its region (Regions), ground, mark or climate."""
+        self.canvas.focus_set()
+        what = self.v_paint.get()
+        t = self._tile(e.x, e.y) if self._on() else None
+        if t is None or not self.v_brush_on.get():
+            return
+        if what == "regions":
+            self._map_lists()
+            if getattr(self.app, "_cmap", None) is not None:
+                self.app.region_brush()[1](t)
+                self.lbl.configure(text="painting with %s" % self.app.v_paint.get())
+        elif what in SWATCHED:
+            ed = self._terrain()
+            c = ed._current(what, t) if ed is not None else None
+            if c is not None:
+                self.v_pick[what].set("%d,%d,%d" % tuple(c[:3]))
+                self.lbl.configure(text="picked %d,%d,%d" % tuple(c[:3]))
+
+    @staticmethod
+    def _tiles_brush(ed):
+        """The tile brush's size: 1 one tile, n a square of 2n - 1 tiles across (as on the 2D map)."""
+        try:
+            return max(1, min(24, int(ed.v_brush.get())))
+        except (tk.TclError, ValueError):
+            return 1
+
+    def _tiles_tick(self):
+        """The tile brush where the mouse is now: the Terrain editor paints the tiles (its Undo, Preview and Apply),
+        the card takes their points' heights, ground and climate at once."""
+        self._tiles_job = None
+        ed = self.app.editors.get("terrain")
+        got = self._point(*self._mouse) if self._paint and self._mouse and ed is not None else None
+        if got is None:
+            return
+        t = tile_of(*got[1])
+        if t == getattr(self, "_last_tile", None):
+            return
+        self._last_tile = t
+        b = self._tiles_brush(ed) - 1
+        tiles = [(t[0] + dx, t[1] + dy) for dx in range(-b, b + 1) for dy in range(-b, b + 1)]
+        what = self.v_paint.get()
+        if what == "regions":
+            paint = getattr(self, "_regions", None)
+            took = paint(tiles) if paint is not None else []
+            if took:
+                self._send_tint(draw=False)
+                self.draw(half=True)
+            return
+        if what in ("land", "sea"):
+            took = ed.paint_coast(tiles, mode=what)
+        else:
+            pick = self.v_pick[what].get()
+            if not pick:
+                self.lbl.configure(text="pick what to paint in 'brush'")
+                return
+            took = ed.paint(tiles, what=what, colour=tuple(int(v) for v in pick.split(",")))
+        if took:
+            xs, ys = [x for (x, _), _ in took], [y for (_, y), _ in took]
+            # a turned tile (land / sea, or a sea ground on land) changes the shore round it too: a tile more round
+            k = 1
+            self._send_points(ed, 2 * (min(xs) - k), 2 * (max(xs) + k) + 2, 2 * (min(ys) - k), 2 * (max(ys) + k) + 2)
+            self.draw(half=True)
+
     def _send_heights(self, ed, at):
         """The points the brush can have changed, read from the Terrain editor's map_heights, sent to the card."""
+        from . import terrain as T
+        _, r, _ = T.spray_footprint(at, ed.v_brush.get())
+        k = int(r) + 2
+        self._send_points(ed, int(at[0]) - k, int(at[0]) + k + 1, int(at[1]) - k, int(at[1]) + k + 1)
+
+    def _send_points(self, ed, x0, x1, y0, y1):
+        """The map_heights points x0..x1, y0..y1 (bottom-up) as the Terrain editor holds them now - their heights,
+        ground and climate - sent to the card."""
         import numpy as np
         from . import terrain as T, terrain3d as T3
         img = ed._img("map_heights.tga")
         d = self.gl.data
-        _, r, _ = T.spray_footprint(at, ed.v_brush.get())
-        k = int(r) + 2
-        x0, x1 = max(0, int(at[0]) - k), min(d.cols - 1, int(at[0]) + k + 1)
-        y0, y1 = max(0, int(at[1]) - k), min(d.rows - 1, int(at[1]) + k + 1)
+        x0, x1, y0, y1 = max(0, x0), min(d.cols - 1, x1), max(0, y0), min(d.rows - 1, y1)
         if img is None or x1 < x0 or y1 < y0:
             return
         sc = ed._shape_coast()
@@ -882,10 +1274,48 @@ class Map3DView(ttk.Frame):
                 self._limits = (camp, T.max_land_height(ed.mod, camp), T.min_sea_height(ed.mod, camp))
             metres = T3.metres_of(rgb, self._limits[1], self._limits[2])
         self.gl.set_heights((d.rows - 1) - y1, x0, metres)
+        # the same points' ground and climate as the brush leaves them (land out of the water takes its
+        # neighbours' ground and climate): shown at once, never popping in after the stroke
+        pics = [ed._img(n) for n in ("map_ground_types.tga", "map_climates.tga")]
+        blocks = [None if p is None or (p.width, p.height) != (d.cols, d.rows) else
+                  np.frombuffer(p.raw, np.uint8).reshape(p.height, p.width, 3)[y0:y1 + 1, x0:x1 + 1][::-1]
+                  for p in pics]
+        self.gl.set_layers((d.rows - 1) - y1, x0, d.layers_of(blocks[0], blocks[1], metres <= 0))
+        if self.v_tint.get() != "none":
+            self._send_tint(draw=False)
+
+    def _send_tint(self, draw=True):
+        """The colours over the map (Layers: climates, regions, none) from the pictures as the brushes leave them,
+        to the card."""
+        if self.gl is None:
+            return
+        import numpy as np
+        from . import terrain3d as T3
+        kind, mod, camp = self.v_tint.get(), self._source(), self.app.v_campaign.get()
+        rgba = None
+        try:
+            if kind == "climates":
+                rgba = self.gl.data.tint_of(kind, climate=T3._picture(mod, camp, "map_climates.tga"))
+            elif kind == "regions":
+                img = mod.region_map(camp)
+                regions = np.frombuffer(bytes(img.raw), np.uint8).reshape(img.height, img.width, 3)[::-1].copy()
+                painted = getattr(self.app, "region_paint", None) or {}
+                if painted:                              # the Map's Edit regions, not written yet: as Apply leaves it
+                    cols = self.app._region_colours()
+                    for (x, y), name in painted.items():
+                        if name in cols and 0 <= y < img.height and 0 <= x < img.width:
+                            regions[img.height - 1 - y, x] = cols[name]
+                rgba = self.gl.data.tint_of(kind, regions=regions)
+        except Exception as e:                           # said in the bar, the map still drawn
+            self.lbl.configure(text="the colours over the map cannot be shown: %s" % e)
+        self.gl.set_tint(rgba)
+        if draw:
+            self.draw()
 
     # ---- the mouse and keys ----
     def _press(self, e, how):
         self.canvas.focus_set()
+        self._tip_hide()
         self._drag = (how, e.x, e.y)
 
     def _motion(self, e):

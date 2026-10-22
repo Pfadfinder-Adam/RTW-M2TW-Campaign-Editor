@@ -35,7 +35,7 @@ from .strat import Strat, first_names
 from .textio import tokens
 from .units import faction_units, read_units
 
-VERSION = "0.35.3"
+VERSION = "0.35.4"
 KOFI = "https://ko-fi.com/pfadfinder"
 SPONSORS = "https://github.com/sponsors/Pfadfinder-Adam"
 DISCORD = "https://discord.gg/uqA9MEn4Z"
@@ -206,10 +206,8 @@ def _logged_error(title=None, message=None, **kw):
 
 messagebox.showerror = _logged_error
 
-# descr_strat.txt: "faction <name>, <economy> <military>" - the words the game knows
-AI_ECONOMY = ("balanced", "bureaucrat", "comfortable", "craftsman", "fortified", "religious", "sailor", "trader")
-AI_MILITARY = ("caesar", "genghis", "henry", "mao", "napoleon", "smith", "stalin")
-AI_CHOICES = ["%s %s" % (e, m) for e in AI_ECONOMY for m in AI_MILITARY]
+# descr_strat.txt: "faction <name>, <economy> <military>" - the words the game knows (strat.ai_choices)
+from .strat import AI_CHOICES, AI_ECONOMY, AI_MILITARY, ai_choices  # noqa: E402,F401
 # New faction: how it comes into the campaign (emergence.WAYS in this order)
 WAY_LABELS = ("on the map from the start", "later, by an event (a date and a region)",
               "later, as the shadow of a faction (its civil war)", "later, splitting off a faction in a revolt")
@@ -355,6 +353,7 @@ class App(tk.Tk):
         self.new_religions = []         # Medieval II: new religions waiting for Apply (religions.py specs)
         self.culture_names = {}         # {settlement: {culture or '*': name}} (REX renames the town for its owner)
         self.name_list = {}             # {faction or '(new)': {pool: [names]}} a name list of its own (Name list...)
+        self.zero = None                # New faction > From zero...: {'culture', 'frame', 'campaign', ...} (gui_fromzero)
         # resources on the map: moved {index: (x, y)}, removed [index], added [{type, xy}], region tags {region: text}
         self.res_moves, self.res_removed, self.res_added, self.region_tags = {}, [], [], {}
         # forts and watchtowers the same way: moved {line: (x, y)}, removed [line], added [{kind, xy}] (forts.py)
@@ -528,7 +527,7 @@ class App(tk.Tk):
         upper.columnconfigure(1, weight=1)
         texts = ttk.Frame(left)
         texts.pack(fill="x", pady=(6, 0))
-        self.v = {k: tk.StringVar() for k in ("template", "name", "display_name", "short_name", "adjective",
+        self.v = {k: tk.StringVar() for k in ("template", "name", "display_name", "short_name", "adjective", "people",
                                               "ai", "denari", "leader_first", "leader_last", "leader_age",
                                               "heir_first", "heir_last", "heir_age", "capital")}
         self.v["denari"].set("5000")
@@ -554,6 +553,11 @@ class App(tk.Tk):
         self.bring_row = ttk.Frame(lf)
         self.bring_row.grid(row=row, column=1, sticky="w", padx=4, pady=(0, 2))
         row += 1
+        b_zero = ttk.Button(self.bring_row, text="From zero...", command=self.from_zero)
+        b_zero.pack(side="left", padx=(0, theme.BUTTON_GAP))
+        tip(b_zero, "A new faction with nothing of an existing one, step by step: its culture, names, colours away "
+                    "from every faction's, its own emblem on every sign, a name list of the whole culture; Apply "
+                    "creates it and recolours every picture it gets in its colours.")
         b_from = ttk.Button(self.bring_row, text="From another mod...", command=self.bring_faction)
         b_from.pack(side="left")
         from .gui_util import tip as _tip_bring
@@ -563,7 +567,8 @@ class App(tk.Tk):
                     "its select map is drawn from this map.")
         self.lbl_bring = ttk.Label(self.bring_row, text="")
         self.lbl_bring.pack(side="left", padx=(6, 0))
-        self.b_unbring = ttk.Button(self.bring_row, text="Forget it", command=lambda: self.set_bring(None))
+        self.b_unbring = ttk.Button(self.bring_row, text="Forget it",
+                                    command=lambda: self.unzero() if self.zero else self.set_bring(None))
         self.e_name = ttk.Entry(lf, textvariable=self.v["name"])
         field("Internal name", self.e_name)
         # Rename... beside its label, not at the row's end (there it widened the whole box - the user, 2026-10-10)
@@ -579,6 +584,13 @@ class App(tk.Tk):
         # ({..._DESCR}) - the rows are hidden there (_game_rows)
         self.rome_rows = [lf.grid_slaves(row=row - 1, column=c)[0] for c in (0, 1)]
         field("Adjective", ttk.Entry(lf, textvariable=self.v["adjective"]))
+        # New faction only: the people's name the template's texts use ('The Scots are Victorious' - no name nor
+        # adjective of Scotland holds 'Scots'); empty = the short name + s
+        field("People (plural)", ttk.Entry(lf, textvariable=self.v["people"]))
+        self.people_row = [lf.grid_slaves(row=row - 1, column=c)[0] for c in (0, 1)]
+        tip(self.people_row[1], "What its people are called, many of them: 'Scots', 'Gauls'. A copied text that "
+                                "names the template's people ('The Scots are Victorious') gets this word. Empty: "
+                                "the short name with an s.")
         # Medieval II's faction screen texts, shown only when the faction has them
         self.extra_rows = {}
         for k, label in (("strength", "Strengths\n(faction screen)"), ("weakness", "Weaknesses\n(faction screen)"),
@@ -891,12 +903,12 @@ class App(tk.Tk):
         # saying what it does (once on the top row; a tester: 'not between the zoom's plus and minus')
         from .gui_util import hint as _hint, tip as _tip
         from .gui_upscale import WHAT_HAPPENS
-        # its '?' BEFORE it, a gap, then - 100% + Fit and the zoom's '?' (a tester, R-20261014-7D5272)
+        # its '?' AFTER it (the author, 2026-10-22: not beside the zoom's '?'; once before it, R-20261014-7D5272)
         up = _tip(ttk.Button(self.map_view.zoom_bar, text="Bigger map (x3)...", command=self.once(
             "upscale_map", lambda: self.upscale_map())), "make the campaign map 3 x bigger (beta)")
-        q = _hint(self.map_view.zoom_bar, WHAT_HAPPENS, width=520)
-        q.pack(side="left", padx=(0, 2))
         up.pack(side="left")
+        q = _hint(self.map_view.zoom_bar, WHAT_HAPPENS, width=520)
+        q.pack(side="left", padx=(2, 0))
         _tip(ttk.Button(self.map_view.zoom_bar, text="Map from zero...", command=self.once(
             "map_zero", lambda: self.map_from_zero())),
             "a new small map in place of this campaign's: one island, one region with its town, a port and a "
@@ -1036,6 +1048,7 @@ class App(tk.Tk):
         menu.add_command(label="Restore a backup...", command=self.restore)
         menu.add_command(label="Check and install a pack...", command=self.once("install_pack", self.install_pack))
         menu.add_command(label="Game manifest...", command=self.once("game_manifest", self.game_manifest))
+        menu.add_command(label="Authors and sources of this mod...", command=self.once("sources", self.sources_window))
         head("About the editor")
         menu.add_command(label="Log", command=self.once("show_log", self.show_log))
         menu.add_command(label="Save logs (zip)...", command=self.once("save_logs", self.save_logs))
@@ -1822,6 +1835,7 @@ class App(tk.Tk):
         st["editing_now"] = copy.deepcopy(self.editing_now)
         st["baseline"] = getattr(self, "_baseline", None)
         st["victory"] = (self.victory.faction, copy.deepcopy(self.victory.cond))
+        st["zero"] = copy.deepcopy(self.zero)
         return st
 
     def _bring_side(self, st):
@@ -1846,6 +1860,8 @@ class App(tk.Tk):
             else:
                 setattr(self, k, st[k])
         self.editing_now, self._baseline = st["editing_now"], st["baseline"]
+        self.zero = st.get("zero")
+        self._from_zero_look()
         t = self.v["template"].get().strip()
         if t:
             self.load_victory(t)
@@ -2106,7 +2122,7 @@ class App(tk.Tk):
             for w in ws:
                 w.grid_remove()
         # cloning-only options are hidden in Edit (diplomacy gets its own editor later)
-        for w in [self.chk_art] + self.dip_row + self.way_row:
+        for w in [self.chk_art] + self.dip_row + self.way_row + self.people_row:
             if edit:
                 w.grid_remove()
             else:
@@ -2289,6 +2305,9 @@ class App(tk.Tk):
             return units
         taken = {k[5:] for k, v in self.roster_set.items() if k.startswith("unit:") and v is False}
         given = {k[5:] for k, v in self.roster_set.items() if k.startswith("unit:") and v is True}
+        # a unit added to a building level on the Roster's By buildings becomes the faction's too
+        given |= {k.split(":", 3)[3] for k, v in self.roster_set.items() if k.startswith("recruit:") and v is True}
+        taken -= given
         have = {u.type for u in units}
         out = [u for u in units if u.type not in taken]
         if given - have and self.mod.file("edu"):
@@ -2309,6 +2328,9 @@ class App(tk.Tk):
         if ed is None and self.editors.get("terrain") is not None and self.map_work() and \
                 self.tab_name() in self.TERRAIN_TABS:
             ed = self.editors["terrain"]                 # Maps > Terrain / Coast & heights: its strokes
+        if ed is None and getattr(self, "map3d", None) is not None and self.map_work() and \
+                self.tab_name() == self.MAP3D_TAB:
+            return self.map3d.undo_step(redo)            # Maps > 3D: its strokes, else the window's own steps
         if ed is None:
             return False
         step = getattr(ed, "redo_step" if redo else "undo_step", None)
@@ -2528,6 +2550,11 @@ class App(tk.Tk):
         """Tools > Credits...: the author, who helped, the testers, the supporters (CREDITS.md - gui_credits)."""
         from .gui_credits import open_credits
         return open_credits(self)
+
+    def sources_window(self):
+        """Tools > Authors and sources of this mod...: whose work the mod holds (gui_sources)."""
+        from .gui_sources import open_sources
+        return open_sources(self)
 
     def _brush_changed(self):
         try:
@@ -2899,12 +2926,27 @@ class App(tk.Tk):
             land = {t: new[r] for t, r in self.region_paint.items() if r in new}
             return {"region_mode": False, "region_painted": self.region_paint, "region_points": points,
                     "new_land": land}
+        paint, pick, cols = self.region_brush()
+        from .regionedit import SEA
+        names = sorted(c for c in cols if c != SEA)
+        self.cb_paint["values"] = [r["name"] + "  (new)" for r in self.new_regions] + names + [SEA]
+        overlay = {t: cols[r] for t, r in self.region_paint.items() if r in cols}
+        on_place, ghost = None, None
+        if self._region_point:
+            on_place = self.place_region_point
+            ghost = {"kind": self._region_point[0], "check": self.region_point_problem}
+        return {"region_mode": True, "paint_overlay": overlay, "on_paint": paint, "on_pick": pick,
+                "brush": self.v_brush.get(), "region_points": points, "on_place": on_place,
+                "region_painted": self.region_paint, "region_colours": cols,
+                "borders": self.v_borders.get(), "ghost": ghost}
+
+    def region_brush(self):
+        """(paint(tiles) -> [(tile, colour shown)], pick(xy), {region: colour}) of Edit regions' brush: tiles given
+        to the region picked in 'Paint with' (kept for Apply in region_paint) - the Map's and the 3D map's."""
         from .regionedit import SEA, sea_colour
         cols = self._region_colours()
-        names = sorted(cols)
         cols[SEA] = sea_colour(self.mod, self.v_campaign.get())     # the region map's sea (Discord: borders cut
-        self.cb_paint["values"] = [r["name"] + "  (new)" for r in self.new_regions] + names + [SEA]   # into rivers)
-        cm = self._cmap
+        cm = self._cmap                                             # into rivers)
 
         def paint(tiles):
             target = self.v_paint.get().replace("  (new)", "").strip()
@@ -2938,15 +2980,7 @@ class App(tk.Tk):
                 new = any(n["name"] == r for n in self.new_regions)
                 self.v_paint.set(r + ("  (new)" if new else ""))
                 self.status.set("Painting with %s." % r)
-        overlay = {t: cols[r] for t, r in self.region_paint.items() if r in cols}
-        on_place, ghost = None, None
-        if self._region_point:
-            on_place = self.place_region_point
-            ghost = {"kind": self._region_point[0], "check": self.region_point_problem}
-        return {"region_mode": True, "paint_overlay": overlay, "on_paint": paint, "on_pick": pick,
-                "brush": self.v_brush.get(), "region_points": points, "on_place": on_place,
-                "region_painted": self.region_paint, "region_colours": cols,
-                "borders": self.v_borders.get(), "ghost": ghost}
+        return paint, pick, cols
 
     def _new_region(self, name):
         return next((r for r in self.new_regions if r["name"] == name), None)
@@ -3624,14 +3658,15 @@ class App(tk.Tk):
 
         def sums():
             t = sum(values().values())
-            total.configure(text="in all %d%%%s" % (t, "" if t == 100 else " - must be 100"),
+            total.configure(text="in all %d%%%s" % (t, "" if t == 100 else " - the game's own files make it 100"),
                             foreground="" if t == 100 else "#c00000")
         sums()
 
         def ok():
             rel = values()
-            if sum(rel.values()) != 100:
-                messagebox.showerror(APP, "the religions must add up to 100", parent=w)
+            if sum(rel.values()) != 100 and not messagebox.askyesno(
+                    APP, "The religions add up to %d%%, not 100. The game reads each share as written (it does not "
+                         "check the sum). Keep them so?" % sum(rel.values()), parent=w):
                 return
             keep(rel)
             w.destroy()
@@ -4753,8 +4788,10 @@ class App(tk.Tk):
             self.v["short_name"].set("")
             self.t_descr.configure(state="normal")
             self.t_descr.delete("1.0", "end")
-        # shown greyed with the game it belongs to, not hidden (NN/g: features vanishing unexplained confuse)
-        for rows, mine, words in ((self.rome_rows, not m2, " (Rome only)"), (self.m2_rows, m2, " (Medieval II only)")):
+        # shown greyed with the game it belongs to, not hidden (NN/g: features vanishing unexplained confuse); the
+        # game on a line of its own - beside the words it was cut in the narrow label column ('Religion (...')
+        for rows, mine, words in ((self.rome_rows, not m2, "\n(Rome only)"),
+                                  (self.m2_rows, m2, "\n(Medieval II only)")):
             for w in rows:
                 w.grid()
                 if w.winfo_class() in ("TLabel", "Label"):
@@ -5084,6 +5121,10 @@ class App(tk.Tk):
         self.family_set = {}
         self._cmap_for = None                  # the map is read again: after Apply towns may stand elsewhere
         self.undo_stack, self.redo_stack = [], []
+        ed = self.editors.get("terrain")
+        if ed is not None and ed.mod is not None and getattr(ed, "_camp", c) != c:
+            ed.rebind(self.mod)                  # another campaign: the Terrain editor (Maps > 3D's brushes too)
+            #                                      draws and paints its map - the old one's strokes were dropped
         self.refresh_field()
         self.refresh_chosen()
         self.fill_towns()
@@ -5351,7 +5392,9 @@ class App(tk.Tk):
         # (variants like 'balanced smith random' or REX's 'opportunist')
         seen = {" ".join(x.header.split(";")[0].split(",", 1)[1].split())
                 for x in (self.strat.factions if self.strat else []) if "," in x.header}
-        self.cb_ai["values"] = AI_CHOICES + sorted(v for v in seen if v and v not in AI_CHOICES)
+        from .limits import game_kind
+        known = ai_choices(game_kind(self.mod))
+        self.cb_ai["values"] = known + sorted(v for v in seen if v and v not in known)
         pool = self.leader_pool()
         self.refresh_name_combos()
         if not self.editing():                 # names left from another faction are not in this one's lists
@@ -5437,13 +5480,17 @@ class App(tk.Tk):
             self.bring = None
             self.lbl_bring.configure(text="")
             self.b_unbring.pack_forget()
+        if not keep_bring and getattr(self, "zero", None):
+            self.zero = None                    # (its recolour, kept for Apply, then finds no faction from zero)
+            self.lbl_bring.configure(text="")
+            self.b_unbring.pack_forget()
 
     def _from_zero_look(self):
         """A faction brought from another mod is made from zero: nothing of the template is seen (the user,
         2026-10-15, again: 'why does it still say Gauls - misleading'). The template row, 'Copy art named after the
         template' and 'template's relations' are put away - the template only gives the lines in the game's lists,
         inside; the relations are neutral, its own pictures come along. Everything back for a plain copy."""
-        brought = not self.editing() and bool(getattr(self, "bring", None))
+        brought = not self.editing() and bool(getattr(self, "bring", None) or getattr(self, "zero", None))
         for w in (self.lbl_template, self.cb_template):
             w.grid_remove() if brought else w.grid()
         if brought:
@@ -5452,11 +5499,48 @@ class App(tk.Tk):
             self.chk_art.grid_remove()
             self.dip_buttons[1].pack_forget()
             self.lf2.configure(text="Leader and heir (names from its own name list)")
+            if self.zero:
+                self.lbl_bring.configure(text="from zero - %s culture" % self.zero.get("culture"))
+                if not self.b_unbring.winfo_manager():
+                    self.b_unbring.pack(side="left", padx=(6, 0))
         elif not self.editing():
             self.chk_art.grid()
             if not self.dip_buttons[1].winfo_manager():
                 self.dip_buttons[1].pack(side="left")
             self.lf2.configure(text="Leader and heir (names must come from the template's name list)")
+
+    def from_zero(self):
+        """New faction > From zero...: the steps (gui_fromzero), then this form."""
+        from .gui_fromzero import open_from_zero
+        if self.bring:
+            self.set_bring(None)
+        open_from_zero(self)
+
+    def zero_sync(self):
+        """A faction from zero: its name, colours and emblem pictures as the form has them now, for the recolour
+        Apply makes after creating it (gui_fromzero.keep_recolour reads them at the write)."""
+        z = self.zero
+        if not z or self.editing():
+            return
+        z["new"] = self.v["name"].get().strip().lower()
+        z["to"] = (self.colours.get("primary"), self.colours.get("secondary"))
+        z["art"] = list(self.art_replace)
+
+    def _drop_zero(self):
+        from .gui_fromzero import RECOLOUR_KEY
+        self.zero = None
+        if RECOLOUR_KEY in self.session_parts():
+            self.session_drop(RECOLOUR_KEY)
+        self.lbl_bring.configure(text="")
+        self.b_unbring.pack_forget()
+
+    def unzero(self):
+        """Forget it beside 'from zero': a copy of a template again (the form stays as it is, the template row back,
+        nothing recoloured by itself)."""
+        self._drop_zero()
+        self._from_zero_look()
+        self.status.set("New faction: a copy of the template again (%s) - its pictures are not recoloured by "
+                        "themselves now." % self.v["template"].get())
 
     def set_bring(self, picked):
         """The faction brought from another mod (None: forget it - the New faction is a copy of the template again).
@@ -6271,9 +6355,9 @@ class App(tk.Tk):
             return
         c = self.field[i]
         if c.get("existing"):
-            if c.get("role"):
-                messagebox.showerror(APP, "%s is the faction's %s - the faction needs him; make another the %s "
-                                          "first." % (c["name"], c["role"], c["role"]))
+            if c.get("role") and not messagebox.askyesno(
+                    APP, "%s is the faction's %s. Take him out anyway? The game then makes the faction's first named "
+                         "character (not the heir) the leader itself." % (c["name"], c["role"])):
                 return
             self.removed_existing.append({"name": c["name"], "from": c["from"]})
             self.char_moves.pop(c["cid"], None)
@@ -6540,6 +6624,7 @@ class App(tk.Tk):
                 "is the shadow of" if way == "shadow" else "splits off"))
         opts = {
             "display_name": v["display_name"], "short_name": v["short_name"], "adjective": v["adjective"],
+            "people": v["people"] or None,
             "description": self.t_descr.get("1.0", "end").strip(),
             "long_description": self.t_long.get("1.0", "end").strip(),
             "religion": (v.get("religion") or None) if self._m2() else None,
@@ -6571,6 +6656,10 @@ class App(tk.Tk):
         }
         if self.bring:                                  # a faction of another mod (factionbring.overlay)
             opts["bring"] = {k: v for k, v in self.bring.items() if k != "for"}
+        if self.zero:                                   # New faction > From zero (traces.plan_note says so)
+            opts["from_zero"] = self.zero.get("culture") or True
+            opts["common_units"] = self.zero.get("common_units", True)
+        self.zero_sync()
         return v["template"], v["name"].lower(), opts
 
     def gather_edit(self):
@@ -7217,7 +7306,11 @@ class App(tk.Tk):
             self.show_text("Done" if not failed else "Written in part", text)
             self.load()
             if new_made and applied & {"faction", "current"}:
+                brought = self.bring
                 self._new_faction_made(new_made)
+                if brought:                             # a faction of another mod: whose work it is, noted
+                    from .gui_sources import noted
+                    noted(self, brought["src"], "faction %s" % brought["faction"])
         if len(bdirs) > 1:                              # Undo this write: the last part, or the whole write
             self.after_idle(lambda: self._written(bdirs[0][0], None, group=list(bdirs)))
         self._mark_work()
@@ -7227,6 +7320,7 @@ class App(tk.Tk):
         yet (Start the game said 'changes not written', a second Create would make it again; the user, 2026-10-15).
         The form is emptied and the work goes on in Edit faction on the faction made - create, then edit."""
         self.bring = None
+        zero, self.zero = self.zero, None
         self.lbl_bring.configure(text="")
         self.b_unbring.pack_forget()
         self.v["name"].set("")
@@ -7240,6 +7334,14 @@ class App(tk.Tk):
         self.template_changed()
         self.status.set("%s is made - it opens here in Edit faction (start a NEW campaign to see it in the game)."
                         % name)
+        if zero:                        # from zero: its units next - the Roster's By buildings
+            try:
+                self.select_tab("Roster")
+                self.roster_editor.tabs.select(self.roster_editor.by_buildings)
+                self.status.set("%s is made from zero - give it units of its own here: Roster > By buildings (a unit "
+                                "added to a level reaches every level above). Start a NEW campaign to see it." % name)
+            except (tk.TclError, ValueError, AttributeError) as e:
+                log.write("Roster after a faction from zero: %s" % e)
 
     def _menu_hint(self, menu):
         try:
@@ -7253,6 +7355,9 @@ class App(tk.Tk):
                             "questions, where the editor keeps its files.")
         elif label == "Help":
             self.status.set("A short guide to the editor (also F1).")
+        elif label.startswith("Authors and sources"):
+            self.status.set("Whose work is in this mod: what was taken from other mods, the authors, links - kept in "
+                            "Authors_and_sources.txt in the mod folder.")
 
     def delete_mod(self):
         """Tools > Delete this mod's folder...: the loaded mod's folder with everything in it, after two questions
