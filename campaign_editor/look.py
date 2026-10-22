@@ -3,8 +3,9 @@ every button: click it and change its size, its name, its place' - buttons and t
 language of the editor, translated by the community and picked in Settings).
 
 Kept apart from the windows (gui_look puts it on them):
-- the look: {piece key: {'text', 'tip', 'width', 'hidden', 'to', 'where'}} in CampaignEditor_look.json beside the
-  settings; a piece key names a button / tick / label by its window, the box it sits in and its own English words
+- the look: {piece key: {'text', 'tip', 'width', 'hidden', 'to', 'where', 'xy', 'up', 'size'}} in
+  CampaignEditor_look.json beside the settings ('to' + 'where': before / after another piece in a row; 'xy' + 'up':
+  free, at x, y of its box or of the box 'up' boxes around it; 'size': [width, height] in pixels); a piece key names a button / tick / label by its window, the box it sits in and its own English words
   (gui_look.piece_key) - the code needs no names of its own, and a piece whose words the code changes later simply
   stops taking its change (nothing breaks);
 - the languages: JSON files {'language': its own name, 'by': who translated, 'words': {English: translated}} -
@@ -21,7 +22,8 @@ from . import log
 
 LOOK_NAME = "_look.json"
 LANG_FOLDER = "_lang"
-KEYS = ("text", "tip", "width", "hidden", "to", "where")
+BOARD_FOLDER = "_look_board"
+KEYS = ("text", "tip", "width", "hidden", "to", "where", "xy", "up", "size")
 
 
 def _home(name):
@@ -66,6 +68,11 @@ def save(look, path=None):
 def set_entry(look, key, entry):
     """A piece's change set (None or {} takes it out); a move goes to the end of the order (moves are put on in turn)."""
     entry = {a: b for a, b in (entry or {}).items() if a in KEYS and b not in (None, "", False)}
+    if "to" in entry:                                   # in a row, or free: never both
+        entry.pop("xy", None)
+        entry.pop("up", None)
+    elif "xy" not in entry:
+        entry.pop("up", None)
     if entry:
         look["pieces"][key] = entry
     else:
@@ -74,6 +81,104 @@ def set_entry(look, key, entry):
         look["order"].remove(key)
     if "to" in entry:
         look["order"].append(key)
+
+
+# ---- the layout board (gui_lookboard): every page of the editor laid out side by side ----
+def board_dir():
+    return _home(BOARD_FOLDER)
+
+
+def load_board(folder=None):
+    """The pages last gathered: [{'id', 'title', 'group', 'size', 'picture', 'pieces', 'hidden'}] ([] when none)."""
+    folder = folder or board_dir()
+    try:
+        with open(os.path.join(folder, "pages.json"), encoding="utf-8") as fh:
+            got = json.load(fh)
+        return [p for p in got.get("pages") or [] if isinstance(p, dict) and p.get("id")]
+    except (OSError, ValueError, TypeError, AttributeError):
+        return []
+
+
+def save_board(pages, folder=None):
+    folder = folder or board_dir()
+    if not folder:
+        return False
+    try:
+        os.makedirs(folder, exist_ok=True)
+        with open(os.path.join(folder, "pages.json"), "w", encoding="utf-8") as fh:
+            json.dump({"version": 1, "pages": pages}, fh, ensure_ascii=False)
+        return True
+    except OSError:
+        return False
+
+
+def lay_cards(groups, row_width=8200, gap=80, head=70):
+    """Where each page card stands on the board: groups = [[(id, width, height), ...], ...] (a group = one kind of
+    page: the works, the tabs of one work, the windows); each group starts a row of its own under its heading, its
+    cards side by side, wrapping at row_width; each card's title in the head above it.
+    -> ({id: (x, y)}, (total width, total height), [y of each group's heading])."""
+    out, tops, y, right = {}, [], 0, 0
+    for group in groups:
+        tops.append(y)
+        y += head
+        x, line = 0, 0
+        for pid, w, h in group:
+            if x and x + w > row_width:
+                x, y = 0, y + line + gap + head
+                line = 0
+            out[pid] = (x, y + head)
+            x += w + gap
+            line = max(line, h)
+            right = max(right, x - gap)
+        if group:
+            y += head + line + gap * 2
+    return out, (right, max(y - gap * 2, 0)), tops
+
+
+def piece_at(pieces, x, y):
+    """The smallest piece whose box holds x, y (pieces = [{'key', 'box': [x, y, w, h]}]), or None."""
+    best = None
+    for p in pieces:
+        bx, by, bw, bh = p["box"]
+        if bx <= x < bx + bw and by <= y < by + bh and (best is None or bw * bh < best["box"][2] * best["box"][3]):
+            best = p
+    return best
+
+
+def drop_beside(pieces, moved, x, y):
+    """Where a piece dropped at x, y stands in a row: (the nearest other piece, 'before' / 'after' by which half of
+    it the mouse is on) - pieces holding the moved one or held by it are skipped; (None, None) when there is none."""
+    mb = moved["box"]
+    best, dist = None, None
+    for p in pieces:
+        if p["key"] == moved["key"]:
+            continue
+        bx, by, bw, bh = p["box"]
+        if _holds(p["box"], mb) or _holds(mb, p["box"]):
+            continue
+        dx = max(bx - x, 0, x - (bx + bw))
+        dy = max(by - y, 0, y - (by + bh))
+        d = dx * dx + dy * dy
+        if dist is None or d < dist:
+            best, dist = p, d
+    if best is None:
+        return None, None
+    return best, ("before" if x < best["box"][0] + best["box"][2] / 2 else "after")
+
+
+def _holds(a, b):
+    return a[0] <= b[0] and a[1] <= b[1] and a[0] + a[2] >= b[0] + b[2] and a[1] + a[3] >= b[1] + b[3]
+
+
+def free_spot(boxes, x, y, w, h):
+    """A piece put free with its top left at x, y (w x h): (how many boxes up from its own it goes - the first box
+    of boxes = [own box, the one around it, ...] that holds it whole, else the last - , x and y in that box)."""
+    for up, (bx, by, bw, bh) in enumerate(boxes):
+        if bx <= x and by <= y and x + w <= bx + bw and y + h <= by + bh:
+            return up, int(x - bx), int(y - by)
+    up = max(len(boxes) - 1, 0)
+    bx, by = (boxes[up][0], boxes[up][1]) if boxes else (0, 0)
+    return up, int(x - bx), int(y - by)
 
 
 # ---- languages ----
@@ -182,5 +287,6 @@ def template(have=None, seen=()):
     return {"language": "", "by": "", "words": out}
 
 
-__all__ = ["load", "save", "set_entry", "look_file", "languages", "read_language", "add_language", "words",
+__all__ = ["load", "save", "set_entry", "look_file", "board_dir", "load_board", "save_board", "lay_cards",
+           "piece_at", "drop_beside", "free_spot", "languages", "read_language", "add_language", "words",
            "template", "KEYS"]
