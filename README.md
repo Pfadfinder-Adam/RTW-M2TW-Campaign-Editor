@@ -41,7 +41,7 @@ Any mod of these games loads - a big one like HLR or a small one that only chang
 | Area | What you do there |
 |---|---|
 | **Factions** | make a new one from another faction or edit one: names, colours, money, towns, leader and heir, garrisons, buildings, diplomacy, victory |
-| **Campaign map** | drag towns, armies and fleets; paint regions, terrain, rivers and heights; grow, cut or make the map 3 x bigger; see it in 3D |
+| **Campaign map** | drag towns, armies and fleets; paint regions, terrain, climates, rivers and heights; a climate library (what each climate gives, new climates); grow, cut or make the map 3 x bigger; see it in 3D |
 | **Units and buildings** | every line as a field; new ones step by step; models in 3D, swapped or your own; voices; bring them from another mod |
 | **Characters** | traits, retinue, ages, names, the family tree, portraits |
 | **Pictures** | every picture of a faction replaced or recoloured, emblem and banners made |

@@ -6209,6 +6209,65 @@ building smith
                                 ["default"]), [(2, "sea default", "x 1")])
         self.assertEqual(L.scan(["a modifies default", "{", "\tx 1", "}"], ["test_climate"], ["default"]), [])
 
+    def test_climate_copy_and_slots_changed(self):
+        """New climate from this...: every block of the source copied under the new name right after it, the name
+        added to 'climates' lists and to lines it leads, one thing's own 'climate x' left; the new name LAST in
+        descr_climates.txt's list (the old slots kept) with its own colour; the name players read. Change...: a
+        ground slot of a climate with no block gets one (a copy of default) with only that slot changed; a tree
+        line's model. Restore puts all back."""
+        from campaign_editor import climatecopy as C, climatelib as L
+        self.assertEqual(C.copy_places(["sea dry summer", "{", "\tparent sea default", "}", "",
+                                        "\tclimates\t\tdry wet", "\tclimates wet, dry, cold", "\tdry any palm",
+                                        "\tclimate\t\tdry", "x modifies dry", "{", "}",
+                                        '<climate id="dry">', "<p/>", "</climate>", '<climate id="z" parent="dry"/>',
+                                        "<climate>", "<name>dry</name>", "<summer/>", "</climate>"], "dry", "hot"),
+                         [(4, ["sea hot summer", "{", "\tparent sea default", "}"]),
+                          (5, None, "\tclimates\t\tdry hot wet"), (6, None, "\tclimates wet, dry, hot, cold"),
+                          (8, ["\thot any palm"]), (15, ['<climate id="hot">', "<p/>", "</climate>"]),
+                          (20, ["<climate>", "<name>hot</name>", "<summer/>", "</climate>"])])
+        d = os.path.join(self.root, "data")
+        write(os.path.join(d, "descr_climates.txt"),
+              "climates\n{\n\tmediterranean\n\tdry\n}\n\nclimate mediterranean\n{\n\tcolour 236 0 140\n\theat 1\n}\n"
+              "\nclimate dry\n{\n\tcolour 102 45 145\n\theat 4\n\tstrategy summer sparse_tree palm_a.cas 8\n}\n")
+        write(os.path.join(d, "descr_aerial_map_ground_types.txt"),
+              "climate default\n{\n\thills a_hills.tga\n\tswamp a_swamp.tga\t\tsnow.tga\n}\n")
+        write(os.path.join(d, "descr_daytypes.txt"), "daytype hot_summer\n\tclimates\t\tdry mediterranean\n")
+        write(os.path.join(d, "text", "climates.txt"), "{DRY}\tDry land\n")
+        before = tree_hash(self.root)
+        mod = ModData(self.root)
+        self.assertTrue(C.problems(mod, "dry", "Bad Name", (1, 2, 3)))
+        self.assertTrue(C.problems(mod, "dry", "mediterranean", (1, 2, 3)))
+        self.assertTrue(C.problems(mod, "dry", "hot", (236, 0, 140)))
+        self.assertEqual(C.problems(mod, "dry", "hot", (1, 2, 3)), [])
+        plan = Plan(mod, "climate", "hot")
+        C.write_copy(plan, "dry", "hot", (1, 2, 3), "Hot land", "rome")
+        plan.apply()
+        mod = ModData(self.root)
+        lines = mod.load(mod.find("descr_climates.txt")).texts()
+        self.assertEqual(L.listed(lines), ["mediterranean", "dry", "hot"])
+        b = L.climates_block(lines, "hot")
+        self.assertEqual((b["colour"], b["heat"], [t[2] for t in b["trees"]]), ((1, 2, 3), "4", ["palm_a.cas"]))
+        self.assertEqual(L.climates_block(lines, "dry")["colour"], (102, 45, 145))
+        self.assertIn("\tclimates\t\tdry hot mediterranean", mod.load(mod.find("descr_daytypes.txt")).texts())
+        self.assertIn("{hot}\tHot land", mod.load(mod.find("text/climates.txt")).texts())
+        plan = Plan(mod, "climate", "hot")
+        C.set_ground(plan, "hot", "hills", "sand_hills.tga")
+        C.set_tree(plan, "hot", lines.index("\tstrategy summer sparse_tree palm_a.cas 8", lines.index("climate hot")) + 1,
+                   "palm_b.cas")
+        plan.apply()
+        mod = ModData(self.root)
+        got = L.aerial_blocks(mod.load(mod.find("descr_aerial_map_ground_types.txt")).texts())
+        self.assertEqual({k: v[:2] for k, v in got["hot"].items()},
+                         {"hills": ("sand_hills.tga", None), "swamp": ("a_swamp.tga", "snow.tga")})
+        self.assertEqual(got["default"]["hills"][:2], ("a_hills.tga", None))
+        lines = mod.load(mod.find("descr_climates.txt")).texts()
+        self.assertEqual([t[2] for t in L.climates_block(lines, "hot")["trees"]], ["palm_b.cas"])
+        self.assertEqual([t[2] for t in L.climates_block(lines, "dry")["trees"]], ["palm_a.cas"])
+        self.assertEqual(C.pool(mod, "nothing_here"), [])
+        for bk in backups(mod):
+            restore(ModData(self.root), bk)
+        self.assertEqual({k: v for k, v in tree_hash(self.root).items() if "_backups" not in k}, before)
+
     def test_land_brush_coast_is_smooth_not_in_steps(self):
         """A report ('where is the smoothing?'): the land brush made land tile by tile, its coast ran in tile-sized
         steps. The coast round the brush's tiles now follows a smooth curve at half-tile level, as the games' own
