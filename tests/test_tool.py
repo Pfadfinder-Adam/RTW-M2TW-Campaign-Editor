@@ -8493,6 +8493,33 @@ building smith
         for src in (inspect.getsource(MapView), inspect.getsource(G)):
             self.assertNotRegex(src, r"\.inside\s*=[^=]")      # nothing writes over the method
 
+    def test_shore_line_follows_the_shown_zoom(self):
+        """The Terrain editor's shore line is drawn from the zoom the window shows (the user, 2026-10-22: 'tie the shore
+        line to the zoom, e.g. 300 %'), not from a fixed pixels-a-tile - the same per cent on a small map and a big
+        one, either game; Settings > Campaign map changes it."""
+        try:
+            import tkinter  # noqa: F401
+            from unittest import mock
+            from campaign_editor import gui_map as GM
+        except ImportError:
+            self.skipTest("no tkinter")
+        self.assertEqual(GM.ZOOM_SETTINGS["map_shore_from"], 300)
+
+        class View:                                   # just what _shore_lines reads; an all-sea 9 x 9 point map
+            shore, z, ox, oy, SHORE_BLOCK = (None, None), 1.0, 0.0, 0.0, 8
+            cmap = type("C", (), {"w": 4, "h": 4})()
+            _shore_block = lambda self, *a: [((0, 0), (1, 1))]    # noqa: E731
+            pct = lambda self: self.at                            # noqa: E731
+
+        v = View()
+        v.shore = (type("P", (), {"width": 9, "height": 9})(), None)
+        for at, drawn in ((100, False), (299, False), (300, True), (600, True)):
+            v.at = at
+            self.assertEqual(bool(GM.MapView._shore_lines(v, 8, 8)), drawn, at)
+        with mock.patch.object(GM, "zoom_setting", lambda key: 100):        # the modder's own zoom
+            v.at = 150
+            self.assertTrue(GM.MapView._shore_lines(v, 8, 8))
+
     def test_upkeep_addon_doubles_and_takes_out_exactly(self):
         """Upkeep x 2 as an add-on of its own (the user, 2026-10-09: 'no huge armies - put in and taken out, on any
         mod'): every unit's upkeep (stat_cost's third number) doubled, the old numbers kept beside the file; Take it

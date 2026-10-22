@@ -23,6 +23,7 @@
 - The editor's own look: Tools > Edit the editor's look - drag any button, tick or label anywhere, rename it, give it a hover text or a width, hide it, take it back; kept for every start. The editor's language from a language file (Settings), and Words to translate writes every word for translators.
 
 ### Changed
+- Terrain editor: the Shore line follows the zoom you see - drawn from 300 % on any map, either game (was a fixed closeness, much later on a big map); Settings > Campaign map changes the zoom.
 - A new faction is a clean clone: its colours, units, buildings, models and cards - none of the template's trait / ancillary triggers (the tick for them is gone).
 - With REX or M2EX an army, garrison or fleet may hold 40 units: Medieval II (with M2EX) keeps them with Options > Game Settings > Army Size = 40 units (seen in the game); Rome (with REX) kept 20 in a game test so far. Check mod files says which stacks are over 20.
 - New mod folder puts no switched-off engine settings files (descr_ex, descr_caps_ex) in: the mod runs on the engine's defaults as before; the editor writes the line a change needs, Check mod files' Copy them in brings the whole list.

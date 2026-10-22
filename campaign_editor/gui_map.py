@@ -15,8 +15,10 @@ SIDE_WIDTH = 260       # the side column beside the map: its switches, zoom and 
 FORT_W = 0.45          # a fort's / watchtower's half size, of a tile: the sign stays inside its tile
 ZOOMS = (1, 1.5, 2, 3, 4, 6, 8, 12, 16, 24, 32, 48, 64)       # screen pixels per tile
 # the map's zoom settings (Tools > Settings > Campaign map): the wheel's step and Ctrl + wheel's in per cent of the
-# shown zoom, and the zoom from which armies, agents, fleets and ports are drawn (towns always)
-ZOOM_SETTINGS = {"map_zoom_step": 50, "map_zoom_step_fine": 10, "map_signs_from": 300}
+# shown zoom, the zoom from which armies, agents, fleets and ports are drawn (towns always) and the one from which
+# the Terrain editor draws the shore line (MapView._shore_lines)
+ZOOM_SETTINGS = {"map_zoom_step": 50, "map_zoom_step_fine": 10, "map_signs_from": 300,
+                 "map_shore_from": 300}
 
 
 def zoom_setting(key):
@@ -29,9 +31,6 @@ def zoom_setting(key):
 MODES = (("political", "Political (the owners)"), ("religion", "Religion (Medieval II)"),
          ("none", "None (the ground only)"))
 
-
-
-SHORE_ZOOM = 8                  # pixels a tile from which the Terrain editor draws the shore as the game does
 
 
 def hover_name(ch):
@@ -828,8 +827,9 @@ class MapView(ttk.Frame):
         - a brush's tick (shore_dirty) works out only its blocks again, while the brush is held too (the user,
         2026-10-21: thousands of canvas lines made the coast and climate brushes lag on a big map - valp, Discord:
         'turning off shore lines helps'; 'he sees nothing while he drags?')."""
-        if self.shore is None or self.z < SHORE_ZOOM:
-            return []
+        if self.shore is None or self.pct() < zoom_setting("map_shore_from") - 1e-6:
+            return []                                   # far out: no shore line (the settings' zoom, the user, 2026-10-22:
+                                                        # 'tie the shore line to the zoom, e.g. 300 %')
         img, metres = self.shore
         if img is None:
             return []
