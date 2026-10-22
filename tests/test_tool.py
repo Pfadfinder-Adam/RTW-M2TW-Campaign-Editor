@@ -3398,6 +3398,72 @@ building smith
                                                                           if "CampaignEditor" not in k})
         self.assertEqual([k for k in after if k not in before], [])
 
+    def test_map_from_zero_with_more_regions_and_factions(self):
+        """Map from zero's next step: n regions, the main faction's and other factions' capitals, the rest the rebels'
+        towns; each region a block of land with its town in its middle (all 8 tiles round a town its own - Medieval
+        II stops on a town touching another region), the port on the main region's coast; a map too small grows."""
+        try:
+            import PIL  # noqa: F401
+        except ImportError:
+            self.skipTest("no Pillow")
+        from campaign_editor import mapzero as MZ
+        from campaign_editor.strat import Strat
+        from campaign_editor.tga import read_tga
+        mod = ModData(self.root)
+        n = min(3, len(mod.regions("test")))
+        plan = Plan(mod, "z", "alpha", {})
+        MZ.make(plan, "test", "alpha", (20, 16), n, 1)                 # too small: it grows
+        plan.apply()
+        mod = ModData(self.root)
+        camp = mod.campaign_dir("test")
+        regions = mod.regions("test")
+        self.assertEqual(len(regions), n)
+        im = read_tga(os.path.join(camp, "map_regions.tga"))
+        lay = MZ.layout(im.width, im.height, n)
+        for c in lay["cells"]:
+            tx, ty = c["town"]
+            self.assertEqual(tuple(im.get(tx, ty)[:3]), (0, 0, 0))
+            round_ = {tuple(im.get(tx + dx, ty + dy)[:3]) for dx in (-1, 0, 1) for dy in (-1, 0, 1)
+                      if (dx, dy) != (0, 0) and (tx + dx, ty + dy) != lay["port"]}
+            self.assertEqual(len(round_), 1)
+        st = Strat(mod.load(os.path.join(camp, "descr_strat.txt")))
+        names = [fb.name for fb in st.factions]
+        self.assertEqual(names[0], "alpha")
+        self.assertIn("slave", names)
+        self.assertEqual(sum(len(fb.settlements) for fb in st.factions), n)
+        self.assertEqual({s.region for fb in st.factions for s in fb.settlements}, set(regions))
+
+    def test_map_from_zero_leaves_port_buildings_where_no_port_is(self):
+        """The tester, 2026-10-22 (6 regions): Etruria's and Apulia's towns kept 'type port_buildings port' on the new
+        map where only the main region has a port - 'Settlement specifies port, but this region is not allowed a
+        port'. A town of a region without a port loses its port buildings, the rest stays."""
+        from campaign_editor import mapzero as MZ
+        block = ["settlement", "{", "\tlevel town", "\tregion Etruria", "\tbuilding", "\t{", "\t\ttype core_building wooden_pallisade",
+                 "\t}", "\tbuilding", "\t{", "\t\ttype port_buildings port", "\t}", "\tbuilding", "\t{",
+                 "\t\ttype castle_port c_port", "\t}", "}"]
+        out = MZ._drop_port_buildings(block)
+        self.assertNotIn("\t\ttype port_buildings port", out)
+        self.assertNotIn("\t\ttype castle_port c_port", out)
+        self.assertIn("\t\ttype core_building wooden_pallisade", out)
+        self.assertEqual(out.count("\tbuilding"), 1)
+        self.assertEqual(out[-1], "}")
+
+    def test_exe_self_check_names_a_module_left_out_of_the_build(self):
+        """The tester, 2026-10-22: Tools > A mod from zero said 'No module named campaign_editor.gui_modzero' in the
+        exe while the self-check passed (it only tries the modules the exe has). The build writes the source's module
+        list into the exe; the self-check names every one the exe lacks."""
+        from unittest import mock
+        from campaign_editor import selfcheck as SC
+        with tempfile.TemporaryDirectory() as d:
+            with open(os.path.join(d, "modules.txt"), "w", encoding="utf-8") as fh:
+                fh.write("__main__\ncheck\ngui_nothere\n")
+            with mock.patch.object(SC.sys, "_MEIPASS", d, create=True):
+                self.assertEqual(SC.built_list(), ["check", "gui_nothere"])
+                bad = []
+                SC._modules(lambda *a: None, lambda what, why: bad.append((what, str(why))), False)
+        self.assertIn(("module gui_nothere", "not in the exe"), bad)
+        self.assertEqual(SC.built_list(), [])
+
     def test_campaign_hud_laid_out_as_the_engine(self):
         """Interface > Campaign HUD (the engines' places, hudlayout): the HUD's bottom at 768, its top 768 - the LEFT
         panel's height, the MIDDLE panel on the bottom, the pieces from the mod's own sheet; a changed page shows."""

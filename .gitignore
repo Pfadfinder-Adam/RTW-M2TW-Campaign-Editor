@@ -48,3 +48,4 @@ CE_Test*.zip
 # the report relay's local files when it is deployed (worker/ itself stays: SECURITY.md points to its code)
 .wrangler/
 node_modules/
+modules.txt

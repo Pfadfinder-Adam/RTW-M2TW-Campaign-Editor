@@ -40,6 +40,17 @@ def run(window=True):
     return not bad, lines
 
 
+def built_list():
+    """The modules the source had when the exe was built (modules.txt, written by the build next to the exe's own
+    files); [] outside the exe or when the build wrote none."""
+    base = getattr(sys, "_MEIPASS", None)
+    try:
+        with open(os.path.join(base, "modules.txt"), encoding="utf-8") as fh:
+            return [n.strip() for n in fh if n.strip() and n.strip() != "__main__"]
+    except (OSError, TypeError):
+        return []
+
+
 def _modules(ok, fail, window):
     import importlib
     import pkgutil
@@ -47,6 +58,8 @@ def _modules(ok, fail, window):
     names = sorted(m.name for m in pkgutil.iter_modules(campaign_editor.__path__) if m.name != "__main__")
     if len(names) < MIN_MODULES:
         fail("the editor's modules", "only %d found" % len(names))
+    for n in sorted(set(built_list()) - set(names)):       # in the source when it was built, not in the exe (the
+        fail("module %s" % n, "not in the exe")             # tester, 2026-10-22: 'No module named gui_modzero')
     done, lacking = 0, []
     for n in names:
         if not window and (n.startswith("gui") or n in WINDOW_ONLY):
