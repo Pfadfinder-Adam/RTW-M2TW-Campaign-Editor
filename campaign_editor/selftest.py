@@ -2901,6 +2901,10 @@ COVERAGE = {
     "Settlement names by culture": ["s_culture_names"],
     "Terrain editor: ground and heights": ["s_terrain"],
     "Terrain editor: features and climates": ["s_features"],
+    "Terrain editor: climates on the water, new land takes its neighbours' climate":
+        "unit test test_land_climate_and_sea_climates_view - a view and the Land and sea brush's own choice; "
+        "s_features writes map_climates.tga the same way",
+    "Climate library": "unit test test_climate_passport - it only reads (nothing written)",
     "Land and sea": ["s_coast"],
     "Land and sea: the ground put right under the heights": ["s_ground_coast"],
     "Land and sea: the shape brush and Smooth the coast (the coast as a shape)": ["s_coast_shape"],
