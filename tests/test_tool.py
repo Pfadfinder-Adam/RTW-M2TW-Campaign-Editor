@@ -11218,7 +11218,7 @@ building smith
         # the Terrain editor paints the square of tiles under the mouse with the pick made here, the card takes
         # those points (and a tile round them: the shore) at once; the same tile again paints nothing more
         from campaign_editor.gui_map3d import PAINTS, SWATCHED
-        self.assertEqual([k for k, _ in PAINTS], ["heights", "ground", "features", "climate", "land", "sea"])
+        self.assertEqual([k for k, _ in PAINTS], ["heights", "ground", "features", "climate", "regions", "land", "sea"])
         calls, sent = [], []
         ed = SimpleNamespace(v_brush=SimpleNamespace(get=lambda: 2),
                              paint=lambda tiles, what, colour: calls.append((what, colour, sorted(tiles))) or
@@ -11238,6 +11238,22 @@ building smith
         me.v_paint, me._last_tile = SimpleNamespace(get=lambda: "land"), None
         Map3DView._tiles_tick(me)
         self.assertEqual(calls[-1][:2], ("land", None))                 # the Land and sea brush, by tile
+        # Regions: the Map's Edit regions brush (kept for Apply in region_paint), the colours over the map follow
+        me.v_paint, me._last_tile = SimpleNamespace(get=lambda: "regions"), None
+        me._regions = lambda tiles: calls.append(("regions", None, sorted(tiles))) or [(tiles[0], (1, 2, 3))]
+        me._send_tint = lambda draw=True: calls.append("tint")
+        Map3DView._tiles_tick(me)
+        self.assertEqual(calls[-2:], [("regions", None, [(x, y) for x in (2, 3, 4) for y in (3, 4, 5)]), "tint"])
+        # Alt + click: the brush picks the tile's own
+        picked = []
+        me = SimpleNamespace(canvas=SimpleNamespace(focus_set=lambda: None), _on=lambda: True,
+                             _tile=lambda x, y: (4, 5), v_brush_on=SimpleNamespace(get=lambda: True),
+                             v_paint=SimpleNamespace(get=lambda: "ground"),
+                             v_pick={k: SimpleNamespace(set=picked.append) for k in SWATCHED},
+                             _terrain=lambda: SimpleNamespace(_current=lambda what, t: (0, 128, 128)),
+                             lbl=SimpleNamespace(configure=lambda **k: None))
+        Map3DView._eyedrop(me, SimpleNamespace(x=1, y=1))
+        self.assertEqual(picked, ["0,128,128"])
         # the colours over the map (Layers): what the brushes left, sent to the card - none takes them off
         tints = []
         me = SimpleNamespace(gl=SimpleNamespace(set_tint=tints.append, data=SimpleNamespace(

@@ -50,7 +50,7 @@ TINT_TIPS = {"climates": "Each tile in its climate's colour (map_climates.tga, d
 
 # what Paint paints on the 3D map: the heights (by point), or one of the Terrain editor's tile brushes
 PAINTS = (("heights", "Heights"), ("ground", "Ground"), ("features", "Rivers, cliffs, volcanoes..."),
-          ("climate", "Climates"), ("land", "Land (tiles)"), ("sea", "Sea (tiles)"))
+          ("climate", "Climates"), ("regions", "Regions"), ("land", "Land (tiles)"), ("sea", "Sea (tiles)"))
 SWATCHED = ("ground", "features", "climate")       # these paint a colour picked from the Terrain editor's palette
 
 
@@ -155,6 +155,7 @@ class Map3DView(ttk.Frame):
         c.bind("<ButtonRelease-2>", self._release)
         c.bind("<Motion>", self._hover)
         c.bind("<ButtonPress-1>", self._paint_start)
+        c.bind("<Alt-ButtonPress-1>", self._eyedrop)
         c.bind("<B1-Motion>", self._drag_paint)
         c.bind("<ButtonRelease-1>", self._paint_end)
         c.bind("<Leave>", lambda e: self._hover(None))
@@ -233,7 +234,8 @@ class Map3DView(ttk.Frame):
             work = (len(getattr(ed, "_undo", ())), len(getattr(ed, "_redo", ())),
                     tuple(len(getattr(ed, k, ())) for k in ("heights", "ground", "features", "climate", "coast")),
                     tuple(len(v) for v in (getattr(ed, "cpx", {}) or {}).values()), id(getattr(ed, "mod", None)))
-        return (getattr(mod, "data", None), self.app.v_campaign.get(), work, self.v_winter.get())
+        painted = tuple(sorted((getattr(self.app, "region_paint", None) or {}).items()))     # Edit regions'
+        return (getattr(mod, "data", None), self.app.v_campaign.get(), work, self.v_winter.get(), hash(painted))
 
     def _strat(self):
         """(descr_strat as Apply will leave it - the Map's armies, agents, fleets, towns and resources added, moved
@@ -522,8 +524,9 @@ class Map3DView(ttk.Frame):
         body = ttk.Frame(f)
 
         def picked():
-            if self.v_paint.get() == "climate" and self.v_tint.get() == "none":
-                self.v_tint.set("climates")              # the climates painted are seen (the sea's too)
+            tint = {"climate": "climates", "regions": "regions"}.get(self.v_paint.get())
+            if tint and self.v_tint.get() != tint:
+                self.v_tint.set(tint)                    # what is painted is seen (the climates on the sea too)
                 self._send_tint()
             for w in body.winfo_children():
                 w.destroy()
@@ -540,7 +543,18 @@ class Map3DView(ttk.Frame):
         own list), the land brush's region and climate."""
         what = self.v_paint.get()
         if what != "heights":
-            if what in SWATCHED:
+            if what == "regions":
+                self._map_lists()                        # the Map's regions read (its Edit regions brush)
+                app = self.app
+                _, _, cols = app.region_brush()
+                from .regionedit import SEA
+                new = [r["name"] + "  (new)" for r in getattr(app, "new_regions", [])]
+                ttk.Label(f, text="paint with (Alt + click on the map picks a tile's region):").pack(anchor="w")
+                ttk.Combobox(f, textvariable=app.v_paint, state="readonly", width=30,
+                             values=new + sorted(c for c in cols if c != SEA) + [SEA]).pack(anchor="w")
+                ttk.Label(f, text="the Map's Edit regions brush: towns and ports keep their tiles; Apply writes it",
+                          foreground=theme.palette()["muted"]).pack(anchor="w")
+            elif what in SWATCHED:
                 var = self.v_pick[what]
                 values = []
                 for label, colours in ed.swatches(what):
@@ -965,6 +979,9 @@ class Map3DView(ttk.Frame):
         self._coast_was = self._coast_now(ed)
         if self.v_paint.get() != "heights":              # a tile brush: the tiles under it now, then as it moves
             self._last_tile = None
+            if self.v_paint.get() == "regions":          # the Map's Edit regions brush, made once a stroke
+                self._map_lists()
+                self._regions = self.app.region_brush()[0] if getattr(self.app, "_cmap", None) is not None else None
             self._tiles_tick()
             return
         if self.v_how.get() == "grab":                   # the game's: the land under the circle held, then moved
@@ -1050,11 +1067,12 @@ class Map3DView(ttk.Frame):
         self._laying, got = True, {}
         ground, self._ground_stale = getattr(self, "_ground_stale", False), False
         mod, camp = self._source(), self.app.v_campaign.get()
+        painted = dict(getattr(self.app, "region_paint", None) or {})
 
         def work():
             try:
                 if ground:
-                    got["layers"] = gl.data.refresh_ground(mod, camp)
+                    got["layers"] = gl.data.refresh_ground(mod, camp, painted)
                 gl.data.place_models()
             except Exception as e:                       # said in the bar, never a crash
                 got["error"] = str(e)
@@ -1093,6 +1111,25 @@ class Map3DView(ttk.Frame):
             self.draw(half=True)
         self.after(50, self._puff)
 
+    def _eyedrop(self, e):
+        """Alt + click: the brush picks the tile's own - its region (Regions), ground, mark or climate."""
+        self.canvas.focus_set()
+        what = self.v_paint.get()
+        t = self._tile(e.x, e.y) if self._on() else None
+        if t is None or not self.v_brush_on.get():
+            return
+        if what == "regions":
+            self._map_lists()
+            if getattr(self.app, "_cmap", None) is not None:
+                self.app.region_brush()[1](t)
+                self.lbl.configure(text="painting with %s" % self.app.v_paint.get())
+        elif what in SWATCHED:
+            ed = self._terrain()
+            c = ed._current(what, t) if ed is not None else None
+            if c is not None:
+                self.v_pick[what].set("%d,%d,%d" % tuple(c[:3]))
+                self.lbl.configure(text="picked %d,%d,%d" % tuple(c[:3]))
+
     @staticmethod
     def _tiles_brush(ed):
         """The tile brush's size: 1 one tile, n a square of 2n - 1 tiles across (as on the 2D map)."""
@@ -1116,6 +1153,13 @@ class Map3DView(ttk.Frame):
         b = self._tiles_brush(ed) - 1
         tiles = [(t[0] + dx, t[1] + dy) for dx in range(-b, b + 1) for dy in range(-b, b + 1)]
         what = self.v_paint.get()
+        if what == "regions":
+            paint = getattr(self, "_regions", None)
+            took = paint(tiles) if paint is not None else []
+            if took:
+                self._send_tint(draw=False)
+                self.draw(half=True)
+            return
         if what in ("land", "sea"):
             took = ed.paint_coast(tiles, mode=what)
         else:
@@ -1183,7 +1227,13 @@ class Map3DView(ttk.Frame):
                 rgba = self.gl.data.tint_of(kind, climate=T3._picture(mod, camp, "map_climates.tga"))
             elif kind == "regions":
                 img = mod.region_map(camp)
-                regions = np.frombuffer(bytes(img.raw), np.uint8).reshape(img.height, img.width, 3)[::-1]
+                regions = np.frombuffer(bytes(img.raw), np.uint8).reshape(img.height, img.width, 3)[::-1].copy()
+                painted = getattr(self.app, "region_paint", None) or {}
+                if painted:                              # the Map's Edit regions, not written yet: as Apply leaves it
+                    cols = self.app._region_colours()
+                    for (x, y), name in painted.items():
+                        if name in cols and 0 <= y < img.height and 0 <= x < img.width:
+                            regions[img.height - 1 - y, x] = cols[name]
                 rgba = self.gl.data.tint_of(kind, regions=regions)
         except Exception as e:                           # said in the bar, the map still drawn
             self.lbl.configure(text="the colours over the map cannot be shown: %s" % e)
