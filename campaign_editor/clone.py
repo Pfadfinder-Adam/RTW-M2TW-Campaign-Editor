@@ -35,19 +35,26 @@ def _replace_word(text, old, new):
     return re.sub(r"(?<![A-Za-z0-9_])%s(?![A-Za-z0-9_])" % re.escape(old), new, text)
 
 
-def swap_names(text, repl):
+def swap_names(text, repl, adjective=None):
     """The template's names in a copied text put to the new faction's, all in ONE pass, the longest first, each only
-    at the start of a word (a plural or '-ish' after it rides along): a new name that holds the template's word is
-    never swapped again (the tester, 2026-10-22: 'CE Gaul Clone' became 'CE CEGC Clone', 'Gaulish' 'CE CE CEGC
-    Cloneish'; earlier 'CE32ian tribes')."""
+    at the start of a word (a plural after it rides along): a new name that holds the template's word is never
+    swapped again (the tester, 2026-10-22: 'CE Gaul Clone' became 'CE CEGC Clone', 'Gaulish' 'CE CE CEGC Cloneish';
+    earlier 'CE32ian tribes'). A word grown from the name ('Gaulish' of 'Gaul', 'Milanese') becomes the new
+    adjective when one is given ('the Gaulish Warlord' was 'the CE Gaul Cloneish Warlord')."""
     olds = [o for o, _ in sorted(repl, key=lambda p: -len(p[0])) if o]
     if not olds:
         return text
     to = {}
     for o, n in repl:
         to.setdefault(o, n)
-    rx = re.compile(r"(?<![A-Za-z0-9_])(%s)" % "|".join(re.escape(o) for o in olds))
-    return rx.sub(lambda m: to[m.group(1)], text)
+    rx = re.compile(r"(?<![A-Za-z0-9_])(%s)([A-Za-z]*)" % "|".join(re.escape(o) for o in olds))
+
+    def put(m):
+        old, tail = m.group(1), m.group(2)
+        if tail and tail.lower() not in ("s", "es") and adjective:
+            return adjective.upper() if old.isupper() and len(old) > 1 else adjective
+        return to[old] + tail
+    return rx.sub(put, text)
 
 
 # ---------------------------------------------------------------------------
@@ -489,6 +496,8 @@ def text_strings(plan):
                                   m2_titles)
             if key.upper() == t and plan.opts.get("display_name"):
                 value, more = gap + plan.opts["display_name"], []
+            elif key.upper() == "ST_" + t and plan.opts.get("short_name"):
+                value, more = gap + plan.opts["short_name"], []       # not the full name ({ST_GAULS} and {GAULS} both 'Gaul')
             elif key.upper() == t + "_DESCR" and plan.opts.get("description"):
                 value, more = gap + plan.opts["description"].replace("\n", "\\n"), []
             elif title is not None:                 # the leader's / heir's title asked on the New faction tab
@@ -498,8 +507,8 @@ def text_strings(plan):
                 value, more = gap + plan.opts["long_description"].replace("\n", "\\n"), []
                 long_keys.append(new_key)
             else:
-                value = swap_names(value, repl)
-                more = [swap_names(l, repl) for l in more]
+                value = swap_names(value, repl, plan.opts.get("adjective"))
+                more = [swap_names(l, repl, plan.opts.get("adjective")) for l in more]
             # the copy goes after the template's whole entry, never inside it
             f.insert(end, [m.group(1) + new_key + "}" + value] + more)
             keys.add(new_key.upper())
