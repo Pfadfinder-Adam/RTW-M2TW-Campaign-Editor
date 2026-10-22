@@ -1006,6 +1006,45 @@ def s_units(c, mod):
     return plan
 
 
+@step("Unit texts players read: CE Test Guard's name, short and long description changed",
+      "CE Test Guard is called 'CE Test Guard II' on its card and in the lists; its description window says "
+      "'Texts changed by the test mod'")
+def s_unit_texts(c, mod):
+    from . import editors as E
+    path = mod.text_file("export_units.txt")
+    if not path:
+        raise Skip("no export_units.txt")
+    plan = Plan(mod, "unit texts", "ce_test_guard", {})
+    E.set_text_values(plan, path, {"ce_test_guard": "CE Test Guard II",          # the Units editor's own writer
+                                   "ce_test_guard_descr_short": "Texts changed",
+                                   "ce_test_guard_descr": "Texts changed by the test mod"})
+    return plan
+
+
+@step("Delete unit, its first half: 'CE Test Gone' copied for {edited}, to be taken out by the next step",
+      "nothing to look at (the next step takes it out)")
+def s_unit_gone_made(c, mod):
+    from . import editors as E
+    src = unit_names(mod, c.edited, 1)[0]
+    plan = Plan(mod, "u", "u", {})
+    E.write_new_record(plan, "unit", src, "ce test gone", {
+        "dict": "ce_test_gone", "recruit": True, "owners": [c.edited],
+        "texts": {"name": "CE Test Gone", "descr": "Taken out by the test mod", "descr_short": "Taken out"}})
+    return plan
+
+
+@step("Delete unit: 'CE Test Gone' taken out with its recruit lines and cards",
+      "CE Test Gone is in no recruitment list and not in custom battle; the game loads with no error about it")
+def s_unit_delete(c, mod):
+    from . import editors as E
+    plan = Plan(mod, "unit", "ce test gone", {})
+    try:
+        E.delete_unit(plan, "ce test gone")
+    except ValueError:
+        raise Skip("CE Test Gone was not made (the step before)")
+    return plan
+
+
 @step("New building step by step: a chain copied as ce_test_hall", "the new building in the construction list")
 def s_buildings(c, mod):
     from . import editors as E
@@ -2878,6 +2917,8 @@ COVERAGE = {
     "Campaign-map figures": ["s_figures"],
     "Unit editor: lines": ["s_unit_fields"],
     "Unit editor: new unit step by step": ["s_units"],
+    "Unit editor: delete a unit": ["s_unit_gone_made", "s_unit_delete"],
+    "Unit editor: texts players read": ["s_unit_texts"],
     "Unit editor: replace the battle model": ["s_model"],
     "Unit editor: your own files for a battle model (texture, model file)": ["s_own_model"],
     "Unit editor: a new unit made from nothing": ["s_unit_nothing"],
