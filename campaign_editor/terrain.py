@@ -16,21 +16,23 @@ from collections import Counter
 
 
 # map_ground_types.tga colours (Rome and Medieval II; the impassable ones Medieval II's and the engines', the black one
-# only the engines' - REX / M2EX's ground type impassable_shrouded)
+# only the engines' - REX / M2EX's ground type impassable_shrouded). The games' own table (medieval2.exe, REX.exe,
+# M2EX.exe; the engine source's WORLD_MAP::m_ground_type_colours): low fertility is teal, high fertility olive,
+# sparse forest green - not the other way round (a modder's report 2026-10-22), impassable sea (0, 0, 64)
 GROUND = {
-    (101, 124, 0): "low fertility", (96, 160, 64): "medium fertility", (0, 128, 0): "high fertility",
-    (0, 0, 0): "wilderness", (0, 64, 0): "dense forest", (0, 128, 128): "sparse forest",
+    (0, 128, 128): "low fertility", (96, 160, 64): "medium fertility", (101, 124, 0): "high fertility",
+    (0, 0, 0): "wilderness", (0, 64, 0): "dense forest", (0, 128, 0): "sparse forest",
     (128, 128, 64): "hills", (98, 65, 65): "mountains", (196, 128, 128): "high mountains",
     (0, 255, 128): "swamp", (255, 255, 255): "beach", (64, 0, 0): "ocean",
     (128, 0, 0): "deep sea", (196, 0, 0): "shallow sea",
-    (64, 64, 64): "impassable land", (128, 128, 128): "impassable sea",
+    (64, 64, 64): "impassable land", (0, 0, 64): "impassable sea",
     (32, 32, 32): "impassable land, always black",
 }
-SEA = {(64, 0, 0), (128, 0, 0), (196, 0, 0), (128, 128, 128)}
+SEA = {(64, 0, 0), (128, 0, 0), (196, 0, 0), (0, 0, 64)}
 # the beach (white) is LAND: both games' own maps lay it on land tiles along the coast (map_regions: M2TW 503 of 503,
 # Rome 580 of 580; touching the sea by a side 482 / 439), every beach point on land heights (measured 2026-10-09) -
 # painted with the land's brushes (it was a sea brush: its sand lay on the water)
-LAND_BRUSHES = [(101, 124, 0), (96, 160, 64), (0, 128, 0), (0, 0, 0), (0, 128, 128), (0, 64, 0), (128, 128, 64),
+LAND_BRUSHES = [(0, 128, 128), (96, 160, 64), (101, 124, 0), (0, 0, 0), (0, 128, 0), (0, 64, 0), (128, 128, 64),
                 (98, 65, 65), (196, 128, 128), (0, 255, 128), (255, 255, 255)]
 SEA_BRUSHES = [(196, 0, 0), (64, 0, 0), (128, 0, 0)]
 
@@ -45,7 +47,7 @@ RIVERY = {(0, 0, 255), (0, 255, 255), (255, 255, 255)}
 VOLCANO, LAND_BRIDGE = (255, 0, 0), (0, 255, 0)
 
 
-IMPASSABLE_LAND, IMPASSABLE_SEA = (64, 64, 64), (128, 128, 128)
+IMPASSABLE_LAND, IMPASSABLE_SEA = (64, 64, 64), (0, 0, 64)
 SHROUDED = (32, 32, 32)          # impassable_shrouded: no army walks there and it is never seen (black) - REX / M2EX
 BEACH = (255, 255, 255)
 
