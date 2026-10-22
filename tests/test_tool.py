@@ -3528,6 +3528,63 @@ building smith
         MZ.go(app, "new")
         self.assertEqual(done, [("work", "new"), ("tab", "New faction")])
 
+    def test_delete_a_unit_and_what_names_it(self):
+        """#375: a unit the modder made taken out again - its block, its recruit lines, its men in the armies, its
+        card when no other unit shows it; Restore puts every byte back."""
+        from campaign_editor import editors as E
+        from campaign_editor.roster import recruit_of
+        mod = ModData(self.root)
+        edu_p, edb_p = mod.file("edu"), mod.file("edb")
+        strat_p = mod.campaign_file("test", "descr_strat.txt")
+        edu = mod.load(edu_p)
+        first = E.unit_blocks(edu)[0]
+        block = [edu.text(k) for k in range(first[1], first[2])]
+        block = ["type             doomed unit" if E.tokens(l)[:1] == ["type"] else
+                 "dictionary       doomed_unit" if E.tokens(l)[:1] == ["dictionary"] else l for l in block]
+        write(edu_p, open(edu_p, encoding="latin-1").read().rstrip("\n") + "\n\n" + "\n".join(block) + "\n")
+        edb_text = open(edb_p, encoding="latin-1").read().split("\n")
+        at = next(k for k, l in enumerate(edb_text) if recruit_of(l))
+        edb_text.insert(at + 1, edb_text[at].replace('"%s"' % recruit_of(edb_text[at])[1], '"doomed unit"'))
+        write(edb_p, "\n".join(edb_text))
+        lines = open(strat_p, encoding="latin-1").read().split("\n")
+        at = next(k for k, l in enumerate(lines) if E._unit_span(l))       # beside another unit: the army keeps one
+        lines.insert(at + 1, "unit\t\tdoomed unit\t\t\texp 0 armour 0 weapon_lvl 0")
+        write(strat_p, "\n".join(lines))
+        card = os.path.join(self.root, "data", "ui", "units", "alpha", "#doomed_unit.tga")
+        os.makedirs(os.path.dirname(card), exist_ok=True)
+        with open(card, "wb") as fh:
+            fh.write(b"card")
+        mod = ModData(self.root)
+        before = {p: open(p, "rb").read() for p in (edu_p, edb_p, strat_p, card)}
+        plan = Plan(mod, "z", "units", {})
+        E.delete_unit(plan, "doomed unit")
+        plan.apply()
+        mod = ModData(self.root)
+        self.assertNotIn("doomed unit", [b[0] for b in E.unit_blocks(mod.load(edu_p))])
+        self.assertNotIn("doomed unit", open(edb_p, encoding="latin-1").read())
+        self.assertNotIn("doomed unit", open(strat_p, encoding="latin-1").read())
+        self.assertFalse(os.path.exists(card))
+        with self.assertRaises(ValueError):
+            E.delete_unit(Plan(mod, "z", "units", {}), "doomed unit")
+        restore(ModData(self.root), backups(ModData(self.root))[0])
+        for p, data in before.items():
+            self.assertEqual(open(p, "rb").read(), data)
+
+    def test_unit_texts_changed_in_the_unit_editor(self):
+        """#375: a unit's name and descriptions players read are changed in the Units editor and written to
+        export_units.txt on Apply (as the buildings' texts are)."""
+        try:
+            from campaign_editor import gui_editors as GE
+        except Exception as e:
+            self.skipTest("no tkinter: %s" % e)
+        import types
+        from campaign_editor import editors as E
+        mod = ModData(self.root)
+        me = types.SimpleNamespace(mod=mod, kind="unit", text_edits={}, app=types.SimpleNamespace())
+        GE.RecordEditor._text_edited(me, "some_unit", "A Brand New Name")
+        self.assertEqual(me.text_edits, {"some_unit": "A Brand New Name"})
+        self.assertEqual([p for p, _ in E.UNIT_TEXT_PARTS], ["", "_descr_short", "_descr"])
+
     def test_campaign_hud_laid_out_as_the_engine(self):
         """Interface > Campaign HUD (the engines' places, hudlayout): the HUD's bottom at 768, its top 768 - the LEFT
         panel's height, the MIDDLE panel on the bottom, the pieces from the mod's own sheet; a changed page shows."""

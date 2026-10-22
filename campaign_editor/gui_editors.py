@@ -45,6 +45,7 @@ class RecordEditor(ttk.Frame):
         self.adds, self.removes = [], set()
         self.current = None
         self.text_edits = {}                 # {key in export_buildings / export_units: new text}, written on Apply
+        self.deletes = []                    # units taken out on Apply (#375), with what names them
         # the list and the record side by side; the line between them is dragged to make the list wider (kept)
         pane = self.pane = ttk.Panedwindow(self, orient="horizontal")
         pane.pack(fill="both", expand=True)
@@ -109,6 +110,8 @@ class RecordEditor(ttk.Frame):
                    command=self.where_window).pack(side="left", padx=(0, 6))
         ttk.Button(tools, text="New %s step by step..." % ("unit" if kind == "unit" else "building"),
                    command=self.copy_dialog).pack(side="left", padx=6)
+        if kind == "unit":                   # its opposite beside it (#375)
+            ttk.Button(tools, text="Delete this unit...", command=self.delete_dialog).pack(side="left", padx=(0, 6))
         ttk.Button(tools, text="Undo all changes here", command=self.reset).pack(side="left")
         flow(tools)
         self.copy_ops = []                   # [(source, new name, details)] written on Apply
@@ -453,7 +456,7 @@ class RecordEditor(ttk.Frame):
         self.mod = mod
         self.work = None
         self.changes, self.imports, self.current, self.copy_ops = {}, [], None, []
-        self.adds, self.removes, self.text_edits = [], set(), {}
+        self.adds, self.removes, self.text_edits, self.deletes = [], set(), {}, []
         self._recruits = self._required = self._limits = None      # read from the file when first asked
         p = self.path()
         self._sig = self._signature()
@@ -753,7 +756,7 @@ class RecordEditor(ttk.Frame):
             f = self._src()
             self.blocks = E.unit_blocks(f) if self.kind == "unit" else E.building_blocks(f)
         self.changes, self.imports, self.copy_ops, self.text_edits = {}, [], [], {}
-        self.adds, self.removes = [], set()
+        self.adds, self.removes, self.deletes = [], set(), []
         self.fill_list()
         self.show()
         self.app.status.set("Nothing changed in the %s editor." % self.kind)
@@ -1124,6 +1127,34 @@ class RecordEditor(ttk.Frame):
         self._unit_models(row)
         self._unit_voice(row)
         flow(row, top=True)
+        self._unit_texts(dic)
+
+    def _unit_texts(self, dic):
+        """The unit's name and descriptions players read ({dic}, {dic_descr_short}, {dic_descr} of export_units.txt,
+        #375): shown and changed here, written on Apply with a backup. Every unit with this dictionary shows them."""
+        from .gui_newrecord import _text_value
+        box = ttk.LabelFrame(self.pics, text="Texts players read", padding=6)
+        box.pack(fill="x", pady=(8, 0))
+        hint(box, "What the game shows for this unit: its name on the card and in the lists, the short text on the "
+                  "card's hover, the long one in its description window - from export_units.txt ({%s}, {%s_descr_short},"
+                  " {%s_descr}); every unit with the dictionary %s shows them. Written on Apply (with a backup)."
+             % (dic, dic, dic, dic), width=420).grid(row=0, column=1, sticky="w")
+        for r, (part, label) in enumerate(E.UNIT_TEXT_PARTS, start=1):
+            key = dic + part
+            now = self.text_edits.get(key)
+            if now is None:
+                now = _text_value(self.mod, "export_units.txt", key)
+            ttk.Label(box, text=label.capitalize()).grid(row=r, column=0, sticky="nw", padx=(0, 6), pady=2)
+            if part == "_descr":
+                w = tk.Text(box, height=4, width=60, wrap="word", font="TkDefaultFont")
+                w.insert("1.0", now)
+                w.bind("<KeyRelease>", lambda ev, k=key, w=w: self._text_edited(k, w.get("1.0", "end-1c")))
+            else:
+                v = tk.StringVar(value=now)
+                w = ttk.Entry(box, textvariable=v, width=60)
+                w.bind("<KeyRelease>", lambda ev, k=key, v=v: self._text_edited(k, v.get()))
+            w.grid(row=r, column=1, sticky="we", pady=2)
+        box.columnconfigure(1, weight=1)
 
     # ---- battle models ----
     def _model_catalogue(self, mod=None):
@@ -2069,7 +2100,8 @@ class RecordEditor(ttk.Frame):
 
     def _text_edited(self, key, text):
         from .gui_newrecord import _text_value
-        if text == _text_value(self.mod, "export_buildings.txt", key):
+        if text == _text_value(self.mod, "export_buildings.txt" if self.kind == "building" else "export_units.txt",
+                               key):
             self.text_edits.pop(key, None)
         else:
             self.text_edits[key] = text
@@ -2127,7 +2159,7 @@ class RecordEditor(ttk.Frame):
     # ---- writing ----
     def dirty(self):
         return bool(self.changes or self.imports or self.copy_ops or self.adds or self.removes or self.text_edits or
-                    self._typed())
+                    getattr(self, "deletes", None) or self._typed())
 
     # ---- unit packs ----
     def bring_dialog(self):
@@ -2395,6 +2427,26 @@ class RecordEditor(ttk.Frame):
             elif self.kind == "building" and key == ["building"] and new != old:
                 E.rename_chain(plan, old, new)
 
+    def delete_dialog(self):
+        """Delete this unit... (#375): the unit on show taken out on Apply, with everything that names it."""
+        if not self.mod or not self.current:
+            messagebox.showerror("Delete", "pick a unit first", parent=self)
+            return
+        name = self.current[0]
+        if name in self.deletes:
+            return
+        if not messagebox.askyesno("Delete this unit", (
+                "Take %s out of the mod on Apply changes?\n\nIts block, its recruit lines, its men in every "
+                "campaign's armies and garrisons, the mercenary pools and the rebels' lists go with it, and its "
+                "cards when no other unit shows them. A backup is made first - Restore puts it all back.\n\n"
+                "An army whose only unit it is would be left empty: Apply then says so and writes nothing - give "
+                "that army another unit first." % name), parent=self):
+            return
+        self.deletes.append(name)
+        self.app.status.set("%s will be taken out on Apply changes (Undo all changes here keeps it)." % name)
+        self.app._mark_work() if hasattr(self.app, "_mark_work") else None
+        self.app.update_actions() if hasattr(self.app, "update_actions") else None
+
     def copy_dialog(self):
         """A new unit (building chain) step by step, starting from the one on show (gui_newrecord)."""
         if not self.mod:
@@ -2456,4 +2508,6 @@ class RecordEditor(ttk.Frame):
                                                   "export_units.txt"), dict(self.text_edits))
         for src, new, d in self.copy_ops:                 # after the field changes: copies add lines
             E.write_new_record(plan, self.kind, src, new, d)
+        for name in getattr(self, "deletes", []):        # last: what the other changes did to it goes with it
+            E.delete_unit(plan, name)
         return plan
