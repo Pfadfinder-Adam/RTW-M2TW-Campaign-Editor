@@ -147,6 +147,22 @@ def _image_size(mod, rel):
     return None
 
 
+def _coast_hidden(feats):
+    """Where the game draws no coast strip: rivers (sources, fords) and cliffs on map_features ((h, w, 3) or None)."""
+    if feats is None:
+        return None
+    code = (feats[..., 0].astype(np.int32) << 16) | (feats[..., 1].astype(np.int32) << 8) | feats[..., 2]
+    return np.isin(code, [(r << 16) | (g << 8) | b for r, g, b in T.RIVERY | {(255, 255, 0)}])
+
+
+def _rivers(feats, H, W):
+    """(H, W) bool, rows bottom first: the river tiles of map_features (roads and borders bend round them)."""
+    if feats is None or feats.shape[:2] != (H, W):
+        return np.zeros((H, W), bool)
+    f = feats[::-1].astype(np.int32)
+    return np.isin((f[..., 0] << 16) | (f[..., 1] << 8) | f[..., 2], (0x0000ff, 0xffffff, 0x00ffff))
+
+
 class MapData:
     """What the card needs of a campaign map, as arrays (the slow part, no OpenGL - made once, also in a thread):
     heights (metres, top row first), the ground picture of each point (an index into pictures), the pictures, the
@@ -173,12 +189,7 @@ class MapData:
         self._tile_models(mod, campaign, winter)
         self._trees(mod, campaign, winter)
         self._objects(mod, campaign, strat, moved=moved)
-        feats = T3._picture(mod, campaign, "map_features.tga")
-        self.coast_hidden = None                    # rivers (sources, fords) and cliffs: the game draws no strip there
-        if feats is not None:
-            from .terrain import RIVERY
-            code = (feats[..., 0].astype(np.int32) << 16) | (feats[..., 1].astype(np.int32) << 8) | feats[..., 2]
-            self.coast_hidden = np.isin(code, [(r << 16) | (g << 8) | b for r, g, b in RIVERY | {(255, 255, 0)}])
+        self.coast_hidden = _coast_hidden(T3._picture(mod, campaign, "map_features.tga"))
 
     def _ground(self, mod, campaign, winter):
         """(layer of each point (rows, cols) uint16, [pictures (LAYER, LAYER, 3)], [repeats a tile per layer])."""
@@ -246,8 +257,10 @@ class MapData:
         from . import tilemodels as TM
         ground = T3._picture(mod, campaign, "map_ground_types.tga")
         climate = T3._picture(mod, campaign, "map_climates.tga")
+        feats = T3._picture(mod, campaign, "map_features.tga")
         if getattr(self, "_model_src", None):
-            self._model_src = (ground,) + tuple(self._model_src[1:])
+            self._model_src = (ground, feats) + tuple(self._model_src[2:])
+        self.coast_hidden = _coast_hidden(feats)
         if getattr(self, "_tree_src", None):
             H, W = (self.rows - 1) // 2, (self.cols - 1) // 2
             names = [n for n, _ in self._tree_src[2]]
@@ -260,6 +273,7 @@ class MapData:
             H, W = src["grid"].shape
             src["mountains"] = TM.tile_types(ground)[TM.MOUNTAINS_HIGH] if ground is not None and \
                 ground.shape[:2] == self.heights.shape else np.zeros((H, W), bool)
+            src["feats"], src["rivers"] = feats, _rivers(feats, H, W)
         return self.layers_of(ground, climate, self.heights <= 0)
 
     def _tile_models(self, mod, campaign, winter):
@@ -443,10 +457,7 @@ class MapData:
             H, W = grid.shape
             mh = TM.tile_types(ground)[TM.MOUNTAINS_HIGH] if ground is not None and \
                 ground.shape[:2] == self.heights.shape else np.zeros((H, W), bool)
-            rivers = np.zeros((H, W), bool)
-            if feats is not None and feats.shape[:2] == (H, W):
-                f = feats[::-1].astype(np.int32)
-                rivers = np.isin((f[..., 0] << 16) | (f[..., 1] << 8) | f[..., 2], (0x0000ff, 0xffffff, 0x00ffff))
+            rivers = _rivers(feats, H, W)
             regs = mod.regions(campaign)
             self._net_src = {"grid": grid, "names": names, "chains": N.road_chains(mod), "feats": feats,
                              "mountains": mh, "rivers": rivers, "towns": mod.city_tiles(campaign),
