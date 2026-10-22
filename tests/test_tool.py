@@ -6123,6 +6123,38 @@ building smith
         after = tree_hash(self.root)
         self.assertEqual({k: v for k, v in after.items() if "_backups" not in k}, before)
 
+    def test_land_climate_and_sea_climates_view(self):
+        """New land takes the climate most land round it has, ring by ring (not the leftover under the sea); the
+        Climates view draws the sea's climates too when asked."""
+        from campaign_editor import terrain as T
+        desert, grass, left = (102, 45, 145), (237, 20, 91), (236, 0, 140)
+
+        class Map:                                        # 5 x 1: land, land, land, sea, sea
+            w, h = 5, 1
+            look = {0: grass, 1: desert, 2: desert, 3: left, 4: left}
+
+            def is_sea(self, x, y):
+                return x >= 3
+
+            def climate_at(self, x, y):
+                return self.look[x]
+        self.assertEqual(T.land_climate(Map(), (3, 0)), desert)        # the neighbour, not the water's own
+        self.assertEqual(T.land_climate(Map(), (4, 0)), desert)        # the next ring when the first has no land
+        self.assertIsNone(T.land_climate(Map(), (4, 0), reach=1))
+        try:
+            from PIL import Image
+        except ImportError:
+            return
+        from campaign_editor.mapdata import CampaignMap
+        m = CampaignMap.__new__(CampaignMap)
+        m.w, m.h = 5, 1
+        m.is_sea = Map().is_sea
+        m.climate_at = Map().climate_at
+        base = Image.new("RGB", (5, 1), (0, 0, 0))
+        self.assertEqual(m._climates(base).getpixel((4, 0)), (0, 0, 0))     # the sea left as it is
+        m.show_sea_climates = True
+        self.assertNotEqual(m._climates(base).getpixel((4, 0)), (0, 0, 0))  # tinted like the land
+
     def test_land_brush_coast_is_smooth_not_in_steps(self):
         """A report ('where is the smoothing?'): the land brush made land tile by tile, its coast ran in tile-sized
         steps. The coast round the brush's tiles now follows a smooth curve at half-tile level, as the games' own
