@@ -336,6 +336,36 @@ def characters_after_tree(s):
     return bad
 
 
+def stray_units(s):
+    """Unit lines no army holds, as 'faction: what is above it': a unit under an agent (no army line), before a
+    character's army line or among the family tree lines. The game reads a faction block as characters (each army
+    line with its units), then character_record and relative lines; at any other line it stops reading the factions
+    without a word - every faction after it is lost, the rebels made empty by the game itself, and a playable one
+    among them crashes the start ('Faction ... listed as present in header, but not supplied', engine source
+    world.cpp parse_factions; Keapon_Laffin's mod, 2026-10-22)."""
+    from .textio import tokens
+    out = []
+    for fb in s.factions:
+        held = set()                                    # lines a town's garrison or an army holds
+        for st in fb.settlements:
+            held.update(range(st.start, st.end))
+        for c in fb.characters:
+            army = False
+            for i in range(c.start, c.end):
+                w = tokens(s.lines[i])[:1]
+                if w == ["army"]:
+                    army = True
+                elif w == ["unit"] and army:
+                    held.add(i)
+        for i in range(fb.start, fb.end):
+            if i in held or tokens(s.lines[i])[:1] != ["unit"]:
+                continue
+            above = next((c for c in reversed(fb.characters) if c.start < i), None)
+            out.append((i, "%s: a unit line no army holds (line %d%s)" % (
+                fb.name, i + 1, ", under %s" % above.name if above and above.end > i else "")))
+    return out
+
+
 def unlisted_factions(s):
     """Factions with a block in descr_strat but in none of the playable / unlockable / nonplayable lists at its top:
     every game stops there ('Faction %s not listed in playable/nonplayable header section.' - RomeTW.exe,
