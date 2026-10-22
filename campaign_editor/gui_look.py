@@ -44,7 +44,8 @@ class Look:
         self.counts = {}                          # (window, base key) -> pieces of it seen
         self.clones = {}                          # str(original) -> its copy standing where it was dropped
         self.waiting = []                         # keys moved whose target has not shown yet
-        self.editing, self.picked, self.undo = False, None, []
+        self.editing, self.picked, self.undo, self.redo = False, None, [], []
+        self.on_change = []                       # called with the key after every change (the layout board)
         self._frame, self._mark, self._bar, self._drag = [], None, None, None
         from . import settings
         self.set_language(settings.get("language") or "")
@@ -134,6 +135,8 @@ class Look:
         e = self.data["pieces"].get(getattr(w, "_look_key", None), {})
         if (e.get("hidden") or str(w) in self.clones) and w.winfo_manager():
             self._forget(w)
+        elif "xy" in e and not e.get("hidden") and w.winfo_manager() != "place":
+            self._free(w, e)                           # the code packed it anew: free where the look put it
         if w.winfo_class() == "TNotebook":
             self._words_on(w)
 
@@ -193,6 +196,9 @@ class Look:
                 w.configure(width=e["width"])
             except tk.TclError:
                 pass
+        if e.get("size") and "xy" not in e and not e.get("hidden"):
+            self._home(w)
+            self._size_on(w, e["size"])
         if e.get("tip"):
             w._look_tip = e["tip"]
             if not getattr(w, "_look_tipped", False):
@@ -202,10 +208,67 @@ class Look:
         if e.get("hidden"):
             self._home(w)
             self._forget(w)
+        elif "xy" in e:
+            self._home(w)
+            self._free(w, e)
         elif "to" in e:
             if not self._move_now(w, e["to"], e.get("where", "after")):
                 if w._look_key not in self.waiting:
                     self.waiting.append(w._look_key)
+
+    def _free(self, w, e):
+        """The piece free at x, y of its own box (up 0) or of the box `up` boxes around it (a copy stands there: Tk
+        gives a widget no other parent), its size kept or the look's."""
+        x, y = (int(v) for v in e["xy"][:2])
+        kw = dict(x=x, y=y)
+        if e.get("size"):
+            kw.update(width=int(e["size"][0]), height=int(e["size"][1]))
+        box, up = w.master, int(e.get("up") or 0)
+        for _ in range(up):
+            if isinstance(box, (tk.Tk, tk.Toplevel)) or box.master is None:
+                break
+            box = box.master
+        self._forget(w)
+        piece = w
+        if box is not w.master:
+            old = self.clones.pop(str(w), None)
+            if old is not None:
+                old.destroy()
+            piece = make_copy(w, box)
+            self.clones[str(w)] = piece
+        piece.place(in_=box, **kw)
+        piece.lift()
+
+    def _size_on(self, w, size):
+        """A piece in a row made width x height pixels: wider / taller by inner padding, narrower by its width in
+        letters (Tk sizes a button by its words); a wrapping bar (gui_util.flow) gives it the size itself."""
+        want_w, want_h = int(size[0]), int(size[1])
+        m = w.master
+        if getattr(m, "_flow_items", None) is not None and any(it[0] is w for it in m._flow_items):
+            w._look_size = (want_w, want_h)
+            m._flow_reflow(again=True)
+            return
+        req_w, req_h = w.winfo_reqwidth(), w.winfo_reqheight()
+        if want_w < req_w and "width" in w.keys():
+            try:
+                from tkinter import font as tkfont
+                f = tkfont.nametofont(str(w.cget("font")) or "TkDefaultFont")
+                letters = max(1, want_w // max(f.measure("0"), 1))
+            except (tk.TclError, ValueError):
+                letters = max(1, want_w // 7)
+            try:
+                w.configure(width=letters)
+            except tk.TclError:
+                pass
+        pad = dict(ipadx=max(0, (want_w - req_w) // 2), ipady=max(0, (want_h - req_h) // 2))
+        mgr = w.winfo_manager()
+        try:
+            if mgr == "pack":
+                w.pack_configure(**pad)
+            elif mgr == "grid":
+                w.grid_configure(**pad)
+        except tk.TclError:
+            pass
 
     def _try_waiting(self):
         for key in list(self.waiting):
@@ -234,6 +297,8 @@ class Look:
         items = getattr(m, "_flow_items", None)
         if items is not None and any(it[0] is w for it in items):
             i = next(i for i, it in enumerate(items) if it[0] is w)
+            if not hasattr(m, "_look_flow0"):              # the bar's own order, before the look changed it
+                m._look_flow0 = [it[0] for it in items]
             w._look_home = ("flow", m, i, items[i])
             return
         mgr = w.winfo_manager()
@@ -288,6 +353,8 @@ class Look:
             except tk.TclError:
                 pass
         w._look_tip = ""
+        if hasattr(w, "_look_size"):
+            del w._look_size
         home = getattr(w, "_look_home", None)
         if home is None:
             return
@@ -296,6 +363,10 @@ class Look:
         kind = home[0]
         if kind == "flow":
             _, m, i, item = home
+            order0 = getattr(m, "_look_flow0", [])
+            if w in order0:                                # before the first piece that came after it
+                later = order0[order0.index(w) + 1:]
+                i = next((j for j, it in enumerate(m._flow_items) if it[0] in later), len(m._flow_items))
             m._flow_items.insert(min(i, len(m._flow_items)), item)
             m._flow_reflow(again=True)
         elif kind == "pack":
@@ -348,7 +419,10 @@ class Look:
     # ---- changing (the edit mode and its menu call these) ----
     def change(self, w, **kw):
         """A piece's change (text / tip / width / hidden / to + where; None takes that part out), kept and put on."""
-        key = w._look_key
+        self.change_key(w._look_key, **kw)
+
+    def change_key(self, key, **kw):
+        """change() by the piece's key: its widget need not be open (put on when its window opens)."""
         old = copy.deepcopy(self.data["pieces"].get(key))
         new = dict(old or {})
         for k, v in kw.items():
@@ -357,22 +431,37 @@ class Look:
             else:
                 new[k] = v
         self.undo.append((key, old))
+        self.redo.clear()
         self._set(key, new)
 
     def _set(self, key, entry):
         LK.set_entry(self.data, key, entry)
         LK.save(self.data)
         w = self.by_key.get(key)
-        if w is not None and w.winfo_exists():
-            self.back_home(w)
-            self._put_on(w)
+        try:
+            if w is not None and w.winfo_exists():
+                self.back_home(w)
+                self._put_on(w)
+        except tk.TclError:
+            pass
         self._frame_on(self.picked)
+        for f in list(self.on_change):
+            f(key)
 
     def do_undo(self):
         if not self.undo:
             return False
         key, old = self.undo.pop()
+        self.redo.append((key, copy.deepcopy(self.data["pieces"].get(key))))
         self._set(key, old)
+        return True
+
+    def do_redo(self):
+        if not self.redo:
+            return False
+        key, new = self.redo.pop()
+        self.undo.append((key, copy.deepcopy(self.data["pieces"].get(key))))
+        self._set(key, new)
         return True
 
     def back_all(self):
