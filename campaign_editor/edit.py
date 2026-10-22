@@ -688,7 +688,13 @@ def take_off_map(plan, f, faction, c):
     someone; written where the records stand, after every character (a report: removing him had no way at all)."""
     fb = Strat(f).faction(faction)
     texts = f.texts()
-    on_tree = c.named and any(tokens(t)[:1] == ["relative"] and c.name in t for t in texts[fb.start:fb.end])
+    from .family import _parse_relative
+    named_on_tree = set()                   # the names themselves ('Gaius Julius' is not 'Gaius Julius Caesar')
+    for t in texts[fb.start:fb.end]:
+        r = _parse_relative(t) if tokens(t)[:1] == ["relative"] else None
+        if r:
+            named_on_tree.update([r[0], r[1]] + r[2])
+    on_tree = c.named and c.name in named_on_tree
     where = "" if not c.xy else " at %d, %d" % c.xy
     if on_tree:
         from .family import record_line

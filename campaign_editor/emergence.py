@@ -549,8 +549,8 @@ def set_event(plan, campaign, faction, date=None, region=None, remove=False):
         if have:
             plan.note(f, "%s: its emergence event removed" % faction)
         return
-    end = len(f.raw) - (1 if f.raw and not f.text(len(f.raw) - 1).strip() else 0)
-    f.insert(end, lines)
+    at, inside = EV.in_order_at(f, date, EV._rome(mod))     # in date order: the games read the events as a queue
+    f.insert(at, lines[1:] + [""] if inside else lines)
     plan.note(f, "%s rises %s%s" % (faction, date.strip(), " in %s" % region if region else ""))
     set_event_texts(plan, faction)
     set_horde(plan, faction)

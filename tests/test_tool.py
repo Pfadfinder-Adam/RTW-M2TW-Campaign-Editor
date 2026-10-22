@@ -15619,6 +15619,18 @@ building smith
         with self.assertRaises(ValueError):                         # the leader: make another the leader first
             map_changes(Plan(ModData(self.root), "map", "map", {}), "test",
                         {"remove": {"alpha": [{"name": "Aaron Alphid", "from": [1, 1]}]}})
+        # a general whose name is only a part of a name on the tree ('Abel' of 'Abel Alphid') is not on it: he
+        # simply goes, no dead record left behind (review 2026-10-22)
+        f = mod.load(strat)
+        i = next(n for n, t in enumerate(f.texts()) if t.startswith("character\tAbel Alphid"))
+        f.raw[i:i] = [f.make(x) for x in ("character\tAbel, named character, age 30, , x 3, y 1", "army",
+                                          "unit\t\talpha general\t\texp 0 armour 0 weapon_lvl 0")]
+        f.save()
+        plan = Plan(ModData(self.root), "map", "map", {})
+        map_changes(plan, "test", {"remove": {"alpha": [{"name": "Abel", "from": [3, 1]}]}})
+        texts = plan.files[strat].texts()
+        self.assertFalse([t for t in texts if t.startswith("character_record") and "Abel," in t], texts)
+        self.assertFalse([t for t in texts if t.startswith("character\tAbel,")])
 
     def test_map_editor_moves_and_arms_any_faction(self):
         """The Map editor (no faction picked): any faction's character dragged elsewhere and any army's units
@@ -18186,6 +18198,36 @@ building smith
         got = EV.picture_files(ModData(self.root), "news", "historic")
         self.assertTrue(all(got.values()))
         self.assertEqual(Image.open(got["roman"]).size, (360, 160))                      # Rome's own size
+
+    def test_event_date_changed_keeps_the_queue(self):
+        """Review 2026-10-22: a date changed in Events (or a later faction's event written) stayed where it was - an
+        event left behind one of a later date never fires (the games read descr_events.txt as a queue). It moves to
+        its place, its comment with it; an event in order stays put; a later faction's event goes in order too."""
+        from campaign_editor import events as EV
+        from campaign_editor import emergence as EM
+        from campaign_editor.plan import Plan
+        camp = os.path.join(self.root, "data", "world", "maps", "campaign", "test")
+        write(os.path.join(camp, "descr_events.txt"),
+              "; events\nevent\thistoric\ta\ndate\t2\n\n; about b\nevent\thistoric\tb\ndate\t5\n\n"
+              "event\thistoric\tc\ndate\t9 winter\n\nevent\tplague\tp\ndate\t12\n\nevent\tplague\tp\ndate\t14\n")
+        mod = ModData(self.root)
+        path = EV.path_of(mod, "test")
+        names = lambda plan: [(e["id"], e["date"]) for e in EV.read(plan.files[path])]
+        plan = Plan(mod, "e", "e", {})
+        EV.apply(plan, "test", {"edit": {"b": {"date": "10"}}})
+        self.assertEqual(names(plan), [("a", "2"), ("c", "9 winter"), ("b", "10"), ("p", "12"), ("p#2", "14")])
+        t = plan.files[path].texts()
+        self.assertEqual(t[t.index("event\thistoric\tb") - 1], "; about b")
+        self.assertTrue(any("date order" in n for _, n in plan.notes))
+        plan = Plan(mod, "e", "e", {})                  # the second of two of one name, to the front; the first edited
+        EV.apply(plan, "test", {"edit": {"p#2": {"date": "1"}, "p": {"date": "13"}}})
+        self.assertEqual(names(plan), [("p", "1"), ("a", "2"), ("b", "5"), ("c", "9 winter"), ("p#2", "13")])
+        plan = Plan(mod, "e", "e", {})
+        EV.apply(plan, "test", {"edit": {"c": {"date": "8"}}})
+        self.assertFalse(any("date order" in n for _, n in plan.notes))
+        plan = Plan(mod, "e", "e", {})
+        EM.set_event(plan, "test", "alpha", "6")
+        self.assertEqual([e["name"] for e in EV.read(plan.files[path])], ["a", "b", "alpha", "c", "p", "p"])
 
     def test_rome_pak_read(self):
         """Rome's data/packs/*.pak: the name table, the end offsets, the files one after another - a file not loose
@@ -21442,6 +21484,12 @@ class CampaignScriptTest(unittest.TestCase):
 
             def note(self, f, text):
                 self.notes.append(text)
+
+            def warn(self, f, text):
+                self.notes.append("WARN " + text)
+        plan = P(TextFile.from_bytes("campaign_script.txt", self.TEXT.encode("latin-1")))
+        CS.plan_remove(plan, "x", ["wait_monitors@15"])        # monitors stay: without it they never react - said
+        self.assertTrue(any(n.startswith("WARN wait_monitors") for n in plan.notes), plan.notes)
         plan = P(TextFile.from_bytes("campaign_script.txt", self.TEXT.encode("latin-1")))
         self.assertEqual(CS.plan_remove(plan, "x", ["monitor_event@6", "declare_counter@3"]), 2)
         left = [l.strip() for l in plan.f.texts() if l.strip()]
@@ -21449,6 +21497,7 @@ class CampaignScriptTest(unittest.TestCase):
                                 "wait_monitors", "end_script"])
         CS.plan_remove(plan, "x", [p["id"] for p in CS.read(plan.f)])
         self.assertEqual([l.strip() for l in plan.f.texts() if l.strip()], ["; the mod's script", "script", "end_script"])
+        self.assertFalse(any(n.startswith("WARN") for n in plan.notes), plan.notes)     # no monitor left: no word
 
 
 class ReaderChecksMoreTest(unittest.TestCase):
