@@ -957,6 +957,27 @@ def future(plan, campaign):
     return fut
 
 
+def own_select_map(plan, campaign, faction, regions, colour):
+    """A new faction's campaign-select map drawn from its own land in its own colour, in place of the template's
+    copy (the copy stays only when it cannot be drawn: no Pillow)."""
+    mod = plan.mod
+    target = map_name(mod.campaign_dir(campaign), faction)
+    rel = os.path.relpath(target, mod.data).replace("\\", "/")
+    if rel in (plan.opts.get("art") or {}):
+        return                                              # a picture of its own was given
+    from .strat import Strat
+    sp = mod.campaign_file(campaign, "descr_strat.txt")
+    if sp in plan.files:
+        regions = [r for r, o in Strat(plan.files[sp]).owners().items() if o == faction] or regions
+    try:
+        made = write_select_map(plan, campaign, faction, regions, tuple(colour))
+    except ImportError:
+        made = False
+    if made:
+        drawn = os.path.normcase(os.path.abspath(target))
+        plan.copies[:] = [c for c in plan.copies if os.path.normcase(os.path.abspath(c[1])) != drawn]
+
+
 def write_select_map(plan, campaign, faction, regions, colour, from_map=False):
     """map_<faction>.tga drawn from its regions (a note says so), on the map as the plan
     leaves it: lit on the campaign's own select background, or with from_map (or when the campaign has no select
@@ -1202,12 +1223,13 @@ def write_art(plan, faction, rel, pick):
             plan.note(plan.files[line["path"]], "%s's %s now %s (was %s)" % (faction, line["field"], ref, line["ref"]))
 
 
-def apply_opts(plan, campaign, faction, regions, primary, towns_changed):
+def apply_opts(plan, campaign, faction, regions, primary, towns_changed, own_map=False):
     """opts['art'] = {path under data: picture to put there}; opts['select_map'] =
     {'on': True, 'colour': [r, g, b]}: only when asked (the Art tab's optional part), the
     campaign-select map is drawn from the faction's towns, and the maps of the factions whose
     land changed follow. Without it every map_<faction>.tga stays as it is (0.9.3: the user wants
-    the originals kept unless he asks; a new faction keeps the template's copy)."""
+    the originals kept unless he asks). own_map: a new faction - its own map is drawn always, never the template's
+    land lit (the user, 2026-10-22: 'nothing in common with an existing faction'); the others' stay unless asked."""
     mod = plan.mod
     for rel, pick in sorted((plan.opts.get("art") or {}).items()):
         if isinstance(pick, dict) and pick.get("extra"):    # a picture shared with others: its own copy first
@@ -1225,6 +1247,8 @@ def apply_opts(plan, campaign, faction, regions, primary, towns_changed):
             write_art(plan, faction, rel, pick)
     sel = plan.opts.get("select_map") or {}
     if not sel.get("on"):
+        if own_map:
+            own_select_map(plan, campaign, faction, regions, sel.get("colour") or default_map_colour(primary))
         return
     from .strat import Strat
     sp = mod.campaign_file(campaign, "descr_strat.txt")

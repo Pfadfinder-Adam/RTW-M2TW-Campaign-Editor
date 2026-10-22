@@ -528,7 +528,7 @@ class App(tk.Tk):
         upper.columnconfigure(1, weight=1)
         texts = ttk.Frame(left)
         texts.pack(fill="x", pady=(6, 0))
-        self.v = {k: tk.StringVar() for k in ("template", "name", "display_name", "short_name", "adjective",
+        self.v = {k: tk.StringVar() for k in ("template", "name", "display_name", "short_name", "adjective", "people",
                                               "ai", "denari", "leader_first", "leader_last", "leader_age",
                                               "heir_first", "heir_last", "heir_age", "capital")}
         self.v["denari"].set("5000")
@@ -579,6 +579,13 @@ class App(tk.Tk):
         # ({..._DESCR}) - the rows are hidden there (_game_rows)
         self.rome_rows = [lf.grid_slaves(row=row - 1, column=c)[0] for c in (0, 1)]
         field("Adjective", ttk.Entry(lf, textvariable=self.v["adjective"]))
+        # New faction only: the people's name the template's texts use ('The Scots are Victorious' - no name nor
+        # adjective of Scotland holds 'Scots'); empty = the short name + s
+        field("People (plural)", ttk.Entry(lf, textvariable=self.v["people"]))
+        self.people_row = [lf.grid_slaves(row=row - 1, column=c)[0] for c in (0, 1)]
+        tip(self.people_row[1], "What its people are called, many of them: 'Scots', 'Gauls'. A copied text that "
+                                "names the template's people ('The Scots are Victorious') gets this word. Empty: "
+                                "the short name with an s.")
         # Medieval II's faction screen texts, shown only when the faction has them
         self.extra_rows = {}
         for k, label in (("strength", "Strengths\n(faction screen)"), ("weakness", "Weaknesses\n(faction screen)"),
@@ -2107,7 +2114,7 @@ class App(tk.Tk):
             for w in ws:
                 w.grid_remove()
         # cloning-only options are hidden in Edit (diplomacy gets its own editor later)
-        for w in [self.chk_art] + self.dip_row + self.way_row:
+        for w in [self.chk_art] + self.dip_row + self.way_row + self.people_row:
             if edit:
                 w.grid_remove()
             else:
@@ -6558,6 +6565,7 @@ class App(tk.Tk):
                 "is the shadow of" if way == "shadow" else "splits off"))
         opts = {
             "display_name": v["display_name"], "short_name": v["short_name"], "adjective": v["adjective"],
+            "people": v["people"] or None,
             "description": self.t_descr.get("1.0", "end").strip(),
             "long_description": self.t_long.get("1.0", "end").strip(),
             "religion": (v.get("religion") or None) if self._m2() else None,
