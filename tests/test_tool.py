@@ -15283,6 +15283,41 @@ building smith
         restore(mod, bdir)
         self.assertEqual(tree_hash(d), before)
 
+    def test_unit_animal_and_model_texture(self):
+        """A handler unit's animals (EDU 'animal wardogs' -> descr_animals.txt's 'wardog', as the engine maps the
+        word; M2EX's models { } form too) and the texture each model is shown in: its texture line for the faction,
+        else the one its own mesh names (Rome's war dogs, pigs, chariots and siege engines have no texture line)."""
+        from unittest import mock
+        from campaign_editor import models as MO
+        from campaign_editor import meshview as MV
+        d = os.path.join(self.root, "data")
+        write(os.path.join(d, "export_descr_unit.txt"), EDU.replace(
+            "ownership\talpha", "category\thandler\nsoldier\t\talpha_model, 12, 36, 1\nanimal\t\twardogs\n"
+            "ownership\talpha").replace("ownership\tslave", "animal\t\tpigs\nownership\tslave"))
+        write(os.path.join(d, "descr_animals.txt"),
+              "type\t\twardog\nclass\t\twardog\nmodel\t\twardog\nradius\t\t0.75\n\n"
+              "type\t\tpig\nclass\t\tpig\nmodels\n{\n\tskeleton fs_pig\n\tpig_a\n\tpig_b\n}\n")
+        write(os.path.join(d, "descr_model_battle.txt"),
+              "type\t\talpha_model\nskeleton\t\tfs_spearman\ntexture\t\tslave, data/models_unit/textures/s.tga\n"
+              "texture\t\talpha, data/models_unit/textures/a.tga\nmodel_flexi\t\tdata/models_unit/a.cas, max\n\n"
+              "type\t\twardog\nskeleton\t\tfs_dog\nmodel_flexi\t\tdata/models_unit/unit_wardog_high.cas, max\n")
+        write(os.path.join(d, "models_unit", "unit_wardog_high.cas"), "dog")
+        mod = ModData(self.root)
+        self.assertEqual(MO.unit_animal(mod, MO.unit_lines(mod, "alpha general")), ("wardogs", "wardog", "wardog"))
+        self.assertEqual(MO.unit_animal(mod, MO.unit_lines(mod, "rebel spear")), ("pigs", "pig", "pig_a"))
+        self.assertEqual(MO.unit_animal(mod, ["type x", "soldier a, 1, 0, 1"]), (None, None, None))
+        cat = MO.catalogue(mod)
+        self.assertEqual(MO.model_texture(mod, cat["alpha_model"], ("beta", "alpha")),
+                         "data/models_unit/textures/a.tga")
+        self.assertEqual(MO.model_texture(mod, cat["alpha_model"]), "data/models_unit/textures/s.tga")
+        dog = mock.Mock(texture_ref="data/models_unit/textures/wardog.tga")
+        with mock.patch.object(MV, "read_file", return_value=dog):
+            self.assertEqual(MO.model_texture(mod, cat["wardog"], ("alpha",)), "data/models_unit/textures/wardog.tga")
+        self.assertIsNone(MO.model_texture(mod, None))
+        os.remove(os.path.join(d, "descr_animals.txt"))
+        self.assertEqual(MO.unit_animal(ModData(self.root), MO.unit_lines(mod, "alpha general"))[:2],
+                         ("wardogs", "wardog"))
+
     def test_replace_battle_model(self):
         """A unit's soldier model swapped for another of this mod or of another mod (brought with its files, renamed
         when the name is taken), the unit's factions given textures on it, a seat mismatch warned about, another
