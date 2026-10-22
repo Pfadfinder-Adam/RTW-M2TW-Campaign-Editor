@@ -91,7 +91,8 @@ editor more time and faster testing (big mods and both games load slowly on the 
 
 ## 🤝 Made a mod with it?
 
-Please say so where you share the mod and link here, so other modders find it too. One line is enough:
+Please mention the editor in your mod's description and add a link to this page, so other modders can find it too.
+One line is enough - copy this one:
 
 ```
 Made with the RTW & M2TW Campaign Editor: https://github.com/Pfadfinder-Adam/RTW-M2TW-Campaign-Editor
