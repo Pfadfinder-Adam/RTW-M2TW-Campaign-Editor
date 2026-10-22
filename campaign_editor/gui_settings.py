@@ -68,6 +68,12 @@ class SettingsWindow(tk.Toplevel):
         for val, text in (("light", "Light"), ("dark", "Dark")):
             ttk.Radiobutton(row, text=text, value=val, variable=self.v_theme,
                             command=self._theme).pack(side="left", padx=(0, 10))
+        ttk.Button(row, text="Themes...", command=self._themes).pack(side="left", padx=(6, 0))
+
+    def _themes(self):
+        from . import theme
+        from .gui_themes import open_themes
+        open_themes(self.app, on_change=lambda: self.v_theme.set("dark" if theme.dark() else "light"))
 
     def _theme(self):
         from . import theme

@@ -3873,6 +3873,39 @@ building smith
         finally:
             app.destroy()
 
+    def test_layout_board_lays_out_the_windows_of_the_works(self):
+        """With a mod loaded the layout board lays out the windows the works open too (the user: 'every page and
+        window already laid out'): a town's (the first town), Rebels, Mercenaries, the map's size, Authors and
+        sources - each one opens as a window of its own for its picture."""
+        try:
+            from unittest import mock
+            from campaign_editor import gui
+            app = gui.App()
+        except Exception as e:                        # no tkinter / no display
+            self.skipTest("no tkinter window: %s" % e)
+        from campaign_editor import gui_lookboard as GB, minimod
+        try:
+            with mock.patch("tkinter.messagebox.showinfo"), mock.patch("tkinter.messagebox.showerror"), \
+                    mock.patch("tkinter.messagebox.askyesno", return_value=False):
+                app.v_path.set(minimod.make(os.path.join(self.root, "mini")))
+                app.load()
+                app.update()
+                b = GB.LayoutBoard.__new__(GB.LayoutBoard)
+                b.app = app
+                steps = [s for s in b._steps() if s[2] == "Windows of the works"]
+                self.assertEqual([s[0] for s in steps], ["window:" + m for m, _ in GB.MOD_WINDOWS])
+                for pid, title, _ in steps:
+                    top = b._open(pid)
+                    app.update()
+                    self.assertIsNotNone(top, title)
+                    self.assertIsNot(top, app)
+                    top.destroy()
+        finally:
+            try:
+                app.destroy()
+            except Exception:
+                pass
+
     def test_mod_from_zero_steps(self):
         """Tools > A mod from zero, step by step (the user, 2026-10-21): the six steps in order, each saying how far
         the loaded mod is, each button opening the editor's own work for it."""
@@ -5653,6 +5686,63 @@ building smith
             except Exception:
                 pass
 
+    def test_editor_look_snippets_switched_on_and_off(self):
+        """Snippets (Obsidian's CSS snippets): sets of button changes, each switched on / off, the own look over
+        them; a part a snippet gives that the own look takes away ('off': a piece a snippet hides shown again); the
+        own changes moved into a snippet change nothing on the screen; switching it off takes them away."""
+        from campaign_editor import look as LK
+        snips = [{"on": True, "pieces": {"a": {"hidden": True}, "b": {"xy": [5, 5], "up": 1}}, "order": []},
+                 {"on": False, "pieces": {"a": {"text": "never"}}, "order": []}]
+        own = {"pieces": {"a": {"off": ["hidden"], "bg": "#101010"}, "b": {"to": "c", "where": "after"}},
+               "order": ["b"]}
+        got = LK.layered(own, snips)
+        self.assertEqual(got["pieces"]["a"], {"bg": "#101010"})
+        self.assertEqual(got["pieces"]["b"], {"to": "c", "where": "after"})       # the own place wins whole
+        self.assertEqual(got["order"], ["b"])
+        self.assertEqual(LK.own_part({"hidden": True, "text": "x"}, {"text": "x", "bg": "#000000"}),
+                         {"bg": "#000000", "off": ["hidden"]})
+        self.assertEqual(LK.own_part({"xy": [1, 2], "up": 1}, {"xy": [1, 2], "up": 2}), {"xy": [1, 2], "up": 2})
+        try:
+            import tkinter as tk
+            from tkinter import ttk
+            root = tk.Tk()
+        except Exception as e:
+            self.skipTest("no window: %s" % e)
+        from unittest import mock
+        from campaign_editor import gui_look as GL
+        from campaign_editor import log
+        home = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, home)
+        try:
+            with mock.patch.object(log, "home", lambda: home):
+                look = GL.install(root)
+                save = ttk.Button(root, text="Save")
+                save.pack()
+                root.update()
+                look.change_key(save._look_key, text="Keep", hidden=True)
+                root.update()
+                self.assertEqual(save.winfo_manager(), "")
+                path = look.own_to_snippet("Mine")
+                root.update()
+                self.assertTrue(path and os.path.isfile(path))
+                self.assertEqual(look.own["pieces"], {})
+                self.assertEqual(save.winfo_manager(), "")                # still hidden: the snippet is on
+                look.change_key(save._look_key, hidden=None)             # shown again over the snippet
+                root.update()
+                self.assertEqual(save.winfo_manager(), "pack")
+                self.assertEqual(look.own["pieces"][save._look_key], {"off": ["hidden"]})
+                self.assertEqual(str(save.cget("text")), "Keep")
+                LK.set_snippet_on(path, False)
+                look.relayer()
+                root.update()
+                self.assertEqual(str(save.cget("text")), "Save")         # the snippet off: its words gone
+                self.assertFalse(LK.snippets()[0]["on"])
+        finally:
+            try:
+                root.destroy()
+            except Exception:
+                pass
+
     def test_layout_board_free_by_default_draft_and_accept(self):
         """On the layout board a dragged piece stays where it is dropped, its edge sticking to another piece's
         line; the change is a draft (the editor untouched, Undo / Redo on the board) until Accept puts it on; with
@@ -5707,6 +5797,9 @@ building smith
                 b.update()
                 b.draw()
                 pid = "work:x"
+                from campaign_editor import theme
+                card = b.cv.find_withtag("card")[0]                      # the page in the look's colours, never white
+                self.assertEqual(b.cv.itemcget(card, "fill"), theme.palette()["bg"])
                 pc = next(q for q in b.pages[0]["pieces"] if q["key"] == ok._look_key)
                 cx = next(q for q in b.pages[0]["pieces"] if q["key"] == cancel._look_key)["box"][0]
                 ox, oy, ow, oh = pc["box"]
@@ -6053,6 +6146,103 @@ building smith
         self.assertIsNone(theme.readable(rgb(theme.DARK["fg"]), dark_grey))     # what reads stays as it is
         self.assertIsNone(theme.readable(rgb(theme.LIGHT["fg"]), cream))
         self.assertEqual(theme.ink("#b00"), "#b00")                     # no window yet: the colour as given
+
+    def test_themes_as_files(self):
+        """Themes as files (Obsidian's theme browser): the editor's own read from assets/themes, the modder's saved
+        with the look now, exported as one .zip and imported back (picture too), a broken or foreign file refused,
+        colours that are not '#rrggbb' dropped, the editor's own never deleted."""
+        import zipfile
+        from unittest import mock
+        from campaign_editor import log, themes
+        home = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, home)
+        with mock.patch.object(log, "home", lambda: home):
+            names = [t["name"] for t in themes.available()]
+            for n in ("Light", "Dark", "Roman parchment", "Medieval night"):
+                self.assertIn(n, names)
+            self.assertEqual(themes.clean({"colours": {"bg": "#e8dcc0", "fg": "red", "x": "#12345"}, "base": "?",
+                                           "font": ["Georgia", 99]}),
+                             {"name": "Theme", "by": "", "base": "light", "colours": {"bg": "#e8dcc0"},
+                              "font": ["Georgia", 48]})
+            self.assertIsNone(themes.clean({"name": "no colours"}))
+            where = themes.save("My/Rome", "a tester", "dark", {"bg": "#101010"}, ["", 12])
+            self.assertEqual(os.path.basename(where), "My_Rome")
+            with open(os.path.join(where, themes.PICTURE), "wb") as fh:
+                fh.write(b"\x89PNG\r\n\x1a\n...")
+            mine = next(t for t in themes.available() if t["name"] == "My/Rome")
+            self.assertTrue(mine["own"])
+            self.assertEqual((mine["base"], mine["colours"], mine["font"]), ("dark", {"bg": "#101010"}, ["", 12]))
+            z = os.path.join(home, "send.zip")
+            self.assertTrue(themes.export(mine, z))
+            self.assertEqual(sorted(zipfile.ZipFile(z).namelist()), ["preview.png", "theme.json"])
+            self.assertTrue(themes.delete(mine))
+            self.assertNotIn("My/Rome", [t["name"] for t in themes.available()])
+            self.assertEqual(themes.import_file(z), ("My/Rome", None))
+            back = next(t for t in themes.available() if t["name"] == "My/Rome")
+            self.assertIsNotNone(back["picture"])
+            bad = os.path.join(home, "bad.json")
+            write(bad, '{"name": "x"}')
+            self.assertIsNone(themes.import_file(bad)[0])
+            write(bad, "not json")
+            self.assertIsNone(themes.import_file(bad)[0])
+            light = next(t for t in themes.available() if t["name"] == "Light")
+            self.assertFalse(themes.delete(light))
+
+    def test_whole_look_own_colours_and_font(self):
+        """Appearance (the user, 2026-10-22: 'the colour of the whole thing at once, as in Obsidian'): own colours
+        over the light look recolour every window - ttk styles and plain tk widgets -, a coloured button takes its
+        own colour with words that read on it, a font for every window; all back gives the look as it comes."""
+        try:
+            import tkinter as tk
+            from tkinter import font as tkfont
+            from tkinter import ttk
+            root = tk.Tk()
+        except Exception as e:
+            self.skipTest("no window: %s" % e)
+        from unittest import mock
+        from campaign_editor import gui_appearance, log, settings, theme
+        home = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, home)
+        kept = dict(theme._state)
+        try:
+            with mock.patch.object(log, "home", lambda: home), mock.patch.object(settings, "_data", {}):
+                theme._state.update(root=None, done={}, custom={}, font=None, fonts0={}, seen=[])
+                theme.apply(root, False)
+                lab = tk.Label(root, text="Faction:")
+                lab.pack()
+                root.update()
+                size0 = tkfont.nametofont("TkDefaultFont", root=root).cget("size")
+                theme.set_custom(root, {"bg": "#e8dcc0", "fg": "#3a2410", "Play.TButton": "#f0e000"},
+                                 ["", 13])
+                root.update()
+                st = ttk.Style(root)
+                self.assertEqual(st.lookup(".", "background"), "#e8dcc0")
+                self.assertEqual(str(lab.cget("background")), "#e8dcc0")
+                self.assertEqual(str(lab.cget("foreground")), "#3a2410")
+                self.assertEqual(st.lookup("Play.TButton", "background"), "#f0e000")
+                self.assertEqual(st.lookup("Play.TButton", "foreground"), "#000000")     # black reads on yellow
+                self.assertEqual(tkfont.nametofont("TkDefaultFont", root=root).cget("size"), 13)
+                self.assertEqual(settings.get("theme_colours")["bg"], "#e8dcc0")
+                panel = gui_appearance.AppearancePanel(root, root)
+                panel.pack()
+                root.update()
+                panel._set("bg", None)                                    # its arrow: the look's own again
+                root.update()
+                self.assertEqual(str(lab.cget("background")), theme.LIGHT["bg"])
+                self.assertEqual(str(lab.cget("foreground")), "#3a2410")
+                panel._all_back()
+                root.update()
+                self.assertEqual(theme.custom(), ({}, None))
+                self.assertEqual(str(lab.cget("foreground")), theme.LIGHT["fg"])
+                self.assertEqual(st.lookup("Play.TButton", "background"), theme.COLOURED["Play.TButton"][0])
+                self.assertEqual(tkfont.nametofont("TkDefaultFont", root=root).cget("size"), size0)
+        finally:
+            theme._state.clear()
+            theme._state.update(kept)
+            try:
+                root.destroy()
+            except Exception:
+                pass
 
     def test_the_editor_checks_itself(self):
         """`campaign_editor.py selfcheck` (CI runs it on the built exe): modules, bundled files, the tiny mod."""
@@ -10479,6 +10669,16 @@ building smith
         self.assertTrue(any("template_weights" in n for n in data.notes))             # no masks: a plain fade
         winter = glmap.MapData(mod, "test", winter=True)
         self.assertGreater(int(winter.pictures[int(winter.layers[4, 4])][0, 0, 0]), 200)  # the snow
+        # a brush raised the sea point out of the water: its own ground shown at once (layers_of, the rule of
+        # loading), the map's pictures read again from memory after the stroke (refresh_ground) - no new build
+        # (the user, 2026-10-22: a lag, then the new land's texture popping in)
+        g = np.array([[[101, 124, 0]]], np.uint8)
+        self.assertEqual(int(data.layers_of(g, None, np.array([[False]]))[0, 0]), green)
+        self.assertEqual(int(data.layers_of(g, None, np.array([[True]]))[0, 0]), sea)
+        was = data.heights[8, 0]
+        data.heights[8, 0] = 5.0
+        self.assertEqual(int(data.refresh_ground(mod, "test")[8, 0]), green)
+        data.heights[8, 0] = was
         # what stands on the map follows descr_strat as the Map leaves it before the write (an army moved there):
         # laid again from the Strat given, the models already read kept
         from unittest import mock
@@ -10535,6 +10735,19 @@ building smith
             gl.set_layers(0, 0, np.full((9, 9), sea, np.uint16))                         # a brush: all sand
             mid = gl.render(cam, 64, 40)[20, 12].astype(int)
             self.assertGreater(mid[0], mid[2] + 40)
+            # the colours over the map (Maps > 3D Layers: climates, regions): a blue climate over the sand shows,
+            # none takes it off again
+            clim = np.zeros((9, 9, 3), np.uint8)
+            clim[...] = (0, 0, 255)
+            tint = data.tint_of("climates", climate=clim)
+            self.assertEqual((tint.shape, tuple(tint[0, 0])), ((4, 4, 4), (0, 0, 255, 255)))
+            gl.set_tint(tint)
+            blue = gl.render(cam, 64, 40)[20, 12].astype(int)
+            self.assertGreater(blue[2], mid[2] + 40)
+            gl.set_tint(None)
+            self.assertTrue(np.array_equal(gl.render(cam, 64, 40)[20, 12].astype(int), mid))
+            regs = np.zeros((4, 4, 3), np.uint8)
+            self.assertEqual(int(data.tint_of("regions", regions=regs)[3, 0, 3]), 255)          # land shows
         finally:
             gl.release()
 
@@ -10957,7 +11170,8 @@ building smith
                               status=SimpleNamespace(set=said.append))
         for to in ((5, 6), (9, 9), (1, 1)):
             me = SimpleNamespace(app=app, _carry=("char", "rome:0", "Flavius", (1, 1)), _tile=lambda x, y, t=to: t,
-                                 _carry_stop=lambda back=True: None, load=lambda: done.append("laid"))
+                                 _carry_stop=lambda back=True: None, load=lambda: done.append("laid"),
+                                 _did=lambda kind: None)
             Map3DView._carry_end(me, SimpleNamespace(x=0, y=0))
         self.assertEqual(done, [("rome:0", (5, 6)), "laid"])         # refused at sea, nothing on its own tile
         self.assertEqual(said, ["Flavius cannot stand at 9, 9: that is sea"])
@@ -10970,7 +11184,8 @@ building smith
         for carried, to in ((("place", ("city", "Latium"), "Latium town", (3, 3)), (4, 4)),
                             (("res", "r7", "gold", (1, 1)), (2, 2)), (("res", "r7", "gold", (1, 1)), (6, 1))):
             me = SimpleNamespace(app=app, _carry=carried, _tile=lambda x, y, t=to: t,
-                                 _carry_stop=lambda back=True: None, load=lambda: done.append("laid"))
+                                 _carry_stop=lambda back=True: None, load=lambda: done.append("laid"),
+                                 _did=lambda kind: None)
             Map3DView._carry_end(me, SimpleNamespace(x=0, y=0))
         self.assertEqual(done, [("city", "Latium", (4, 4)), "laid", ("r7", (6, 1)), "laid"])
         self.assertEqual(said[-1], "gold cannot stand at 2, 2: taken")
@@ -10989,6 +11204,120 @@ building smith
         self.assertEqual(lifted, [])
         Map3DView._drag_paint(me, SimpleNamespace(x=15, y=10))
         self.assertEqual(lifted, [(15, 10)])
+        # a heights stroke that made land out of the water (or sank it): the map is not made again at its end
+        # (the user, 2026-10-22: a lag, then the new land's texture popping in) - the ground read again in the
+        # thread that lays the mountains again
+        coast = iter([(("g", 1),), ()])
+        laid = []
+        me = SimpleNamespace(app=SimpleNamespace(editors={"terrain": object()}), _pressed=None, _carry=None,
+                             _paint=True, _grab=None, gl=SimpleNamespace(coast_frozen=True, models_stale=False),
+                             _coast_was=(), _coast_now=lambda ed: next(coast), _stamp=lambda: "now",
+                             rebuild=lambda: self.fail("made again"), _lay_models=lambda: laid.append(1),
+                             _sharp_later=lambda: None, v_paint=SimpleNamespace(get=lambda: "heights"))
+        Map3DView._paint_end(me, SimpleNamespace(x=0, y=0))
+        self.assertEqual((laid, me._ground_stale, me.gl.models_stale, me._for), ([1], True, True, "now"))
+        # Paint's tile brushes on the 3D map (the user, 2026-10-22: every brush of the 2D map there, seen at once):
+        # the Terrain editor paints the square of tiles under the mouse with the pick made here, the card takes
+        # those points (and a tile round them: the shore) at once; the same tile again paints nothing more
+        from campaign_editor.gui_map3d import PAINTS, SWATCHED
+        self.assertEqual([k for k, _ in PAINTS], ["heights", "ground", "features", "climate", "regions", "land", "sea"])
+        calls, sent = [], []
+        ed = SimpleNamespace(v_brush=SimpleNamespace(get=lambda: 2),
+                             paint=lambda tiles, what, colour: calls.append((what, colour, sorted(tiles))) or
+                             [(t, colour) for t in tiles],
+                             paint_coast=lambda tiles, mode: calls.append((mode, None, sorted(tiles))) or [])
+        me = SimpleNamespace(app=SimpleNamespace(editors={"terrain": ed}), _paint=True, _mouse=(5, 5),
+                             _point=lambda x, y: ((0, 0, 0), (7.0, 9.0)), _tiles_brush=Map3DView._tiles_brush,
+                             v_paint=SimpleNamespace(get=lambda: "climate"),
+                             v_pick={k: SimpleNamespace(get=lambda: "10,20,30") for k in SWATCHED},
+                             _send_points=lambda ed, *box: sent.append(box), draw=lambda half=False: None,
+                             lbl=SimpleNamespace(configure=lambda **k: None))
+        Map3DView._tiles_tick(me)
+        self.assertEqual(calls, [("climate", (10, 20, 30), [(x, y) for x in (2, 3, 4) for y in (3, 4, 5)])])
+        self.assertEqual(sent, [(2, 12, 4, 14)])
+        Map3DView._tiles_tick(me)                                       # the same tile: nothing more
+        self.assertEqual(len(calls), 1)
+        me.v_paint, me._last_tile = SimpleNamespace(get=lambda: "land"), None
+        Map3DView._tiles_tick(me)
+        self.assertEqual(calls[-1][:2], ("land", None))                 # the Land and sea brush, by tile
+        # Regions: the Map's Edit regions brush (kept for Apply in region_paint), the colours over the map follow
+        me.v_paint, me._last_tile = SimpleNamespace(get=lambda: "regions"), None
+        me._regions = lambda tiles: calls.append(("regions", None, sorted(tiles))) or [(tiles[0], (1, 2, 3))]
+        me._send_tint = lambda draw=True: calls.append("tint")
+        Map3DView._tiles_tick(me)
+        self.assertEqual(calls[-2:], [("regions", None, [(x, y) for x in (2, 3, 4) for y in (3, 4, 5)]), "tint"])
+        # Alt + click: the brush picks the tile's own
+        picked = []
+        me = SimpleNamespace(canvas=SimpleNamespace(focus_set=lambda: None), _on=lambda: True,
+                             _tile=lambda x, y: (4, 5), v_brush_on=SimpleNamespace(get=lambda: True),
+                             v_paint=SimpleNamespace(get=lambda: "ground"),
+                             v_pick={k: SimpleNamespace(set=picked.append) for k in SWATCHED},
+                             _terrain=lambda: SimpleNamespace(_current=lambda what, t: (0, 128, 128)),
+                             lbl=SimpleNamespace(configure=lambda **k: None))
+        Map3DView._eyedrop(me, SimpleNamespace(x=1, y=1))
+        self.assertEqual(picked, ["0,128,128"])
+        # Ctrl+Z / Ctrl+Y on the 3D tab: a stroke of the Terrain editor's brushes goes back there (the map made
+        # from its pictures again), regions painted or a figure carried by the window's own Undo
+        undone, later = [], []
+        ed = SimpleNamespace(undo_stroke=lambda: undone.append("undo"), redo_stroke=lambda: undone.append("redo"))
+        me = SimpleNamespace(app=SimpleNamespace(editors={"terrain": ed}), after_idle=later.append,
+                             load="load", _after_undo="after")
+        Map3DView._did(me, "terrain")
+        Map3DView._did(me, "app")
+        self.assertFalse(Map3DView.undo_step(me))                   # the regions: the window's Undo, then the map
+        self.assertTrue(Map3DView.undo_step(me))                    # the stroke: the Terrain editor's
+        self.assertTrue(Map3DView.undo_step(me, redo=True))
+        self.assertEqual((undone, later), (["undo", "redo"], ["after", "load", "load"]))
+        self.assertFalse(Map3DView.undo_step(me, redo=True))        # the regions again: the window's Redo
+        self.assertFalse(Map3DView.undo_step(me, redo=True))        # nothing of its own left
+        # the Ground brush over the sea: every tile it turns into land goes to the Land and sea brush in ONE call
+        # (the shore risen and smoothed once - tile by tile a big brush lagged), then gets its ground
+        try:
+            from campaign_editor import mapdata  # noqa: F401 - the brush names its tiles' looks there (Pillow)
+            from campaign_editor.gui_terrain import TerrainEditor
+        except ImportError:                              # CI's test job: no Pillow
+            TerrainEditor = None
+        if TerrainEditor is not None:
+            from unittest import mock
+            coast, laid = [], []
+            sea = {(1, 0), (2, 0), (3, 0)}
+            te = SimpleNamespace(_bound=lambda: True, v_what=SimpleNamespace(get=lambda: "ground"),
+                                 _current=lambda what, t: (64, 0, 0) if t in sea else (0, 128, 128),
+                                 cmap=SimpleNamespace(is_sea=lambda x, y: (x, y) in sea, __dict__={}),
+                                 paint_coast=lambda tiles, mode: coast.append((sorted(tiles), mode)) or
+                                 [(t, None) for t in tiles if t != (3, 0)], _coast_why="a town stands there",
+                                 standing=set(), _lay_tile=lambda what, t, c: laid.append(t), ground={}, climate={},
+                                 features={}, pending=lambda: 3,
+                                 app=SimpleNamespace(status=SimpleNamespace(set=lambda t: None), _mark_work=lambda: None))
+            with mock.patch("campaign_editor.terrain.paint_problem", lambda *a: None):
+                took = TerrainEditor.paint(te, [(0, 0), (1, 0), (2, 0), (3, 0)], colour=(101, 124, 0))
+            self.assertEqual(coast, [([(1, 0), (2, 0), (3, 0)], "land")])
+            self.assertEqual(laid, [(0, 0), (1, 0), (2, 0)])                    # (3, 0) refused: stays sea
+            self.assertEqual(len(took), 3)
+        # a tile brush in hand: what the tile is, beside the mouse
+        cm = SimpleNamespace(w=9, h=9, ground_at=lambda x, y: (0, 128, 128), climate_at=lambda x, y: (1, 2, 3),
+                             region_at=lambda x, y: "Latium")
+        me = SimpleNamespace(app=SimpleNamespace(editors={"terrain": SimpleNamespace(cmap=cm, mod=None)},
+                                                 region_paint={(4, 4): "Etruria"}))
+        self.assertEqual(Map3DView._paint_tip(me, (3, 3)).splitlines(),
+                         ["tile 3, 3", "ground: low fertility", "climate: 1 2 3", "region: Latium"])
+        self.assertTrue(Map3DView._paint_tip(me, (4, 4)).endswith("region: Etruria"))     # painted, not written
+        # the colours over the map (Layers): what the brushes left, sent to the card - none takes them off
+        tints = []
+        me = SimpleNamespace(gl=SimpleNamespace(set_tint=tints.append, data=SimpleNamespace(
+            tint_of=lambda kind, climate=None, regions=None: (kind, climate is not None, regions is not None))),
+            v_tint=SimpleNamespace(get=lambda: "climates"), _source=lambda: "mod",
+            app=SimpleNamespace(v_campaign=SimpleNamespace(get=lambda: "imperial_campaign")), draw=lambda: None)
+        from unittest import mock
+        try:
+            import numpy  # noqa: F401
+        except ImportError:                              # CI's test job: the rest needs NumPy
+            return
+        with mock.patch("campaign_editor.terrain3d._picture", lambda mod, camp, name: "picture"):
+            Map3DView._send_tint(me)
+        me.v_tint = SimpleNamespace(get=lambda: "none")
+        Map3DView._send_tint(me)
+        self.assertEqual(tints, [("climates", True, False), None])
         # the hover's words: a character's name and what he is, a town's name and owner, a resource's name
         app._map_chars["rome:0"].update(kind="general", faction="romans_julii", army=True, units=5)
         mv.cmap, mv.owners = SimpleNamespace(info={"Latium": {"settlement": "Roma"}}), {"Latium": "romans_senate"}

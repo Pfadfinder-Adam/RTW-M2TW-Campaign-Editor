@@ -38,7 +38,9 @@ class Look:
 
     def __init__(self, root):
         self.root = root
-        self.data = LK.load()
+        self.own = LK.load()                      # the modder's own changes (CampaignEditor_look.json)
+        self.snips = LK.snippets()                # sets of changes switched on / off, under the own ones
+        self.data = LK.layered(self.own, self.snips)   # the look in force
         self.words = {}
         self.seen_words = set()                   # English words seen in the windows (for 'Words to translate')
         self.by_key = {}                          # key -> widget (the newest of that key)
@@ -503,8 +505,10 @@ class Look:
         self._set(key, new)
 
     def _set(self, key, entry):
-        LK.set_entry(self.data, key, entry)
-        LK.save(self.data)
+        base = LK.layered({"pieces": {}, "order": []}, self.snips)["pieces"].get(key) if self.snips else None
+        LK.set_entry(self.own, key, LK.own_part(base, entry))
+        LK.save(self.own)
+        self.data = LK.layered(self.own, self.snips)
         w = self.by_key.get(key)
         try:
             if w is not None and w.winfo_exists():
@@ -531,6 +535,37 @@ class Look:
         self.undo.append((key, copy.deepcopy(self.data["pieces"].get(key))))
         self._set(key, new)
         return True
+
+    def relayer(self):
+        """The snippets read again (one switched on / off, added, deleted): every piece whose look changed put
+        back and its new look put on."""
+        old = self.data["pieces"]
+        self.snips = LK.snippets()
+        self.data = LK.layered(self.own, self.snips)
+        new = self.data["pieces"]
+        for key in [k for k in set(old) | set(new) if old.get(k) != new.get(k)]:
+            w = self.by_key.get(key)
+            try:
+                if w is not None and w.winfo_exists():
+                    self.back_home(w)
+                    self._put_on(w)
+            except tk.TclError:
+                pass
+            for f in list(self.on_change):
+                f(key)
+        self._try_waiting()
+
+    def own_to_snippet(self, name):
+        """The modder's own changes moved into a new snippet (switched on: nothing changes on the screen) -> its
+        path or None."""
+        path = LK.save_snippet(name, self.own, on=True)
+        if path:
+            self.own = {"pieces": {}, "order": []}
+            LK.save(self.own)
+            self.undo.clear()
+            self.redo.clear()
+            self.relayer()
+        return path
 
     def back_all(self):
         """Every change of the look taken back (one Undo step each)."""

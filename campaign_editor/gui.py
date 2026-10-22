@@ -2313,6 +2313,9 @@ class App(tk.Tk):
         if ed is None and self.editors.get("terrain") is not None and self.map_work() and \
                 self.tab_name() in self.TERRAIN_TABS:
             ed = self.editors["terrain"]                 # Maps > Terrain / Coast & heights: its strokes
+        if ed is None and getattr(self, "map3d", None) is not None and self.map_work() and \
+                self.tab_name() == self.MAP3D_TAB:
+            return self.map3d.undo_step(redo)            # Maps > 3D: its strokes, else the window's own steps
         if ed is None:
             return False
         step = getattr(ed, "redo_step" if redo else "undo_step", None)
@@ -2908,12 +2911,27 @@ class App(tk.Tk):
             land = {t: new[r] for t, r in self.region_paint.items() if r in new}
             return {"region_mode": False, "region_painted": self.region_paint, "region_points": points,
                     "new_land": land}
+        paint, pick, cols = self.region_brush()
+        from .regionedit import SEA
+        names = sorted(c for c in cols if c != SEA)
+        self.cb_paint["values"] = [r["name"] + "  (new)" for r in self.new_regions] + names + [SEA]
+        overlay = {t: cols[r] for t, r in self.region_paint.items() if r in cols}
+        on_place, ghost = None, None
+        if self._region_point:
+            on_place = self.place_region_point
+            ghost = {"kind": self._region_point[0], "check": self.region_point_problem}
+        return {"region_mode": True, "paint_overlay": overlay, "on_paint": paint, "on_pick": pick,
+                "brush": self.v_brush.get(), "region_points": points, "on_place": on_place,
+                "region_painted": self.region_paint, "region_colours": cols,
+                "borders": self.v_borders.get(), "ghost": ghost}
+
+    def region_brush(self):
+        """(paint(tiles) -> [(tile, colour shown)], pick(xy), {region: colour}) of Edit regions' brush: tiles given
+        to the region picked in 'Paint with' (kept for Apply in region_paint) - the Map's and the 3D map's."""
         from .regionedit import SEA, sea_colour
         cols = self._region_colours()
-        names = sorted(cols)
         cols[SEA] = sea_colour(self.mod, self.v_campaign.get())     # the region map's sea (Discord: borders cut
-        self.cb_paint["values"] = [r["name"] + "  (new)" for r in self.new_regions] + names + [SEA]   # into rivers)
-        cm = self._cmap
+        cm = self._cmap                                             # into rivers)
 
         def paint(tiles):
             target = self.v_paint.get().replace("  (new)", "").strip()
@@ -2947,15 +2965,7 @@ class App(tk.Tk):
                 new = any(n["name"] == r for n in self.new_regions)
                 self.v_paint.set(r + ("  (new)" if new else ""))
                 self.status.set("Painting with %s." % r)
-        overlay = {t: cols[r] for t, r in self.region_paint.items() if r in cols}
-        on_place, ghost = None, None
-        if self._region_point:
-            on_place = self.place_region_point
-            ghost = {"kind": self._region_point[0], "check": self.region_point_problem}
-        return {"region_mode": True, "paint_overlay": overlay, "on_paint": paint, "on_pick": pick,
-                "brush": self.v_brush.get(), "region_points": points, "on_place": on_place,
-                "region_painted": self.region_paint, "region_colours": cols,
-                "borders": self.v_borders.get(), "ghost": ghost}
+        return paint, pick, cols
 
     def _new_region(self, name):
         return next((r for r in self.new_regions if r["name"] == name), None)
