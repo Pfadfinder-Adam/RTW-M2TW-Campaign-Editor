@@ -295,7 +295,9 @@ def apply_regions(plan, campaign, painted, new_regions):
             if res:
                 plan.note(dr, "%s: resources of %s (%s)" % (r["name"], donor, res))
         if not res:
-            raise ValueError("%s: give it at least one resource (the game files have no region without)" % r["name"])
+            # the game takes 'none' for a region with no resource (engine source map_regions_db.cpp, both games)
+            res = "none"
+            plan.note(dr, "%s: no resource (the line says none)" % r["name"])
         d = regions.get(donor) or {}
         creator = r.get("creator") or d.get("creator") or r.get("owner")
         rebels = r.get("rebels") or d.get("rebels")
@@ -481,7 +483,8 @@ def set_religions(plan, campaign, religions):
         elif cur in religions and code.strip().startswith("religions"):
             rel = {k: int(v) for k, v in religions[cur].items()}
             if sum(rel.values()) != 100:
-                raise ValueError("%s: the religions add up to %d, not 100" % (cur, sum(rel.values())))
+                plan.warn(f, "%s: the religions add up to %d, not 100 - written as given (the game reads each share "
+                          "as it is, no check of the sum: religion.cpp)" % (cur, sum(rel.values())))
             indent = line[:len(line) - len(line.lstrip())]
             new = indent + religions_line(rel)
             if new != line.rstrip("\r\n"):
@@ -494,7 +497,8 @@ def set_religions(plan, campaign, religions):
             continue
         rel = {k: int(v) for k, v in religions[r].items()}
         if sum(rel.values()) != 100:
-            raise ValueError("%s: the beliefs add up to %d, not 100" % (r, sum(rel.values())))
+            plan.warn(f, "%s: the beliefs add up to %d, not 100 - written as given (the game reads each share "
+                          "as it is, no check of the sum: religion.cpp)" % (r, sum(rel.values())))
         i = entries[r]["beliefs"][0]
         line = f.text(i)
         words = " ".join("%s %d" % (k, v) for k, v in rel.items() if v) or "%s 100" % next(iter(rel))

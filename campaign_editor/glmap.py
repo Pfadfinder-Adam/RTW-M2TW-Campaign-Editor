@@ -28,6 +28,7 @@ import time
 import numpy as np
 
 from . import maptrees as MT
+from . import terrain as T
 from . import terrain3d as T3
 
 SCALE = {"medieval2": 1.2, "rome": 0.6}         # the games' height scale (aerial_map.h)
@@ -146,6 +147,22 @@ def _image_size(mod, rel):
     return None
 
 
+def _coast_hidden(feats):
+    """Where the game draws no coast strip: rivers (sources, fords) and cliffs on map_features ((h, w, 3) or None)."""
+    if feats is None:
+        return None
+    code = (feats[..., 0].astype(np.int32) << 16) | (feats[..., 1].astype(np.int32) << 8) | feats[..., 2]
+    return np.isin(code, [(r << 16) | (g << 8) | b for r, g, b in T.RIVERY | {(255, 255, 0)}])
+
+
+def _rivers(feats, H, W):
+    """(H, W) bool, rows bottom first: the river tiles of map_features (roads and borders bend round them)."""
+    if feats is None or feats.shape[:2] != (H, W):
+        return np.zeros((H, W), bool)
+    f = feats[::-1].astype(np.int32)
+    return np.isin((f[..., 0] << 16) | (f[..., 1] << 8) | f[..., 2], (0x0000ff, 0xffffff, 0x00ffff))
+
+
 class MapData:
     """What the card needs of a campaign map, as arrays (the slow part, no OpenGL - made once, also in a thread):
     heights (metres, top row first), the ground picture of each point (an index into pictures), the pictures, the
@@ -172,28 +189,12 @@ class MapData:
         self._tile_models(mod, campaign, winter)
         self._trees(mod, campaign, winter)
         self._objects(mod, campaign, strat, moved=moved)
-        feats = T3._picture(mod, campaign, "map_features.tga")
-        self.coast_hidden = None                    # rivers (sources, fords) and cliffs: the game draws no strip there
-        if feats is not None:
-            from .terrain import RIVERY
-            code = (feats[..., 0].astype(np.int32) << 16) | (feats[..., 1].astype(np.int32) << 8) | feats[..., 2]
-            self.coast_hidden = np.isin(code, [(r << 16) | (g << 8) | b for r, g, b in RIVERY | {(255, 255, 0)}])
+        self.coast_hidden = _coast_hidden(T3._picture(mod, campaign, "map_features.tga"))
 
     def _ground(self, mod, campaign, winter):
         """(layer of each point (rows, cols) uint16, [pictures (LAYER, LAYER, 3)], [repeats a tile per layer])."""
         keys = sorted(set(T3.GROUND_KEYS.values()) | {"beach"})
         names, choices, density = T3.picture_choices(mod, keys, winter)
-        ground = T3._picture(mod, campaign, "map_ground_types.tga")
-        climate = T3._picture(mod, campaign, "map_climates.tga")
-        shape = (self.rows, self.cols)
-        gi = T3._ground_index(ground, keys) if ground is not None and ground.shape[:2] == shape else \
-            np.full(shape, keys.index("fertility_low"), np.int32)
-        ci = T3._climate_index(mod, climate, names) if climate is not None and climate.shape[:2] == shape else \
-            np.zeros(shape, np.int32)
-        sea = self.heights <= 0
-        # the games' own fix at loading: a land point with a sea colour is low fertility, a sea point is beach
-        gi = np.where(gi < 0, keys.index("fertility_low"), gi)
-        gi = np.where(sea, keys.index("beach"), gi)
         files, loaded, pictures, repeat, missing = {}, {}, [], [], set()
         table = np.zeros((len(names), len(keys)), np.int32)
         for c, cname in enumerate(names):
@@ -228,7 +229,73 @@ class MapData:
                                   sorted(os.path.basename(m) for m in missing)[:4]) + (" ..." if len(missing) > 4 else "")))
         if not any(choices.values()):
             self.notes.append("no descr_aerial_map_ground_types.txt - the grounds' plain colours shown")
-        return table[ci, gi].astype(np.uint16), pictures, repeat
+        self._ground_keys, self._climate_names, self._climates, self._table = keys, names, T.climates(mod), table
+        layers = self.layers_of(T3._picture(mod, campaign, "map_ground_types.tga"),
+                                T3._picture(mod, campaign, "map_climates.tga"), self.heights <= 0)
+        return layers, pictures, repeat
+
+    def layers_of(self, ground, climate, sea):
+        """The ground picture (layer) of points: (h, w) uint16 from their map_ground_types and map_climates colours
+        ((h, w, 3) top row first, or None) and whether each is under the sea ((h, w) bool) - the rule of loading,
+        also for a brush's few points (a point raised out of the water shows its own ground and climate at once)."""
+        keys, shape = self._ground_keys, sea.shape
+        gi = T3._ground_index(ground, keys) if ground is not None and ground.shape[:2] == shape else \
+            np.full(shape, keys.index("fertility_low"), np.int32)
+        ci = T3._climate_index(None, climate, self._climate_names, self._climates) if climate is not None and \
+            climate.shape[:2] == shape else np.zeros(shape, np.int32)
+        # the games' own fix at loading: a land point with a sea colour is low fertility, a sea point is beach
+        gi = np.where(gi < 0, keys.index("fertility_low"), gi)
+        gi = np.where(sea, keys.index("beach"), gi)
+        return self._table[ci, gi].astype(np.uint16)
+
+    def tint_of(self, kind, climate=None, regions=None):
+        """The colours laid over the map, a tile each ((H, W, 4) uint8, top row first): 'climates' - each tile's
+        climate colour (map_climates, (h, w, 3) top row first), the sea's too: what new land made there gets;
+        'regions' - each land tile's map_regions colour ((H, W, 3) top row first), the sea left clear."""
+        H, W = (self.rows - 1) // 2, (self.cols - 1) // 2
+        out = np.zeros((H, W, 4), np.uint8)
+        if kind == "climates" and climate is not None and climate.shape[:2] == self.heights.shape:
+            out[..., :3] = climate[1::2, 1::2][:H, :W]
+            out[..., 3] = 255
+        elif kind == "regions" and regions is not None and regions.shape[:2] == (H, W):
+            out[..., :3] = regions
+            out[..., 3] = np.where(self.heights[1::2, 1::2][:H, :W] > 0, 255, 0)
+        return out
+
+    def refresh_ground(self, mod, campaign, painted=None):
+        """The brushes changed the ground, climates or regions in memory (land raised out of the water, land sunk
+        under it): what the tile models, trees and borders stand on read again, each point's picture made again -
+        returned, for the card to take on the main thread. painted: {tile: region} the Map's Edit regions gave and
+        Apply will write (the borders drawn as it will leave them). No new build of the map (the user, 2026-10-22: the map
+        made again at a stroke's end lagged, and the new land's texture came in after)."""
+        from . import mapnet as N
+        from . import tilemodels as TM
+        ground = T3._picture(mod, campaign, "map_ground_types.tga")
+        climate = T3._picture(mod, campaign, "map_climates.tga")
+        feats = T3._picture(mod, campaign, "map_features.tga")
+        if getattr(self, "_model_src", None):
+            self._model_src = (ground, feats) + tuple(self._model_src[2:])
+        self.coast_hidden = _coast_hidden(feats)
+        if getattr(self, "_tree_src", None):
+            H, W = (self.rows - 1) // 2, (self.cols - 1) // 2
+            names = [n for n, _ in self._tree_src[2]]
+            ci = T3._climate_index(mod, climate, names) if climate is not None and \
+                climate.shape[:2] == self.heights.shape else np.zeros(self.heights.shape, np.int32)
+            self._tree_src = (ground, ci[1::2, 1::2][:H, :W][::-1]) + tuple(self._tree_src[2:])
+        src = getattr(self, "_net_src", None)
+        if src:
+            from .regionedit import SEA
+            src["grid"], src["names"] = N.region_grid(mod, campaign)
+            index = {n: i for i, n in enumerate(src["names"])}
+            gh, gw = src["grid"].shape
+            for (x, y), name in (painted or {}).items():
+                if 0 <= x < gw and 0 <= y < gh and (name in index or name == SEA):
+                    src["grid"][y, x] = index.get(name, -1)
+            H, W = src["grid"].shape
+            src["mountains"] = TM.tile_types(ground)[TM.MOUNTAINS_HIGH] if ground is not None and \
+                ground.shape[:2] == self.heights.shape else np.zeros((H, W), bool)
+            src["feats"], src["rivers"] = feats, _rivers(feats, H, W)
+        return self.layers_of(ground, climate, self.heights <= 0)
 
     def _tile_models(self, mod, campaign, winter):
         """The tile models (mountains, hills, volcanoes - tilemodels) placed on this map, their pictures."""
@@ -325,9 +392,10 @@ class MapData:
             for tex in self.objects:
                 if tex is not None:
                     self.object_pictures[tex] = loader.picture(tex)
+            self.objects_missing = sorted(loader.missing)        # all of them (the bar names four): into the log
             if loader.missing:
                 self.notes.append("model(s) or texture(s) of what stands on the map not found: %s" %
-                                  ", ".join(sorted(loader.missing)[:4]))
+                                  ", ".join(self.objects_missing[:4]))
         except Exception as e:                          # said in the bar, the map still drawn
             self.notes.append("the towns and armies are not drawn: %s" % e)
 
@@ -342,25 +410,27 @@ class MapData:
     def place_objects(self):
         """The towns, armies, roads and borders laid again on the heights as they are now."""
         from . import mapmodels as MM
-        self.ghost = {}
+        self.ghost, self._held = {}, None
         if getattr(self, "_objs", None):
-            self.objects = MM.build(self._objs[0], self._objs[1], self.heights, 0.0005 * self.scale)
+            self._each = MM.build_each(self._objs[0], self._objs[1], self.heights, 0.0005 * self.scale)
+            self.objects = MM.join(self._each)
         self.place_net()
 
     def lift_out(self, pick):
         """What pick(object) chooses (mapobjects3d.objects' dicts) taken out of the map into the hand: self.ghost
         holds it as the card draws it, self.objects the rest - it then goes with the mouse (GLMap.ghost_shift) until
-        put down. True when anything was taken."""
+        put down. True when anything was taken. Only joined again from each object's laid pieces (_each), nothing
+        laid anew."""
         from . import mapmodels as MM
-        if not getattr(self, "_objs", None):
+        if not getattr(self, "_objs", None) or len(getattr(self, "_each", ())) != len(self._objs[0]):
             return False
-        objs, loader = self._objs
-        held = [o for o in objs if pick(o)]
+        objs = self._objs[0]
+        held = [i for i, o in enumerate(objs) if pick(o)]
         if not held:
             return False
-        ys = 0.0005 * self.scale
-        self.objects = MM.build([o for o in objs if not pick(o)], loader, self.heights, ys)
-        self.ghost = MM.build(held, loader, self.heights, ys)
+        out = set(held)
+        self.objects = MM.join(e for i, e in enumerate(self._each) if i not in out)
+        self.ghost = MM.join(self._each[i] for i in held)
         self._held = held
         return True
 
@@ -373,12 +443,16 @@ class MapData:
         if not held or not getattr(self, "ghost", None):
             return False
         if tile is not None:
-            towns = {tuple(o["xy"]) for o in self._objs[0] if o["kind"] == "town"}
-            for o in held:
-                o["xy"] = tuple(tile)
-                if o["kind"] == "character":
-                    o["in_town"] = tuple(tile) in towns
-            self.ghost = MM.build(held, self._objs[1], self.heights, 0.0005 * self.scale)
+            objs = self._objs[0]
+            towns = {tuple(o["xy"]) for o in objs if o["kind"] == "town"}
+            for i in held:
+                objs[i]["xy"] = tuple(tile)
+                if objs[i]["kind"] == "character":
+                    objs[i]["in_town"] = tuple(tile) in towns
+            laid = MM.build_each([objs[i] for i in held], self._objs[1], self.heights, 0.0005 * self.scale)
+            for i, one in zip(held, laid):
+                self._each[i] = one
+            self.ghost = MM.join(laid)
         for tex, arr in self.ghost.items():
             if len(arr):
                 have = self.objects.get(tex)
@@ -404,10 +478,7 @@ class MapData:
             H, W = grid.shape
             mh = TM.tile_types(ground)[TM.MOUNTAINS_HIGH] if ground is not None and \
                 ground.shape[:2] == self.heights.shape else np.zeros((H, W), bool)
-            rivers = np.zeros((H, W), bool)
-            if feats is not None and feats.shape[:2] == (H, W):
-                f = feats[::-1].astype(np.int32)
-                rivers = np.isin((f[..., 0] << 16) | (f[..., 1] << 8) | f[..., 2], (0x0000ff, 0xffffff, 0x00ffff))
+            rivers = _rivers(feats, H, W)
             regs = mod.regions(campaign)
             self._net_src = {"grid": grid, "names": names, "chains": N.road_chains(mod), "feats": feats,
                              "mountains": mh, "rivers": rivers, "towns": mod.city_tiles(campaign),
@@ -676,9 +747,22 @@ flat out float kind_v;
 void main() { g = pos.xz * 2.0; n = nrm; kind_v = kind; gl_Position = mvp * vec4(pos, 1.0); }
 """
 
+# colours laid over the map to see what is painted (Maps > 3D: the climates - on the water too -, the regions): one
+# texel a tile, top row first; its alpha how much it shows
+TINT_GLSL = """
+uniform sampler2D tint;
+uniform int tinted;
+vec3 tinted_by(vec3 c, vec2 tile) {
+    if (tinted == 0) return c;
+    ivec2 ts = textureSize(tint, 0);
+    vec4 t = texelFetch(tint, clamp(ivec2(floor(tile)), ivec2(0), ts - 1), 0);
+    return mix(c, dec(t.rgb), t.a * 0.55);
+}
+"""
+
 TERRAIN_FS = """
 #version 330
-""" + COLOUR_GLSL + """
+""" + COLOUR_GLSL + TINT_GLSL + """
 uniform vec3 to_light;
 uniform vec3 ambient;
 uniform vec3 diffuse;
@@ -700,8 +784,14 @@ uint mix3(uint a, uint b, uint c) {
     x ^= x >> 13; x *= 0x5bd1e995u; x ^= x >> 15;
     return x;
 }
-vec3 pic(uint l, vec2 t) { return dec(texture(ground, vec3(t * rep[l], float(l))).rgb); }
+vec2 tdx, tdy;
+// the picture's mip level from slopes taken once, before any discard or branch: a texture() inside them has no
+// sure slope where a 2 x 2 pixel block straddles a half-tile's edge - some cards then drew a thin pale line along
+// the edges of blended half-tiles and of tile models' tiles (a tester: faint squares on the ground)
+vec3 pic(uint l, vec2 t) { return dec(textureGrad(ground, vec3(t * rep[l], float(l)), tdx * rep[l], tdy * rep[l]).rgb); }
 void main() {
+    tdx = dFdx(g * 0.5);
+    tdy = dFdy(g * 0.5);
     if (mode == 0) {
         ivec2 vs = textureSize(voids, 0);
         uint k = texelFetch(voids, clamp(ivec2(floor(g * 0.5)), ivec2(0), vs - 1), 0).r;
@@ -732,6 +822,7 @@ void main() {
         float sum = max(w0 + w1 + w2 + w3, 1e-4);
         col = (pic(l0, t) * w0 + pic(l1, t) * w1 + pic(l2, t) * w2 + pic(l3, t) * w3) / sum;
     }
+    col = tinted_by(col, g * 0.5);
     vec3 light = ambient + diffuse * max(dot(normalize(n), to_light), 0.0);
     colour = vec4(enc(col * (linear == 1 ? light : min(light, vec3(1.0)))), 1.0);
 }
@@ -943,10 +1034,10 @@ vec3 sea(vec2 w) {                      // the open water's colour at world poin
 
 SEA_FS = """
 #version 330
-""" + SEA_GLSL + """
+""" + SEA_GLSL + TINT_GLSL + """
 out vec4 colour;
 in vec2 w;
-void main() { colour = vec4(enc(sea(w)), 1.0); }
+void main() { colour = vec4(enc(tinted_by(sea(w), w)), 1.0); }
 """
 
 RIVER_VS = """
@@ -1168,6 +1259,9 @@ class GLMap:
                            for k, v in data.model_pictures.items()}
         self.model_masks = {k: self._picture(v, 4, (255, 255, 255, 255)) for k, v in data.model_masks.items()}
         self._white = self._picture(None, 4, (255, 255, 255, 255))
+        H, W = (rows - 1) // 2, (cols - 1) // 2
+        self.tint = self._keep(ctx.texture((max(1, W), max(1, H)), 4, bytes(max(1, W) * max(1, H) * 4)))
+        self.tint.filter = (ctx.NEAREST, ctx.NEAREST)            # a tile's own colour, its edges sharp
         # the grid: one point per heights pixel, two triangles a half-tile square along its SW -> NE diagonal
         gy, gx = np.mgrid[0:rows, 0:cols].astype(np.float32)
         pts = np.stack([gx.ravel(), gy.ravel()], 1)
@@ -1213,6 +1307,11 @@ class GLMap:
                 if name in prog:
                     prog[name].value = unit
             prog["mode"].value = 0 if prog is self.terrain else 1
+        for prog in (self.terrain, self.under, self.sea):
+            if "tint" in prog:
+                prog["tint"].value = 13
+            if "tinted" in prog:
+                prog["tinted"].value = 0
         self.over["pic"].value, self.over["mask"].value = 9, 10
         self.tree["pic"].value = 9
         self.obj["pic"].value = 9
@@ -1355,6 +1454,15 @@ class GLMap:
         self.coast_dirty = True                                  # the shore traced again at the next frame
         self.models_stale = True                                 # the tile models laid again after the stroke
 
+    def set_tint(self, rgba):
+        """Colours over the map: (H, W, 4) uint8, a tile each, top row first (MapData.tint_of), or None for none."""
+        on = rgba is not None
+        if on:
+            self.tint.write(np.ascontiguousarray(rgba, np.uint8).tobytes())
+        for prog in (self.terrain, self.under, self.sea):
+            if "tinted" in prog:
+                prog["tinted"].value = int(on)
+
     def set_layers(self, row, col, block):
         """The ground picture (layer) of a block of points from (row, col) changed on the card."""
         block = np.asarray(block, np.uint16)
@@ -1424,6 +1532,7 @@ class GLMap:
         self.water.use(4)
         self.waves.use(5)
         self.sky.use(6)
+        self.tint.use(13)
         if show.get("sea", True):
             self.sea["mvp"].write(mvp_bytes)
             if "eye" in self.sea:

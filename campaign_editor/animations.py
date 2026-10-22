@@ -1,16 +1,25 @@
 """The games' battle animations, read from their packs (data/animations/pack.idx + pack.dat - Rome, Barbarian
-Invasion, Medieval II) to pose a battle model in the 3D view and play it.
+Invasion, Medieval II) to pose a battle model in the 3D view and play it, and the skeletons they play on - read the
+way the game reads them (the engine source: SKELETON::unpack, SKELETON_BASE::open, ANIM_DATA_PACK), so any mod's
+bones are placed as in the game, whatever their number, order and names.
 
 pack.idx: 'ANIM.PACK', a version (4 Rome / BI, 9 Medieval II) and the count at byte 16; from byte 20 one record per
 animation: its record size, offset into pack.dat, size, scale (Rome keeps most twice, at 1.0 and 1.1), frames,
 bones, kind, then the name ('data/animations/...cas'). An animation in pack.dat: frames, bones, kind again, then for
 every frame each bone's own turn (a quaternion x y z w, from its parent), then for every frame the offsets of the
-first `kind` bones (x y z from the parent): kind 1 = the pelvis alone (Rome's usual), kind = bones (Medieval II's
-usual: every bone). XIDX (the Europa Barbarorum team's pack tool) reads the records the same way.
+`kind` bones that carry one (x y z from the parent), the root's moves and lengths, and last a bit mask saying WHICH
+bones those are (one bit a bone): the pelvis alone is Rome's usual and every bone Medieval II's, but a camel's swim,
+an elephant's moves, a crossbow's string and many a mod's own animations carry some bones and not others - a bone
+with no offset of its own stands where its skeleton's base pose puts it (read as 'the first `kind` bones', a mod's
+men fell together: 'they look crushed'). XIDX (the Europa Barbarorum team's pack tool) reads the records the same way.
 
-descr_skeleton.txt names each skeleton's animations: 'type <skeleton>', then 'anim <what> <file> ...' lines.
-A Rome model's bones are its own (meshview.read_cas); a Medieval II mesh is made in the pose of its skeleton's
-'default' animation (the base pose) - meshview.pose_mesh turns it from there."""
+Skeletons (Skeleton): Medieval II's skeletons.dat record of each skeleton holds its bones - each one's name, parent
+and base pose (its place from the parent) and the inverse of its place in the pose the meshes are made in (the
+skin's bind, from the skeleton's 'default' animation). A mod living on descr_skeleton.txt alone (no set loads) has
+its skeleton built from the type's first .cas file, as the game does. A Rome model's bones are its own
+(meshview.read_cas).
+
+descr_skeleton.txt names each skeleton's animations: 'type <skeleton>', then 'anim <what> <file> ...' lines."""
 
 import os
 import re
@@ -29,14 +38,16 @@ class Entry:
 
 
 class Anim:
-    """One animation: frames, bones, kind; rotations(k) = each bone's own turn in frame k, offsets(k) = the offsets
-    of its first `kind` bones from their parents (kind 1: the pelvis alone)."""
+    """One animation: frames, bones, kind; rotations(k) = each bone's own turn in frame k, offsets(k) = each bone's
+    offset from its parent in frame k - None for a bone the animation carries none for (it stands at its skeleton's
+    base pose); moved = the bones that carry one (the record's bit mask)."""
 
-    def __init__(self, name, frames, bones, kind, data):
+    def __init__(self, name, frames, bones, kind, data, version=None):
         self.name, self.frames, self.bones, self.kind, self.data = name, frames, bones, kind, data
         need = 5 + 16 * frames * bones + 12 * frames * kind
         if frames < 1 or bones < 1 or len(data) < need:
             raise ValueError("%s: not an animation the editor can read" % name)
+        self.moved = moved_bones(data, frames, bones, kind, version)
 
     def rotations(self, k):
         k = max(0, min(self.frames - 1, k))
@@ -45,11 +56,40 @@ class Anim:
     def offsets(self, k):
         k = max(0, min(self.frames - 1, k))
         at = 5 + 16 * self.frames * self.bones + 12 * k * self.kind
-        return list(struct.iter_unpack("<3f", self.data[at:at + 12 * self.kind]))
+        out = [None] * self.bones
+        for b, t in zip(self.moved, struct.iter_unpack("<3f", self.data[at:at + 12 * self.kind])):
+            out[b] = t
+        return out
+
+
+# what stands between an animation's offsets and its bit mask, by the pack's version: Medieval II (9) keeps the
+# root's moves for every frame (8 bytes) and the distances to the end (4), Rome (4) every second frame (12 + 4);
+# then both the root's offsets (12 a frame) and six numbers (length in time and distance, the move, three speeds)
+_BETWEEN = {9: lambda f: 24 * f + 32, 4: lambda f: 16 * (f >> 1) + 12 * f + 32}
+
+
+def moved_bones(data, frames, bones, kind, version=None):
+    """The bones an animation in pack.dat carries offsets for, in order: its record's last bytes, one bit a bone
+    (ANIM_DATA_PACK's trans_array: 4 to 12 bytes); the first `kind` bones when no mask reads."""
+    start = 5 + 16 * frames * bones + 12 * frames * max(kind, 1)
+    for v in ([version] if version in _BETWEEN else []) + [v for v in _BETWEEN if v != version]:
+        at = start + _BETWEEN[v](frames)
+        rest = len(data) - at
+        if 4 <= rest <= 12 and rest % 4 == 0:
+            bits = int.from_bytes(data[at:], "little")
+            got = tuple(b for b in range(bones) if bits >> b & 1)
+            if len(got) == kind and bits >> bones == 0:
+                return got
+    return tuple(range(min(kind, bones)))
 
 
 def read_index(data):
     """[Entry] of a pack.idx's bytes (ValueError when it is not one)."""
+    return _read_index(data)[1]
+
+
+def _read_index(data):
+    """(the pack's version, [Entry]) of a pack.idx's bytes."""
     if not data.startswith(HEADER) or len(data) < 20:
         raise ValueError("not an animation pack index")
     count = struct.unpack_from("<I", data, 16)[0]
@@ -64,7 +104,7 @@ def read_index(data):
             break
         out.append(Entry(data[p + 21:end].decode("latin-1"), scale, frames, bones, kind, off, size))
         p = end + 1
-    return out
+    return struct.unpack_from("<I", data, 12)[0], out
 
 
 def key(name):
@@ -77,14 +117,14 @@ class Pack:
     def __init__(self, folder):
         self.folder = folder
         self.idx, self.dat = _ci(folder, "pack.idx"), _ci(folder, "pack.dat")
-        self._entries = None
+        self._entries, self.version = None, None
 
     @property
     def entries(self):
         """{key: [Entry, ...]} - the scales of one animation together, 1.0 first."""
         if self._entries is None:
             with open(self.idx, "rb") as fh:
-                found = read_index(fh.read())
+                self.version, found = _read_index(fh.read())
             self._entries = {}
             for e in found:
                 self._entries.setdefault(key(e.name), []).append(e)
@@ -92,15 +132,16 @@ class Pack:
                 es.sort(key=lambda e: abs(e.scale - 1.0))
         return self._entries
 
-    def anim(self, name):
+    def anim(self, name, scale=None):
+        """The animation of this name - at the scale nearest `scale` (its skeleton's: Rome keeps several), else 1.0's."""
         es = self.entries.get(key(name))
         if not es or not self.dat:
             return None
-        e = es[0]
+        e = es[0] if scale is None else min(es, key=lambda e: abs(e.scale - scale))
         with open(self.dat, "rb") as fh:
             fh.seek(e.offset)
             data = fh.read(e.size)
-        return Anim(e.name, e.frames, e.bones, e.kind, data)
+        return Anim(e.name, e.frames, e.bones, e.kind, data, self.version)
 
 
 _PACKS = {}
@@ -128,6 +169,12 @@ class LooseAnim:
         skip = 1 if cas.names and cas.names[0].lower().replace(" ", "") == "sceneroot" else 0
         self.name, self.frames, self._cas, self._skip = name, cas.frames, cas, skip
         self.bones = self.kind = cas.bones - skip
+        self.moved = tuple(range(self.bones))
+        # its skeleton as the game builds one from a .cas (SKELETON_BASE::open): the Scene Root left out, each bone's
+        # parent one less, the first the root
+        self.names = list(cas.names[skip:])
+        self.parents = tuple(-1 if i == 0 else max(-1, cas.parents[i + skip] - skip) for i in range(self.bones))
+        self.rest = list(cas.rest[skip:])
 
     def rotations(self, k):
         return self._cas.rotations(k)[self._skip:]
@@ -154,11 +201,12 @@ def loose(mod, name):
         return None
 
 
-def find(mod, name):
-    """The Anim of this name from the first pack holding it, else its loose .cas file (LooseAnim), or None."""
+def find(mod, name, scale=None):
+    """The Anim of this name from the first pack holding it (at the scale nearest `scale`: its skeleton's), else its
+    loose .cas file (LooseAnim), or None."""
     for p in packs(mod):
         try:
-            got = p.anim(name)
+            got = p.anim(name, scale)
         except (OSError, ValueError):
             got = None
         if got is not None:
@@ -275,11 +323,141 @@ def of_skeleton(mod, skeleton):
     return out
 
 
+def why_none(mod, skeleton):
+    """Why of_skeleton finds no animation for this skeleton, in plain words - View in 3D says it where the Animation
+    list would be."""
+    listed = list(dict.fromkeys(key(f) for f in [f for _, f in skeleton_anims(mod, skeleton)] +
+                                _set_record_anims(mod, skeleton)))
+    if not listed:
+        return ("the skeleton %s is neither in descr_skeleton.txt nor in the animation set (data/animations/"
+                "skeletons.dat)" % skeleton)
+    if packs(mod):
+        return "%s: none of its %d animation files is in the animation packs or loose (the first: %s)" % (
+            skeleton, len(listed), listed[0])
+    return ("%s: there is no animation pack (data/animations/pack.idx, pack.dat) and none of its %d animation "
+            "files is loose (the first: %s)" % (skeleton, len(listed), listed[0]))
+
+
 _SETS = {}
 
 
 def _set_record_anims(mod, skeleton):
     """The animations a skeleton's record in the animation set the game loads (skeletons.idx / .dat) names."""
+    from . import animpacks
+    s = _anim_set(mod)
+    if s is None:
+        return []
+    try:
+        rec = s.record(skeleton or "")
+    except (ValueError, KeyError):
+        rec = None
+    return animpacks.anim_paths(rec) if rec else []
+
+
+class Skeleton:
+    """A skeleton as the game holds it: each bone's name, its parent (-1: the root), its base pose (its place from
+    the parent - where a bone the animation carries no offset for stands), the inverse of its place in the model in
+    the pose the meshes are made in (binds: 12 numbers each, 3 rows of a turn and a shift - a point of the mesh times
+    its bone's bind, then the bone's place in a frame, is where the point goes: the game's skinning) and the scale
+    its animations are kept at."""
+
+    def __init__(self, name, parents, rest, names=None, binds=None, scale=1.0):
+        self.name, self.parents, self.rest, self.scale = name, tuple(parents), list(rest), scale
+        self.names = list(names or [""] * len(self.parents))
+        self.binds = binds if binds is not None else _binds(self.parents, [(0.0, 0.0, 0.0, 1.0)] * len(self.parents),
+                                                                self.rest)
+        self.index = {}
+        for i, n in enumerate(self.names):
+            self.index.setdefault(n.lower(), i)
+
+    def __len__(self):
+        return len(self.parents)
+
+    def bone(self, name):
+        """The number of the bone of this name (any letter case), or None."""
+        return self.index.get((name or "").lower())
+
+    @classmethod
+    def from_record(cls, name, rec):
+        """A Medieval II skeleton from its record in skeletons.dat (SKELETON::pack: the scale, the bone count, the
+        IK share; per bone its kind, base pose, parent, two flags and the IK controller (28 bytes), its bind (48) and
+        its name), or None when the record is not of that form."""
+        try:
+            scale, n = struct.unpack_from("<fH", rec, 0)
+            if not 0 < n <= 255 or not 0.01 < scale < 100:
+                return None
+            p, parents, rest, binds, names = 10, [], [], [], []
+            for i in range(n):
+                _, x, y, z, par = struct.unpack_from("<i3fi", rec, p)
+                m = struct.unpack_from("<12f", rec, p + 28)
+                end = rec.index(b"\0", p + 76, p + 76 + 100)
+                parents.append(-1 if i == 0 else par)
+                rest.append((x, y, z))
+                binds.append(m)
+                names.append(rec[p + 76:end].decode("latin-1"))
+                p = end + 1
+        except (struct.error, ValueError):
+            return None
+        if any(not 0 <= parents[i] < i for i in range(1, n)) or not all(_turn_ok(m) for m in binds):
+            return None
+        return cls(name, parents, rest, names, binds, scale)
+
+    @classmethod
+    def from_anim(cls, name, first, default=None):
+        """A skeleton built from a .cas animation's own bones (the game's way with descr_skeleton.txt alone: the
+        type's first file), its binds from its 'default' animation's first frame (SKELETON::finalise)."""
+        sk = cls(name, first.parents, first.rest, first.names)
+        if default is not None and default.bones >= len(sk):
+            rots = default.rotations(0)
+            sk.binds = _binds(sk.parents, rots, sk.offsets(default.offsets(0)))
+        return sk
+
+    def offsets(self, given):
+        """Each bone's offset: the given one (an animation's frame), else its base pose."""
+        return [given[b] if b < len(given) and given[b] is not None else self.rest[b] for b in range(len(self))]
+
+
+def _turn_ok(m):
+    """Whether a bind's turn is a turn (each row of length 1, finite) - a record with a bind never made (a skeleton
+    with no 'default' or 'stand_a_idle' is left unmade by the game) holds zeros there."""
+    try:
+        return all(abs(m[4 * r] ** 2 + m[4 * r + 1] ** 2 + m[4 * r + 2] ** 2 - 1.0) < 0.01 for r in range(3)) and \
+            all(abs(v) < 1e4 for v in m)
+    except (TypeError, OverflowError):
+        return False
+
+
+def world(parents, rotations, offsets):
+    """Every bone's turn and place in the model from their own turns and offsets from their parents."""
+    from .meshview import _qmul, _qrot
+    rot, where = [], []
+    for b, par in enumerate(parents):
+        q, t = rotations[b], offsets[b]
+        if par < 0:
+            rot.append(tuple(q))
+            where.append(tuple(t))
+        else:
+            o = _qrot(rot[par], t)
+            where.append(tuple(where[par][k] + o[k] for k in range(3)))
+            rot.append(_qmul(rot[par], q))
+    return rot, where
+
+
+def _binds(parents, rotations, offsets):
+    """Each bone's bind (3 rows of 4: turn and shift): the inverse of its place in the model in this pose."""
+    from .meshview import _qmat
+    rot, where = world(parents, rotations, offsets)
+    out = []
+    for q, t in zip(rot, where):
+        m = _qmat(q)                                # the inverse turn: the turn's rows read as columns
+        inv = (m[0], m[3], m[6], m[1], m[4], m[7], m[2], m[5], m[8])
+        sh = tuple(-(inv[3 * r] * t[0] + inv[3 * r + 1] * t[1] + inv[3 * r + 2] * t[2]) for r in range(3))
+        out.append((inv[0], inv[1], inv[2], sh[0], inv[3], inv[4], inv[5], sh[1], inv[6], inv[7], inv[8], sh[2]))
+    return out
+
+
+def _anim_set(mod):
+    """The animation set the game loads for this mod (its own four files, else the game's), read once - or None."""
     from . import animpacks
     for folder in mod.dirs("animations"):
         idx = _ci(folder, "skeletons.idx")
@@ -288,47 +466,32 @@ def _set_record_anims(mod, skeleton):
         k = (os.path.normcase(os.path.abspath(folder)), os.path.getmtime(idx))
         if k not in _SETS:
             _SETS[k] = animpacks.AnimSet.at(folder)
-        s = _SETS[k]
-        if s is None:
-            continue
+        if _SETS[k] is not None:
+            return _SETS[k]
+    return None
+
+
+def skeleton(mod, name):
+    """The Skeleton of this name as the game has it: its record in the set the game loads (skeletons.dat - the name
+    as written, else alike but for the letter case), else built from its first .cas file (descr_skeleton.txt; a
+    'parent' gives its skeleton), its binds from its 'default' animation. None when neither is there (the game could
+    not play it either)."""
+    s = _anim_set(mod)
+    rec = None
+    if s is not None:
         try:
-            rec = s.record(skeleton or "")
+            rec = s.record(name or "")
         except (ValueError, KeyError):
             rec = None
-        if rec:
-            return animpacks.anim_paths(rec)
-    return []
-
-
-def base_pose(mod, skeleton):
-    """Medieval II: the skeleton's base pose (its 'default' animation, frame 0) as (rotations, offsets) - the pose its
-    meshes are made in - with every bone's offset (the base pose holds the pelvis's alone: the others from the first
-    of the skeleton's animations that has them all). None when not found."""
-    anims = skeleton_anims(mod, skeleton)
-    base = next((find(mod, f) for what, f in anims if what.lower() == "default"), None)
-    if base is None:
-        # a skeleton descr_skeleton.txt does not have (only in the set the game loads - skeletons.dat): its record
-        # names the base pose too - by its name (MTW2_Spear_basepose, ..._default), else last, as the game writes it
-        rec = _set_record_anims(mod, skeleton)
-        f = next((f for f in rec if re.search(r"base_?pose|default", os.path.basename(f), re.I)), None) or \
-            (rec[-1] if rec else None)
-        base = find(mod, f) if f else None
-        anims = anims + [(os.path.splitext(os.path.basename(f))[0], f) for f in rec]
-    if base is None:
-        return None
-    offsets = base.offsets(0)
-    if len(offsets) < base.bones:
-        full = None
-        for _, f in anims:
-            a = find(mod, f)
-            if a is not None and a.kind >= base.bones:
-                full = a
-                break
-        if full is None:
-            return None
-        offsets = offsets + full.offsets(0)[len(offsets):base.bones]
-    return base.rotations(0), offsets
+    got = Skeleton.from_record(name, rec) if rec else None
+    if got is None:
+        anims = skeleton_anims(mod, name)
+        first = next((a for a in (find(mod, f) for _, f in anims[:1]) if a is not None), None)
+        if first is not None and getattr(first, "parents", None):
+            default = next((find(mod, f) for what, f in anims if what.lower() == "default"), None)
+            got = Skeleton.from_anim(name, first, default)
+    return got
 
 
 __all__ = ["FPS", "Anim", "Pack", "read_index", "key", "packs", "find", "skeletons", "skeleton_anims", "of_skeleton",
-           "base_pose"]
+           "why_none", "Skeleton", "skeleton", "world", "moved_bones"]

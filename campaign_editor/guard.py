@@ -38,6 +38,14 @@ def roots_of(mod):
     return roots
 
 
+def safe_rel(rel):
+    """A path from a file someone sent (a unit pack, a mod pack) that stays under the folder it is put in: no '..',
+    no drive, not absolute, no empty part."""
+    parts = rel.replace("\\", "/").split("/")
+    return bool(rel) and not rel.startswith(("/", "\\")) and ":" not in rel and \
+        all(p and p not in (".", "..") for p in parts)
+
+
 def check(paths, roots, what="write"):
     """Raise OutsideError naming every path of paths that lies outside all roots (nothing is written then)."""
     bad = [p for p in paths if not any(inside(p, r) for r in roots)]

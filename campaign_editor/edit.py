@@ -17,6 +17,12 @@ RE_RGB = re.compile(r"red\s*(\d+)\s*,\s*green\s*(\d+)\s*,\s*blue\s*(\d+)")
 RE_KEY = re.compile(r"^(\s*\{)([A-Za-z0-9_]+)(\}.*)$")
 
 
+# taking out a faction's leader or heir is the modder's choice: the game makes the first named character (not the heir)
+# the leader itself and only logs it (engine source world.cpp, game_rtw/world.cpp: 'has no faction leader, so setting
+# one automatically'); with no named character left it logs 'this faction will be toast'
+ROLE_GONE = ("%s was %s's %s - taken out; the game makes its first named character (not the heir) the leader "
+             "itself - pick another in the faction's window if you want someone else")
+
 def _unescape(v):
     """A string value as text: '\\n' is a line break; the file's own line breaks
     inside a long value are only wrapping."""
@@ -609,12 +615,11 @@ def map_changes(plan, campaign, changes):
             raise ValueError("%s has no faction block in descr_strat.txt" % fac)
         for m in items:
             src = tuple(m["from"])
-            c = next((c for c in fb.characters if c.name == m["name"] and c.xy == src), None)
+            c = _standing(plan, fb, m["name"], src)
             if c is None:
                 raise ValueError("%s at %d, %d is not a character of %s" % (m["name"], src[0], src[1], fac))
             if c.role:
-                raise ValueError("%s is %s's %s - the faction needs him; make another the %s first" % (
-                    c.name, fac, c.role, c.role))
+                plan.warn(None, ROLE_GONE % (c.name, fac, c.role))
             gone.append((c, fac))
     for c, fac in sorted(gone, key=lambda x: -x[0].start):
         take_off_map(plan, f, fac, c)
@@ -688,7 +693,13 @@ def take_off_map(plan, f, faction, c):
     someone; written where the records stand, after every character (a report: removing him had no way at all)."""
     fb = Strat(f).faction(faction)
     texts = f.texts()
-    on_tree = c.named and any(tokens(t)[:1] == ["relative"] and c.name in t for t in texts[fb.start:fb.end])
+    from .family import _parse_relative
+    named_on_tree = set()                   # the names themselves ('Gaius Julius' is not 'Gaius Julius Caesar')
+    for t in texts[fb.start:fb.end]:
+        r = _parse_relative(t) if tokens(t)[:1] == ["relative"] else None
+        if r:
+            named_on_tree.update([r[0], r[1]] + r[2])
+    on_tree = c.named and c.name in named_on_tree
     where = "" if not c.xy else " at %d, %d" % c.xy
     if on_tree:
         from .family import record_line
@@ -726,12 +737,11 @@ def _army_edits(plan, f, faction=None, units=None, remove=None):
     found = []
     for what, m in jobs:
         src = tuple(m["from"])
-        c = next((c for c in fb.characters if c.name == m["name"] and c.xy == src), None)
+        c = _standing(plan, fb, m["name"], src)
         if c is None:
             raise ValueError("%s at %d, %d is not a character of %s" % (m["name"], src[0], src[1], faction))
         if what == "remove" and c.role:
-            raise ValueError("%s is %s's %s - the faction needs him; make another the %s first" % (
-                c.name, faction, c.role, c.role))
+            plan.warn(None, ROLE_GONE % (c.name, faction, c.role))
         found.append((c, what, m))
     for c, what, m in sorted(found, key=lambda x: -x[0].start):
         chunk = f.texts()[c.start:c.end]
@@ -757,6 +767,17 @@ def _army_edits(plan, f, faction=None, units=None, remove=None):
         plan.note(f, "%s (%s): %d unit(s)%s" % (c.name, c.kind, len(lines), " + his bodyguard" if keep else ""))
 
 
+def _standing(plan, fb, name, src):
+    """The character of fb named so that stood at src when the Map read the file - also when a town moved in the
+    same write carried him to its new tile (a tester: an army taken out of a town went back into it when the town
+    was moved after), or None."""
+    for xy in (src, getattr(plan, "carried", {}).get((name, src))):
+        c = next((c for c in fb.characters if c.name == name and c.xy == xy), None) if xy else None
+        if c is not None:
+            return c
+    return None
+
+
 def _moves(plan, f, campaign, faction=None, moves=None):
     """opts['moves'] = [{'name', 'from': (x, y), 'to': (x, y)}]: characters of
     the faction moved on the map, checked like the window checks them (faction / moves: another faction's, the
@@ -770,7 +791,7 @@ def _moves(plan, f, campaign, faction=None, moves=None):
     # another one leaves later in the list, or of another faction (a report: 'another army stands there')
     for m in plan.opts["moves"] if moves is None else moves:
         src, dst = tuple(m["from"]), tuple(m["to"])
-        c = next((c for c in fb.characters if c.name == m["name"] and c.xy == src), None)
+        c = _standing(plan, fb, m["name"], src)
         if c is None:
             raise ValueError("%s at %d, %d is not a character of %s" % (m["name"], src[0], src[1], faction))
         army = _has_army(s.lines[c.start:c.end])
@@ -802,7 +823,9 @@ def _people(plan, f, now):
                              % (role, first, plan.new))
         rest = name[len(first):].strip()
         if rest and pool and rest not in pool.get("surnames", []):
-            raise ValueError("%s: surname '%s' is not in %s's surname list" % (role, rest, plan.new))
+            from .start import SURNAME_WHY
+            plan.warn(f, "%s: surname '%s' is not in %s's surname list - the game shows no surname%s"
+                      % (role, rest, plan.new, SURNAME_WHY))
         line = f.text(c.start)
         if name != have["name"]:
             from .family import rename_in_tree

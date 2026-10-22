@@ -468,7 +468,8 @@ def copy_unit(plan, src_type, new_type, new_dict, recruit=True, texts=None, owne
         else:
             lines.append(f.text(i))
     for b in blocks:
-        if old_dict and any(tokens(f.text(i))[:2] == ["dictionary", new_dict] for i in range(b[1], b[2])):
+        if old_dict and any([w.lower() for w in tokens(f.text(i))[:2]] == ["dictionary", new_dict.lower()]
+                           for i in range(b[1], b[2])):    # its cards are files: Windows reads them in any case
             raise ValueError("the dictionary name '%s' is taken by %s" % (new_dict, b[0]))
     vals = dict(values or {})
     if owners:
@@ -1003,8 +1004,8 @@ def rename_unit(plan, old, new):
     """A unit's type renamed: its recruit lines, the armies in every campaign's
     descr_strat, the mercenary pools and the rebels' lists follow."""
     mod = plan.mod
-    if new in unit_names(mod):
-        raise ValueError("a unit '%s' exists already" % new)
+    if new.lower() in {n.lower() for n in unit_names(mod)} and new.lower() != old.lower():
+        raise ValueError("a unit '%s' exists already (the games read unit types in any case)" % new)
     edb = mod.file("edb")
     if edb:
         e = plan.edit(edb)
@@ -1012,14 +1013,14 @@ def rename_unit(plan, old, new):
         from .roster import recruit_of
         for i in range(len(e.raw)):
             t = e.text(i)
-            if (recruit_of(t) or ("", ""))[1] == old:
-                e.set(i, t.replace('"%s"' % old, '"%s"' % new, 1))
+            if (recruit_of(t) or ("", ""))[1].lower() == old.lower():     # the games read types in any case
+                e.set(i, re.sub(r'"%s"' % re.escape(old), lambda m: '"%s"' % new, t, count=1, flags=re.I))
                 n += 1
         if n:
             plan.note(e, "recruit lines follow the new name %s (%d)" % (new, n))
     files = [mod.campaign_file(c, "descr_strat.txt") for c in mod.campaigns()] + \
         [mod.campaign_file(c, "descr_mercenaries.txt") for c in mod.campaigns()] + \
-        [os.path.join(mod.data, "descr_rebel_factions.txt")]
+        [mod.find("descr_rebel_factions.txt")]    # a thin mod reads the game's (written as its own copy)
     seen = set()
     for p in files:
         if not p or not os.path.isfile(p) or p in seen:
@@ -1030,7 +1031,7 @@ def rename_unit(plan, old, new):
         for i in range(len(f.raw)):
             t = f.text(i)
             sp = _unit_span(t)
-            if sp and t[sp[0]:sp[1]] == old:
+            if sp and t[sp[0]:sp[1]].strip().lower() == old.lower():
                 f.set(i, t[:sp[0]] + new + t[sp[1]:])
                 n += 1
         if n:
@@ -1062,7 +1063,7 @@ def delete_unit(plan, name):
     if edb:
         from .roster import recruit_of
         e = plan.edit(edb)
-        gone = [i for i in range(len(e.raw)) if (recruit_of(e.text(i)) or ("", ""))[1] == name]
+        gone = [i for i in range(len(e.raw)) if (recruit_of(e.text(i)) or ("", ""))[1].lower() == name.lower()]
         for i in reversed(gone):
             e.delete(i, i + 1)
         if gone:
@@ -1070,7 +1071,7 @@ def delete_unit(plan, name):
         taken += len(gone)
     files = [mod.campaign_file(c, "descr_strat.txt") for c in mod.campaigns()] + \
         [mod.campaign_file(c, "descr_mercenaries.txt") for c in mod.campaigns()] + \
-        [os.path.join(mod.data, "descr_rebel_factions.txt")]
+        [mod.find("descr_rebel_factions.txt")]    # a thin mod reads the game's (written as its own copy)
     seen = set()
     for p in files:
         if not p or not os.path.isfile(p) or p in seen:
@@ -1081,7 +1082,7 @@ def delete_unit(plan, name):
         for i in range(len(f.raw)):
             t = f.text(i)
             sp = _unit_span(t)
-            if sp and t[sp[0]:sp[1]].strip() == name:
+            if sp and t[sp[0]:sp[1]].strip().lower() == name.lower():
                 gone.append(i)
         for i in reversed(gone):
             f.delete(i, i + 1)
@@ -1212,7 +1213,7 @@ def line_limits(f, kind):
 # - a key the mod repeats somewhere (officer, recruit lines, bonuses, upgrades) takes any number, except the
 #   original exes' own caps below - and those only when no REX / M2EX runs the game (limits.lifted).
 LIST_KEYS = {"recruit", "recruit_pool", "retrain", "retrain_pool"}       # repeatable even where the mod has one
-GAME_CAPS = {("unit", "officer"): 3}      # TWC wiki Hardcoded Limits (RTW + M2TW): at most 3 officers
+GAME_CAPS = {("unit", "officer"): 3}      # engine source unit_db.h MAX_UNIT_OFFICERS 3 (both games)
 
 
 def room_for(f, kind, block, place, level, key, limits, pending=0, mod=None):
@@ -1234,9 +1235,10 @@ def room_for(f, kind, block, place, level, key, limits, pending=0, mod=None):
             k, "unit" if kind == "unit" else "building level") if have >= 1 else None
     cap = GAME_CAPS.get((kind, k))
     if cap and have >= cap:
-        from .limits import lifted
-        if not (mod is not None and lifted(mod, "units")):
-            return "the original game takes at most %d '%s' lines (REX / M2EX not found beside the game)" % (cap, k)
+        from .limits import engine_of
+        if not (mod is not None and engine_of(mod)):   # REX / M2EX take it and ignore past 3 (Check mod files says so)
+            return "the original game takes at most %d '%s' lines - more stops it (REX / M2EX not found beside the " \
+                   "game; they keep 3 and ignore the rest)" % (cap, k)
     return None
 
 

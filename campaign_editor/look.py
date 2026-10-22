@@ -3,9 +3,12 @@ every button: click it and change its size, its name, its place' - buttons and t
 language of the editor, translated by the community and picked in Settings).
 
 Kept apart from the windows (gui_look puts it on them):
-- the look: {piece key: {'text', 'tip', 'width', 'hidden', 'to', 'where', 'xy', 'up', 'size'}} in
+- the look: {piece key: {'text', 'tip', 'width', 'hidden', 'to', 'where', 'xy', 'up', 'size', 'bg', 'fg', 'font',
+  'emoji'}} in
   CampaignEditor_look.json beside the settings ('to' + 'where': before / after another piece in a row; 'xy' + 'up':
-  free, at x, y of its box or of the box 'up' boxes around it; 'size': [width, height] in pixels); a piece key names a button / tick / label by its window, the box it sits in and its own English words
+  free, at x, y of its box or of the box 'up' boxes around it; 'size': [width, height] in pixels; 'bg' / 'fg': its
+  own background / words' colour '#rrggbb'; 'font': [family or '', size or 0, 'bold italic'...] - '' / 0 keep the
+  editor's; 'emoji': put before its words); a piece key names a button / tick / label by its window, the box it sits in and its own English words
   (gui_look.piece_key) - the code needs no names of its own, and a piece whose words the code changes later simply
   stops taking its change (nothing breaks);
 - the languages: JSON files {'language': its own name, 'by': who translated, 'words': {English: translated}} -
@@ -22,8 +25,12 @@ from . import log
 
 LOOK_NAME = "_look.json"
 LANG_FOLDER = "_lang"
+SNIP_FOLDER = "_snippets"
 BOARD_FOLDER = "_look_board"
-KEYS = ("text", "tip", "width", "hidden", "to", "where", "xy", "up", "size")
+KEYS = ("text", "tip", "width", "hidden", "to", "where", "xy", "up", "size", "bg", "fg", "font", "emoji", "off")
+# 'off': parts a snippet under the own look gives a piece that the own look takes away (a piece a snippet hides,
+# shown again)
+STYLE_KEYS = ("bg", "fg", "font", "emoji")     # how a piece looks (copied from one piece to another together)
 
 
 def _home(name):
@@ -81,6 +88,145 @@ def set_entry(look, key, entry):
         look["order"].remove(key)
     if "to" in entry:
         look["order"].append(key)
+
+
+def merged(entry, change):
+    """A piece's entry with a change laid over it (None in the change takes that part out) - a new dict."""
+    new = dict(entry or {})
+    for k, v in (change or {}).items():
+        if v is None:
+            new.pop(k, None)
+        else:
+            new[k] = v
+    return new
+
+
+def shown_words(entry, own):
+    """The words a piece shows: its own (the language's) or the look's, its emoji before them."""
+    words = entry.get("text") or own
+    return "%s %s" % (entry["emoji"], words) if entry.get("emoji") and words else entry.get("emoji") or words
+
+
+def font_of(spec, now):
+    """A piece's font as Tk takes it: spec = [family, size, style words] over now = (family, size) of the font it
+    has ('' / 0 in spec keep now's); None when spec asks nothing."""
+    if not spec:
+        return None
+    family, size, style = (list(spec) + ["", 0, ""])[:3]
+    try:
+        size = int(size)
+    except (TypeError, ValueError):
+        size = 0
+    return (family or now[0], size or now[1]) + tuple(str(style or "").split())
+
+
+def deeper(rgb, by=0.85):
+    """A colour a little darker (a button pressed / under the mouse) as '#rrggbb'."""
+    return "#%02x%02x%02x" % tuple(max(0, min(255, int(c * by))) for c in rgb)
+
+
+# ---- snippets: sets of piece changes switched on and off (Obsidian's CSS snippets) ----
+def snippets_dir():
+    return _home(SNIP_FOLDER)
+
+
+def snippets(folder=None):
+    """Every snippet: [{'name', 'path', 'on', 'pieces', 'order'}] by name. A snippet is a look file (load / save) with
+    a name and an on / off switch: its changes lie under the modder's own, the ones switched on in name order."""
+    folder = folder or snippets_dir()
+    out = []
+    try:
+        names = sorted(os.listdir(folder)) if folder else []
+    except OSError:
+        names = []
+    for n in names:
+        if not n.lower().endswith(".json"):
+            continue
+        path = os.path.join(folder, n)
+        try:
+            with open(path, encoding="utf-8") as fh:
+                head = json.load(fh)
+        except (OSError, ValueError):
+            continue
+        if not isinstance(head, dict) or not isinstance(head.get("pieces"), dict):
+            continue
+        got = load(path)
+        out.append({"name": str(head.get("name") or n[:-5])[:60], "path": path, "on": head.get("on", True) is not False,
+                    "pieces": got["pieces"], "order": got["order"]})
+    return sorted(out, key=lambda s: s["name"].lower())
+
+
+def save_snippet(name, look, on=True, folder=None):
+    """A look's pieces kept as a snippet named name (switched on or off) -> its path, or None."""
+    folder = folder or snippets_dir()
+    if not folder:
+        return None
+    safe = "".join(c if c.isalnum() or c in " -_" else "_" for c in name).strip() or "Snippet"
+    path = os.path.join(folder, safe + ".json")
+    pieces = {k: v for k, v in look["pieces"].items() if v}
+    data = {"version": 1, "name": name.strip() or safe, "on": bool(on), "pieces": pieces,
+            "order": [k for k in look.get("order", []) if k in pieces and "to" in pieces[k]]}
+    try:
+        os.makedirs(folder, exist_ok=True)
+        with open(path, "w", encoding="utf-8") as fh:
+            json.dump(data, fh, indent=1, ensure_ascii=False)
+        return path
+    except OSError:
+        return None
+
+
+def set_snippet_on(path, on):
+    """A snippet switched on or off (kept in its file)."""
+    try:
+        with open(path, encoding="utf-8") as fh:
+            data = json.load(fh)
+        data["on"] = bool(on)
+        with open(path, "w", encoding="utf-8") as fh:
+            json.dump(data, fh, indent=1, ensure_ascii=False)
+        return True
+    except (OSError, ValueError, TypeError):
+        return False
+
+
+def layered(own, snips=()):
+    """The look in force: the snippets switched on, one over another, and the modder's own over them all (a part
+    of a piece the own look sets wins) -> {'pieces', 'order'}."""
+    pieces, order = {}, []
+    for layer in [s for s in snips if s.get("on")] + [own]:
+        for k, e in layer["pieces"].items():
+            got = merged(pieces.get(k), {a: b for a, b in e.items() if a != "off"})
+            for a in e.get("off") or ():
+                got.pop(a, None)
+            pieces[k] = got
+        order += [k for k in layer.get("order", []) if k in pieces]
+    for k, e in list(pieces.items()):                  # in a row and free at once: the later layer said which
+        if "to" in e and "xy" in e:
+            own_e = own["pieces"].get(k, {})
+            e.pop("to" if "xy" in own_e else "xy", None)
+            if "xy" not in e:
+                e.pop("up", None)
+            else:
+                e.pop("where", None)
+    seen, last = set(), []
+    for k in reversed(order):
+        if k not in seen and "to" in pieces.get(k, {}):
+            seen.add(k)
+            last.append(k)
+    return {"pieces": {k: e for k, e in pieces.items() if e}, "order": last[::-1]}
+
+
+def own_part(base, entry):
+    """What the modder's own look must hold so that a piece shows entry over the snippets' base: the parts that
+    differ from it."""
+    base, entry = base or {}, entry or {}
+    own = {k: v for k, v in entry.items() if base.get(k) != v}
+    for group in (("xy", "up"), ("to", "where")):     # a place is said whole, never half over the base's
+        if any(k in own for k in group):
+            own.update({k: entry[k] for k in group if k in entry})
+    off = sorted(k for k in base if k not in entry and k != "off")
+    if off:
+        own["off"] = off
+    return own
 
 
 # ---- the layout board (gui_lookboard): every page of the editor laid out side by side ----
@@ -290,6 +436,7 @@ def template(have=None, seen=()):
     return {"language": "", "by": "", "words": out}
 
 
-__all__ = ["load", "save", "set_entry", "look_file", "board_dir", "load_board", "save_board", "lay_cards",
+__all__ = ["load", "save", "set_entry", "merged", "snippets", "save_snippet", "set_snippet_on", "layered",
+           "own_part", "snippets_dir", "shown_words", "font_of", "deeper", "STYLE_KEYS", "look_file", "board_dir", "load_board", "save_board", "lay_cards",
            "piece_at", "drop_beside", "free_spot", "languages", "read_language", "add_language", "words",
            "template", "KEYS"]

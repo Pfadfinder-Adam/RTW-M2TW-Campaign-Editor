@@ -1,4 +1,4 @@
-"""The credits: CREDITS.md - the page on GitHub (beside the CHANGELOG and the ROADMAP) and, inside the exe, the
+"""The credits: CREDITS.md - the page on GitHub (beside the CHANGELOG) and, inside the exe, the
 Tools > Credits... window. One file for both: whoever is thanked on the page is thanked in the editor."""
 
 import os

@@ -183,3 +183,5 @@ class PackWindow(tk.Toplevel):
         self.destroy()
         self.app.load()
         self.app.status.set("Pack installed: %d file(s) written (backup %s)." % (n, bdir))
+        from .gui_sources import noted                # whose work it is: noted, the author asked for (no block)
+        noted(self.app, self.path, "pack (%d file%s)" % (n, "" if n == 1 else "s"))

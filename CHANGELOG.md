@@ -4,7 +4,49 @@
 
 ### Added
 - Recolour freely: any colour of any picture made another, not only the faction's colours - click a colour on a battle texture, campaign-map figure, card or button, pick the new colour or turn it with the sliders; its light and shade kept, faces left alone, several changes in a row, a brush to add or keep. On every texture card (Unit editor, Models tab) and every picture opened big; a texture of the game is copied, never written over; a unit's texture can change for that unit only. Both games, a backup, Restore gives it back.
-- Tools > Layout board: every page of the editor (each work, its tabs, the Tools windows) laid out side by side on one canvas - drag a button into another place in its row, or with Alt exactly where you drop it; drag its corners to size it; right click to rename it, give it a hover text, hide it or take it back. Each change shows in the editor at once and is kept for every start; Undo / Redo, Back to how it was.
+
+### Fixed
+- Rebels: more than 20 unit types in one rebel type is said with REX / M2EX too - the game keeps only 20 there as well.
+- Family tree: children with no father are found by the mod's own ages (Medieval II girls up to 16, as its files say), not fixed ones.
+- Opening locked factions: a mod's Pope under another name stays locked, like papal_states.
+- Region names of a campaign in a subfolder (custom/...) are found, as the game finds them.
+- A mod's override .pack now wins over data.pack, as in the game.
+- New faction: the AI list offers Medieval II's own personalities too (richard, saladin and the others).
+- Renaming a faction whose name has a capital letter works again in every file.
+- Check mod files: a skeleton named in another letter case is said as missing - the game tells them apart.
+
+### Changed
+- Limits follow the games' own code: with REX / M2EX only what their code lifts is free (regions, units, religions, buildings, map size); officers (3) and rebel unit types (20) are still said.
+- A mod without its own descr_ex.txt uses the game's one, as REX / M2EX do; raising max_factions copies the whole file into the mod, so no other setting is lost.
+- No more refusals the game does not need - each is now a warning: a surname not in the name list, taking out the faction leader or heir, religions that do not add up to 100, a new region with no resource ('none'), a region's land given to a region it does not touch, two levels of one building chain in a town.
+- Medieval II (with M2EX): missile ammo down to 1 is fine; ancillaries follow descr_campaign_db.xml.
+
+## 0.35.4 - 2026-10-22
+
+### In short
+- **Added**: a whole mod, map or faction from zero, step by step; paint right on the 3D map (heights, ground, climates, regions) with Undo; Themes and the editor's own look (Appearance, Layout board); the Climate library; Buildings by faction and the roster's By buildings; Delete a unit and its texts; Campaign HUD and Sprite sheets in Interface; Painted look for cards; Authors and sources of this mod.
+- **Fixed**: every fix of 0.35.1 - 0.35.3 and many more from testers' and players' reports (Recolour of a faction with one colour, T pose in View in 3D, Map from zero's sea and script, a thin mod's built map, the 3D map).
+- **Changed**: a new faction starts with an empty form; the shore line from 500 % zoom; 40-unit stacks with REX / M2EX.
+
+### Added
+- New faction > **From zero...**: a new faction with nothing of an existing one, step by step - its culture (the faction its lines in the game's lists are made from is picked behind it, never shown as a template), its names (the internal name made from them), colours away from every faction's (free pairs offered; colours like another faction's said), its own emblem on every sign (a must; a symbol like another faction's said), a name list mixed from the whole culture (no one faction's list); then the form for its towns and leader, and one Apply creates it and recolours every picture it got in its own colours. Its units: only those its culture shares, not the ones only that faction has (a tick on the last step; a culture sharing fewer than 6 keeps them); once made it opens on Roster > By buildings to give it units of its own. 'Forget it' makes it a copy of the template again.
+- Maps > 3D: **Ctrl+Z / Ctrl+Y** take back (or do again) what was done on the 3D map - a brush stroke, regions painted, a figure carried; with a tile brush in hand the mouse resting on a tile says its ground, climate and region.
+- Check mod files: **TRACES OF ANOTHER FACTION** - for each faction made with New faction, what it still shares with the faction it was made from or another one: pictures and unit cards pixel for pixel, battle textures, the 3D symbol, movies, colours too close, texts naming another faction, most of the name list; with where in the editor each is made its own (only information - nothing there stops the game). New faction's own report ends with the same list.
+- New faction: **People (plural)** - what its people are called in the texts players read ("the Scots"); left empty the editor makes it from the name.
+- Maps > 3D: Paint > **Regions** - the Map's Edit regions brush right on the 3D map (paint tiles into the region picked, the region colours shown over the map, the borders drawn again after the stroke); **Alt + click** picks the tile's own region, ground, mark or climate for the brush.
+- Maps > 3D > Layers: **colours over the map** - each tile in its climate's colour (the sea's too: what land raised there gets) or its region's, following the brushes while you paint; picking the Climates brush shows the climates by itself.
+- Maps > 3D: **Paint** (was Heights brush) paints right on the 3D map - the heights, or tile by tile the ground, rivers / cliffs / volcanoes, climates, land or sea, each picked in 'brush' with the Terrain editor's own palette; Undo, Preview and Apply shared with the Terrain editor, the painted ground shows at once.
+- Terrain > Climates > **Climate library...**: every climate of the mod with its slot (of 32 with REX / M2EX) and how many tiles of the map it covers, and what each one gives the game - the campaign map's trees and ground textures, the mountains' own textures, the battle map's ground, plants, grass and water, the weather, sounds, town trees, disasters, its name - file by file and line by line, pictures shown. In it: **New climate from this...** makes a new climate as a copy of the picked one - every block and line it has in every file copied under the new name (so battles find it), the next free slot (32 with REX / M2EX), a colour and a name players read of its own; **Change...** gives a climate's campaign-map ground texture or tree another picture or model from the mod's and the game's own, pictures shown. A backup first, Restore undoes it.
+- Maps > 3D: whatever stands on the map but has no model to draw (its file missing, its type naming none) shows as a red 3D question mark in its place, so nothing is there unseen.
+- Terrain > Climates: **Climates on the water** shows the climate under the sea too (the file has one there; new land made there gets it) and lets you paint it. Land and sea: **New land: neighbours' climate** - land made from the sea takes the climate of the land round it, not the leftover under the water (on by default).
+- Tools > Authors and sources of this mod: whose work is in your mod - what was taken, from which mod or pack, the author, a link, whether you asked; kept in Authors_and_sources.txt in the mod folder for players. Taking units, buildings, a faction, a battle model or a pack from another mod notes it by itself and asks for the author and link (nothing checked or blocked; 'Later' keeps it as it is).
+- Appearance > **Snippets**: sets of button changes, each switched on and off with its own tick (as Obsidian's CSS snippets) - Move my changes into a snippet..., Import... / Export... one, delete it; your own changes stay over them (a button a snippet hides can be shown again).
+- Layout board: with a mod loaded the windows the works open are laid out too - a town's window, Rebels, Mercenaries, the map's size, Authors and sources.
+- **Themes** (Settings > Look > Themes..., or Appearance > Themes...): every theme as a card with a picture - Light, Dark, Roman parchment, Medieval night, Byzantine purple and your own; Use puts one on the whole editor, Save the look now as a theme... keeps yours with a picture, Export... writes one .zip to send, Import a theme... takes one sent to you.
+- Layout board: the board and its pages in the look's colours - dark in Dark (pictures taken in another look are taken again when it opens).
+- Tools > Layout board > **Appearance**: the colours of the whole editor at once (background, words, fields, buttons, tabs, the picked line... and the buttons with a colour of their own, as Play or Report a bug) and one font and size for every window, over Light or Dark; each swatch's arrow takes its colour back, All back to the look as it comes takes everything back. Kept for every start.
+- Tools > Layout board: every page of the editor (each work, its tabs, the Tools windows) laid out side by side on one canvas - drag a button and it stays exactly where you drop it, its edges sticking to the lines other pieces stand on (pink guide lines) and, with Grid ticked, to a grid of 4 / 8 / 16 / 32 px (Alt puts it into a row instead); drag its corners to size it, the arrows nudge it; right click to rename it, give it a hover text, its own colours, font and an emoji before its words (Copy its look / Paste the look on another piece), hide it or take it back. Your changes are drawn on the board first: Accept puts them all on the editor (kept for every start), Discard drops them; Undo / Redo, Back to how it was.
+- Roster (Edit faction): a **By buildings** tab - the faction's buildings, a building's levels, each level's units as cards. Click a unit in **All units** and it is added to that level and every level above it (before, a unit added to one level was gone once the building grew); the x on a card takes it away; **+ Building** and the x / + on a building or a level let the faction build it or take it away. Green / red until Apply, Undo works.
 - Buildings: a **By faction** tab beside the lines - pick a faction and see its buildings as the game shows them: the chains it may build as pictures grouped by type, a chain's levels side by side (cost, turns, the town they need), the units each level recruits for it as cards (the hover says how: pool, experience, conditions), a click on a card shows the unit on the right with where else it is recruited; Lines of this building / Open in Units go to the lines. Both games.
 - Units: Delete this unit... (beside New unit) takes a unit out on Apply with its recruit lines, its men in the armies and garrisons, the mercenary pools, the rebels' lists and its cards; Restore puts it back.
 - Units: Texts players read - the unit's name, short and long description are changed right in the Units editor.
@@ -12,8 +54,7 @@
 - View in 3D: Face and parts - pick each head, body ... variant by hand (Medieval II); Mount's colour - each of the mount's own textures; Units > Battle models lists every armour upgrade's model with its own View in 3D. Front / Back buttons gone (the model turns with the mouse).
 - Tools > A mod from zero, step by step: your own mod folder, the map, the factions, units and buildings, Check mod files, the game - in order, how far each is, a button for each.
 - Make a card / Make a picture: 'Painted look' - the 3D view turned into flat brush areas with a thin dark line, so the card looks painted, not 3D.
-- Map from zero (the map's bar): a new small map in place of the campaign's - one island, one region with its town, a port and a resource, one faction (Rome: the Gauls, Medieval II: France) and the rebels; Restore puts the old map back.
-- Map from zero: as many regions and factions as you like - each faction its own capital and leader, the regions left over the rebels' towns; the map grows to fit them.
+- Map from zero (the map's bar): a new small map in place of the campaign's - one island with its regions, towns, a port and a resource, as many factions as you like (the main one picked by you - by default Rome: the Gauls, Medieval II: France; each its own capital and leader) and the rebels in the regions left over; the map grows to fit them. Restore puts the old map back.
 - Interface > Campaign HUD: the campaign map's bottom panel as the game draws it (both games, the engines' own places), from the mod's pictures; right click a piece to replace its picture or set its place and size; preview on bigger screens; save as PNG.
 - Interface > Campaign HUD lies on a board you can move and zoom, like Obsidian Canvas: the wheel zooms at the mouse, the middle or right button (or Space + left) moves it, Fit / 1:1 / + / - in its corner (Shift+1, Shift+0); your screenshot is a card of its own - first exactly over the HUD, dragged aside to compare side by side, it lands on the grid and sticks to the HUD's edges (Alt: anywhere).
 - Interface > Campaign HUD: a screenshot of the game over it to compare - how much of it shows (slider, [ ]), O shows / hides it.
@@ -23,15 +64,45 @@
 - The game stopped? The editor notices it (after Start the game, or at its next start when it was closed) and asks once whether to send a report - the reason in one line, nothing sent without your click; can be switched off in Settings.
 - Coast & heights drawn by the graphics card straight into the window on Windows (the map, the shore line and the brush; moving, zooming and painting no longer remake a picture each time); the frame's time shows beside the zoom. Elsewhere, or if the card fails, it draws as before.
 - The editor's own look: Tools > Edit the editor's look - drag any button, tick or label anywhere, rename it, give it a hover text or a width, hide it, take it back; kept for every start. The editor's language from a language file (Settings), and Words to translate writes every word for translators.
+- Settlements: an Owner filter - pick a faction and see only the towns it holds.
+- Maps > 3D: the mouse resting on an army, agent, fleet, town, port, resource or fort shows its name beside it, as on the Map (who he is, his faction and units; the town's owner).
 
 ### Changed
+- New faction keeps nothing of the template's own: its story texts (descriptions, victory and defeat texts, first advice) become a plain line of the new faction instead of the template's with the names swapped; the template's people word ('The Scots are Victorious') is swapped too - New faction > People (plural); a movie only the template shows is not taken (Medieval II: the one the other factions share; Rome: none), nor its voice track and subtitles over the movies, nor its leader's face on the select screen; its town flag in battle (Rome) and 3D symbol are copies of its own; its campaign-select map is drawn from its own towns in its own colour.
+- Maps: the '?' of Bigger map (x3)... stands after the button, no longer beside the zoom's own '?'.
 - Terrain editor: the heights map (drawn point by point) shows no towns, ports or other signs - only the heights, the water and the shore.
-- Terrain editor: the Shore line follows the zoom you see - drawn from 300 % on any map, either game (was a fixed closeness, much later on a big map); Settings > Campaign map changes the zoom.
+- Terrain editor: the Shore line follows the zoom you see - drawn from 500 % on any map, either game (was a fixed closeness, much later on a big map); Settings > Campaign map changes the zoom.
 - A new faction is a clean clone: its colours, units, buildings, models and cards - none of the template's trait / ancillary triggers (the tick for them is gone).
 - With REX or M2EX an army, garrison or fleet may hold 40 units: Medieval II (with M2EX) keeps them with Options > Game Settings > Army Size = 40 units (seen in the game); Rome (with REX) kept 20 in a game test so far. Check mod files says which stacks are over 20.
 - New mod folder puts no switched-off engine settings files (descr_ex, descr_caps_ex) in: the mod runs on the engine's defaults as before; the editor writes the line a change needs, Check mod files' Copy them in brings the whole list.
 
 ### Fixed
+- New faction > From zero on Rome stopped at Create Faction: the culture's own names (with letters like ë or é, a dot, a surname of several words) were refused as if typed -> the game's own names are taken as they are.
+- A general taken off the map whose name is part of a name on the family tree ('Abel' of 'Abel Alphid') was written back as a man who died before the start -> only a man the tree itself names stays on it.
+- Events > Campaign script: taking out wait_monitors while monitors stayed said nothing - the script then ends at once and its monitors never react -> it is said before Apply.
+- Events: an event given a new date stayed where it was in the file, and a later faction's event was put at the end - one behind an event of a later date never fires (the games read the events as a queue) -> both go to their place in date order.
+- Roster: a unit taken away from a faction stayed in the recruit lines that let it in by its culture or 'everyone' (its towns still trained it; Medieval II stops at such a line) -> those lines now leave it out too; New faction > From zero takes the template's own units the same way.
+- Delete unit / renaming a unit: a recruit line or an army writing the unit's name in other capitals was left behind (the game reads them the same) -> they follow now, and so does the rebels' list of a mod that uses the game's own file.
+- New unit: a card name taken by another unit in other capitals was let through (the cards would be shared) -> refused now.
+- Mercenaries: a pool renamed to the name of a pool already there was written as two pools of one name -> refused now.
+- New faction > From zero: the Emblem step slowed the window down (it read the whole faction again on every click) -> it reads only when the emblem changed.
+- View in 3D (Medieval II): a mod's men looked crushed when an animation played, a camel and an elephant moved on a man's bones, and some mods' new animations did not play right -> the skeleton is read as the game reads it (every bone, its parent and its place from the mod's own skeleton files, any number and order of bones), each animation moves only the bones it says it moves, and weapons hang on the hand their own skeleton names, so any mod's models and animations play as in the game. Rome's animations are read the same way.
+- Map (Medieval II): a resource moved or added onto a wasteland's land went in without a word, though the game refuses it - now Apply's list says so (the resource is still written: your choice).
+- Terrain > Climates: on a big map every stroke stopped the map for about a second while the climate colours were drawn again - now they are drawn at once.
+- Terrain / Coast & heights / Maps > 3D: after picking another campaign the brushes still worked on the old campaign's map (its land, sea and regions) and Apply wrote the old strokes into the new one - now another campaign starts the Terrain editor clean on its own map.
+- View in 3D: the Animation list sometimes vanished without a word -> where a model has none, the window now says why (its skeleton is in neither descr_skeleton.txt nor the animation set, or its animation files are in no pack and not loose, the first one named); picking another Armour level whose model has other skeletons gives that model's own animations (it kept the first model's).
+- Roster: the green / red rows of a given / taken unit or level were glaring light ones in the dark look - now dark green / red there.
+- Terrain / Maps > 3D: a big Ground brush over the sea lagged (each tile turned into land one at a time) -> the brush's tiles turn together, about three times faster.
+- Maps > 3D: land raised out of the water with the heights brush made the map stall at the stroke's end, then its ground texture changed to the new climate -> the new land shows its own ground and climate while you paint, and nothing is made again after.
+- Maps > 3D: Rome's glass resource was never seen (its picture is see-through all over) -> it stands on the map as the game shows it.
+- Edit faction: the game a row belongs to ("Medieval II only" beside Religion on Rome) was cut off -> it stands on a line of its own.
+- Maps (and 3D): an army taken out of its town went back into it when the town was moved after -> it stays where you put it; one left in the town still goes with it.
+- Maps > 3D: a white frame showed on empty ground and none on the army or resource you had moved -> the 3D map shows the Map's changes again (and says so in its bar when it cannot).
+- Maps > 3D: thin pale lines along the edges of some ground squares on some graphics cards -> the ground is drawn without them.
+- Maps > 3D: a click on a resource, army or town made the map stall for a moment -> a click alone does nothing, and lifting something to carry it is quick.
+- Maps > 3D: a model's texture named with a path in it is found; whatever is still drawn white is named in the editor's log for a report.
+- New mod folder on the plain game: the game could not keep its built map (an error in its log, the map built again at every start) -> the new mod has the folder the game keeps it in.
+- Recolour: a faction with no secondary colour could not be previewed or written (an error) -> it recolours like any other.
 - Map from zero: the old campaign script kept running on the new map and filled the game's log with errors -> the new map gets an empty script; Undo of a map write left the map file the game had built for it -> it goes too, so the game builds the old map again.
 - Map from zero: the new sea showed the old map's coasts and deep water - the sea's colour picture (water_surface.tga, stretched over the whole map) was left as it was; the new map now writes its own in one sea colour (the old picture's open sea). Both games.
 - View in 3D / Make a card: a man whose skeleton has a twin named the same but for the letter case (Medieval II's halberdiers: the man's MTW2_Halberd_Primary and the halberd's MTW2_Halberd_primary) stood in the T pose and his animations did not play -> each skeleton is read apart, as the game reads them, and the man stands and moves.
@@ -42,7 +113,7 @@
 - Campaign HUD: a right click names every piece under it (a ring and its button's picture) and says when a picture is shared by two buttons; Undo / Redo redraw the view.
 - Units / Buildings: after Apply or Undo the form went blank -> the unit on show stays on show.
 - Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
-- Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
+- Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens.
 - New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
 - Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
 - Building '?' hints mislabelled half the vanilla lines (a level and 'bonus N' are both allowed on every effect) -> both forms explained; free_upkeep, religion, settlement sizes (castles too) and Rome's weapon levels said right; Medieval II level lines, hidden_resources and Barbarian Invasion's religious_belief get hints.
@@ -116,17 +187,6 @@
 - **Changed**: the faction-select map and minimap use the 3D map's picture where a ground's texture was not found; a name given twice in a faction gets a free one instead of a refused write.
 
 ### Fixed
-- Campaign HUD (Rome): the four tabs were too wide and read 'Settlement' and a 4th 'Army' -> as in the game: Army, Town, Agents and an empty one, at their places.
-- Campaign HUD: a right click names every piece under it (a ring and its button's picture) and says when a picture is shared by two buttons; Undo / Redo redraw the view.
-- Units / Buildings: after Apply or Undo the form went blank -> the unit on show stays on show.
-- New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
-- Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
-- New faction: the form jumped a line when the template hint came or went -> it stays put.
-- Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
-- New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
-- Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
-- Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
-- Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
 - New faction > From another mod: a name list typed in the window was replaced by the other mod's, so the leader typed from it was refused (naming the template) -> the typed list wins; the message names the faction whose list it is.
 - An error box at start (the message line placed before the tabs before they were laid out) -> gone.
 - Two characters of one faction with the same name: the write was refused (naming captains stopped) -> the second one takes a free name of the faction's own list, said in the report.
@@ -397,17 +457,6 @@
   line of the block** in both editors; the editor remembers whether it was open.
 
 ### Fixed
-- Campaign HUD (Rome): the four tabs were too wide and read 'Settlement' and a 4th 'Army' -> as in the game: Army, Town, Agents and an empty one, at their places.
-- Campaign HUD: a right click names every piece under it (a ring and its button's picture) and says when a picture is shared by two buttons; Undo / Redo redraw the view.
-- Units / Buildings: after Apply or Undo the form went blank -> the unit on show stays on show.
-- New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
-- Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
-- New faction: the form jumped a line when the template hint came or went -> it stays put.
-- Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
-- New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
-- Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
-- Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
-- Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
 - Maps > 3D: rebel villages (a region with no settlement in descr_strat.txt) were not shown -> each stands there, as in the game; Rome's wonders stand on the map with their own models.
 - Maps > 3D: the heights brush's circle looked dark on sand -> its white line is wider.
 - Maps > 3D with HLR: the figures were white and many grounds plain - the mod's own pack names its files with the mod's folder in front, and a texture named without its ending was not tried as .tga -> both found.
@@ -836,17 +885,6 @@
   release's page.
 
 ### Fixed
-- Campaign HUD (Rome): the four tabs were too wide and read 'Settlement' and a 4th 'Army' -> as in the game: Army, Town, Agents and an empty one, at their places.
-- Campaign HUD: a right click names every piece under it (a ring and its button's picture) and says when a picture is shared by two buttons; Undo / Redo redraw the view.
-- Units / Buildings: after Apply or Undo the form went blank -> the unit on show stays on show.
-- New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
-- Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
-- New faction: the form jumped a line when the template hint came or went -> it stays put.
-- Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
-- New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
-- Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
-- Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
-- Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
 - **View in 3D: the camera jerked while an animation played** - each frame was sized anew; the view now keeps its
   place and size while it plays (sized again for another animation, the mount or the weapons).
 - **Unit editor: France picked in Show, England's colours shown** - the card, the battle model's texture and the 3D
@@ -1125,17 +1163,6 @@
   test mod.
 
 ### Fixed
-- Campaign HUD (Rome): the four tabs were too wide and read 'Settlement' and a 4th 'Army' -> as in the game: Army, Town, Agents and an empty one, at their places.
-- Campaign HUD: a right click names every piece under it (a ring and its button's picture) and says when a picture is shared by two buttons; Undo / Redo redraw the view.
-- Units / Buildings: after Apply or Undo the form went blank -> the unit on show stays on show.
-- New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
-- Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
-- New faction: the form jumped a line when the template hint came or went -> it stays put.
-- Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
-- New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
-- Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
-- Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
-- Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
 - **Add-ons (Sack Settlement, both games; Avoid Growth): the game's script console and other script texts turned
   into another font** after the add-on had drawn - a font it opened could stay open when its drawing failed, and
   everything drawn after it took that font. Every font the add-ons use is now closed by the game itself, whatever
@@ -1224,17 +1251,6 @@
 - Long explanations at the top of Mercenaries, Map size and the 3 x bigger map are one line now; the rest shows on the '?'.
 
 ### Fixed
-- Campaign HUD (Rome): the four tabs were too wide and read 'Settlement' and a 4th 'Army' -> as in the game: Army, Town, Agents and an empty one, at their places.
-- Campaign HUD: a right click names every piece under it (a ring and its button's picture) and says when a picture is shared by two buttons; Undo / Redo redraw the view.
-- Units / Buildings: after Apply or Undo the form went blank -> the unit on show stays on show.
-- New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
-- Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
-- New faction: the form jumped a line when the template hint came or went -> it stays put.
-- Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
-- New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
-- Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
-- Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
-- Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
 - Backups that were put back (Restore, Undo this write) stayed in `CampaignEditor_backups` as `*_restored` folders, one per undo. They are deleted now, and the ones older versions left are taken away when the mod is loaded.
 - **Change size...** under the map did nothing on the Terrain tab; it opens the Map size window from every map now.
 - The family member's diamond on a flag was always white; it takes the colour that reads on the flag (dark on a light flag, light on a dark one), like every other mark.
@@ -1252,17 +1268,6 @@
 ## 0.30.1 - 2026-10-07
 
 ### Fixed
-- Campaign HUD (Rome): the four tabs were too wide and read 'Settlement' and a 4th 'Army' -> as in the game: Army, Town, Agents and an empty one, at their places.
-- Campaign HUD: a right click names every piece under it (a ring and its button's picture) and says when a picture is shared by two buttons; Undo / Redo redraw the view.
-- Units / Buildings: after Apply or Undo the form went blank -> the unit on show stays on show.
-- New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
-- Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
-- New faction: the form jumped a line when the template hint came or went -> it stays put.
-- Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
-- New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
-- Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
-- Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
-- Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
 - Edit faction on a faction the mod has but the campaign does not (no block in its `descr_strat.txt`): said in plain words what to do (another campaign, or bring it in as a new / later faction).
 - Module builder and Add-ons on Medieval II: putting a script into the game refused with 'D:\Medieval II Total War\data holds only the files this mod changes' when the game keeps its data in packs (the usual install). The loaded mod now carries the write and its backup; Scripts in the game the same.
 - The set-up problems found on Load: a long list ran off the screen and the window could not be closed. The same problem on many lines of a file is now said once with its lines, a long text scrolls, and the buttons are always in sight (*Put them right* / *Not now*).
@@ -1273,17 +1278,6 @@
 ## 0.30.0 - 2026-10-07
 
 ### Fixed
-- Campaign HUD (Rome): the four tabs were too wide and read 'Settlement' and a 4th 'Army' -> as in the game: Army, Town, Agents and an empty one, at their places.
-- Campaign HUD: a right click names every piece under it (a ring and its button's picture) and says when a picture is shared by two buttons; Undo / Redo redraw the view.
-- Units / Buildings: after Apply or Undo the form went blank -> the unit on show stays on show.
-- New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
-- Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
-- New faction: the form jumped a line when the template hint came or went -> it stays put.
-- Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
-- New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
-- Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
-- Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
-- Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
 - Windows: two writes in the same second could be put back by Restore in the wrong order (the files' own times are too coarse there); every backup now keeps the exact moment it was made. The game's log kept with the editor's logs got every line ending doubled.
 - The map: painting land to a region and moving a town or port in the same write kept only one of them (the second change of the regions picture started again from the file); a town or port moved onto land just painted to its region was refused as 'not its land' until written. Both now go in one write.
 - Unit cards: a mod folder that keeps the game's own cards showed them as wide name buttons; the cards are now found in the game's data too, a unit without any picture gets a grey card of the same size with its name, and cards of another size sit in the middle of the usual box, so the rows stay even.
@@ -1841,17 +1835,6 @@
   tree), so the pictures, the battle model and the voice have the room; Add line... opens them.
 
 ### Fixed
-- Campaign HUD (Rome): the four tabs were too wide and read 'Settlement' and a 4th 'Army' -> as in the game: Army, Town, Agents and an empty one, at their places.
-- Campaign HUD: a right click names every piece under it (a ring and its button's picture) and says when a picture is shared by two buttons; Undo / Redo redraw the view.
-- Units / Buildings: after Apply or Undo the form went blank -> the unit on show stays on show.
-- New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
-- Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
-- New faction: the form jumped a line when the template hint came or went -> it stays put.
-- Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
-- New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
-- Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
-- Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
-- Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
 - **Terrain tab**: the map showed tiny or not at all when the tab opened - it was fitted before the tab had its size; it is fitted again once it has one.
 - Recolour window: the 'wheel: zoom, right drag: move' line has a row of its own (it was cut at the window's edge).
 - **Bigger map (x3): the coast comes down to the water** - the land by the water kept the old shore's full height,
@@ -2210,17 +2193,6 @@
   starts from there. 'Not now' asks with the next version, 'Don't ask again' never; Settings > Folders has the button.
 
 ### Fixed
-- Campaign HUD (Rome): the four tabs were too wide and read 'Settlement' and a 4th 'Army' -> as in the game: Army, Town, Agents and an empty one, at their places.
-- Campaign HUD: a right click names every piece under it (a ring and its button's picture) and says when a picture is shared by two buttons; Undo / Redo redraw the view.
-- Units / Buildings: after Apply or Undo the form went blank -> the unit on show stays on show.
-- New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
-- Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
-- New faction: the form jumped a line when the template hint came or went -> it stays put.
-- Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
-- New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
-- Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
-- Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
-- Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
 - **The bigger map (x3) keeps the rules of the games' own maps** (five reports from Divide and Conquer, all of them
   measured on vanilla Medieval II too - 66 of 77 ports there had no water beside them): a town in a region
   descr_regions does not list stays one town pixel with its land round it (Erebor became nine); every port stands on
@@ -2277,17 +2249,6 @@
   list opens on the add-on of the loaded game.
 
 ### Fixed
-- Campaign HUD (Rome): the four tabs were too wide and read 'Settlement' and a 4th 'Army' -> as in the game: Army, Town, Agents and an empty one, at their places.
-- Campaign HUD: a right click names every piece under it (a ring and its button's picture) and says when a picture is shared by two buttons; Undo / Redo redraw the view.
-- Units / Buildings: after Apply or Undo the form went blank -> the unit on show stays on show.
-- New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
-- Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
-- New faction: the form jumped a line when the template hint came or went -> it stays put.
-- Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
-- New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
-- Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
-- Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
-- Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
 - **A new Medieval II faction keeps its template's `ai_label` and `denari_kings_purse`**: they were lost, so the AI
   ran on the 'default' rule set with no income each turn (one reason new factions stood still). A note in Preview
   when the new faction starts with one army led by its leader (the computer seldom sends its leader out).
@@ -2353,17 +2314,6 @@
   faction a script names that the mod lacks. "Open another log..." reads any other one.
 
 ### Fixed
-- Campaign HUD (Rome): the four tabs were too wide and read 'Settlement' and a 4th 'Army' -> as in the game: Army, Town, Agents and an empty one, at their places.
-- Campaign HUD: a right click names every piece under it (a ring and its button's picture) and says when a picture is shared by two buttons; Undo / Redo redraw the view.
-- Units / Buildings: after Apply or Undo the form went blank -> the unit on show stays on show.
-- New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
-- Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
-- New faction: the form jumped a line when the template hint came or went -> it stays put.
-- Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
-- New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
-- Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
-- Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
-- Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
 - **M2EX / REX not seen** (a player with M2EX got "the original exe cannot take more"): the engine is found in
   the game folder by any spelling of its exe or .xdb, and its `descr_ex.txt` (in the mod or the game's data) counts as
   the engine being installed. Load says which engine was found and where `max_factions` comes from; a refusal says
@@ -2388,17 +2338,6 @@
   resource, a region's last land, a river tile, or a port's last land. Undo / Redo stroke, Preview, one backup.
 
 ### Fixed
-- Campaign HUD (Rome): the four tabs were too wide and read 'Settlement' and a 4th 'Army' -> as in the game: Army, Town, Agents and an empty one, at their places.
-- Campaign HUD: a right click names every piece under it (a ring and its button's picture) and says when a picture is shared by two buttons; Undo / Redo redraw the view.
-- Units / Buildings: after Apply or Undo the form went blank -> the unit on show stays on show.
-- New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
-- Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
-- New faction: the form jumped a line when the template hint came or went -> it stays put.
-- Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
-- New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
-- Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
-- Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
-- Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
 - **The bigger map (Tools > Make the campaign map 3 x bigger) - played in the game, it was flat and square:**
   - `map_heights.hgt` - the game's float copy of the heights, which it reads INSTEAD of `map_heights.tga` and never
     makes again - was left at the old size; it is now written at the new size (measured on both vanilla games:
@@ -2440,17 +2379,6 @@
   one over the armies, agents and fleets (name, tile, or a unit inside the army, e.g. "knight").
 
 ### Fixed
-- Campaign HUD (Rome): the four tabs were too wide and read 'Settlement' and a 4th 'Army' -> as in the game: Army, Town, Agents and an empty one, at their places.
-- Campaign HUD: a right click names every piece under it (a ring and its button's picture) and says when a picture is shared by two buttons; Undo / Redo redraw the view.
-- Units / Buildings: after Apply or Undo the form went blank -> the unit on show stays on show.
-- New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
-- Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
-- New faction: the form jumped a line when the template hint came or went -> it stays put.
-- Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
-- New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
-- Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
-- Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
-- Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
 - A mod without `descr_names.txt` (e.g. a small Medieval II add-on mod) no longer stops the window when a template
   faction is picked ("expected str, bytes or os.PathLike object, not NoneType"); the name lists are just empty.
 - The mouse wheel over an open drop-down list no longer logs an error.
@@ -2508,17 +2436,6 @@
   and the Victory block.
 
 ### Fixed
-- Campaign HUD (Rome): the four tabs were too wide and read 'Settlement' and a 4th 'Army' -> as in the game: Army, Town, Agents and an empty one, at their places.
-- Campaign HUD: a right click names every piece under it (a ring and its button's picture) and says when a picture is shared by two buttons; Undo / Redo redraw the view.
-- Units / Buildings: after Apply or Undo the form went blank -> the unit on show stays on show.
-- New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
-- Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
-- New faction: the form jumped a line when the template hint came or went -> it stays put.
-- Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
-- New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
-- Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
-- Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
-- Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
 - **Medieval II diplomacy**: the tab now reads and writes `faction_standings` (-1.0 .. 1.0) - before it showed every
   Medieval II faction as neutral. A new Medieval II faction 'neutral to all' got Rome's `600 slave` lines, which
   Medieval II does not read (it was not at war with the rebels); now `faction_standings -1.0 slave` and
@@ -2595,17 +2512,6 @@
   out (and the names of services in it) scared people off; the wiki page keeps the details.
 
 ### Fixed
-- Campaign HUD (Rome): the four tabs were too wide and read 'Settlement' and a 4th 'Army' -> as in the game: Army, Town, Agents and an empty one, at their places.
-- Campaign HUD: a right click names every piece under it (a ring and its button's picture) and says when a picture is shared by two buttons; Undo / Redo redraw the view.
-- Units / Buildings: after Apply or Undo the form went blank -> the unit on show stays on show.
-- New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
-- Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
-- New faction: the form jumped a line when the template hint came or went -> it stays put.
-- Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
-- New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
-- Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
-- Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
-- Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
 - **"modeldb: a number expected at ..." on a mod's battle_models.modeldb**: a
   modeldb edited by hand - line breaks, tabs, two spaces between the values - is read as the game reads it (it was
   refused, so no new faction could be made); written back in the game's own form.
@@ -2664,17 +2570,6 @@
   of its template's); drawing one from the faction's towns comes back in a later release.
 
 ### Fixed
-- Campaign HUD (Rome): the four tabs were too wide and read 'Settlement' and a 4th 'Army' -> as in the game: Army, Town, Agents and an empty one, at their places.
-- Campaign HUD: a right click names every piece under it (a ring and its button's picture) and says when a picture is shared by two buttons; Undo / Redo redraw the view.
-- Units / Buildings: after Apply or Undo the form went blank -> the unit on show stays on show.
-- New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
-- Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
-- New faction: the form jumped a line when the template hint came or went -> it stays put.
-- Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
-- New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
-- Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
-- Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
-- Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
 - **A unit given to a faction was listed twice in a building's description**:
   where a level recruits a unit by two lines for different factions (vanilla: Arab Cavalry for the Moors and for
   Egypt, Turkomans, the Carthaginian peasant for Spain and for the Carthaginian culture - 36 levels in Rome, 107 in
@@ -2750,17 +2645,6 @@
   mod does not have are refused - as is leaving out the governor's chain.
 
 ### Fixed
-- Campaign HUD (Rome): the four tabs were too wide and read 'Settlement' and a 4th 'Army' -> as in the game: Army, Town, Agents and an empty one, at their places.
-- Campaign HUD: a right click names every piece under it (a ring and its button's picture) and says when a picture is shared by two buttons; Undo / Redo redraw the view.
-- Units / Buildings: after Apply or Undo the form went blank -> the unit on show stays on show.
-- New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
-- Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
-- New faction: the form jumped a line when the template hint came or went -> it stays put.
-- Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
-- New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
-- Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
-- Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
-- Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
 - **A region or its town could not be renamed** (a user asked; a double click on the town list only adds the town):
   **Rename...** beside the towns list, a right click on a town, and Edit region now show the names players see of the
   region and its town and write them to the campaign's `<campaign>_regions_and_settlement_names.txt` (the key and
@@ -2798,17 +2682,6 @@
   and New religion. The files keep the internal name.
 
 ### Fixed
-- Campaign HUD (Rome): the four tabs were too wide and read 'Settlement' and a 4th 'Army' -> as in the game: Army, Town, Agents and an empty one, at their places.
-- Campaign HUD: a right click names every piece under it (a ring and its button's picture) and says when a picture is shared by two buttons; Undo / Redo redraw the view.
-- Units / Buildings: after Apply or Undo the form went blank -> the unit on show stays on show.
-- New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
-- Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
-- New faction: the form jumped a line when the template hint came or went -> it stays put.
-- Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
-- New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
-- Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
-- Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
-- Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
 - **Buildings whose list says `factions { all, }`** (a modder's way to let everyone build them) were taken as
   buildable by no one: the Buildings tab offered only the other levels, and setting them warned "not in the faction
   list". 'all' in a factions list now means every faction, everywhere the tool checks it.
@@ -2829,17 +2702,6 @@
 ## 0.19.0 - 2026-09-30
 
 ### Fixed
-- Campaign HUD (Rome): the four tabs were too wide and read 'Settlement' and a 4th 'Army' -> as in the game: Army, Town, Agents and an empty one, at their places.
-- Campaign HUD: a right click names every piece under it (a ring and its button's picture) and says when a picture is shared by two buttons; Undo / Redo redraw the view.
-- Units / Buildings: after Apply or Undo the form went blank -> the unit on show stays on show.
-- New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
-- Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
-- New faction: the form jumped a line when the template hint came or went -> it stays put.
-- Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
-- New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
-- Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
-- Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
-- Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
 - **A faction picked in New faction mode** (to change it, not to copy it) no longer ends in a puzzling "nothing to
   write": the line at the top and the message on Apply now say that it is the template of
   a new faction, and to press Edit faction to change it itself.
@@ -2885,17 +2747,6 @@
 - **An icon of its own** for the exe and the window: a gear ring round a Roman "R" and a medieval "M" (drawn for the editor, no game pictures).
 
 ### Fixed
-- Campaign HUD (Rome): the four tabs were too wide and read 'Settlement' and a 4th 'Army' -> as in the game: Army, Town, Agents and an empty one, at their places.
-- Campaign HUD: a right click names every piece under it (a ring and its button's picture) and says when a picture is shared by two buttons; Undo / Redo redraw the view.
-- Units / Buildings: after Apply or Undo the form went blank -> the unit on show stays on show.
-- New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
-- Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
-- New faction: the form jumped a line when the template hint came or went -> it stays put.
-- Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
-- New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
-- Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
-- Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
-- Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
 - Settlement names by culture under M2EX: checked in the game, so Preview no longer warns that it is untested there.
 - **Medieval II with M2EX: a new mod folder starts the way M2EX's own mods do** - `Start_<name>.bat` runs
   `M2EX.exe --features.mod=mods/<name>` (as M2EX's Teutonic.bat / Crusades.bat), the plain game keeps
@@ -2904,17 +2755,6 @@
 ## 0.18.1 - 2026-09-30
 
 ### Fixed
-- Campaign HUD (Rome): the four tabs were too wide and read 'Settlement' and a 4th 'Army' -> as in the game: Army, Town, Agents and an empty one, at their places.
-- Campaign HUD: a right click names every piece under it (a ring and its button's picture) and says when a picture is shared by two buttons; Undo / Redo redraw the view.
-- Units / Buildings: after Apply or Undo the form went blank -> the unit on show stays on show.
-- New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
-- Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
-- New faction: the form jumped a line when the template hint came or went -> it stays put.
-- Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
-- New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
-- Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
-- Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
-- Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
 - **Barbarian Invasion: regions read and written right.** BI's descr_regions.txt has a `legion: ...` line after
   each region's name and a beliefs line (`pagan 90 christianity 10`) after farming. The tool took the legion
   line for the town, so a BI region showed the town as "legion: ...", the builder as the town and so on. Now
@@ -2927,17 +2767,6 @@
   built from its code must stay open under GPL-3.0 and keep the author's copyright notice.
 
 ### Fixed (from the user's tests)
-- Campaign HUD (Rome): the four tabs were too wide and read 'Settlement' and a 4th 'Army' -> as in the game: Army, Town, Agents and an empty one, at their places.
-- Campaign HUD: a right click names every piece under it (a ring and its button's picture) and says when a picture is shared by two buttons; Undo / Redo redraw the view.
-- Units / Buildings: after Apply or Undo the form went blank -> the unit on show stays on show.
-- New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
-- Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
-- New faction: the form jumped a line when the template hint came or went -> it stays put.
-- Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
-- New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
-- Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
-- Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
-- Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
 - **Medieval II: a new army, agent or fleet of the rebels never showed up in the game.** In Medieval II the rebels
   are the last faction in descr_strat, and their block ends where the diplomacy starts with `faction_standings`
   (Rome starts it with `core_attitudes`). The tool knew only Rome's word, so it wrote the rebel army after the
@@ -2951,17 +2780,6 @@
   towns list, or more room for the roster cards.
 
 ### Fixed (from the modders' guides, checked on the vanilla files)
-- Campaign HUD (Rome): the four tabs were too wide and read 'Settlement' and a 4th 'Army' -> as in the game: Army, Town, Agents and an empty one, at their places.
-- Campaign HUD: a right click names every piece under it (a ring and its button's picture) and says when a picture is shared by two buttons; Undo / Redo redraw the view.
-- Units / Buildings: after Apply or Undo the form went blank -> the unit on show stays on show.
-- New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
-- Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
-- New faction: the form jumped a line when the template hint came or went -> it stays put.
-- Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
-- New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
-- Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
-- Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
-- Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
 - **REX / M2EX: the original game's limits no longer hold a modder back.** With REX or M2EX beside the game the
   religions limit (9) is not applied (New religion... says "no limit"), and Check mod counts regions, map size,
   units and religions as lifted for both engines (their own notes: "no faction, religion, region, unit, cultures,
@@ -3023,17 +2841,6 @@ Asked on Discord: where are the rebels?
   and Medieval II (rebels take a town, a captain and a new army written, Restore byte-exact) and in the window.
 
 ### Fixed
-- Campaign HUD (Rome): the four tabs were too wide and read 'Settlement' and a 4th 'Army' -> as in the game: Army, Town, Agents and an empty one, at their places.
-- Campaign HUD: a right click names every piece under it (a ring and its button's picture) and says when a picture is shared by two buttons; Undo / Redo redraw the view.
-- Units / Buildings: after Apply or Undo the form went blank -> the unit on show stays on show.
-- New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
-- Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
-- New faction: the form jumped a line when the template hint came or went -> it stays put.
-- Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
-- New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
-- Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
-- Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
-- Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
 - **A new faction no longer takes its template's shadow / spawn ties** (BI / Medieval II `descr_sm_factions`):
   a clone of `empire_east` was also `shadowed_by empire_east_rebels`, so two factions claimed one civil-war
   shadow; `spawns_on_revolt`, `spawned_by` and `spawned_on_event` were copied the same way. The clone starts as a
@@ -3044,17 +2851,6 @@ Asked on Discord: where are the rebels?
 REX's new features, read from REX's own notes, and two things the tool got wrong on Medieval II.
 
 ### Fixed
-- Campaign HUD (Rome): the four tabs were too wide and read 'Settlement' and a 4th 'Army' -> as in the game: Army, Town, Agents and an empty one, at their places.
-- Campaign HUD: a right click names every piece under it (a ring and its button's picture) and says when a picture is shared by two buttons; Undo / Redo redraw the view.
-- Units / Buildings: after Apply or Undo the form went blank -> the unit on show stays on show.
-- New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
-- Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
-- New faction: the form jumped a line when the template hint came or went -> it stays put.
-- Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
-- New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
-- Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
-- Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
-- Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
 - **Medieval II recruitment lines**: Medieval II recruits with `recruit_pool` lines (the vanilla buildings file has
   1475 of them and no `recruit` line at all), but the Roster tab, unit renames, unit packs, "Copy as new" and the
   line checks read only Rome's `recruit`. On Medieval II the Roster showed no place a unit is recruited, a renamed
@@ -3087,17 +2883,6 @@ and ran with the changes, and its own log converts buildings the same way the to
 building not specified ... building will disappear during conversion").
 
 ### Fixed
-- Campaign HUD (Rome): the four tabs were too wide and read 'Settlement' and a 4th 'Army' -> as in the game: Army, Town, Agents and an empty one, at their places.
-- Campaign HUD: a right click names every piece under it (a ring and its button's picture) and says when a picture is shared by two buttons; Undo / Redo redraw the view.
-- Units / Buildings: after Apply or Undo the form went blank -> the unit on show stays on show.
-- New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
-- Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
-- New faction: the form jumped a line when the template hint came or went -> it stays put.
-- Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
-- New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
-- Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
-- Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
-- Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
 - **City / castle with a size set by hand**: Inverness (a castle town) made a city and raised to a large town got
   its governor's building fitted to the file's old size at the write (`wooden_pallisade` in a large town - Preview
   warned "the game refuses to load that"). Buildings picked in the window keep the governor's building fitted
@@ -3121,17 +2906,6 @@ building not specified ... building will disappear during conversion").
   warning that one was missing.
 
 ### Fixed
-- Campaign HUD (Rome): the four tabs were too wide and read 'Settlement' and a 4th 'Army' -> as in the game: Army, Town, Agents and an empty one, at their places.
-- Campaign HUD: a right click names every piece under it (a ring and its button's picture) and says when a picture is shared by two buttons; Undo / Redo redraw the view.
-- Units / Buildings: after Apply or Undo the form went blank -> the unit on show stays on show.
-- New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
-- Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
-- New faction: the form jumped a line when the template hint came or went -> it stays put.
-- Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
-- New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
-- Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
-- Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
-- Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
 - **"<army> stands on x, y - move it first" when moving a town**: taking Odessus sent its
   garrison out to the next free tile, the very tile the town was then moved to, and Apply refused every time. An
   army on a moved town's new tile now steps aside to the nearest free tile of the region (said in Preview).
@@ -3167,17 +2941,6 @@ building not specified ... building will disappear during conversion").
 ## 0.14.1 - 2026-09-29
 
 ### Fixed
-- Campaign HUD (Rome): the four tabs were too wide and read 'Settlement' and a 4th 'Army' -> as in the game: Army, Town, Agents and an empty one, at their places.
-- Campaign HUD: a right click names every piece under it (a ring and its button's picture) and says when a picture is shared by two buttons; Undo / Redo redraw the view.
-- Units / Buildings: after Apply or Undo the form went blank -> the unit on show stays on show.
-- New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
-- Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
-- New faction: the form jumped a line when the template hint came or went -> it stays put.
-- Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
-- New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
-- Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
-- Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
-- Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
 - **Name list... on Medieval II**: vanilla M2 has surname keys with a space (`de Lyon`, `von Saxony`, `al Rashid` -
   8 factions' characters carry them). A new list kept such names as `de_Lyon`, another key, so the game would not
   have found the characters' names. Names the characters already carry are now kept exactly as written; new names
@@ -3227,17 +2990,6 @@ plain Rome copy (the julii taking Mediolanium); not yet tested in the game.
   town has now ("(shown: Medhlan)"). A name set in Names by culture... shows on the map the moment OK is pressed.
 
 ### Fixed
-- Campaign HUD (Rome): the four tabs were too wide and read 'Settlement' and a 4th 'Army' -> as in the game: Army, Town, Agents and an empty one, at their places.
-- Campaign HUD: a right click names every piece under it (a ring and its button's picture) and says when a picture is shared by two buttons; Undo / Redo redraw the view.
-- Units / Buildings: after Apply or Undo the form went blank -> the unit on show stays on show.
-- New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
-- Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
-- New faction: the form jumped a line when the template hint came or went -> it stays put.
-- Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
-- New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
-- Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
-- Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
-- Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
 - **New mod folder made from Barbarian Invasion or Alexander** (REX): its start file now starts that game (`-bi` /
   `-alx`, as REX's own start files do). Without it REX read the mod over the plain game's data, and the menu's
   imperial campaign was read with BI's factions.
@@ -3270,17 +3022,6 @@ Medieval II copies, in the window on Linux and with the deep Check; the flag sym
   Two writes made by one Apply are undone in the right order.
 
 ### Fixed
-- Campaign HUD (Rome): the four tabs were too wide and read 'Settlement' and a 4th 'Army' -> as in the game: Army, Town, Agents and an empty one, at their places.
-- Campaign HUD: a right click names every piece under it (a ring and its button's picture) and says when a picture is shared by two buttons; Undo / Redo redraw the view.
-- Units / Buildings: after Apply or Undo the form went blank -> the unit on show stays on show.
-- New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
-- Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
-- New faction: the form jumped a line when the template hint came or went -> it stays put.
-- Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
-- New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
-- Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
-- Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
-- Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
 - Building editor: **Add line** refused a new `recruit` line once a level had as many as the busiest level of the
   mod ("no building level in this mod has more than 101 'recruit' lines"). Recruit lines only list units and the
   game takes any number of them, so they are no longer held to that rule. (Reported by a tester.)
@@ -3320,17 +3061,6 @@ its own pictures shown everywhere, the painted terrain drawn; the bugs he found 
   `RTW-M2TW-Campaign-Editor-files`; a log an older version left there moves into `logs` by itself.
 
 ### Fixed
-- Campaign HUD (Rome): the four tabs were too wide and read 'Settlement' and a 4th 'Army' -> as in the game: Army, Town, Agents and an empty one, at their places.
-- Campaign HUD: a right click names every piece under it (a ring and its button's picture) and says when a picture is shared by two buttons; Undo / Redo redraw the view.
-- Units / Buildings: after Apply or Undo the form went blank -> the unit on show stays on show.
-- New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
-- Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
-- New faction: the form jumped a line when the template hint came or went -> it stays put.
-- Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
-- New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
-- Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
-- Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
-- Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
 - **Two characters of one faction with the same name**: the game skipped the second ("duplicated character name
   in this faction, skipping") - an army named like the leader, a spy named like an automatic captain. Names now
   stay unique in a faction: the automatic captain skips taken names, the New army / agent dialog refuses one,
@@ -3377,33 +3107,11 @@ its own pictures shown everywhere, the painted terrain drawn; the bugs he found 
 - The map draws each feature in its own colour (rivers, fords, sources, cliffs, volcanoes).
 
 ### Fixed
-- Campaign HUD (Rome): the four tabs were too wide and read 'Settlement' and a 4th 'Army' -> as in the game: Army, Town, Agents and an empty one, at their places.
-- Campaign HUD: a right click names every piece under it (a ring and its button's picture) and says when a picture is shared by two buttons; Undo / Redo redraw the view.
-- Units / Buildings: after Apply or Undo the form went blank -> the unit on show stays on show.
-- New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
-- Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
-- New faction: the form jumped a line when the template hint came or went -> it stays put.
-- Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
-- New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
-- Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
-- Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
-- Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
 - Medieval II's impassable land (`64 64 64` in map_ground_types) now refuses characters like mountains do.
 
 ## 0.9.4 - 2026-09-29
 
 ### Fixed
-- Campaign HUD (Rome): the four tabs were too wide and read 'Settlement' and a 4th 'Army' -> as in the game: Army, Town, Agents and an empty one, at their places.
-- Campaign HUD: a right click names every piece under it (a ring and its button's picture) and says when a picture is shared by two buttons; Undo / Redo redraw the view.
-- Units / Buildings: after Apply or Undo the form went blank -> the unit on show stays on show.
-- New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
-- Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
-- New faction: the form jumped a line when the template hint came or went -> it stays put.
-- Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
-- New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
-- Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
-- Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
-- Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
 - **Barbarian Invasion (bi) would not load its campaign** ("invalid literal for int() ... 'Pictii'"): an entry
   of its `descr_regions.txt` has a line more before the colour. The file is now read by one reader for
   everyone (the colour line anchors each entry), and the tool's writers (Edit region, region tags) use it too.
@@ -3440,17 +3148,6 @@ its own pictures shown everywhere, the painted terrain drawn; the bugs he found 
   `descr_regions.txt` lines of a region of the map (builder, rebels, region tags, triumph, farming).
 
 ### Fixed
-- Campaign HUD (Rome): the four tabs were too wide and read 'Settlement' and a 4th 'Army' -> as in the game: Army, Town, Agents and an empty one, at their places.
-- Campaign HUD: a right click names every piece under it (a ring and its button's picture) and says when a picture is shared by two buttons; Undo / Redo redraw the view.
-- Units / Buildings: after Apply or Undo the form went blank -> the unit on show stays on show.
-- New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
-- Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
-- New faction: the form jumped a line when the template hint came or went -> it stays put.
-- Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
-- New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
-- Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
-- Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
-- Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
 - A new region shows in the towns list on the Faction tab at once (it only came after Apply).
 - A **new faction** can start in a region made in the same session: the map, the region and the faction are
   written by one Apply (the region first; the faction takes it as a rebel village). Characters placed next to
@@ -3469,17 +3166,6 @@ its own pictures shown everywhere, the painted terrain drawn; the bugs he found 
 - README: how to install (the exe in a folder of its own) and what the tool does with your own pictures.
 
 ### Fixed
-- Campaign HUD (Rome): the four tabs were too wide and read 'Settlement' and a 4th 'Army' -> as in the game: Army, Town, Agents and an empty one, at their places.
-- Campaign HUD: a right click names every piece under it (a ring and its button's picture) and says when a picture is shared by two buttons; Undo / Redo redraw the view.
-- Units / Buildings: after Apply or Undo the form went blank -> the unit on show stays on show.
-- New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
-- Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
-- New faction: the form jumped a line when the template hint came or went -> it stays put.
-- Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
-- New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
-- Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
-- Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
-- Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
 - Restore removes the folders a run made for its new files when they are left empty.
 
 ## 0.8.0 - 2026-09-29
@@ -3495,34 +3181,12 @@ its own pictures shown everywhere, the painted terrain drawn; the bugs he found 
   Checked on the vanilla files of both games (julii, england): preview, write, Restore byte for byte.
 
 ### Fixed
-- Campaign HUD (Rome): the four tabs were too wide and read 'Settlement' and a 4th 'Army' -> as in the game: Army, Town, Agents and an empty one, at their places.
-- Campaign HUD: a right click names every piece under it (a ring and its button's picture) and says when a picture is shared by two buttons; Undo / Redo redraw the view.
-- Units / Buildings: after Apply or Undo the form went blank -> the unit on show stays on show.
-- New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
-- Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
-- New faction: the form jumped a line when the template hint came or went -> it stays put.
-- Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
-- New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
-- Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
-- Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
-- Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
 - Renaming the leader or heir on the Faction tab now renames him on the family tree (`relative`
   lines) too; before, the tree kept the old name.
 
 ## 0.7.5 - 2026-09-29
 
 ### Fixed
-- Campaign HUD (Rome): the four tabs were too wide and read 'Settlement' and a 4th 'Army' -> as in the game: Army, Town, Agents and an empty one, at their places.
-- Campaign HUD: a right click names every piece under it (a ring and its button's picture) and says when a picture is shared by two buttons; Undo / Redo redraw the view.
-- Units / Buildings: after Apply or Undo the form went blank -> the unit on show stays on show.
-- New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
-- Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
-- New faction: the form jumped a line when the template hint came or went -> it stays put.
-- Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
-- New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
-- Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
-- Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
-- Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
 - **Medieval II: crash on load after taking a castle** ("The castle core building level should be
   EQUAL the settlement level!"): a castle's governor's building (`core_castle_building`) stands at
   the settlement's own level (motte_and_bailey = village, wooden_castle = town, castle = large
@@ -3535,17 +3199,6 @@ its own pictures shown everywhere, the painted terrain drawn; the bugs he found 
 ## 0.7.4 - 2026-09-28
 
 ### Fixed
-- Campaign HUD (Rome): the four tabs were too wide and read 'Settlement' and a 4th 'Army' -> as in the game: Army, Town, Agents and an empty one, at their places.
-- Campaign HUD: a right click names every piece under it (a ring and its button's picture) and says when a picture is shared by two buttons; Undo / Redo redraw the view.
-- Units / Buildings: after Apply or Undo the form went blank -> the unit on show stays on show.
-- New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
-- Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
-- New faction: the form jumped a line when the template hint came or went -> it stays put.
-- Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
-- New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
-- Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
-- Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
-- Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
 - **Art tab: the picture list was squeezed to a strip** by the campaign-select map blown up to 2x;
   the map now takes at most about 40 % of the tab's height (and half its width), smaller on small
   windows, so the pictures below keep their room.
@@ -3566,17 +3219,6 @@ its own pictures shown everywhere, the painted terrain drawn; the bugs he found 
 ## 0.7.1 - 2026-09-28
 
 ### Fixed
-- Campaign HUD (Rome): the four tabs were too wide and read 'Settlement' and a 4th 'Army' -> as in the game: Army, Town, Agents and an empty one, at their places.
-- Campaign HUD: a right click names every piece under it (a ring and its button's picture) and says when a picture is shared by two buttons; Undo / Redo redraw the view.
-- Units / Buildings: after Apply or Undo the form went blank -> the unit on show stays on show.
-- New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
-- Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
-- New faction: the form jumped a line when the template hint came or went -> it stays put.
-- Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
-- New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
-- Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
-- Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
-- Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
 - **Preview / Apply changes, Undo, Tools... disappeared** when a tab was taller than the window
   (a smaller screen, a window made smaller): the buttons and the status line are now held at the
   bottom first and the tab shrinks instead (checked on a 1000 x 640 window on every tab).
@@ -3598,17 +3240,6 @@ The first release since 0.1.2: it holds 0.2.0 - 0.6.0 below (those were test bui
   zeroed dialog cannot break the game.
 
 ### Fixed
-- Campaign HUD (Rome): the four tabs were too wide and read 'Settlement' and a 4th 'Army' -> as in the game: Army, Town, Agents and an empty one, at their places.
-- Campaign HUD: a right click names every piece under it (a ring and its button's picture) and says when a picture is shared by two buttons; Undo / Redo redraw the view.
-- Units / Buildings: after Apply or Undo the form went blank -> the unit on show stays on show.
-- New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
-- Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
-- New faction: the form jumped a line when the template hint came or went -> it stays put.
-- Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
-- New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
-- Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
-- Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
-- Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
 - **Campaign-select map (Medieval II) lit in the wrong place in the game** (shifted right): the
   place of the map inside the picture is now learnt from where the game lights each vanilla faction
   on its own map (a scale per axis); the land is filled solid (the see-through fill looked poor),
@@ -3746,17 +3377,6 @@ Fixes from a run through every part of the tool as a user (vanilla and HLR).
   texts, pictures).
 
 ### Fixed
-- Campaign HUD (Rome): the four tabs were too wide and read 'Settlement' and a 4th 'Army' -> as in the game: Army, Town, Agents and an empty one, at their places.
-- Campaign HUD: a right click names every piece under it (a ring and its button's picture) and says when a picture is shared by two buttons; Undo / Redo redraw the view.
-- Units / Buildings: after Apply or Undo the form went blank -> the unit on show stays on show.
-- New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
-- Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
-- New faction: the form jumped a line when the template hint came or went -> it stays put.
-- Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
-- New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
-- Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
-- Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
-- Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
 - A new faction now also gets the template's mouse-over, selected and grey
   campaign buttons (file names with the faction name in the middle were missed).
 
@@ -3776,17 +3396,6 @@ Fixes from a run through every part of the tool as a user (vanilla and HLR).
 - A template fills the new faction's empty fields (money, colours).
 
 ### Fixed
-- Campaign HUD (Rome): the four tabs were too wide and read 'Settlement' and a 4th 'Army' -> as in the game: Army, Town, Agents and an empty one, at their places.
-- Campaign HUD: a right click names every piece under it (a ring and its button's picture) and says when a picture is shared by two buttons; Undo / Redo redraw the view.
-- Units / Buildings: after Apply or Undo the form went blank -> the unit on show stays on show.
-- New faction: a new name holding the template's word (a clone of the Gauls called 'CE Gaul Clone') was swapped twice in the copied texts ('CE CEGC Clone') -> each name is swapped once.
-- Tools > A mod from zero: 'New faction' opened the Factions work on another tab -> it opens New faction; the steps follow what you did without reopening the window.
-- New faction: the form jumped a line when the template hint came or went -> it stays put.
-- Tools > A mod from zero did not open in the exe (its window was missing from the build) -> it opens; the exe now checks itself for every window before it is handed out.
-- New faction: the template no longer fills the colours and the leader's / heir's titles (left empty, the template's stay in the files); AI, culture, money and religion still start as the template's.
-- Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
-- Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
-- Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
 - A princess (witch) takes a woman's name from descr_names.
 - A lower settlement level or a smaller governor's building pulls every other
   building down to what fits.

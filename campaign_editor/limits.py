@@ -56,7 +56,7 @@ def _setting(path, key="max_factions"):
 # Not here: heavengames' "20 landmasses" - vanilla RTW's own map has 32 separate pieces of land and runs,
 # so what the game counts is not known.
 HARD_LIMITS = {
-    "rome": {"regions": 200, "map_size": 510, "units": 500, "chains": 64, "levels": 9, "hidden_resources": 63},
+    "rome": {"regions": 200, "map_size": 510, "units": 500, "chains": 64, "levels": 9, "hidden_resources": 64},
     "medieval2": {"regions": 200, "map_size": 510, "units": 500, "chains": 128, "levels": 9,
                   "hidden_resources": 64},
 }
@@ -65,11 +65,16 @@ HARD_LIMITS = {
 # religions uncapped; 18/04 maps past 32768), the EB II / M2EX thread on TWC ("no faction, religion, region, unit,
 # cultures, model etc. limits"), HLR's 750 regions under REX. Factions stay a number of their own (max_factions).
 # Not named anywhere: building chains, levels, hidden resources - those keep the original's number as a note.
+# Since 2026-10-22 (limits.md THE RULE) a key is here ONLY when the engine source shows it lifted; lifted() lifts
+# nothing else (officers 3, rebel unit types 20, army 20 / 40 stay - the source keeps them).
 _LIFTS = {
-    "regions": "lifted by REX / M2EX (HLR runs 750 regions under REX)",
-    "map_size": "lifted by REX / M2EX (their notes: map size limits removed, maps past 32768 fixed)",
-    "units": "lifted by REX / M2EX (\"no ... unit ... limits\" - M2EX's own notes)",
-    "religions": "lifted by REX / M2EX (README: religions uncapped)",
+    "regions": "lifted by REX / M2EX (engine source: REGION_ID int32, region arrays grow - world_map.h)",
+    "map_size": "lifted by REX / M2EX (engine source: map coordinates int16, about 32767 - strategy_map_common.h)",
+    "units": "lifted by REX / M2EX (engine source: the unit table grows past CA's 500 - env/database.h)",
+    "religions": "lifted by REX / M2EX (engine source: 'No cap to enforce' - romans.cpp)",
+    "chains": "lifted by REX / M2EX (engine source: building chains in a growing array - building_db.h)",
+    "levels": "lifted by REX / M2EX (engine source: levels read without a limit - building_db.cpp)",
+    "hidden_resources": "lifted by REX / M2EX (engine source: the list grows, regions keep a bit field of any size)",
 }
 ENGINE_LIFTS = {"REX.exe": dict(_LIFTS), "M2EX.exe": dict(_LIFTS)}
 # The original exes' fixed numbers the tool refuses beyond when no REX / M2EX runs the game.
@@ -86,18 +91,32 @@ def manhood_age(mod):
     """The age a boy comes of age - the oldest a living man off the map (a record) may be. A setting, not a fixed
     number: Rome + REX read `age_of_manhood` in descr_ex.txt, Medieval II `<age_of_manhood uint="N"/>` in
     descr_campaign_db.xml (the mod's copy, else the game's); vanilla and the defaults say 16."""
+    return family_age(mod, "age_of_manhood")
+
+
+FAMILY_AGES = {"age_of_manhood": 16, "daughters_age_of_consent": 12}
+
+
+def family_age(mod, key):
+    """A family tree age setting (`age_of_manhood`, `daughters_age_of_consent`) as the engine reads it: Rome + REX
+    from descr_ex.txt (engine source descr_ex.cpp, defaults 16 / 12; the original RomeTW.exe has them fixed at the
+    same), Medieval II from descr_campaign_db.xml's family_tree block (campaign_db.cpp, the mod's copy, else the
+    game's) - vanilla Medieval II's own file says 16 for both, not 12."""
     import re
     from .newmod import game_of
+    default = FAMILY_AGES[key]
     if game_kind(mod) != "medieval2":
-        return ex_setting(mod, "age_of_manhood") or 16
+        p = ex_file(mod, "descr_ex.txt")
+        value = _setting(p, key)[1] if p else None
+        return default if value is None else value
     game = game_of(mod.data)
     for folder in (mod.data, _ci(game, "data") if game else None):
         p = _ci(folder, "descr_campaign_db.xml") if folder else None
         if p:
             with open(p, encoding="latin-1") as fh:
-                m = re.search(r"<age_of_manhood\s+(?:uint|int|float)=\"(\d+)", fh.read())
-            return int(m.group(1)) if m else 16
-    return 16
+                m = re.search(r"<%s\s+(?:uint|int|float)=\"(\d+)" % key, fh.read())
+            return int(m.group(1)) if m else default
+    return default
 
 
 def ex_file(mod, name):
@@ -105,9 +124,46 @@ def ex_file(mod, name):
     mod's own copy, else None - the engine's built-in defaults. A mod never takes the game's data copy: both
     engines' descr_caps_ex.txt say "Mods that don't ship this file get safe defaults" (each option marked "default
     for mods"), REX ships separate copies for bi/ and alexander/, M2EX one in each Kingdoms mod, and modders
-    (Klerski, 2026-10-01) found the same. For the game's own data the mod's copy is that copy. Never the game's copy
-    under a mod that holds only its changes (ModData.under) - the engines read these from the mod alone."""
-    return _ci(mod.data, name)
+    (Klerski, 2026-10-01) found the same. For the game's own data the mod's copy is that copy.
+    descr_ex.txt is different (engine source, 2026-10-22): it is read through the file overlay, the mod's copy, else
+    the GAME's data/descr_ex.txt (descr_ex.cpp + romans_cmd_line.cpp setup_path_make); only descr_caps_ex.txt skips
+    the overlay on purpose (descr_caps_ex.cpp caps_ex_path: 'a mod that doesn't ship it should get compiled-in
+    defaults, not vanilla's settings')."""
+    own = _ci(mod.data, name)
+    if own or name.lower() == "descr_caps_ex.txt":
+        return own
+    return game_ex_file(mod, name)
+
+
+def game_ex_file(mod, name="descr_ex.txt"):
+    """The game's own data/<name> under a mod (its fallback through the engine's file overlay), or None."""
+    from .newmod import game_of
+    game = game_of(mod.data)
+    data = _ci(game, "data") if game else None
+    if not data or os.path.normcase(os.path.abspath(data)) == os.path.normcase(os.path.abspath(mod.data)):
+        return None
+    return _ci(data, name)
+
+
+def mod_ex_path(plan, name="descr_ex.txt"):
+    """The mod's own descr_ex.txt to write - when the mod has none but the game has one, the game's whole file is
+    copied in first (a one-line file would hide every other setting the game's copy gives the mod). Returns the
+    path, ready for plan.edit, or None when neither has one."""
+    own = _ci(plan.mod.data, name)
+    if own:
+        return own
+    base = game_ex_file(plan.mod, name)
+    if not base:
+        return None
+    path = os.path.join(plan.mod.data, name)
+    if path not in plan.files:                       # the game's text, written as the mod's own new file
+        from .textio import TextFile
+        f = TextFile.load(base)
+        f.path = path
+        plan.borrowed.add(path)
+        plan.originals[path] = f.dump()
+        plan.files[path] = f
+    return path
 
 
 def ex_setting(mod, key):
@@ -167,19 +223,20 @@ def engine_report(mod):
     how = "found in %s" % game if engine_files(game) else "taken as installed (its descr_ex.txt is there, its exe " \
         "was not seen in %s)" % game
     own = "the mod's own %s" % os.path.basename(lim["file"]) if lim.get("own") else \
-        "its built-in defaults - the mod has no descr_ex.txt of its own, and a mod never takes the game's copy"
+        "the game's data/descr_ex.txt (the mod has none of its own; the engine falls back to the game's)" \
+        if lim.get("file") and os.path.isfile(lim["file"]) else "its built-in defaults - no descr_ex.txt in the mod or the game"
     return "%s %s - max_factions %d (from %s)" % (engine[:-4], how, lim["max"], own)
 
 
 def lifted(mod, key):
-    """Why the original exe's limit `key` does not hold for this mod, or None. THE USER'S RULE (2026-10-03, after the
-    same limit error again and again): with REX / M2EX beside the game EVERY limit is lifted - factions, regions,
-    religions, cultures, units, chains, levels, hidden resources, anything - no error, no warning; a setting line
-    (max_factions) is simply rewritten to fit (keep_up)."""
+    """Why the original exe's limit `key` does not hold for this mod, or None. THE RULE (the user, 2026-10-22,
+    replaces 2026-10-03's 'with REX / M2EX EVERY limit is lifted'): only what the engine source shows lifted
+    (ENGINE_LIFTS); any other key keeps its limit with the engine too. Setting lines (max_factions) are still
+    rewritten to fit (keep_up) - the engine's own way."""
     engine = engine_of(mod)
     if not engine:
         return None
-    return ENGINE_LIFTS.get(engine, {}).get(key) or "no limit with %s" % engine[:-4]
+    return ENGINE_LIFTS.get(engine, {}).get(key)
 
 
 def faction_limit(mod):
@@ -196,7 +253,7 @@ def faction_limit(mod):
         return out
     p = ex_file(mod, "descr_ex.txt")
     out["file"] = p or os.path.join(mod.data, "descr_ex.txt")
-    out["own"] = bool(p)
+    out["own"] = bool(_ci(mod.data, "descr_ex.txt"))
     if p:
         line, value = _setting(p)
         if value is not None:                   # no line: the engine's default holds
@@ -247,8 +304,8 @@ def check(plan, count, allow_raise=True):
 def raise_limit(plan, limit, count):
     """max_factions set to count in the mod's descr_ex.txt (a line added when missing; the file made with that
     line alone when the mod has none - the game's copy is never read for a mod, ex_file) - with the plan's backup."""
-    path = limit["file"] or os.path.join(plan.mod.data, "descr_ex.txt")     # always the mod's own (ex_file)
-    if os.path.isfile(path):
+    path = mod_ex_path(plan) or os.path.join(plan.mod.data, "descr_ex.txt")    # the mod's own, the game's copied in
+    if path in plan.files or os.path.isfile(path):
         f = plan.edit(path)
         if limit["line"] is not None:
             old = f.text(limit["line"])
@@ -271,8 +328,8 @@ def raise_setting(plan, key, value):
     note (the user's rule: with an engine nothing is a limit). Returns True when written."""
     if not engine_of(plan.mod):
         return False
-    path = ex_file(plan.mod, "descr_ex.txt") or os.path.join(plan.mod.data, "descr_ex.txt")
-    if os.path.isfile(path):
+    path = mod_ex_path(plan) or os.path.join(plan.mod.data, "descr_ex.txt")
+    if path in plan.files or os.path.isfile(path):
         f = plan.edit(path)
         at = next((i for i, l in enumerate(f.texts()) if re.match(r"\s*%s\s+\d+" % re.escape(key), l)), None)
         if at is not None:

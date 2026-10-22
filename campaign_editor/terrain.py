@@ -519,6 +519,35 @@ def nearest_region(cmap, xy, reach=60):
     return None
 
 
+def ground_file(name):
+    """The path under data/ of a picture named in descr_aerial_map_ground_types.txt: the game puts the name after
+    data/terrain/aerial_map/ground_types/ as it stands, so a mod may climb out with '../' (HLR names
+    '../../../../data/terrain/aerial_map/ground_types/x.tga' - the same folder reached from the game's root)."""
+    import posixpath
+    p = posixpath.normpath("data/terrain/aerial_map/ground_types/" + name.replace("\\", "/"))
+    return p[5:] if p.lower().startswith("data/") else p.lstrip("./")
+
+
+def land_climate(cmap, xy, reach=3):
+    """The climate (map_climates.tga colour) most land tiles round xy have, ring by ring up to reach, or None. New
+    land takes it: what lies under the sea is mostly leftovers of old coasts (vanilla Rome: 11 climates under its
+    sea), not the land's own."""
+    from collections import Counter
+    x0, y0 = xy
+    for r in range(1, reach + 1):
+        seen = Counter()
+        for dx in range(-r, r + 1):
+            for dy in (-r, r) if abs(dx) != r else range(-r, r + 1):
+                x, y = x0 + dx, y0 + dy
+                if 0 <= x < cmap.w and 0 <= y < cmap.h and not cmap.is_sea(x, y):
+                    c = cmap.climate_at(x, y)
+                    if c is not None:
+                        seen[c] += 1
+        if seen:
+            return seen.most_common(1)[0][0]
+    return None
+
+
 def coast_problem(cmap, xy, to_land, standing, features, region_tiles, ports):
     """None, or why tile xy cannot be made land (to_land) or sea. standing: tiles with a town, port, character,
     fort or resource; features: map_features {(x, y): colour}; region_tiles: {region: how many land tiles it has

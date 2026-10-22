@@ -34,9 +34,50 @@ def tree_hash(root):
     return out
 
 
+# a Medieval II man's 20 bones and each one's parent (the game's own skeletons) - test data for the posing tests
+MAN_BONES = ("bone_pelvis", "bone_RThigh", "bone_Rlowerleg", "bone_Rfoot", "bone_abs", "bone_torso", "bone_head",
+             "bone_jaw", "bone_eyebrow", "bone_Rclavical", "bone_Rupperarm", "bone_Relbow", "bone_Rhand",
+             "bone_Lclavical", "bone_Lupperarm", "bone_Lelbow", "bone_Lhand", "bone_LThigh", "bone_Llowerleg",
+             "bone_Lfoot")
+MAN_PARENTS = (-1, 0, 1, 2, 0, 4, 5, 6, 6, 5, 9, 10, 11, 5, 13, 14, 15, 0, 17, 18)
+
+
+def _m2_skeleton(names, parents, rest, paths=(), binds=None, scale=1.0):
+    """A Medieval II skeleton's record in skeletons.dat (SKELETON::pack): the scale, the bone count, the IK share;
+    per bone its kind, base pose, parent, two flags, the IK controller, its bind and its name; then its animations."""
+    import struct as _st
+    from campaign_editor.animations import _binds
+    binds = binds or _binds(parents, [(0, 0, 0, 1)] * len(names), rest)
+    out = _st.pack("<fHf", scale, len(names), 0.5)
+    for n, par, r, b in zip(names, parents, rest, binds):
+        out += _st.pack("<i3fiBBxxi", 0, r[0], r[1], r[2], par, 0, 0, -1) + _st.pack("<12f", *b) + n.encode() + b"\0"
+    return out + b"".join(x.encode() + b"\0" * 9 for x in paths)
+
+
+def _cas_bytes():
+    """A loose .cas animation of three bones (Scene Root, bone_body, bone_arm), three frames, the arm turning."""
+    import struct as _st
+
+    def text(t):
+        return _st.pack("<I", len(t) + 1) + t.encode() + b"\x00"
+
+    def raw(t):
+        return _st.pack("<I", len(t)) + t.encode()
+    head = _st.pack("<f", 3.18) + b"\x00" * 46 + _st.pack("<H", 3) + _st.pack("<3I", 0, 0, 1)
+    head += _st.pack("<I3f", 3, 0.05, 0.1, 0.15)
+    props = "Mass = 0.000000\r\nEllasticity = 0.300000\r\nFriction = 0.300000\r\n"
+    bones = text("Scene Root") + _st.pack("<5I", 0, 0, 0, 48, 0) + b"\x01\x00\x00\x00\x00"
+    bones += text("bone_body") + _st.pack("<5I", 0, 0, 0, 48, 0) + b"\x01\x00\x00\x00\x00"
+    bones += text("bone_arm") + _st.pack("<5I", 3, 1, 0, 48, 0) + b"\x00" + raw(props)
+    keys = b"".join(_st.pack("<4f", 0.1 * k, 0, 0, 1) for k in range(3)) + _st.pack("<3f", 0, 1, 0.25)
+    rest = _st.pack("<9f", 0, 0, 0, 0, 0.5, 0, 9, 9, 9)
+    return head + bones + keys + rest + b"\x00" * 40
+
+
 def _make_anim_set(folder, skels, anims, shape=(2, 3, 1)):
-    """A game animation set (pack.idx / .dat, skeletons.idx / .dat) in folder: skels {name: [anim path]}, anims
-    {path: [(scale, bytes)]}; shape: each animation's (frames, bones, kind) in the index."""
+    """A game animation set (pack.idx / .dat, skeletons.idx / .dat) in folder: skels {name: [anim path] or a whole
+    record (bytes: _m2_skeleton)}, anims {path: [(scale, bytes)]}; shape: each animation's (frames, bones, kind) in
+    the index."""
     import struct as _st
     os.makedirs(folder, exist_ok=True)
     head = lambda magic, stamp, ver, n: magic + stamp + _st.pack("<II", ver, n)  # noqa: E731
@@ -53,7 +94,8 @@ def _make_anim_set(folder, skels, anims, shape=(2, 3, 1)):
     sidx, sdat = bytearray(head(b"SKEL.PACK", b"\x80\x79\x08", 3, len(skels))), \
         bytearray(head(b"SKEL.PACK", b"\x80\x79\x08", 3, len(skels)))
     for name, paths in skels.items():
-        rec = b"\x01\x02" + b"".join(p.encode() + b"\0" * 9 for p in paths)
+        rec = bytes(paths) if isinstance(paths, (bytes, bytearray)) else \
+            b"\x01\x02" + b"".join(p.encode() + b"\0" * 9 for p in paths)
         sidx += _st.pack("<III", len(name) + 1, len(sdat), len(rec)) + name.encode() + b"\0"
         sdat += rec
     for name, data in (("pack.idx", pidx), ("pack.dat", pdat), ("skeletons.idx", sidx),
@@ -263,13 +305,187 @@ class ToolTest(unittest.TestCase):
         self.assertEqual(rd("banners", "textures", "Faction_banner_beta.texture"), "A-banner")
         self.assertIn("factions alpha, beta", rd("descr_sounds_accents.txt"))       # the file's commas
         self.assertIn("<Faction>alpha</Faction>\n    <Faction>beta</Faction>", rd("descr_sounds_db.xml"))
-        self.assertIn('<faction name="beta">\n    <track>a.bik</track>', rd("descr_movies_tracks.xml"))
+        # the template's voice track and subtitles over the movies are not the new faction's (vanilla leaves 7 of its
+        # factions out of the file: they play the movies plain)
+        self.assertNotIn('"beta"', rd("descr_movies_tracks.xml"))
         self.assertIn("<name>beta</name>", rd("world", "maps", "campaign", "test", "descr_faction_movies.xml"))
+        # alpha.bik is the template's own movie: no movie for the new faction, never the template's
+        self.assertIn("<name>beta</name>\n\t\t<intro></intro>",
+                      rd("world", "maps", "campaign", "test", "descr_faction_movies.xml"))
         self.assertIn("factions slave alpha beta", rd("world", "maps", "base", "descr_sounds_music_types.txt"))
         self.assertEqual(rd("descr_banners_new.xml").count("Faction="), 3)            # slave's not copied
         restore(ModData(self.root), backups(ModData(self.root))[0])
         after = {k: v for k, v in tree_hash(self.root).items() if not k.startswith(("faction_tool_backups", "CampaignEditor_backups"))}
         self.assertEqual(before, after)
+
+    def test_new_faction_keeps_nothing_of_the_template_s_own(self):
+        """The user, 2026-10-22 ('no traces of the clone'): a dry clone of the Gauls / Scotland kept the template's
+        story texts ('The trouser-wearing ... Gauls'), 'The Scots are Victorious' (Scots: no name nor adjective of
+        Scotland), its own movies, its leader's face, and pointed its town flag and 3D symbol at the template's files.
+        Now the story is a plain line of the new faction, the people's word swapped, a movie of the template's own
+        is left empty (a shared one stays), the flag and the symbol are copies of its own, no leader_pic copied."""
+        d = os.path.join(self.root, "data")
+        write(os.path.join(d, "text", "expanded_bi.txt"),
+              "{ALPHA}\t\tAlphland\n{EMT_ALPHA_SPY}\t\tAlphish Spy\n{EMT_VICTORY_ALPHA}\t\tThe Alphs are victorious\n"
+              "{EMT_DEFEATED_BY_ALPHA}\t\tVictory is gone: the unfeasibly moustached Alphs now rule the whole world\n"
+              "{ALPHA_DESCR}\t\tAlphs\\nStrong close-combat infantry, but very limited cavalry indeed\n"
+              "{hut_alpha_desc}\t\tThe Alphish hut where the Alphs of the hills keep their goats in winter\n",
+              utf16=True)
+        write(os.path.join(d, "descr_sm_factions.txt"), SM.replace(
+            "secondary_colour\t\tred 4, green 5, blue 6\n",
+            "secondary_colour\t\tred 4, green 5, blue 6\nsymbol\t\tmodels_strat/symbol_alpha.CAS\n"
+            "victory_movie\t\tfmv/victory/barb_outro.wmv\ndefeat_movie\t\tfmv/lose/alpha_eliminated.wmv\n").replace(
+            "culture\t\tbarbarian\n", "culture\t\tbarbarian\nvictory_movie\t\tfmv/victory/barb_outro.wmv\n"))
+        os.makedirs(os.path.join(d, "models_strat"), exist_ok=True)
+        with open(os.path.join(d, "models_strat", "symbol_alpha.CAS"), "wb") as fh:
+            fh.write(b"head textures\\#banner_symbol_alpha.tga\x00tail")
+        write(os.path.join(d, "models_strat", "textures", "#banner_symbol_alpha.tga.dds"), "symbol")
+        write(os.path.join(d, "descr_building_battle.txt"), "\t##standard_alpha.tga\n\t{\n\t\talpha\t\t##standard_"
+                                                            "alpha.tga\n\t\tslave\t\t##standard_slave.tga\n\t}\n")
+        write(os.path.join(d, "models_building", "textures", "##standard_alpha.tga.dds"), "flag")
+        camp = os.path.join(d, "world", "maps", "campaign", "test")
+        write(os.path.join(camp, "leader_pic_alpha.tga"), "face")
+        mod = ModData(self.root)
+        plan = build(mod, "test", "alpha", "beta", {"display_name": "Betaland", "adjective": "Betish",
+                                                    "start": {"regions": ["B_R"], "leader": {"name": "Boris"}}})
+        text = "\n".join(plan.files[mod.text_file("expanded_bi.txt")].texts())
+        self.assertIn("{EMT_VICTORY_BETA}\t\tThe Betalands are victorious", text)       # people: the name + s
+        self.assertIn("{EMT_DEFEATED_BY_BETA}\t\tVictory can no longer be yours. Betaland has won.", text)
+        self.assertIn("{BETA_DESCR}\t\tBetaland", text)
+        self.assertNotIn("cavalry indeed\n{EMT", text.split("{BETA_DESCR}")[1][:80])
+        self.assertIn("{hut_beta_desc}\t\tThe Betish hut where the Betalands of the hills", text)  # a building's: swapped
+        sm = "\n".join(plan.files[mod.file("sm_factions")].texts())
+        beta = sm.split("faction\t\tbeta")[1].split("faction\t\tslave")[0]
+        self.assertIn("victory_movie\t\tfmv/victory/barb_outro.wmv", beta)           # shared with the rebels: kept
+        self.assertRegex(beta, r"(?m)^defeat_movie\s*$")                                # its own: none
+        self.assertIn("symbol\t\tmodels_strat/symbol_beta.CAS", beta)
+        cas = os.path.join(d, "models_strat", "symbol_beta.CAS")
+        # the texture name inside the model keeps its length (the model's bytes stay where they were)
+        self.assertEqual(plan.binaries[cas], b"head textures\\#banner_symbol_beta_.tga\x00tail")
+        dsts = {os.path.relpath(dst, d).replace("\\", "/"): src for src, dst in plan.copies}
+        self.assertIn("models_strat/textures/#banner_symbol_beta_.tga.dds", dsts)
+        self.assertIn("models_building/textures/##standard_beta.tga.dds", dsts)
+        self.assertIn("beta\t\t##standard_beta.tga", "\n".join(plan.files[mod.file("building_battle")].texts()))
+        self.assertFalse([k for k in dsts if "leader_pic" in k])
+        # the template's own files stay as they were
+        self.assertIn("alpha\t\t##standard_alpha.tga", "\n".join(plan.files[mod.file("building_battle")].texts()))
+        self.assertIn("symbol\t\tmodels_strat/symbol_alpha.CAS", sm)
+
+    def test_traces_of_another_faction(self):
+        """Stage 2 of a faction with nothing in common (the user, 2026-10-22): what a faction the editor made still
+        shares with another - colours, unit cards pixel for pixel, a text naming another faction - listed by Check
+        mod files for the factions the backups say the editor made; the plan of a new faction says it too."""
+        from campaign_editor import traces as T
+        from campaign_editor.check import check_mod
+        d = os.path.join(self.root, "data")
+        mod = ModData(self.root)
+        plan = build(mod, "test", "alpha", "beta", {"display_name": "Betaland",
+                                                    "start": {"regions": ["B_R"], "leader": {"name": "Boris"}}})
+        self.assertIn("beta still has of alpha", plan.report())
+        plan.apply()
+        p = os.path.join(d, "text", "expanded_bi.txt")
+        with open(p, encoding="utf-16") as fh:
+            text = fh.read()
+        with open(p, "w", encoding="utf-16") as fh:
+            fh.write(text + "{EMT_BETA_TOWN}\t\tAlphan Kingdom's town\n")
+        mod = ModData(self.root)
+        self.assertEqual(T.made_factions(mod), {"beta": "alpha"})
+        found = T.traces(mod, "test", "beta")
+        kinds = {(t["what"], t["other"]) for t in found}
+        self.assertIn(("colours almost the same as another faction's", "alpha"), kinds)    # the template's colours
+        self.assertIn(("unit cards pixel for pixel another faction's", "alpha"), kinds)
+        self.assertIn(("of its texts naming another faction", "alpha"), kinds)
+        self.assertTrue(all(":" in line for line in T.summary(found)))
+        report = check_mod(mod, "test")
+        self.assertIn("TRACES OF ANOTHER FACTION in beta (made from alpha", report)
+        self.assertIn("unit cards pixel for pixel another faction's: alpha", report)
+        # colours of its own: no colour trace
+        self.assertEqual(T.colour_traces({"a": {"primary_colour": (200, 10, 10), "secondary_colour": (0, 0, 0)},
+                                          "b": {"primary_colour": (10, 200, 10), "secondary_colour": (0, 0, 0)}},
+                                         "a"), [])
+
+    def test_new_faction_from_zero_picks(self):
+        """New faction > From zero (the user, 2026-10-22): the faction its lines are made from picked behind the
+        culture, colours away from every faction's, a name list mixed from the whole culture (no one faction's most of
+        it), the internal name made from the name; its plan says its pictures are recoloured in the same Apply."""
+        from campaign_editor import fromzero as Z
+        mod = ModData(self.root)
+        self.assertEqual(Z.culture_factions(mod, "eastern"), ["alpha"])
+        self.assertEqual(Z.frame_faction(mod, "test", "eastern"), "alpha")
+        self.assertIsNone(Z.frame_faction(mod, "test", "nobody"))
+        self.assertEqual(Z.colours_alike(mod, (3, 3, 3), (5, 5, 5)), [("alpha", "both")])
+        self.assertEqual(Z.colours_alike(mod, (3, 3, 3), (250, 250, 250)), [("alpha", "primary")])
+        self.assertEqual(Z.colours_alike(mod, (200, 30, 30)), [])
+        free = Z.free_colours(mod, 4)
+        self.assertEqual(len(free), 4)
+        self.assertTrue(all(not Z.colours_alike(mod, p, s) for p, s in free))
+        self.assertEqual(Z.internal_of("Kingdom of Zorga!"), "kingdom_of_zorga")
+        self.assertEqual(Z.internal_of("1st Legion"), "f_1st_legion")
+
+        class Mod:                                  # three factions of one culture, one with a long list
+            pools = {"a": {"characters": ["A%d" % i for i in range(40)] + ["Common"], "surnames": ["Sa"]},
+                     "b": {"characters": ["B%d" % i for i in range(5)] + ["Common"], "women": ["Wb"]},
+                     "c": {"characters": ["C%d" % i for i in range(5)]}, "d": {"characters": ["D1"]}}
+
+            def factions(self):
+                return [("a", "x"), ("b", "x"), ("c", "x"), ("d", "y"), ("slave", "x")]
+
+            def name_pool(self, f):
+                return self.pools.get(f, {})
+        pools, owners = Z.culture_name_list(Mod(), "x")
+        self.assertEqual(owners, ["a", "b", "c"])
+        men = pools["characters"]
+        self.assertEqual(len(men), len({n.lower() for n in men}))
+        self.assertNotIn("D1", men)
+        self.assertTrue(all(Z._share(men, Mod.pools[f]["characters"]) <= 0.75 for f in owners))
+        self.assertIn("B0", men)
+        self.assertEqual((pools["surnames"], pools["women"]), (["Sa"], ["Wb"]))
+        # the culture's names are the game's own keys, written as they are: Rome's 'Sk\xedlas', 'Cisantaxma.',
+        # 'of Itius Portis' were refused by the typed-names check and From zero stopped at Create (review 2026-10-22)
+        from campaign_editor import namelists as NL
+        Mod.pools["c"]["characters"].append("Sk\xedlas")
+        Mod.pools["b"]["surnames"] = ["of Itius Portis", "Cisantaxma."]
+        pools, _ = Z.culture_name_list(Mod(), "x")
+        self.assertTrue(all(isinstance(n, NL.Kept) for p in pools.values() for n in p))
+        self.assertIn("of Itius Portis", pools["surnames"])
+        self.assertEqual(NL.problems(pools), [])
+        self.assertEqual(len(NL.problems({"characters": ["Sk\xedlas"], "women": ["W"]})), 1)   # typed: still said
+        plan = build(mod, "test", "alpha", "beta", {"display_name": "Betaland", "from_zero": "eastern",
+                                                    "start": {"regions": ["B_R"], "leader": {"name": "Boris"}}})
+        self.assertIn("recoloured in its own colours right after it is written", plan.report())
+        self.assertNotIn("Art > Recolour all its pictures", plan.report())
+        # stage 4: the units its culture shares, not the template's own - too few shared: the template's stay
+        self.assertEqual(Z.template_units(mod, "alpha", "eastern"), (["alpha general"], []))
+        self.assertIn("keeps alpha's own units (1): its culture shares only 0", plan.report())
+        with open(os.path.join(self.root, "data", "export_descr_unit.txt"), "a", encoding="latin-1") as fh:
+            fh.write("".join("\ntype\t\teast unit %d\ndictionary\teast_%d\nownership\teastern\n" % (i, i)
+                             for i in range(6)))
+        mod = ModData(self.root)
+        start = {"regions": ["B_R"], "leader": {"name": "Boris"}}
+        plan = build(mod, "test", "alpha", "beta", {"display_name": "Betaland", "from_zero": "eastern",
+                                                    "start": start})
+        edu = "\n".join(plan.files[mod.file("edu")].texts())
+        self.assertNotIn("beta", edu)                       # alpha general stays alpha's alone
+        self.assertIn("beta has the 6 unit(s) its culture shares, not alpha's own 1 (alpha general)", plan.report())
+        plan = build(mod, "test", "alpha", "beta", {"display_name": "Betaland", "from_zero": "eastern",
+                                                    "common_units": False, "start": start})
+        self.assertIn("ownership\talpha, beta", "\n".join(plan.files[mod.file("edu")].texts()))
+        try:
+            from PIL import Image, ImageDraw
+        except ImportError:
+            return
+        a = Image.new("RGBA", (64, 64), (0, 0, 0, 0))
+        ImageDraw.Draw(a).polygon([(32, 4), (60, 60), (4, 60)], fill=(255, 255, 255, 255))
+        b = Image.new("RGBA", (64, 64), (0, 0, 0, 0))
+        ImageDraw.Draw(b).ellipse((4, 4, 30, 30), fill=(255, 255, 255, 255))
+        self.assertGreater(Z.shape_likeness(a, a.convert("LA").convert("RGBA")), 0.99)
+        self.assertEqual([f for f, _ in Z.symbols_alike(a, {"t": a, "o": b})], ["t"])
+
+    def test_people_word_of_a_faction(self):
+        from campaign_editor.build import people_word
+        self.assertEqual(people_word({"display_name": "Scotland", "adjective": "Scottish"}), "Scots")
+        self.assertIsNone(people_word({"display_name": "Gaul", "short_name": "Gaul", "adjective": "Gallic"}))
+        self.assertIsNone(people_word({"display_name": "Egypt", "adjective": "Egyptian"}))
 
     def test_restore_to_undoes_a_backup_and_every_newer_one(self):
         before = tree_hash(self.root)
@@ -311,6 +527,91 @@ class ToolTest(unittest.TestCase):
         self.assertEqual(backups(ModData(self.root)), [])
         self.assertEqual({k: v for k, v in tree_hash(self.root).items() if not k.startswith("CampaignEditor_backups")},
                          {k: v for k, v in now.items() if not k.startswith("CampaignEditor_backups")})
+
+    def test_restore_of_a_backup_missing_a_copy_changes_nothing(self):
+        """A backup whose copy of a file was deleted by hand: Restore removed the mod's file first and then failed
+        on the copy - the file lost. Now it is refused before anything is touched; a whole backup still restores, and
+        a faction's select map put back leaves the game's map.rwm alone (it is not a layer of it)."""
+        from campaign_editor import textio
+        mod = ModData(self.root)
+        bdir = build(mod, "test", "alpha", "beta", {"start": {"regions": ["B_R"], "leader": {"name": "Boris"}}}).apply()
+        from campaign_editor.plan import read_manifest, stored
+        m = read_manifest(bdir)
+        rel = m["modified"][0]
+        kept = os.path.join(bdir, stored(rel))
+        with open(kept, "rb") as fh:
+            body = fh.read()
+        os.remove(kept)
+        now = tree_hash(self.root)
+        with self.assertRaises(textio.WriteError) as got:
+            restore(ModData(self.root), bdir)
+        self.assertIn("not whole", str(got.exception))
+        self.assertIn("Nothing was changed", str(got.exception))
+        self.assertEqual(tree_hash(self.root), now)
+        with open(kept, "wb") as fh:
+            fh.write(body)
+        base = os.path.join(mod.data, "world", "maps", "base")
+        os.makedirs(base, exist_ok=True)
+        write(os.path.join(base, "map.rwm"), "built by the game")
+        p2 = Plan(ModData(self.root), None, "gamma")
+        p2.binary(os.path.join(mod.campaign_dir("test"), "map_beta.tga"), b"repainted")
+        restore(ModData(self.root), p2.apply())
+        self.assertTrue(os.path.isfile(os.path.join(base, "map.rwm")))   # a select map is no map layer
+        restore(ModData(self.root), bdir)
+        self.assertFalse([n for n in os.listdir(os.path.dirname(os.path.join(self.root, rel)))
+                          if n.endswith(".CampaignEditor_tmp")])
+
+    def test_settings_are_written_whole_or_not_at_all(self):
+        """Settings are written beside the file and renamed over it: a value JSON cannot hold leaves the file as it
+        was (before: a cut file, read back as broken - every setting lost) and is not kept; no temp file stays."""
+        import json
+        from unittest import mock
+        from campaign_editor import log, settings
+        d = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, d, ignore_errors=True)
+        with mock.patch.object(log, "home", return_value=d), mock.patch.object(settings, "_data", None):
+            settings.put("theme", "dark")
+            settings.put("map_look", {"bad": object()})
+            with open(os.path.join(d, log.SETTINGS_NAME), encoding="utf-8") as fh:
+                self.assertEqual(json.load(fh), {"theme": "dark"})
+            self.assertIsNone(settings.get("map_look"))
+            settings.put("game", "C:/Games/Rome")
+            self.assertEqual(sorted(os.listdir(d)), [log.SETTINGS_NAME])
+
+    def test_packs_never_put_a_file_out_of_the_data_folder(self):
+        """A unit pack or a mod pack someone sent that names 'data/../../d3d9.dll': the guard lets writes into the game's
+        folder, so such a file landed beside the game's exe. A unit pack with one is refused whole; a mod pack leaves
+        it out and names it."""
+        import json
+        import zipfile
+        from campaign_editor import modpack as MP, packs as P
+        unit = os.path.join(self.root, "evil_units.zip")
+        with zipfile.ZipFile(unit, "w") as z:
+            z.writestr("manifest.json", json.dumps({"pack": P.PACK_VERSION}))
+            z.writestr("files/ui/units/a.tga", b"x")
+            z.writestr("files/../../d3d9.dll", b"MZ")
+        with self.assertRaises(ValueError) as got:
+            P.read_pack(unit)
+        self.assertIn("outside a mod's data folder", str(got.exception))
+        mp = os.path.join(self.root, "evil_mod.zip")
+        with zipfile.ZipFile(mp, "w") as z:
+            z.writestr("data/ui/units/a.tga", b"x")
+            z.writestr("data/../../d3d9.dll", b"MZ")
+        files, left = MP.read(mp)
+        self.assertEqual(list(files), ["ui/units/a.tga"])
+        self.assertIn("data/../../d3d9.dll", left)
+
+    def test_a_plain_ascii_language_table_takes_any_letter(self):
+        """The engines' text tables in a language folder (data/text/english/*.txt) are UTF-8 without a BOM; one that
+        held only ASCII so far was read as single-byte and a Cyrillic name typed into it was written as '?'. It now
+        reads as UTF-8 (the same bytes untouched); descr_* files and data/text's own stay single-byte."""
+        f = TextFile.from_bytes(os.path.join("g", "data", "text", "english", "credits.txt"), b"{A}\r\nhello\r\n")
+        self.assertEqual(f.dump(), b"{A}\r\nhello\r\n")
+        f.set(1, "\u041f\u0451\u0442\u0440")
+        self.assertEqual(f.unplain(), "")
+        self.assertEqual(f.dump().decode("utf-8"), "{A}\r\n\u041f\u0451\u0442\u0440\r\n")
+        for p in (os.path.join("g", "data", "descr_strat.txt"), os.path.join("g", "data", "text", "names.txt")):
+            self.assertEqual(TextFile.from_bytes(p, b"x").encoding, "latin-1")
 
     def test_modeldb_miscounted_name_and_two_models_of_one_name(self):
         """Check mod files on battle_models.modeldb: the game reads it as a Boost text archive - a string is its length,
@@ -610,7 +911,7 @@ building smith
         self.assertEqual(ex_setting(mod, "max_num_ancillaries"), 8)       # no descr_ex.txt: the game's default
         self.assertEqual(ex_setting(mod, "max_num_children"), 4)
         write(os.path.join(game, "data", "descr_ex.txt"), "max_num_ancillaries 16\nmax_num_children 6\n")
-        self.assertEqual(ex_setting(mod, "max_num_ancillaries"), 8)       # a mod never takes the game's copy
+        self.assertEqual(ex_setting(mod, "max_num_ancillaries"), 16)      # the game's copy, as the engine falls back
         write(os.path.join(hlr, "data", "descr_ex.txt"), "; the mod's own\nmax_factions 31\n")
         self.assertEqual(ex_setting(mod, "max_num_children"), 4)          # the mod's file decides: default
         self.assertEqual(ex_setting(ModData(os.path.join(game, "data")), "max_num_ancillaries"), 16)  # the game
@@ -830,11 +1131,14 @@ building smith
         many = {"R%d" % i: {} for i in range(750)}                       # HLR's 750 regions
         got = engine_limits(mod, "test", many, [], [], img)
         self.assertIn("REX beside the game", got[0][0])
-        self.assertIn("LIMITS: none", got[0][0])                         # the user's rule: no limit at all
+        self.assertIn("no limit", got[0][0])                             # what the engine source lifts
+        self.assertIn("Kept: 3 officers", got[0][0])                     # and what it keeps (2026-10-22)
         self.assertFalse(any(fault for _, fault in got))
         from campaign_editor.limits import lifted
-        for key in ("regions", "chains", "levels", "hidden_resources", "cultures", "anything"):
+        for key in ("regions", "chains", "levels", "hidden_resources", "units", "religions", "map_size"):
             self.assertTrue(lifted(mod, key))
+        for key in ("officers", "rebel_units", "anything"):              # only what the code shows lifted
+            self.assertIsNone(lifted(mod, key))
         os.remove(os.path.join(game, "REX.exe"))
         got = engine_limits(ModData(hlr), "test", many, [], [], img)
         self.assertTrue(any(fault and "regions" in m for m, fault in got))   # the original exe stops at 200
@@ -861,6 +1165,68 @@ building smith
         mod = ModData(hlr)
         self.assertEqual(manhood_age(mod), 18)
         self.assertFalse(FM.record_age_problems(son, None, manhood_age(mod) - 1))
+
+    def test_child_ages_are_the_mods_settings(self):
+        """Universality: a record is a child below the mod's own ages, as the engine reads them (engine source
+        character_db.cpp) - REX's descr_ex.txt daughters_age_of_consent / age_of_manhood, Medieval II's
+        descr_campaign_db.xml (vanilla's own says 16 for girls, not Rome's 12). A 14-year-old girl with no father is
+        left out by vanilla Medieval II, kept by Rome."""
+        from campaign_editor import family as FM
+        from campaign_editor.limits import family_age
+        game, hlr = self._game()
+        mod = ModData(hlr)
+        self.assertEqual(FM.child_ages(mod), {"female": 12, "male": 16})
+        write(os.path.join(hlr, "data", "descr_ex.txt"), "; REX\ndaughters_age_of_consent 15\nage_of_manhood 18\n")
+        mod = ModData(hlr)
+        self.assertEqual(FM.child_ages(mod), {"female": 15, "male": 18})
+        d = os.path.join(self.root, "data")
+        write(os.path.join(d, "descr_religions.txt"), "religions\n{\n    catholic\n}\n")
+        write(os.path.join(d, "descr_campaign_db.xml"), "<campaign_db>\n  <family_tree>\n"
+              "    <age_of_manhood uint=\"16\"/>\n    <daughters_age_of_consent uint=\"16\"/>\n"
+              "  </family_tree>\n</campaign_db>\n")
+        m2 = ModData(self.root)
+        self.assertEqual(family_age(m2, "daughters_age_of_consent"), 16)
+        wed = {"people": [FM.Person(name="Ada", sex="female", age=14, source="record")], "tree": [["Odo", "Ada", []]]}
+        self.assertEqual(FM.dropped_records(wed, FM.child_ages(m2)), [("Ada", "child")])     # Medieval II: under 16
+        self.assertEqual(FM.dropped_records(wed), [])                                         # Rome's 12: a wife
+
+    def test_rebel_type_past_20_units_warned_with_rex_too(self):
+        """Universality: REX / M2EX keep the game's 20 unit types per rebel type (engine source rebel_faction_db.h
+        MAX_REBEL_UNIT_TYPES, RebelFactionRegistry.cpp clamps) - the 21st is dropped, so it is said with REX too."""
+        from campaign_editor import rebels as RB
+        from campaign_editor.limits import engine_of
+        game, hlr = self._game()
+        mod = ModData(hlr)
+        self.assertEqual(engine_of(mod), "REX.exe")
+        r = RB.RebelType("Many", units=["u%d" % i for i in range(21)])
+        r.changed = lambda: True
+        self.assertTrue([p for p in RB.problems(mod, [r]) if "first 20" in p])
+        r.units = r.units[:20]
+        self.assertFalse([p for p in RB.problems(mod, [r]) if "first 20" in p])
+
+    def test_limits_follow_the_engine_source(self):
+        """2026-10-22 (limits.md THE RULE: a limit only where the code backs it): M2EX takes missile ammo down to 1
+        and checks no range (rules_db.cpp); more than 3 officers is found (the engine ignores the extras,
+        unit_db.cpp); Medieval II's ancillaries follow descr_campaign_db.xml (8 when it has none), not descr_ex.txt."""
+        from campaign_editor.units import edu_problems, officers_over
+        from campaign_editor import family as FM
+        edu = ["type a", "dictionary a", "category infantry", "class missile", "soldier a, 20, 0, 1",
+               "officer x", "officer x", "officer x", "officer x",
+               "stat_pri 5, 3, arrow, 0, 1, missile, archery, piercing, none, 25, 1", "ownership alpha"]
+        ammo = lambda engine, kind: [p for p in edu_problems(edu, [("alpha", "eastern")], kind, engine)
+                                     if "ammo" in p or "range" in p.lower()]
+        self.assertEqual(ammo("M2EX.exe", "medieval2"), [])
+        self.assertTrue(ammo(None, "medieval2"))                         # the original exe: 2 at least
+        self.assertEqual(officers_over(edu), ["a"])
+        people = {"k": FM.Person(name="Odo")}
+        changes = {"k": {"ancillaries": ["a%d" % i for i in range(9)]}}
+        d = os.path.join(self.root, "data")
+        write(os.path.join(d, "descr_religions.txt"), "religions\n{\n    catholic\n}\n")
+        mod = ModData(self.root)
+        self.assertTrue(any("at most 8" in w for w in FM.limit_warnings(mod, [], changes, people)))
+        write(os.path.join(d, "descr_campaign_db.xml"), "<campaign_db>\n  <characters>\n"
+              "    <max_number_of_ancillaries uint=\"12\"/>\n  </characters>\n</campaign_db>\n")
+        self.assertEqual(FM.limit_warnings(ModData(self.root), [], changes, people), [])
 
     def test_religion_limit_only_on_the_original_exe(self):
         """The original exe takes 9 religions; with REX / M2EX beside the game a 10th is not refused (their
@@ -1401,6 +1767,7 @@ building smith
         self.assertEqual(st["base"], "(game)")
         self.assertTrue(st["thin"])
         self.assertEqual([n for _, _, fs in os.walk(data) for n in fs], [])     # nothing copied
+        self.assertTrue(os.path.isdir(os.path.join(data, "world", "maps", "base")))   # the game saves map.rwm there
         self.assertEqual(os.path.normcase(ModData(data).under), os.path.normcase(os.path.join(game, "data")))
         with open(os.path.join(game, "Beta", "Start_Beta.bat"), "rb") as f:
             bat = f.read()
@@ -1415,6 +1782,7 @@ building smith
         self.assertIn("descr_sm_factions.txt", left)
         self.assertIn("ui/units/beta/#alpha_general.tga", left)
         self.assertNotIn("ui/units/alpha/#alpha_general.tga", left)     # unchanged: the game has it
+        self.assertTrue(os.path.isdir(os.path.join(data, "world", "maps", "base")))   # kept though empty
 
     def test_thin_mod_readers_find_the_games_pictures(self):
         """A mod folder keeps only what it changes (thin): every reader that walks a picture folder walks the game's
@@ -1476,6 +1844,26 @@ building smith
         mine = open(os.path.join(data, "world", "maps", "campaign", "test", "descr_mercenaries.txt")).read()
         self.assertIn("regions B_R2", mine)
 
+    def test_rename_a_faction_named_with_a_capital(self):
+        """Universality: the engine reads faction names in any case (string_recognition.cpp), so a mod may write
+        'Alpha'. Its rename skipped every file (the file's text was lowered, the name was not) - it follows now."""
+        import re
+        from campaign_editor import factionrename as FR
+        d = os.path.join(self.root, "data")
+        strat = os.path.join(d, "world", "maps", "campaign", "test", "descr_strat.txt")
+        for p in (os.path.join(d, "descr_sm_factions.txt"), strat):
+            with open(p, encoding="latin-1") as fh:
+                text = fh.read()
+            write(p, re.sub(r"(?<![A-Za-z0-9_])alpha(?![A-Za-z0-9_])", "Alpha", text))
+        mod = ModData(self.root)
+        plan = Plan(mod, "rename", "delta", {})
+        FR.plan_rename(plan, "test", "Alpha", "delta")
+        plan.apply()
+        with open(strat, encoding="latin-1") as fh:
+            text = fh.read()
+        self.assertRegex(text, r"(?m)^faction\s+delta\b")
+        self.assertNotRegex(text, r"(?<![A-Za-z0-9_])Alpha(?![A-Za-z0-9_])")
+
     def test_rename_faction_reaches_glued_names_and_the_games_files(self):
         """Report R-20261009-CDDAF0 (the test mod on Medieval II with M2EX): venice renamed venice_ce, then the game
         closed at start - 'Unknown attribute type(Combat_V_Faction_Venice)': the trait effect glues the faction's
@@ -1511,6 +1899,14 @@ building smith
         self.assertIn("Combat_V_Faction_alphabet 1", mine)                 # another name, left
         self.assertIn("Condition FactionType alpha_ce", mine)
         self.assertIn("Trait Fearsalpha", mine)                            # a trait's own name stays
+
+    def test_recolour_faction_with_no_secondary_colour(self):
+        """Report R-20261022-46D767 (Rome with REX): Recolour of a faction with no secondary colour stopped at
+        Preview and Apply - the colours were compared as if both were always there."""
+        from campaign_editor import recolour as R
+        self.assertEqual(R.colour_pair([(10, 20, 30), None]), ((10, 20, 30), None))
+        self.assertEqual(R.colour_pair([[1, 2, 3], [4, 5, 6]]), ((1, 2, 3), (4, 5, 6)))
+        self.assertNotEqual(R.colour_pair([(1, 2, 3), None]), R.colour_pair([(1, 2, 3), (4, 5, 6)]))
 
     def test_recolour_finds_the_templates_cards_under_a_thin_mod(self):
         """Report R-20261009-4D53CB (the test mod on Rome with REX): a clone's cards stayed its template's red after
@@ -3559,7 +3955,7 @@ building smith
         self.assertEqual(swap_names("GAULISH", [("Gaul", "X"), ("GAUL", "X")], "Gallic"), "GALLIC")
         p = os.path.join(self.root, "data", "text", "expanded_bi.txt")
         write(p, "{ALPHA}\tGaul\n{ST_ALPHA}\tGaul\n{ALPHA_DESCR}\tThe Gaulish Warlord rides\n"
-                 "{EMT_ALPHA_SPY}\tGallic Spy\n", utf16=True)
+                 "{EMT_ALPHA_SPY}\tGallic Spy\n{hall_alpha}\tThe Gaulish Warlord's hall\n", utf16=True)
         mod = ModData(self.root)
         build(mod, "test", "alpha", "beta", {"start": {"regions": ["B_R"], "leader": {"name": "Boris"}},
                                              "display_name": "CE Gaul Clone", "short_name": "CEGC",
@@ -3567,7 +3963,9 @@ building smith
         got = edit.read_faction(ModData(self.root), "test", "beta")
         self.assertEqual((got["display_name"], got["short_name"], got["adjective"]),
                          ("CE Gaul Clone", "CEGC", "CE Gaulish"))
-        self.assertEqual(got["description"], "The CE Gaulish Warlord rides")
+        # the faction's own description is never the template's (2026-10-22): its name; other texts are swapped
+        self.assertEqual(got["description"], "CE Gaul Clone")
+        self.assertIn("{hall_beta}\tThe CE Gaulish Warlord's hall", open(p, encoding="utf-16").read())
 
     def test_mod_from_zero_new_faction_button_opens_its_tab(self):
         """The tester, 2026-10-22: Tools > A mod from zero > 'New faction' left the Factions work on its Buildings tab.
@@ -3601,10 +3999,13 @@ building smith
         edb_text = open(edb_p, encoding="latin-1").read().split("\n")
         at = next(k for k, l in enumerate(edb_text) if recruit_of(l))
         edb_text.insert(at + 1, edb_text[at].replace('"%s"' % recruit_of(edb_text[at])[1], '"doomed unit"'))
+        # the games read unit types in any case: a line spelling it otherwise is the unit's too (review 2026-10-22)
+        edb_text.insert(at + 1, edb_text[at].replace('"%s"' % recruit_of(edb_text[at])[1], '"Doomed Unit"'))
         write(edb_p, "\n".join(edb_text))
         lines = open(strat_p, encoding="latin-1").read().split("\n")
         at = next(k for k, l in enumerate(lines) if E._unit_span(l))       # beside another unit: the army keeps one
         lines.insert(at + 1, "unit\t\tdoomed unit\t\t\texp 0 armour 0 weapon_lvl 0")
+        lines.insert(at + 1, "unit\t\tDOOMED unit\t\t\texp 0 armour 0 weapon_lvl 0")
         write(strat_p, "\n".join(lines))
         card = os.path.join(self.root, "data", "ui", "units", "alpha", "#doomed_unit.tga")
         os.makedirs(os.path.dirname(card), exist_ok=True)
@@ -3617,14 +4018,35 @@ building smith
         plan.apply()
         mod = ModData(self.root)
         self.assertNotIn("doomed unit", [b[0] for b in E.unit_blocks(mod.load(edu_p))])
-        self.assertNotIn("doomed unit", open(edb_p, encoding="latin-1").read())
-        self.assertNotIn("doomed unit", open(strat_p, encoding="latin-1").read())
+        self.assertNotIn("doomed unit", open(edb_p, encoding="latin-1").read().lower())
+        self.assertNotIn("doomed unit", open(strat_p, encoding="latin-1").read().lower())
         self.assertFalse(os.path.exists(card))
         with self.assertRaises(ValueError):
             E.delete_unit(Plan(mod, "z", "units", {}), "doomed unit")
         restore(ModData(self.root), backups(ModData(self.root))[0])
         for p, data in before.items():
             self.assertEqual(open(p, "rb").read(), data)
+
+    def test_test_mod_deletes_a_unit_and_changes_its_texts(self):
+        """The test mod's steps for #375: a unit's texts players read changed; a unit made and taken out again."""
+        import types
+        from campaign_editor import editors as E, selftest as ST
+        c = types.SimpleNamespace(campaign="test", edited="alpha", new="alpha")
+        with open(os.path.join(self.root, "data", "text", "export_units.txt"), "w", encoding="utf-16") as fh:
+            fh.write("\u00ac\n{some_unit}\tSome Unit\n")
+        for fn in (ST.s_units, ST.s_unit_texts, ST.s_unit_gone_made):
+            fn(c, ModData(self.root)).apply()
+        mod = ModData(self.root)
+        units = "\n".join(mod.load(mod.text_file("export_units.txt")).texts())
+        self.assertIn("CE Test Guard II", units)
+        self.assertIn("Texts changed by the test mod", units)
+        self.assertIn("ce test gone", [b[0] for b in E.unit_blocks(mod.load(mod.file("edu")))])
+        ST.s_unit_delete(c, mod).apply()
+        mod = ModData(self.root)
+        self.assertNotIn("ce test gone", [b[0] for b in E.unit_blocks(mod.load(mod.file("edu")))])
+        self.assertNotIn("ce test gone", open(mod.file("edb"), encoding="latin-1").read())
+        with self.assertRaises(ST.Skip):                       # nothing to take out: said, not a failure
+            ST.s_unit_delete(c, mod)
 
     def test_unit_texts_changed_in_the_unit_editor(self):
         """#375: a unit's name and descriptions players read are changed in the Units editor and written to
@@ -3841,6 +4263,39 @@ building smith
                 self.assertTrue(ed.hud.v_shot.get())
         finally:
             app.destroy()
+
+    def test_layout_board_lays_out_the_windows_of_the_works(self):
+        """With a mod loaded the layout board lays out the windows the works open too (the user: 'every page and
+        window already laid out'): a town's (the first town), Rebels, Mercenaries, the map's size, Authors and
+        sources - each one opens as a window of its own for its picture."""
+        try:
+            from unittest import mock
+            from campaign_editor import gui
+            app = gui.App()
+        except Exception as e:                        # no tkinter / no display
+            self.skipTest("no tkinter window: %s" % e)
+        from campaign_editor import gui_lookboard as GB, minimod
+        try:
+            with mock.patch("tkinter.messagebox.showinfo"), mock.patch("tkinter.messagebox.showerror"), \
+                    mock.patch("tkinter.messagebox.askyesno", return_value=False):
+                app.v_path.set(minimod.make(os.path.join(self.root, "mini")))
+                app.load()
+                app.update()
+                b = GB.LayoutBoard.__new__(GB.LayoutBoard)
+                b.app = app
+                steps = [s for s in b._steps() if s[2] == "Windows of the works"]
+                self.assertEqual([s[0] for s in steps], ["window:" + m for m, _ in GB.MOD_WINDOWS])
+                for pid, title, _ in steps:
+                    top = b._open(pid)
+                    app.update()
+                    self.assertIsNotNone(top, title)
+                    self.assertIsNot(top, app)
+                    top.destroy()
+        finally:
+            try:
+                app.destroy()
+            except Exception:
+                pass
 
     def test_mod_from_zero_steps(self):
         """Tools > A mod from zero, step by step (the user, 2026-10-21): the six steps in order, each saying how far
@@ -4354,6 +4809,54 @@ building smith
         restore(ModData(self.root), bdir)
         after = {k: v for k, v in tree_hash(self.root).items() if "_backups" not in k}
         self.assertEqual(after, before)
+
+    def test_a_mods_pope_stays_locked_by_its_type_not_its_name(self):
+        """Universality: the engine finds the Pope by `special_faction_type papal_faction` in descr_sm_factions.txt
+        (engine source faction_db.cpp), not by the name papal_states - a mod's pope under another name stays locked."""
+        from campaign_editor import gamefix
+        strat = os.path.join(self.root, "data", "world", "maps", "campaign", "test", "descr_strat.txt")
+        with open(strat) as fh:
+            text = fh.read()
+        write(strat, text.replace("playable\n\talpha\nend\nunlockable\nend", "playable\nend\nunlockable\n\talpha\nend", 1))
+        self.assertEqual(gamefix.locked_factions(ModData(self.root), "test"), ["alpha"])
+        sm = os.path.join(self.root, "data", "descr_sm_factions.txt")
+        with open(sm, encoding="latin-1") as fh:
+            text = fh.read()
+        write(sm, text.replace("culture\t\teastern\n", "culture\t\teastern\nspecial_faction_type\tpapal_faction\n", 1))
+        self.assertEqual(gamefix.papal_factions(ModData(self.root)), {"alpha"})
+        self.assertEqual(gamefix.locked_factions(ModData(self.root), "test"), [])
+
+    def test_region_names_of_a_custom_campaign_found_like_the_engine(self):
+        """Universality: the engine takes the LAST part of the campaign's name for its region names
+        (map_regions_db.cpp: custom/foo -> text/foo_regions_and_settlement_names.txt), else the campaign folder's
+        own copy - not text/custom/foo_..., which never exists."""
+        d = os.path.join(self.root, "data")
+        write(os.path.join(d, "text", "foo_regions_and_settlement_names.txt"), "{A_R}\tA\n", utf16=True)
+        camp = os.path.join(d, "world", "maps", "campaign", "custom", "bar")
+        write(os.path.join(camp, "bar_regions_and_settlement_names.txt"), "{A_R}\tA\n", utf16=True)
+        mod = ModData(self.root)
+        self.assertEqual(os.path.basename(mod.region_labels_file("custom/foo")), "foo_regions_and_settlement_names.txt")
+        self.assertEqual(os.path.dirname(mod.region_labels_file("custom/bar")), camp)
+        self.assertIsNone(mod.region_labels_file("custom/none"))
+
+    def test_override_packs_come_before_data_pack(self):
+        """Universality: the engine mounts a folder's .pack files in REVERSE name order, so an override pack sorting
+        after data.pack wins (engine source core/io/io_vfs.cpp); Rome's .pak stay in name order after them."""
+        from campaign_editor import gamepacks as G
+        d = os.path.join(self.root, "data")
+        for n in ("data.pack", "data_1.pack", "zz_override.pack", "sprites_0.pak", "sprites_1.pak"):
+            write(os.path.join(d, "packs", n), "x")
+        self.assertEqual([os.path.basename(p) for p in G.packs([d])],
+                         ["zz_override.pack", "data_1.pack", "data.pack", "sprites_0.pak", "sprites_1.pak"])
+
+    def test_ai_personalities_per_game(self):
+        """Universality: Medieval II's exe reads 15 military personalities Rome's does not (richard, saladin, ...;
+        engine source string_recognition.cpp) - offered for Medieval II only."""
+        from campaign_editor.strat import ai_choices
+        self.assertIn("balanced richard", ai_choices("medieval2"))
+        self.assertNotIn("balanced richard", ai_choices("rome"))
+        self.assertEqual(len(ai_choices("rome")), 8 * 7)
+        self.assertEqual(len(ai_choices("medieval2")), 8 * 22)
 
     def test_select_map_outline_smooth_without_a_picture_from_above(self):
         """Report #271 (Barbarian Invasion): with no picture from above the select map was drawn on the editor's own
@@ -5549,6 +6052,234 @@ building smith
             except Exception:
                 pass
 
+    def test_layout_board_sticks_to_lines(self):
+        """The board's sticking (the user, 2026-10-22: 'a grid to turn on, and it sticks to the line another piece
+        stands on, as in Obsidian'): an edge sized onto a line or the grid, the pink guide lines of a box laid down,
+        a draft's change laid over the editor's own."""
+        from campaign_editor import board as B
+        from campaign_editor import look as LK
+        others = [(100, 40, 80, 20), (0, 0, 600, 300)]          # a button, the window
+        xs, ys = B.lines_of(others)
+        self.assertEqual(xs[:3], [100, 140, 180])
+        self.assertEqual(B.snap_edge(103, xs, grid=8), (100, 100))        # within 8 px: on the button's left
+        self.assertEqual(B.snap_edge(103, xs, grid=8, zoom=0.25), (100, 100))
+        self.assertEqual(B.snap_edge(103, xs, grid=8, zoom=4), (104, None))   # 12 px on the screen: the grid
+        self.assertEqual(B.snap_edge(123, xs, grid=8, to_grid=False), (123, None))
+        x, y, _ = B.snap_box((104, 75, 60, 20), others, grid=8)
+        self.assertEqual((x, y), (100, 72))                      # left on the button's line, y on the grid
+        self.assertEqual(B.guide_lines((x, y, 60, 20), others), ([100], []))
+        self.assertEqual(B.guide_lines((110, 40, 60, 20), others), ([140], [40, 50, 60]))   # middles meet too
+        self.assertEqual(LK.merged({"xy": [1, 2], "text": "a"}, {"xy": None, "size": [3, 4]}),
+                         {"text": "a", "size": [3, 4]})
+
+    def test_editor_look_colours_font_and_emoji(self):
+        """A piece's own colours, font and emoji (the user, 2026-10-22: 'change the button's colour, its text, add
+        emoji'): a ttk button gets a style of its own built on the one it had, a tk label its options; the emoji
+        stands before its words; Back to how it was gives the theme's look and words back."""
+        from campaign_editor import look as LK
+        self.assertEqual(LK.shown_words({"emoji": "💾"}, "Save"), "💾 Save")
+        self.assertEqual(LK.shown_words({"emoji": "💾", "text": "Keep"}, "Save"), "💾 Keep")
+        self.assertEqual(LK.shown_words({"emoji": "❓"}, ""), "❓")
+        self.assertEqual(LK.font_of(["", 0, "bold"], ("Segoe UI", 9)), ("Segoe UI", 9, "bold"))
+        self.assertEqual(LK.font_of(["Georgia", 14, ""], ("Segoe UI", 9)), ("Georgia", 14))
+        self.assertIsNone(LK.font_of(None, ("Segoe UI", 9)))
+        self.assertEqual(LK.deeper((200, 100, 0)), "#aa5500")
+        try:
+            import tkinter as tk
+            from tkinter import ttk
+            root = tk.Tk()
+        except Exception as e:
+            self.skipTest("no window: %s" % e)
+        from unittest import mock
+        from campaign_editor import gui_look as GL
+        from campaign_editor import log
+        home = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, home)
+        try:
+            with mock.patch.object(log, "home", lambda: home):
+                look = GL.install(root)
+                play = ttk.Button(root, text="Play", style="Play.TButton")
+                play.pack()
+                lab = tk.Label(root, text="Faction:")
+                lab.pack()
+                root.update()
+                look.change_key(play._look_key, bg="#123456", fg="#ffffff", font=["", 0, "bold"], emoji="▶")
+                look.change_key(lab._look_key, fg="#aa0000", font=["", 15, ""])
+                root.update()
+                name = str(play.cget("style"))
+                self.assertTrue(name.startswith("CE") and name.endswith(".Play.TButton"), name)
+                st = ttk.Style(root)
+                self.assertEqual(st.lookup(name, "background"), "#123456")
+                self.assertIn("bold", str(st.lookup(name, "font")))
+                self.assertEqual(str(play.cget("text")), "▶ Play")
+                self.assertEqual(str(lab.cget("foreground")), "#aa0000")
+                self.assertIn("15", str(lab.cget("font")))
+                look.back_all()
+                root.update()
+                self.assertEqual(str(play.cget("style")), "Play.TButton")
+                self.assertEqual(str(play.cget("text")), "Play")
+                self.assertNotEqual(str(lab.cget("foreground")), "#aa0000")
+        finally:
+            try:
+                root.destroy()
+            except Exception:
+                pass
+
+    def test_editor_look_snippets_switched_on_and_off(self):
+        """Snippets (Obsidian's CSS snippets): sets of button changes, each switched on / off, the own look over
+        them; a part a snippet gives that the own look takes away ('off': a piece a snippet hides shown again); the
+        own changes moved into a snippet change nothing on the screen; switching it off takes them away."""
+        from campaign_editor import look as LK
+        snips = [{"on": True, "pieces": {"a": {"hidden": True}, "b": {"xy": [5, 5], "up": 1}}, "order": []},
+                 {"on": False, "pieces": {"a": {"text": "never"}}, "order": []}]
+        own = {"pieces": {"a": {"off": ["hidden"], "bg": "#101010"}, "b": {"to": "c", "where": "after"}},
+               "order": ["b"]}
+        got = LK.layered(own, snips)
+        self.assertEqual(got["pieces"]["a"], {"bg": "#101010"})
+        self.assertEqual(got["pieces"]["b"], {"to": "c", "where": "after"})       # the own place wins whole
+        self.assertEqual(got["order"], ["b"])
+        self.assertEqual(LK.own_part({"hidden": True, "text": "x"}, {"text": "x", "bg": "#000000"}),
+                         {"bg": "#000000", "off": ["hidden"]})
+        self.assertEqual(LK.own_part({"xy": [1, 2], "up": 1}, {"xy": [1, 2], "up": 2}), {"xy": [1, 2], "up": 2})
+        try:
+            import tkinter as tk
+            from tkinter import ttk
+            root = tk.Tk()
+        except Exception as e:
+            self.skipTest("no window: %s" % e)
+        from unittest import mock
+        from campaign_editor import gui_look as GL
+        from campaign_editor import log
+        home = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, home)
+        try:
+            with mock.patch.object(log, "home", lambda: home):
+                look = GL.install(root)
+                save = ttk.Button(root, text="Save")
+                save.pack()
+                root.update()
+                look.change_key(save._look_key, text="Keep", hidden=True)
+                root.update()
+                self.assertEqual(save.winfo_manager(), "")
+                path = look.own_to_snippet("Mine")
+                root.update()
+                self.assertTrue(path and os.path.isfile(path))
+                self.assertEqual(look.own["pieces"], {})
+                self.assertEqual(save.winfo_manager(), "")                # still hidden: the snippet is on
+                look.change_key(save._look_key, hidden=None)             # shown again over the snippet
+                root.update()
+                self.assertEqual(save.winfo_manager(), "pack")
+                self.assertEqual(look.own["pieces"][save._look_key], {"off": ["hidden"]})
+                self.assertEqual(str(save.cget("text")), "Keep")
+                LK.set_snippet_on(path, False)
+                look.relayer()
+                root.update()
+                self.assertEqual(str(save.cget("text")), "Save")         # the snippet off: its words gone
+                self.assertFalse(LK.snippets()[0]["on"])
+        finally:
+            try:
+                root.destroy()
+            except Exception:
+                pass
+
+    def test_layout_board_free_by_default_draft_and_accept(self):
+        """On the layout board a dragged piece stays where it is dropped, its edge sticking to another piece's
+        line; the change is a draft (the editor untouched, Undo / Redo on the board) until Accept puts it on; with
+        Alt it goes into a row; Discard drops the draft."""
+        try:
+            import tkinter as tk
+            from tkinter import ttk
+            root = tk.Tk()
+        except Exception as e:
+            self.skipTest("no window: %s" % e)
+        from unittest import mock
+        from campaign_editor import gui_look as GL
+        from campaign_editor import gui_lookboard as GB
+        from campaign_editor import log
+        from campaign_editor import look as LK
+        home = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, home)
+
+        class Ev:
+            def __init__(self, b, pid, x, y, alt=False):
+                px, py = b.places[pid]
+                self.x = (px + x) * b.zoom - b.cv.canvasx(0)
+                self.y = (py + y) * b.zoom - b.cv.canvasy(0)
+                self.state = (0x20000 if sys.platform == "win32" else 0x0008) if alt else 0
+
+        def drag(b, pid, frm, to, alt=False):
+            b._press(Ev(b, pid, *frm))
+            b._motion(Ev(b, pid, (frm[0] + to[0]) / 2, (frm[1] + to[1]) / 2, alt))
+            b._motion(Ev(b, pid, *to, alt=alt))
+            b._release(Ev(b, pid, *to, alt=alt))
+
+        try:
+            with mock.patch.object(log, "home", lambda: home), \
+                    mock.patch.object(GB.messagebox, "askyesnocancel", lambda *a, **k: False):
+                root.geometry("600x300")
+                look = GL.install(root)
+                root.look = look
+                box = ttk.Frame(root)
+                box.pack(fill="both", expand=True)
+                ok = ttk.Button(box, text="OK")
+                ok.pack(side="left", anchor="n")
+                cancel = ttk.Button(box, text="Cancel")
+                cancel.pack(side="left", anchor="n")
+                apply_ = ttk.Button(box, text="Apply")
+                apply_.pack(side="left", anchor="n")
+                root.update()
+                pieces, hidden = GB.pieces_of(look, root)
+                LK.save_board([{"id": "work:x", "title": "X", "group": "Works", "size": [600, 300],
+                                "pieces": pieces, "hidden": hidden}])
+                b = GB.LayoutBoard(root)
+                b.zoom = 1.0
+                b.update()
+                b.draw()
+                pid = "work:x"
+                from campaign_editor import theme
+                card = b.cv.find_withtag("card")[0]                      # the page in the look's colours, never white
+                self.assertEqual(b.cv.itemcget(card, "fill"), theme.palette()["bg"])
+                pc = next(q for q in b.pages[0]["pieces"] if q["key"] == ok._look_key)
+                cx = next(q for q in b.pages[0]["pieces"] if q["key"] == cancel._look_key)["box"][0]
+                ox, oy, ow, oh = pc["box"]
+                drag(b, pid, (ox + 5, oy + 5), (cx + 3 + 5, oy + 105))       # 3 px off Cancel's left edge
+                self.assertEqual(pc["box"][0], cx)                         # stuck to Cancel's line
+                self.assertEqual(look.data["pieces"], {})                  # only a draft: the editor untouched
+                self.assertEqual(ok.winfo_manager(), "pack")
+                self.assertEqual(b.draft[ok._look_key]["xy"][0], cx)
+                self.assertEqual(str(b.b_accept.cget("state")), "normal")
+                b.undo()
+                self.assertEqual(b.draft, {})
+                self.assertEqual(pc["box"], [ox, oy, ow, oh])
+                b.redo()
+                self.assertEqual(pc["box"][0], cx)
+                b.accept()
+                root.update()
+                self.assertEqual(ok.winfo_manager(), "place")
+                self.assertEqual(ok.winfo_x(), cx)
+                self.assertEqual(b.draft, {})
+                drag(b, pid, (pc["box"][0] + 5, pc["box"][1] + 5), (20, 20))
+                b.discard()
+                self.assertEqual(b.draft, {})
+                self.assertEqual(pc["box"][0], cx)                         # back where it was accepted
+                cb = next(q for q in b.pages[0]["pieces"] if q["key"] == cancel._look_key)
+                ab = next(q for q in b.pages[0]["pieces"] if q["key"] == apply_._look_key)["box"]
+                drag(b, pid, (cb["box"][0] + 5, cb["box"][1] + 5), (ab[0] + ab[2] - 2, ab[1] + 5), alt=True)
+                self.assertEqual(b.draft[cancel._look_key], {"to": apply_._look_key, "where": "after", "xy": None,
+                                                            "up": None, "hidden": None})   # Alt: into a row
+                b._copied = {"bg": "#204060", "fg": None, "font": None, "emoji": "❓"}
+                b._apply(b.pages[0], pc, **b._copied)                      # Paste the look: a draft too
+                self.assertNotIn("bg", look.data["pieces"][ok._look_key])
+                b.accept()
+                root.update()
+                self.assertEqual(str(ok.cget("text")), "❓ OK")
+                b.close()
+        finally:
+            try:
+                root.destroy()
+            except Exception:
+                pass
+
     def test_editor_words_to_translate(self):
         """Words to translate: every whole English word of the windows read from the code (buttons, titles, hover
         texts), each with its translation so far; a language file read, a broken one refused."""
@@ -5855,6 +6586,103 @@ building smith
         self.assertIsNone(theme.readable(rgb(theme.LIGHT["fg"]), cream))
         self.assertEqual(theme.ink("#b00"), "#b00")                     # no window yet: the colour as given
 
+    def test_themes_as_files(self):
+        """Themes as files (Obsidian's theme browser): the editor's own read from assets/themes, the modder's saved
+        with the look now, exported as one .zip and imported back (picture too), a broken or foreign file refused,
+        colours that are not '#rrggbb' dropped, the editor's own never deleted."""
+        import zipfile
+        from unittest import mock
+        from campaign_editor import log, themes
+        home = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, home)
+        with mock.patch.object(log, "home", lambda: home):
+            names = [t["name"] for t in themes.available()]
+            for n in ("Light", "Dark", "Roman parchment", "Medieval night"):
+                self.assertIn(n, names)
+            self.assertEqual(themes.clean({"colours": {"bg": "#e8dcc0", "fg": "red", "x": "#12345"}, "base": "?",
+                                           "font": ["Georgia", 99]}),
+                             {"name": "Theme", "by": "", "base": "light", "colours": {"bg": "#e8dcc0"},
+                              "font": ["Georgia", 48]})
+            self.assertIsNone(themes.clean({"name": "no colours"}))
+            where = themes.save("My/Rome", "a tester", "dark", {"bg": "#101010"}, ["", 12])
+            self.assertEqual(os.path.basename(where), "My_Rome")
+            with open(os.path.join(where, themes.PICTURE), "wb") as fh:
+                fh.write(b"\x89PNG\r\n\x1a\n...")
+            mine = next(t for t in themes.available() if t["name"] == "My/Rome")
+            self.assertTrue(mine["own"])
+            self.assertEqual((mine["base"], mine["colours"], mine["font"]), ("dark", {"bg": "#101010"}, ["", 12]))
+            z = os.path.join(home, "send.zip")
+            self.assertTrue(themes.export(mine, z))
+            self.assertEqual(sorted(zipfile.ZipFile(z).namelist()), ["preview.png", "theme.json"])
+            self.assertTrue(themes.delete(mine))
+            self.assertNotIn("My/Rome", [t["name"] for t in themes.available()])
+            self.assertEqual(themes.import_file(z), ("My/Rome", None))
+            back = next(t for t in themes.available() if t["name"] == "My/Rome")
+            self.assertIsNotNone(back["picture"])
+            bad = os.path.join(home, "bad.json")
+            write(bad, '{"name": "x"}')
+            self.assertIsNone(themes.import_file(bad)[0])
+            write(bad, "not json")
+            self.assertIsNone(themes.import_file(bad)[0])
+            light = next(t for t in themes.available() if t["name"] == "Light")
+            self.assertFalse(themes.delete(light))
+
+    def test_whole_look_own_colours_and_font(self):
+        """Appearance (the user, 2026-10-22: 'the colour of the whole thing at once, as in Obsidian'): own colours
+        over the light look recolour every window - ttk styles and plain tk widgets -, a coloured button takes its
+        own colour with words that read on it, a font for every window; all back gives the look as it comes."""
+        try:
+            import tkinter as tk
+            from tkinter import font as tkfont
+            from tkinter import ttk
+            root = tk.Tk()
+        except Exception as e:
+            self.skipTest("no window: %s" % e)
+        from unittest import mock
+        from campaign_editor import gui_appearance, log, settings, theme
+        home = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, home)
+        kept = dict(theme._state)
+        try:
+            with mock.patch.object(log, "home", lambda: home), mock.patch.object(settings, "_data", {}):
+                theme._state.update(root=None, done={}, custom={}, font=None, fonts0={}, seen=[])
+                theme.apply(root, False)
+                lab = tk.Label(root, text="Faction:")
+                lab.pack()
+                root.update()
+                size0 = tkfont.nametofont("TkDefaultFont", root=root).cget("size")
+                theme.set_custom(root, {"bg": "#e8dcc0", "fg": "#3a2410", "Play.TButton": "#f0e000"},
+                                 ["", 13])
+                root.update()
+                st = ttk.Style(root)
+                self.assertEqual(st.lookup(".", "background"), "#e8dcc0")
+                self.assertEqual(str(lab.cget("background")), "#e8dcc0")
+                self.assertEqual(str(lab.cget("foreground")), "#3a2410")
+                self.assertEqual(st.lookup("Play.TButton", "background"), "#f0e000")
+                self.assertEqual(st.lookup("Play.TButton", "foreground"), "#000000")     # black reads on yellow
+                self.assertEqual(tkfont.nametofont("TkDefaultFont", root=root).cget("size"), 13)
+                self.assertEqual(settings.get("theme_colours")["bg"], "#e8dcc0")
+                panel = gui_appearance.AppearancePanel(root, root)
+                panel.pack()
+                root.update()
+                panel._set("bg", None)                                    # its arrow: the look's own again
+                root.update()
+                self.assertEqual(str(lab.cget("background")), theme.LIGHT["bg"])
+                self.assertEqual(str(lab.cget("foreground")), "#3a2410")
+                panel._all_back()
+                root.update()
+                self.assertEqual(theme.custom(), ({}, None))
+                self.assertEqual(str(lab.cget("foreground")), theme.LIGHT["fg"])
+                self.assertEqual(st.lookup("Play.TButton", "background"), theme.COLOURED["Play.TButton"][0])
+                self.assertEqual(tkfont.nametofont("TkDefaultFont", root=root).cget("size"), size0)
+        finally:
+            theme._state.clear()
+            theme._state.update(kept)
+            try:
+                root.destroy()
+            except Exception:
+                pass
+
     def test_the_editor_checks_itself(self):
         """`campaign_editor.py selfcheck` (CI runs it on the built exe): modules, bundled files, the tiny mod."""
         from campaign_editor import selfcheck
@@ -6092,6 +6920,151 @@ building smith
         after = tree_hash(self.root)
         self.assertEqual({k: v for k, v in after.items() if "_backups" not in k}, before)
 
+    def test_land_climate_and_sea_climates_view(self):
+        """New land takes the climate most land round it has, ring by ring (not the leftover under the sea); the
+        Climates view draws the sea's climates too when asked."""
+        from campaign_editor import terrain as T
+        desert, grass, left = (102, 45, 145), (237, 20, 91), (236, 0, 140)
+
+        class Map:                                        # 5 x 1: land, land, land, sea, sea
+            w, h = 5, 1
+            look = {0: grass, 1: desert, 2: desert, 3: left, 4: left}
+
+            def is_sea(self, x, y):
+                return x >= 3
+
+            def climate_at(self, x, y):
+                return self.look[x]
+        self.assertEqual(T.land_climate(Map(), (3, 0)), desert)        # the neighbour, not the water's own
+        self.assertEqual(T.land_climate(Map(), (4, 0)), desert)        # the next ring when the first has no land
+        self.assertIsNone(T.land_climate(Map(), (4, 0), reach=1))
+        try:
+            from PIL import Image
+        except ImportError:
+            return
+        from campaign_editor.mapdata import CampaignMap
+        m = CampaignMap.__new__(CampaignMap)
+        m.w, m.h = 5, 1
+        m.is_sea = Map().is_sea
+        m.climate_at = Map().climate_at
+        base = Image.new("RGB", (5, 1), (0, 0, 0))
+        self.assertEqual(m._climates(base).getpixel((4, 0)), (0, 0, 0))     # the sea left as it is
+        m.show_sea_climates = True
+        self.assertNotEqual(m._climates(base).getpixel((4, 0)), (0, 0, 0))  # tinted like the land
+
+
+    def test_climate_passport(self):
+        """Climate library: what a climate gives, file by file - descr_climates (slot, colour, heat, winter, trees,
+        battle plants), the campaign ground textures (the 'default' block where it has none), every other file's
+        block or line naming it (a text file's {TAG} lines are not blocks); the engine's slot name counts only as a
+        block's own header ('x modifies y' is x's); free slots up to 32."""
+        from campaign_editor import climatelib as L
+        d = os.path.join(self.root, "data")
+        write(os.path.join(d, "descr_climates.txt"),
+              "climates\n{\n\tmediterranean\n\tsandy_desert\n}\n\nclimate mediterranean\n{\n\tcolour 236 0 140\n"
+              "\theat 1\n}\n\nclimate sandy_desert\n{\n\tcolour 102 45 145\n\theat 4\n\twinter\n"
+              "\tstrategy summer sparse_tree palm_a.cas 8\n\n\tbattle_vegetation\n\tdense_forest dense_pine\n"
+              "\tbattle_winter_vegetation\n\tdense_forest winter_dense_pine\n\tenv_map data/battlefield/e.dds\n}\n")
+        write(os.path.join(d, "descr_aerial_map_ground_types.txt"),
+              "climate default\n{\n\thills a_hills.tga\n\tswamp a_swamp.tga\n}\nclimate sandy_desert\n{\n"
+              "\thills sand_hills.tga snow.tga\n}\n")
+        write(os.path.join(d, "descr_geography.txt"),
+              "sandy_desert modifies default\n{\n\ttexture sand terrain/battlefield/sandy_desert/sand.tga\n}\n"
+              "rocky_desert modifies sandy_desert\n{\n\ttexture rock none\n}\n")
+        write(os.path.join(d, "descr_daytypes.txt"),
+              "daytype desert_summer\n\n\tclimates\t\tsandy_desert rocky_desert\n\tseasons summer\n")
+        write(os.path.join(d, "text", "climates.txt"), "{SANDY_DESERT}Sandy desert\n{ROCKY_DESERT}Rocky\n")
+        mod = ModData(self.root)
+        rows = L.passport(mod, "sandy_desert", "rome")
+        got = {(r.file, r.what, r.value) for r in rows}
+        self.assertIn(("descr_climates.txt", "slot", "2 of 32 (engine name sandy_desert)"), got)
+        self.assertIn(("descr_climates.txt", "colour", "102 45 145"), got)
+        self.assertIn(("descr_climates.txt", "winter", "snow in winter"), got)
+        self.assertIn(("descr_climates.txt", "trees summer sparse tree", "palm_a.cas (sprite 8)"), got)
+        self.assertIn(("descr_climates.txt", "winter dense forest", "winter_dense_pine"), got)
+        hills = [r for r in rows if r.what == "ground hills"][0]
+        self.assertEqual((hills.value, hills.note, hills.picture),
+                         ("sand_hills.tga  /  winter snow.tga", "", "terrain/aerial_map/ground_types/sand_hills.tga"))
+        swamp = [r for r in rows if r.what == "ground swamp"][0]
+        self.assertEqual((swamp.value, swamp.note), ("a_swamp.tga", "from default"))
+        geo = [r for r in rows if r.file == "descr_geography.txt"]
+        self.assertEqual([(r.what, r.value, r.line) for r in geo],
+                         [("sandy_desert modifies default", "texture sand terrain/battlefield/sandy_desert/sand.tga", 3),
+                          ("built on it", "rocky_desert modifies sandy_desert", 5)])
+        self.assertEqual(geo[0].picture, "terrain/battlefield/sandy_desert/sand.tga")
+        self.assertIn(("descr_daytypes.txt", "daytype desert_summer", "climates\t\tsandy_desert rocky_desert"), got)
+        self.assertEqual([r.value for r in rows if r.file == "text/climates.txt"], ["{SANDY_DESERT}Sandy desert"])
+        self.assertEqual(L.slot_name(0, "rome"), "default")
+        self.assertEqual(L.slot_name(12, "medieval2"), "custom_1")
+        self.assertIsNone(L.slot_name(32, "rome"))
+        lines = mod.load(mod.find("descr_climates.txt")).texts()
+        self.assertEqual(L.listed(lines), ["mediterranean", "sandy_desert"])
+        free = L.free_slots(lines, "medieval2")
+        self.assertEqual((len(free), free[0], free[-1]), (30, (2, "rocky_desert"), (31, "custom_20")))
+        # Rome's slot 0 'default' is every file's base block: not taken for the first climate's own
+        self.assertEqual(L.scan(["sea default", "{", "\tx 1", "}", "parent sea default"], ["test_climate"],
+                                ["default"]), [(2, "sea default", "x 1")])
+        self.assertEqual(L.scan(["a modifies default", "{", "\tx 1", "}"], ["test_climate"], ["default"]), [])
+
+    def test_climate_copy_and_slots_changed(self):
+        """New climate from this...: every block of the source copied under the new name right after it, the name
+        added to 'climates' lists and to lines it leads, one thing's own 'climate x' left; the new name LAST in
+        descr_climates.txt's list (the old slots kept) with its own colour; the name players read. Change...: a
+        ground slot of a climate with no block gets one (a copy of default) with only that slot changed; a tree
+        line's model. Restore puts all back."""
+        from campaign_editor import climatecopy as C, climatelib as L
+        self.assertEqual(C.copy_places(["sea dry summer", "{", "\tparent sea default", "}", "",
+                                        "\tclimates\t\tdry wet", "\tclimates wet, dry, cold", "\tdry any palm",
+                                        "\tclimate\t\tdry", "x modifies dry", "{", "}",
+                                        '<climate id="dry">', "<p/>", "</climate>", '<climate id="z" parent="dry"/>',
+                                        "<climate>", "<name>dry</name>", "<summer/>", "</climate>"], "dry", "hot"),
+                         [(4, ["sea hot summer", "{", "\tparent sea default", "}"]),
+                          (5, None, "\tclimates\t\tdry hot wet"), (6, None, "\tclimates wet, dry, hot, cold"),
+                          (8, ["\thot any palm"]), (15, ['<climate id="hot">', "<p/>", "</climate>"]),
+                          (20, ["<climate>", "<name>hot</name>", "<summer/>", "</climate>"])])
+        d = os.path.join(self.root, "data")
+        write(os.path.join(d, "descr_climates.txt"),
+              "climates\n{\n\tmediterranean\n\tdry\n}\n\nclimate mediterranean\n{\n\tcolour 236 0 140\n\theat 1\n}\n"
+              "\nclimate dry\n{\n\tcolour 102 45 145\n\theat 4\n\tstrategy summer sparse_tree palm_a.cas 8\n}\n")
+        write(os.path.join(d, "descr_aerial_map_ground_types.txt"),
+              "climate default\n{\n\thills a_hills.tga\n\tswamp a_swamp.tga\t\tsnow.tga\n}\n")
+        write(os.path.join(d, "descr_daytypes.txt"), "daytype hot_summer\n\tclimates\t\tdry mediterranean\n")
+        write(os.path.join(d, "text", "climates.txt"), "{DRY}\tDry land\n")
+        before = tree_hash(self.root)
+        mod = ModData(self.root)
+        self.assertTrue(C.problems(mod, "dry", "Bad Name", (1, 2, 3)))
+        self.assertTrue(C.problems(mod, "dry", "mediterranean", (1, 2, 3)))
+        self.assertTrue(C.problems(mod, "dry", "hot", (236, 0, 140)))
+        self.assertEqual(C.problems(mod, "dry", "hot", (1, 2, 3)), [])
+        plan = Plan(mod, "climate", "hot")
+        C.write_copy(plan, "dry", "hot", (1, 2, 3), "Hot land", "rome")
+        plan.apply()
+        mod = ModData(self.root)
+        lines = mod.load(mod.find("descr_climates.txt")).texts()
+        self.assertEqual(L.listed(lines), ["mediterranean", "dry", "hot"])
+        b = L.climates_block(lines, "hot")
+        self.assertEqual((b["colour"], b["heat"], [t[2] for t in b["trees"]]), ((1, 2, 3), "4", ["palm_a.cas"]))
+        self.assertEqual(L.climates_block(lines, "dry")["colour"], (102, 45, 145))
+        self.assertIn("\tclimates\t\tdry hot mediterranean", mod.load(mod.find("descr_daytypes.txt")).texts())
+        self.assertIn("{hot}\tHot land", mod.load(mod.find("text/climates.txt")).texts())
+        plan = Plan(mod, "climate", "hot")
+        C.set_ground(plan, "hot", "hills", "sand_hills.tga")
+        C.set_tree(plan, "hot", lines.index("\tstrategy summer sparse_tree palm_a.cas 8", lines.index("climate hot")) + 1,
+                   "palm_b.cas")
+        plan.apply()
+        mod = ModData(self.root)
+        got = L.aerial_blocks(mod.load(mod.find("descr_aerial_map_ground_types.txt")).texts())
+        self.assertEqual({k: v[:2] for k, v in got["hot"].items()},
+                         {"hills": ("sand_hills.tga", None), "swamp": ("a_swamp.tga", "snow.tga")})
+        self.assertEqual(got["default"]["hills"][:2], ("a_hills.tga", None))
+        lines = mod.load(mod.find("descr_climates.txt")).texts()
+        self.assertEqual([t[2] for t in L.climates_block(lines, "hot")["trees"]], ["palm_b.cas"])
+        self.assertEqual([t[2] for t in L.climates_block(lines, "dry")["trees"]], ["palm_a.cas"])
+        self.assertEqual(C.pool(mod, "nothing_here"), [])
+        for bk in backups(mod):
+            restore(ModData(self.root), bk)
+        self.assertEqual({k: v for k, v in tree_hash(self.root).items() if "_backups" not in k}, before)
+
     def test_land_brush_coast_is_smooth_not_in_steps(self):
         """A report ('where is the smoothing?'): the land brush made land tile by tile, its coast ran in tile-sized
         steps. The coast round the brush's tiles now follows a smooth curve at half-tile level, as the games' own
@@ -6316,8 +7289,10 @@ building smith
         with open(os.path.join(camp, "descr_regions.txt"), encoding="latin-1") as fh:
             self.assertEqual(fh.read(), bi.replace("pagan 90 christianity 10", "pagan 50 christianity 50").replace(
                 "pagan 100", "pagan 50 christianity 50"))
-        with self.assertRaises(ValueError):
-            set_religions(Plan(ModData(self.root), "map", "religions"), "test", {"A_R": {"pagan": 90}})
+        # a sum other than 100 is written with a warning: the game reads each share as it is (religion.cpp)
+        wp = Plan(ModData(self.root), "map", "religions")
+        set_religions(wp, "test", {"A_R": {"pagan": 90}})
+        self.assertTrue(any("not 100" in w for _, w in wp.warnings))
         mod = ModData(self.root)
         restore(mod, backups(mod)[0])
         self.assertEqual({k: v for k, v in tree_hash(self.root).items() if "_backups" not in k}, before)
@@ -6398,8 +7373,9 @@ building smith
         c = s.faction("alpha").characters[0]
         units = [l.split("\t")[2] for l in s.lines[c.start:c.end] if l.startswith("unit")]
         self.assertEqual(units, ["alpha general", "rebel spear", "rebel spear"])
-        with self.assertRaises(ValueError):             # family members are never removed
-            edit(ModData(self.root), "test", "alpha", {"remove": [{"name": "Aaron Alphid", "from": (1, 1)}]})
+        # the leader may be removed (the game picks another itself, world.cpp) - said as a warning
+        plan = edit(ModData(self.root), "test", "alpha", {"remove": [{"name": "Aaron Alphid", "from": (1, 1)}]})
+        self.assertTrue(any("leader itself" in m for _, m in plan.warnings))
         # taking a town whose rebels leave warns that it starts empty
         plan = edit(ModData(self.root), "test", "alpha", {"take": ["B_R"]})
         self.assertTrue(any("no army in B_R" in m for _, m in plan.warnings))
@@ -7942,7 +8918,8 @@ building smith
         from unittest import mock
         with mock.patch.object(launch.sys, "platform", "win32"), mock.patch.object(launch.subprocess, "Popen") as run:
             launch.start(launch.start_line(hlr))                      # the script, run from its own folder
-            self.assertEqual(run.call_args[0][0], ["cmd", "/c", os.path.join(rome, "HLR", "Start_HLR.bat")])
+            # one string, the path quoted twice under /s: cmd keeps the quotes of a path with '(x86)' in it
+            self.assertEqual(run.call_args[0][0], 'cmd /s /c ""%s""' % os.path.join(rome, "HLR", "Start_HLR.bat"))
             self.assertEqual(run.call_args[1]["cwd"], os.path.join(rome, "HLR"))
             launch.start(dac)                                         # the engine, from the game folder
             self.assertEqual(run.call_args[0][0], [os.path.join(m2, "M2EX.exe"), "--features.mod=mods/DaC"])
@@ -8827,7 +9804,7 @@ building smith
             from campaign_editor import gui_map as GM
         except ImportError:
             self.skipTest("no tkinter")
-        self.assertEqual(GM.ZOOM_SETTINGS["map_shore_from"], 300)
+        self.assertEqual(GM.ZOOM_SETTINGS["map_shore_from"], 500)
 
         class View:                                   # just what _shore_lines reads; an all-sea 9 x 9 point map
             shore, z, ox, oy, SHORE_BLOCK = (None, None), 1.0, 0.0, 0.0, 8
@@ -8837,7 +9814,7 @@ building smith
 
         v = View()
         v.shore = (type("P", (), {"width": 9, "height": 9})(), None)
-        for at, drawn in ((100, False), (299, False), (300, True), (600, True)):
+        for at, drawn in ((100, False), (499, False), (500, True), (600, True)):
             v.at = at
             self.assertEqual(bool(GM.MapView._shore_lines(v, 8, 8)), drawn, at)
         with mock.patch.object(GM, "zoom_setting", lambda key: 100):        # the modder's own zoom
@@ -9550,6 +10527,10 @@ building smith
         with open(os.path.join(troot, "data", "descr_model_battle.txt"), "a") as fh:
             fh.write("\ntype\t\tbroken\nskeleton\t\tfs_hc_spearman_classic, fs_swordsman ; old\n")
         self.assertEqual(skeleton_problems(ModData(troot)), [("broken", ["fs_hc_spearman_classic"])])
+        # the engine finds a skeleton by its exact name (anim_db.h skeleton_get): another letter case is missing too
+        with open(os.path.join(troot, "data", "descr_model_battle.txt"), "a") as fh:
+            fh.write("\ntype\t\tshouting\nskeleton\t\tFS_Swordsman\n")
+        self.assertIn(("shouting", ["FS_Swordsman"]), skeleton_problems(ModData(troot)))
 
     def test_medieval2_animation_set_takes_a_carried_skeleton(self):
         """Bring in Medieval II (BACKLOG B): the game's own data/Animations set is read (its 112 skeletons, 2401
@@ -10135,6 +11116,16 @@ building smith
         self.assertTrue(any("template_weights" in n for n in data.notes))             # no masks: a plain fade
         winter = glmap.MapData(mod, "test", winter=True)
         self.assertGreater(int(winter.pictures[int(winter.layers[4, 4])][0, 0, 0]), 200)  # the snow
+        # a brush raised the sea point out of the water: its own ground shown at once (layers_of, the rule of
+        # loading), the map's pictures read again from memory after the stroke (refresh_ground) - no new build
+        # (the user, 2026-10-22: a lag, then the new land's texture popping in)
+        g = np.array([[[101, 124, 0]]], np.uint8)
+        self.assertEqual(int(data.layers_of(g, None, np.array([[False]]))[0, 0]), green)
+        self.assertEqual(int(data.layers_of(g, None, np.array([[True]]))[0, 0]), sea)
+        was = data.heights[8, 0]
+        data.heights[8, 0] = 5.0
+        self.assertEqual(int(data.refresh_ground(mod, "test")[8, 0]), green)
+        data.heights[8, 0] = was
         # what stands on the map follows descr_strat as the Map leaves it before the write (an army moved there):
         # laid again from the Strat given, the models already read kept
         from unittest import mock
@@ -10150,8 +11141,9 @@ building smith
             data.set_strat(mod, "test", (3, 0))                           # moved
             self.assertTrue(np.allclose(data.objects[None][0, [0, 2]], [3.5, 3.5]))
             self.assertIs(data._objs[1], loader)
-            self.assertTrue(data.lift_out(lambda o: True))               # taken into the hand (3D carry)
-            self.assertEqual((data.objects, sorted(data.ghost)), ({}, [None]))
+            with mock.patch.object(MM, "build_each", side_effect=AssertionError("laid anew")):
+                self.assertTrue(data.lift_out(lambda o: True))           # taken into the hand (3D carry): the
+            self.assertEqual((data.objects, sorted(data.ghost)), ({}, [None]))     # pieces laid before, joined
             data.put_back()                                               # Esc: back where it stood
             self.assertEqual((sorted(data.objects), data.ghost), ([None], {}))
             # let go on another tile: only what was carried is laid again there, the map is not laid anew (a
@@ -10190,6 +11182,19 @@ building smith
             gl.set_layers(0, 0, np.full((9, 9), sea, np.uint16))                         # a brush: all sand
             mid = gl.render(cam, 64, 40)[20, 12].astype(int)
             self.assertGreater(mid[0], mid[2] + 40)
+            # the colours over the map (Maps > 3D Layers: climates, regions): a blue climate over the sand shows,
+            # none takes it off again
+            clim = np.zeros((9, 9, 3), np.uint8)
+            clim[...] = (0, 0, 255)
+            tint = data.tint_of("climates", climate=clim)
+            self.assertEqual((tint.shape, tuple(tint[0, 0])), ((4, 4, 4), (0, 0, 255, 255)))
+            gl.set_tint(tint)
+            blue = gl.render(cam, 64, 40)[20, 12].astype(int)
+            self.assertGreater(blue[2], mid[2] + 40)
+            gl.set_tint(None)
+            self.assertTrue(np.array_equal(gl.render(cam, 64, 40)[20, 12].astype(int), mid))
+            regs = np.zeros((4, 4, 3), np.uint8)
+            self.assertEqual(int(data.tint_of("regions", regions=regs)[3, 0, 3]), 255)          # land shows
         finally:
             gl.release()
 
@@ -10512,6 +11517,48 @@ building smith
         self.assertEqual((float(ship[1]), float(ship[8])), (0.0, 3))  # on the water, the armies' layer
         self.assertAlmostEqual(float(ship[2]), 0.5 - 0.25)            # scaled by half
 
+    def test_map_in_3d_shows_a_red_question_mark_where_no_model_is(self):
+        """A tester: a resource's frame showed on empty ground - something stood there that the 3D map did not draw.
+        Whatever stands on the map with no model to draw (its file not found, its type naming none) gets a red '?'
+        in its place, facing the camera; the model is still listed as missing. A texture see-through all over (Rome's
+        glass: alpha 122 everywhere - the model was never seen) is drawn solid."""
+        try:
+            import numpy as np
+        except ImportError:
+            self.skipTest("NumPy not installed")
+        from campaign_editor import mapmodels as MM
+        from campaign_editor import mapobjects3d as O
+        loader = MM.Loader(ModData(self.root))
+        parts = loader.parts("models_strat/no_such.CAS")
+        self.assertEqual([t for t, _ in parts], [MM.MISSING])
+        v = parts[0][1]
+        self.assertEqual(v.shape[1], 8)
+        self.assertGreater(float(v[:, 1].max()), 0.7)                 # about a tile high, standing on the ground
+        self.assertGreaterEqual(float(v[:, 1].min()), 0.0)
+        self.assertTrue((v[:, 5] > 0.9).any())                        # a face looking south, at the camera
+        self.assertIn("models_strat/no_such.CAS", loader.missing)
+        self.assertEqual(loader.picture(MM.MISSING)[0, 0].tolist(), list(MM.MISSING_RGBA))
+        try:
+            from PIL import Image
+        except ImportError:
+            Image = None
+        if Image is not None:
+            rel = "models_strat/textures/resource_glass.tga"
+            os.makedirs(os.path.join(self.root, "data", "models_strat", "textures"), exist_ok=True)
+            Image.fromarray(np.full((4, 4, 4), (60, 160, 170, 122), np.uint8), "RGBA").save(
+                os.path.join(self.root, "data", rel))
+            self.assertEqual(int(MM.Loader(ModData(self.root)).picture(rel)[..., 3].min()), 255)
+        # a resource whose type has no model stands as the '?'
+        mod = ModData(self.root)
+        camp = mod.campaign_file("test", "descr_strat.txt")
+        with open(camp) as fh:
+            text = fh.read()
+        write(camp, text.replace("\n;#####>", "\nresource\tglass, 3, 2\n;#####>", 1))
+        mod = ModData(self.root)
+        objs = O.objects(mod, "test", Strat(mod.load(camp)))
+        self.assertIn({"kind": "resource", "model": MM.MISSING, "texture": None, "xy": (3, 2), "scale": 1.0,
+                       "faction": None}, objs)
+
     def test_map_in_3d_port_dock_as_the_engine(self):
         """Report #329: a port's land part on its tile, its sea part on the dock - the sea tile beside it with the most
         sea around it (the engine's setup_orientation, its count not started again when it loses) - both turned so
@@ -10532,6 +11579,26 @@ building smith
         west[2, 1] = west[2, 0] = True
         self.assertEqual(MM._port_dock(2, 2, west), (90, (1, 2)))
 
+    def test_map_in_3d_texture_names_as_the_game_finds_them(self):
+        """A model's part names its texture plainly, without an ending, or with a path (data\\models_strat\\...):
+        each found where the game finds it; one not found is listed (it is drawn white - an HLR tester)."""
+        try:
+            import numpy  # noqa: F401
+        except ImportError:
+            self.skipTest("NumPy not installed")
+        from campaign_editor import mapmodels as MM
+        have = {"models_strat/textures/pot.tga", "models_strat/textures/basket.tga"}
+        loader = MM.Loader(None)
+        loader.picture = lambda rel: True if rel in have else None
+        self.assertEqual(loader._texture("models_strat/resource_pot.cas", "pot.tga"), "models_strat/textures/pot.tga")
+        self.assertEqual(loader._texture("models_strat/resource_pot.cas", "basket"), "models_strat/textures/basket.tga")
+        self.assertEqual(loader._texture("models_strat/resource_pot.cas", "data\\models_strat\\textures\\pot.tga"),
+                         "models_strat/textures/pot.tga")
+        self.assertEqual(loader._texture("models_strat/resource_pot.cas", "C:\\work\\tex\\basket.tga"),
+                         "models_strat/textures/basket.tga")
+        self.assertIsNone(loader._texture("models_strat/resource_pot.cas", "lid.tga"))
+        self.assertEqual(loader.missing, {"lid.tga"})
+
     def test_map_in_3d_carries_a_figure_as_the_map(self):
         """The user, 2026-10-17: figures moved on the 3D map as on the Map - the left button on one (an army in a
         town: on the town), let go on another tile: the Map's own check and move (Undo, Apply), the 3D map laid again;
@@ -10550,7 +11617,8 @@ building smith
                               status=SimpleNamespace(set=said.append))
         for to in ((5, 6), (9, 9), (1, 1)):
             me = SimpleNamespace(app=app, _carry=("char", "rome:0", "Flavius", (1, 1)), _tile=lambda x, y, t=to: t,
-                                 _carry_stop=lambda back=True: None, load=lambda: done.append("laid"))
+                                 _carry_stop=lambda back=True: None, load=lambda: done.append("laid"),
+                                 _did=lambda kind: None)
             Map3DView._carry_end(me, SimpleNamespace(x=0, y=0))
         self.assertEqual(done, [("rome:0", (5, 6)), "laid"])         # refused at sea, nothing on its own tile
         self.assertEqual(said, ["Flavius cannot stand at 9, 9: that is sea"])
@@ -10563,13 +11631,153 @@ building smith
         for carried, to in ((("place", ("city", "Latium"), "Latium town", (3, 3)), (4, 4)),
                             (("res", "r7", "gold", (1, 1)), (2, 2)), (("res", "r7", "gold", (1, 1)), (6, 1))):
             me = SimpleNamespace(app=app, _carry=carried, _tile=lambda x, y, t=to: t,
-                                 _carry_stop=lambda back=True: None, load=lambda: done.append("laid"))
+                                 _carry_stop=lambda back=True: None, load=lambda: done.append("laid"),
+                                 _did=lambda kind: None)
             Map3DView._carry_end(me, SimpleNamespace(x=0, y=0))
         self.assertEqual(done, [("city", "Latium", (4, 4)), "laid", ("r7", (6, 1)), "laid"])
         self.assertEqual(said[-1], "gold cannot stand at 2, 2: taken")
         # what is carried: the 3D map's own objects of that thing on that tile
         pick = Map3DView._picks("place", ("port", "Latium"), (3, 3))
         self.assertTrue(pick({"kind": "port_sea", "xy": (3, 3)}) and not pick({"kind": "town", "xy": (3, 3)}))
+        # a click alone lifts nothing (a tester: a stall at every click on a resource); the mouse moved with the
+        # button held lifts it
+        lifted = []
+        me = SimpleNamespace(app=app, _tile=lambda x, y: (1, 1), _map_lists=lambda: None, _carry=None,
+                             _things_at=lambda t: [("res", "r7", "gold")], DRAG_START=4, _paint=False,
+                             _carry_start=lambda e: lifted.append((e.x, e.y)), _tip_hide=lambda: None,
+                             _hover=lambda e: None)
+        Map3DView._carry_press(me, SimpleNamespace(x=10, y=10))
+        Map3DView._drag_paint(me, SimpleNamespace(x=12, y=11))          # a hand's tremble: still a click
+        self.assertEqual(lifted, [])
+        Map3DView._drag_paint(me, SimpleNamespace(x=15, y=10))
+        self.assertEqual(lifted, [(15, 10)])
+        # a heights stroke that made land out of the water (or sank it): the map is not made again at its end
+        # (the user, 2026-10-22: a lag, then the new land's texture popping in) - the ground read again in the
+        # thread that lays the mountains again
+        coast = iter([(("g", 1),), ()])
+        laid = []
+        me = SimpleNamespace(app=SimpleNamespace(editors={"terrain": object()}), _pressed=None, _carry=None,
+                             _paint=True, _grab=None, gl=SimpleNamespace(coast_frozen=True, models_stale=False),
+                             _coast_was=(), _coast_now=lambda ed: next(coast), _stamp=lambda: "now",
+                             rebuild=lambda: self.fail("made again"), _lay_models=lambda: laid.append(1),
+                             _sharp_later=lambda: None, v_paint=SimpleNamespace(get=lambda: "heights"))
+        Map3DView._paint_end(me, SimpleNamespace(x=0, y=0))
+        self.assertEqual((laid, me._ground_stale, me.gl.models_stale, me._for), ([1], True, True, "now"))
+        # Paint's tile brushes on the 3D map (the user, 2026-10-22: every brush of the 2D map there, seen at once):
+        # the Terrain editor paints the square of tiles under the mouse with the pick made here, the card takes
+        # those points (and a tile round them: the shore) at once; the same tile again paints nothing more
+        from campaign_editor.gui_map3d import PAINTS, SWATCHED
+        self.assertEqual([k for k, _ in PAINTS], ["heights", "ground", "features", "climate", "regions", "land", "sea"])
+        calls, sent = [], []
+        ed = SimpleNamespace(v_brush=SimpleNamespace(get=lambda: 2),
+                             paint=lambda tiles, what, colour: calls.append((what, colour, sorted(tiles))) or
+                             [(t, colour) for t in tiles],
+                             paint_coast=lambda tiles, mode: calls.append((mode, None, sorted(tiles))) or [])
+        me = SimpleNamespace(app=SimpleNamespace(editors={"terrain": ed}), _paint=True, _mouse=(5, 5),
+                             _point=lambda x, y: ((0, 0, 0), (7.0, 9.0)), _tiles_brush=Map3DView._tiles_brush,
+                             v_paint=SimpleNamespace(get=lambda: "climate"),
+                             v_pick={k: SimpleNamespace(get=lambda: "10,20,30") for k in SWATCHED},
+                             _send_points=lambda ed, *box: sent.append(box), draw=lambda half=False: None,
+                             lbl=SimpleNamespace(configure=lambda **k: None))
+        Map3DView._tiles_tick(me)
+        self.assertEqual(calls, [("climate", (10, 20, 30), [(x, y) for x in (2, 3, 4) for y in (3, 4, 5)])])
+        self.assertEqual(sent, [(2, 12, 4, 14)])
+        Map3DView._tiles_tick(me)                                       # the same tile: nothing more
+        self.assertEqual(len(calls), 1)
+        me.v_paint, me._last_tile = SimpleNamespace(get=lambda: "land"), None
+        Map3DView._tiles_tick(me)
+        self.assertEqual(calls[-1][:2], ("land", None))                 # the Land and sea brush, by tile
+        # Regions: the Map's Edit regions brush (kept for Apply in region_paint), the colours over the map follow
+        me.v_paint, me._last_tile = SimpleNamespace(get=lambda: "regions"), None
+        me._regions = lambda tiles: calls.append(("regions", None, sorted(tiles))) or [(tiles[0], (1, 2, 3))]
+        me._send_tint = lambda draw=True: calls.append("tint")
+        Map3DView._tiles_tick(me)
+        self.assertEqual(calls[-2:], [("regions", None, [(x, y) for x in (2, 3, 4) for y in (3, 4, 5)]), "tint"])
+        # Alt + click: the brush picks the tile's own
+        picked = []
+        me = SimpleNamespace(canvas=SimpleNamespace(focus_set=lambda: None), _on=lambda: True,
+                             _tile=lambda x, y: (4, 5), v_brush_on=SimpleNamespace(get=lambda: True),
+                             v_paint=SimpleNamespace(get=lambda: "ground"),
+                             v_pick={k: SimpleNamespace(set=picked.append) for k in SWATCHED},
+                             _terrain=lambda: SimpleNamespace(_current=lambda what, t: (0, 128, 128)),
+                             lbl=SimpleNamespace(configure=lambda **k: None))
+        Map3DView._eyedrop(me, SimpleNamespace(x=1, y=1))
+        self.assertEqual(picked, ["0,128,128"])
+        # Ctrl+Z / Ctrl+Y on the 3D tab: a stroke of the Terrain editor's brushes goes back there (the map made
+        # from its pictures again), regions painted or a figure carried by the window's own Undo
+        undone, later = [], []
+        ed = SimpleNamespace(undo_stroke=lambda: undone.append("undo"), redo_stroke=lambda: undone.append("redo"))
+        me = SimpleNamespace(app=SimpleNamespace(editors={"terrain": ed}), after_idle=later.append,
+                             load="load", _after_undo="after")
+        Map3DView._did(me, "terrain")
+        Map3DView._did(me, "app")
+        self.assertFalse(Map3DView.undo_step(me))                   # the regions: the window's Undo, then the map
+        self.assertTrue(Map3DView.undo_step(me))                    # the stroke: the Terrain editor's
+        self.assertTrue(Map3DView.undo_step(me, redo=True))
+        self.assertEqual((undone, later), (["undo", "redo"], ["after", "load", "load"]))
+        self.assertFalse(Map3DView.undo_step(me, redo=True))        # the regions again: the window's Redo
+        self.assertFalse(Map3DView.undo_step(me, redo=True))        # nothing of its own left
+        # the Ground brush over the sea: every tile it turns into land goes to the Land and sea brush in ONE call
+        # (the shore risen and smoothed once - tile by tile a big brush lagged), then gets its ground
+        try:
+            from campaign_editor import mapdata  # noqa: F401 - the brush names its tiles' looks there (Pillow)
+            from campaign_editor.gui_terrain import TerrainEditor
+        except ImportError:                              # CI's test job: no Pillow
+            TerrainEditor = None
+        if TerrainEditor is not None:
+            from unittest import mock
+            coast, laid = [], []
+            sea = {(1, 0), (2, 0), (3, 0)}
+            te = SimpleNamespace(_bound=lambda: True, v_what=SimpleNamespace(get=lambda: "ground"),
+                                 _current=lambda what, t: (64, 0, 0) if t in sea else (0, 128, 128),
+                                 cmap=SimpleNamespace(is_sea=lambda x, y: (x, y) in sea, __dict__={}),
+                                 paint_coast=lambda tiles, mode: coast.append((sorted(tiles), mode)) or
+                                 [(t, None) for t in tiles if t != (3, 0)], _coast_why="a town stands there",
+                                 standing=set(), _lay_tile=lambda what, t, c: laid.append(t), ground={}, climate={},
+                                 features={}, pending=lambda: 3,
+                                 app=SimpleNamespace(status=SimpleNamespace(set=lambda t: None), _mark_work=lambda: None))
+            with mock.patch("campaign_editor.terrain.paint_problem", lambda *a: None):
+                took = TerrainEditor.paint(te, [(0, 0), (1, 0), (2, 0), (3, 0)], colour=(101, 124, 0))
+            self.assertEqual(coast, [([(1, 0), (2, 0), (3, 0)], "land")])
+            self.assertEqual(laid, [(0, 0), (1, 0), (2, 0)])                    # (3, 0) refused: stays sea
+            self.assertEqual(len(took), 3)
+        # a tile brush in hand: what the tile is, beside the mouse
+        cm = SimpleNamespace(w=9, h=9, ground_at=lambda x, y: (0, 128, 128), climate_at=lambda x, y: (1, 2, 3),
+                             region_at=lambda x, y: "Latium")
+        me = SimpleNamespace(app=SimpleNamespace(editors={"terrain": SimpleNamespace(cmap=cm, mod=None)},
+                                                 region_paint={(4, 4): "Etruria"}))
+        self.assertEqual(Map3DView._paint_tip(me, (3, 3)).splitlines(),
+                         ["tile 3, 3", "ground: low fertility", "climate: 1 2 3", "region: Latium"])
+        self.assertTrue(Map3DView._paint_tip(me, (4, 4)).endswith("region: Etruria"))     # painted, not written
+        # the colours over the map (Layers): what the brushes left, sent to the card - none takes them off
+        tints = []
+        me = SimpleNamespace(gl=SimpleNamespace(set_tint=tints.append, data=SimpleNamespace(
+            tint_of=lambda kind, climate=None, regions=None: (kind, climate is not None, regions is not None))),
+            v_tint=SimpleNamespace(get=lambda: "climates"), _source=lambda: "mod",
+            app=SimpleNamespace(v_campaign=SimpleNamespace(get=lambda: "imperial_campaign")), draw=lambda: None)
+        from unittest import mock
+        try:
+            import numpy  # noqa: F401
+        except ImportError:                              # CI's test job: the rest needs NumPy
+            return
+        with mock.patch("campaign_editor.terrain3d._picture", lambda mod, camp, name: "picture"):
+            Map3DView._send_tint(me)
+        me.v_tint = SimpleNamespace(get=lambda: "none")
+        Map3DView._send_tint(me)
+        self.assertEqual(tints, [("climates", True, False), None])
+        # the hover's words: a character's name and what he is, a town's name and owner, a resource's name
+        app._map_chars["rome:0"].update(kind="general", faction="romans_julii", army=True, units=5)
+        mv.cmap, mv.owners = SimpleNamespace(info={"Latium": {"settlement": "Roma"}}), {"Latium": "romans_senate"}
+        app.res_shown = lambda: [{"id": "f3", "kind": "fort", "owner": "gauls", "xy": (1, 1)}]
+        import sys
+        from unittest import mock
+        fake = SimpleNamespace(hover_name=lambda ch: "Captain " + ch["name"])     # gui_map needs Pillow's ImageTk
+        with mock.patch.dict(sys.modules, {"campaign_editor.gui_map": fake}):
+            text = Map3DView._tip_text(SimpleNamespace(app=app), [("char", "rome:0", "Flavius"),
+                                                                 ("place", ("city", "Latium"), "Latium town"),
+                                                                 ("res", "f3", "fort")])
+        self.assertEqual(text.splitlines(), ["Captain Flavius", "   general of romans_julii, 5 unit(s)",
+                                             "Roma (Latium) - town", "   owner romans_senate", "fort of gauls"])
 
     def test_map_in_3d_figures_face_the_camera(self):
         """Reports #330 / #331: the figures on the 3D map stood with their backs to the camera, in Rome and in
@@ -10668,8 +11876,10 @@ building smith
         write(os.path.join(game, "m2ex.EXE"), "x")
         self.assertEqual(limits.engine_of(mod), "M2EX.exe")
         lim = limits.faction_limit(mod)
-        self.assertEqual((lim["max"], lim["own"], lim["written"]), (31, False, False))   # M2EX's default, not 50
-        self.assertIn("built-in defaults", limits.engine_report(mod))
+        # the engine reads descr_ex.txt through its file overlay: the mod's, else the GAME's (engine source
+        # descr_ex.cpp + setup_path_make, 2026-10-22) - so the game's 50 holds for a mod without its own
+        self.assertEqual((lim["max"], lim["own"], lim["written"]), (50, False, True))
+        self.assertIn("the game's data/descr_ex.txt", limits.engine_report(mod))
         self.assertEqual(limits.faction_limit(ModData(os.path.join(game, "data")))["max"], 50)  # the game itself
         plan = Plan(mod, "a", "b", {})
         limits.raise_limit(plan, lim, 40)
@@ -10678,7 +11888,7 @@ building smith
         with open(own, "rb") as fh:
             text = fh.read()
         self.assertIn(b"max_factions 40", text)
-        self.assertNotIn(b"rolloff", text)                          # only the line meant: the rest stays default
+        self.assertIn(b"rolloff", text)         # the game's whole file copied in: its other settings still hold
         with open(os.path.join(game, "data", "descr_ex.txt"), "rb") as fh:
             self.assertIn(b"max_factions 50", fh.read())
         lim = limits.faction_limit(ModData(mod.data))
@@ -11331,6 +12541,11 @@ building smith
         self.assertIn("- Old.", plain)
         with self.assertRaises(ValueError):
             RN.notes(log, "9.9.9", "owner/repo")
+        # no release while the editor names another version of itself (its new-version check would nag for ever)
+        self.assertEqual(RN.code_version('APP = "x"\nVERSION = "1.2.0"\n'), "1.2.0")
+        self.assertIsNone(RN.code_version("nothing here"))
+        with open(os.path.join(os.path.dirname(__file__), "..", "campaign_editor", "gui.py"), encoding="utf-8") as fh:
+            self.assertRegex(RN.code_version(fh.read()) or "", r"^\d+\.\d+\.\d+$")   # the real one is found
 
     def test_sprite_sheet_binary_read_write_and_add(self):
         """The plain games' binary sprite sheets (Rome .rsd version 5, Medieval II .sd version 6): read and written
@@ -13165,6 +14380,10 @@ building smith
         plan = Plan(mod, "mercenaries", "test", {})
         ME.plan_pools(plan, "test", pools)
         self.assertEqual(plan.changed_files(), [])                   # nothing changed: nothing written
+        pools[1].name = "Both"                     # renamed to a pool not changed: two pools of one name (review)
+        with self.assertRaisesRegex(ValueError, "two pools are called Both"):
+            ME.plan_pools(Plan(mod, "mercenaries", "test", {}), "test", pools)
+        pools[1].name = "Only_B"
         left = ME.give_regions(pools, pools[0], ["A_R"])               # Both keeps only A_R ...
         new = ME.Pool("Mine")
         pools.append(new)
@@ -14154,6 +15373,26 @@ building smith
                           if p["id"] == "building_conditions"], [])
         self.assertTrue(bdir)
 
+    def test_an_army_taken_out_stays_when_its_town_moves(self):
+        """A tester (3D map, Rome BI): an army dragged out of its town went back to the town when the town was moved
+        after - the town's move carried everyone on its old tile, then the army's own move no longer found him
+        there. Now an army moved out stays where it was put; one left in the town goes with it (its units edits
+        still find it)."""
+        from campaign_editor import mapedit as ME
+        from campaign_editor.edit import map_changes
+        mod = ModData(self.root)
+        self.assertEqual(tuple(mod.city_tiles("test")["A_R"]), (1, 1))
+        unit = "unit\t\talpha general\t\texp 1 armour 0 weapon_lvl 0"
+        out = {"moves": {"alpha": [{"name": "Aaron Alphid", "from": (1, 1), "to": (0, 3)}]}}
+        stay = {"army_units": {"alpha": [{"name": "Aaron Alphid", "from": (1, 1), "units": [unit, unit]}]}}
+        for changes, where in ((out, (0, 3)), (stay, (1, 2))):
+            plan = Plan(ModData(self.root), "map", "map", {})
+            ME.apply_places(plan, "test", [{"what": "city", "region": "A_R", "to": (1, 2)}])
+            map_changes(plan, "test", changes)
+            s = Strat(plan.files[mod.campaign_file("test", "descr_strat.txt")])
+            aaron = next(c for c in s.faction("alpha").characters if c.name == "Aaron Alphid")
+            self.assertEqual(aaron.xy, where)
+
     def test_town_onto_the_tile_its_port_leaves(self):
         """Report R-20261012-79696C (HLR): 'town of Utica_R cannot go to 139, 190: another town or port stands there'
         though that one was moved too - each place was checked only against the moves BEFORE it in the list. Now
@@ -14348,6 +15587,18 @@ building smith
         self.assertAlmostEqual(a.rotations(2)[1][0], 0.2, places=5)
         self.assertEqual(len(a.offsets(0)), 2)
         self.assertIsNone(AN.find(mod, "data/animations/none.cas"))
+
+    def test_view_in_3d_says_why_a_model_has_no_animation(self):
+        """The user, 2026-10-22: 'the editor sometimes hides the animation' - View in 3D now says why there is none:
+        a skeleton nobody lists, or its files in no pack and not loose."""
+        from campaign_editor import animations as AN
+        d = os.path.join(self.root, "data")
+        write(os.path.join(d, "descr_skeleton.txt"), "type\t\tfs_x\nanim\t\tstand\tdata/animations/gone.cas\n")
+        mod = ModData(self.root)
+        self.assertEqual(AN.of_skeleton(mod, "fs_x"), [])
+        self.assertIn("none of its 1 animation files is loose", AN.why_none(mod, "fs_x"))
+        self.assertIn("data/animations/gone.cas", AN.why_none(mod, "fs_x"))
+        self.assertIn("neither in descr_skeleton.txt", AN.why_none(mod, "fs_nobody"))
 
     def test_tile_models_read_from_the_games_packs(self):
         """A tester's photo (ROCSS, Medieval II): the 3D map's rivers were blue squares - the mod has no
@@ -14664,7 +15915,7 @@ building smith
 
     def test_map_deletes_a_character_of_any_faction(self):
         """The Map's right-click Delete: a character of any faction goes with his whole block (army too); the leader,
-        the heir and one on the family tree are refused."""
+        the heir go too, with a warning (the game picks a leader itself - world.cpp)."""
         from campaign_editor.edit import map_changes
         mod = ModData(self.root)
         strat = mod.campaign_file("test", "descr_strat.txt")
@@ -14679,9 +15930,9 @@ building smith
         self.assertEqual(len(plan.files[strat].raw), len(mod.load(strat).raw) - (c.end - c.start))
         lead = next((x for f in s.factions for x in f.characters if x.role == "leader" and x.xy), None)
         if lead:
-            with self.assertRaises(ValueError):
-                map_changes(Plan(mod, "map", "map", {}), "test",
-                            {"remove": {lead.owner: [{"name": lead.name, "from": list(lead.xy)}]}})
+            lp = Plan(mod, "map", "map", {})
+            map_changes(lp, "test", {"remove": {lead.owner: [{"name": lead.name, "from": list(lead.xy)}]}})
+            self.assertTrue(any("leader itself" in w for _, w in lp.warnings))
 
     def test_a_family_member_taken_off_the_map_stays_on_the_tree(self):
         """Report R-20261012-EEEE61: Flavius Julius's army could not go - Units & armies said 'a member of the family,
@@ -14721,9 +15972,23 @@ building smith
             self.assertTrue(any(t.startswith("relative") and "Abel Alphid" in t for t in texts))
             from campaign_editor.strat import characters_after_tree
             self.assertEqual(characters_after_tree(after), [])
-        with self.assertRaises(ValueError):                         # the leader: make another the leader first
-            map_changes(Plan(ModData(self.root), "map", "map", {}), "test",
-                        {"remove": {"alpha": [{"name": "Aaron Alphid", "from": [1, 1]}]}})
+        # the leader may go too (2026-10-22, the code backs no ban: the game makes the first named character the
+        # leader itself, world.cpp) - said as a warning
+        lp = Plan(ModData(self.root), "map", "map", {})
+        map_changes(lp, "test", {"remove": {"alpha": [{"name": "Aaron Alphid", "from": [1, 1]}]}})
+        self.assertTrue(any("Aaron Alphid was alpha's" in w and "leader itself" in w for _, w in lp.warnings))
+        # a general whose name is only a part of a name on the tree ('Abel' of 'Abel Alphid') is not on it: he
+        # simply goes, no dead record left behind (review 2026-10-22)
+        f = mod.load(strat)
+        i = next(n for n, t in enumerate(f.texts()) if t.startswith("character\tAbel Alphid"))
+        f.raw[i:i] = [f.make(x) for x in ("character\tAbel, named character, age 30, , x 3, y 1", "army",
+                                          "unit\t\talpha general\t\texp 0 armour 0 weapon_lvl 0")]
+        f.save()
+        plan = Plan(ModData(self.root), "map", "map", {})
+        map_changes(plan, "test", {"remove": {"alpha": [{"name": "Abel", "from": [3, 1]}]}})
+        texts = plan.files[strat].texts()
+        self.assertFalse([t for t in texts if t.startswith("character_record") and "Abel," in t], texts)
+        self.assertFalse([t for t in texts if t.startswith("character\tAbel,")])
 
     def test_map_editor_moves_and_arms_any_faction(self):
         """The Map editor (no faction picked): any faction's character dragged elsewhere and any army's units
@@ -15184,68 +16449,79 @@ building smith
         self.assertEqual([w for w, _ in AN.of_skeleton(mod, "mtw2_bowman")], ["default", "stand_a_idle"])
         self.assertEqual(AN.of_skeleton(mod, "MTW2_Fast_Bowman")[1],
                          ("stand_a_idle", "data\\animations\\MTW2_Bowman\\turn.cas"))
-        rot, off = AN.base_pose(mod, "MTW2_Bowman")
-        self.assertEqual((len(rot), off[0], off[5]), (20, (0, 1, 0), (0, 0.5, 0)))   # the others' offsets filled in
-        mesh = MV.Mesh([MV.Group("Body", "x", (0, 1, 2), False)], [(1, 1, 0), (0, 1, 1), (0, 1, 0)], None)
+        # the skeleton: neither the set the game loads nor a .cas file of it here - the game could not play it either
+        self.assertIsNone(AN.skeleton(mod, "MTW2_Bowman"))
+        rest = [(0, 1, 0)] + [(0, 0.5, 0)] * 19
+        sk = AN.Skeleton("MTW2_Bowman", MAN_PARENTS, rest, MAN_BONES)
+        rot = [(0, 0, 0, 1)] * 20
+        mesh = MV.Mesh([MV.Group("Body", "x", (0, 1, 2), False)], [(1, 1, 0), (0, 4.5, 0), (0, 1, 0)], None)
         mesh.skin = [(0, 4, 1.0, 0.0), (20, 16, 1.0, 0.0), (0, 0, 0.0, 0.0)]       # a weapon point: its hand holds it
-        turned = MV.pose_mesh(mesh, MV.Pose.of(AN.find(mod, "data/animations/MTW2_Bowman/turn.cas"), 0), (rot, off))
+        turned = MV.pose_mesh(mesh, MV.Pose.of(AN.find(mod, "data/animations/MTW2_Bowman/turn.cas"), 0), sk)
         for got, want in zip(turned.positions[0], (-1, 0.5, 0)):          # half round the up axis at the pelvis
             self.assertAlmostEqual(got, want, places=5)
-        self.assertIsNone(MV.pose_mesh(MV.Mesh(mesh.groups, mesh.positions, None), MV.Pose(rot, off), (rot, off)))
-        # a weapon's own move in the hand (its skeleton's animation of the same name): half round at the hand - a
-        # javelin turned point first for the throw (it was thrown blunt end first)
-        hand = MV._world(rot, off)[1][16]
-        flipped = MV.pose_mesh(mesh, MV.Pose(rot, off), (rot, off), held={20: (1.0, 0.0, 0.0, 0.0)})
-        v = mesh.positions[1]
-        for got, want in zip(flipped.positions[1], (v[0], 2 * hand[1] - v[1], 2 * hand[2] - v[2])):
-            self.assertAlmostEqual(got, want, places=5)
-        self.assertEqual(MV.pose_mesh(mesh, MV.Pose(rot, off), (rot, off)).positions[1], tuple(v))   # none: as held
-        self.assertEqual(MV.weapon_turn(type("W", (), {"frames": 1, "rotations": lambda s, k: [(0, 0, 0, 1),
-                                                       (1, 0, 0, 0)], "offsets": lambda s, k: [(0, 0, 0)]})(), 0),
-                         (1, 0, 0, 0))
-        # a weapon point naming only the pelvis as its second bone (a knight's lance and sword) is held by the right
-        # hand - held by the pelvis they hung in the air; a mount's tree has no hands
-        self.assertEqual((MV.hand_of(16, 20), MV.hand_of(0, 20), MV.hand_of(25, 20), MV.hand_of(0, 23)), (16, 12, 12, 0))
-        knight = MV.Mesh(mesh.groups, mesh.positions, None)
+        self.assertEqual(MV.pose_mesh(mesh, MV.Pose(rot, [None] * 20), sk).positions, mesh.positions)  # at its rest
+        self.assertIsNone(MV.pose_mesh(MV.Mesh(mesh.groups, mesh.positions, None), MV.Pose(rot, rest), sk))
+        self.assertIsNone(MV.pose_mesh(mesh, MV.Pose(rot[:19], rest), sk))      # fewer bones than its skeleton
+        # which bones an animation carries offsets for: the bit mask at its record's end (a camel's swim, a crossbow's
+        # string - read as 'the first kind bones', a mod's men fell together); none there: the first kind bones
+        tail = b"\x00" * (24 + 32) + (0b101).to_bytes(8, "little")
+        masked = AN.Anim("m", 1, 3, 2, struct.pack("<HHB", 1, 3, 2) + struct.pack("<4f", 0, 0, 0, 1) * 3 +
+                         struct.pack("<6f", 1, 2, 3, 4, 5, 6) + tail, 9)
+        self.assertEqual((masked.moved, masked.offsets(0)), ((0, 2), [(1, 2, 3), None, (4, 5, 6)]))
+        self.assertEqual(AN.find(mod, "data/animations/MTW2_Bowman/stand.cas").moved, tuple(range(20)))
+        self.assertEqual(sk.offsets([(9, 9, 9), None]), [(9, 9, 9)] + rest[1:])   # a bone with none: its base pose
+        # a weapon with no skeleton of its own here: the hand its points name holds it - the man lifted, it goes too
+        lifted = MV.pose_mesh(mesh, MV.Pose(rot, [(0, 1.5, 0)] + [None] * 19), sk)
+        self.assertAlmostEqual(lifted.positions[1][1], 5.0, places=5)
+        # a knight's lance and sword name only the pelvis as their second bone: held by the right hand (held by the
+        # pelvis they hung in the air)
+        knight = MV.Mesh(mesh.groups, [(1, 1, 0), (0.3, 4.0, 0), (0, 1, 0)], None)
         knight.skin = [(0, 4, 1.0, 0.0), (20, 0, 1.0, 0.0), (0, 0, 0.0, 0.0)]
-        swung = MV.Pose(rot, [(0, 0.5, 0)] + list(off[1:]))           # the man lifted: the hand goes with him
-        self.assertAlmostEqual(MV.pose_mesh(knight, swung, (rot, off)).positions[1][1], v[1] - 0.5, places=5)
-        named = MV.Mesh([], [], None)
-        named.bone_names = {0: "bone_pelvis", 20: "bone_weapon01", 21: "bone_weapon02", 22: "bone_shield"}
-        self.assertEqual(MV.weapon_bones(named), {"weapon": [20, 21], "shield": [22]})
-        # a Discord modder's shield (a Morrowind mod) floated beside the head as an animation played: the game's
-        # meshes give slot 22 several names (bone_weapon03, bone_shield01, bone_shield) - only the first was kept, so
-        # no shield was found, and its points' weightless second bone (the belly) held it. The game binds a shield to
-        # the left hand by name (the engine source).
-        many = MV.Mesh([], [], None)
-        many.bone_aliases = {20: ["bone_weapon01"], 22: ["bone_weapon03", "bone_shield01", "bone_shield"]}
-        many.bone_names = {20: "bone_weapon01", 22: "bone_weapon03"}
-        self.assertEqual(MV.weapon_bones(many), {"weapon": [20], "shield": [22]})
-        group = MV.Mesh([], [], None)                                   # report #293: the mod's only name
-        group.bone_names = {20: "bone_weapon_group01", 22: "bone_weapon_group03"}
-        self.assertEqual(MV.weapon_bones(group), {"weapon": [20], "shield": [22]})
         bent = list(rot)
-        bent[16] = (0.0, 0.0, math.sqrt(0.5), math.sqrt(0.5))           # the left hand turned a quarter round
+        bent[12] = (0.0, 0.0, math.sqrt(0.5), math.sqrt(0.5))           # the right hand turned a quarter round
+        for got, want in zip(MV.pose_mesh(knight, MV.Pose(bent, [None] * 20), sk).positions[1], (0, 4.3, 0)):
+            self.assertAlmostEqual(got, want, places=5)
+        # the weapon's own skeleton (the model's skeleton_attachment): its first bone is the man's hand it hangs on
+        # (here the left), its weapon bone the mesh's of the same name; its animation of the same move turns it -
+        # a javelin point first for the throw - its first bone's own turn left out, as the game does
+        bow = AN.Skeleton("Bow_Primary", (-1, 0), [(0, 4, 0), (0, 0.25, 0)], ["bone_Lhand", "bone_Weapon01"])
+        mesh.bone_aliases = {20: ["bone_weapon01"]}
+        same = MV.pose_mesh(mesh, MV.Pose(rot, [None] * 20), sk, [(bow, None)])
+        self.assertEqual(same.positions[1], mesh.positions[1])
+        flip = MV.Pose([(0, 1, 0, 0), (1, 0, 0, 0)], [None, None])
+        flipped = MV.pose_mesh(mesh, MV.Pose(rot, [None] * 20), sk, [(bow, flip)])
+        for got, want in zip(flipped.positions[1], (0, 4.0, 0)):            # half round at the weapon's bone (4.25)
+            self.assertAlmostEqual(got, want, places=5)
+        self.assertEqual(MV._child_offset(1, (1, 2, 3)), (-3, 2, 1))      # its own offsets as the game lays them on
+        self.assertEqual(MV._child_offset(2, (1, 2, 3)), (-1, 3, 2))
+        # a shield goes to the left hand by its name (a Discord modder's shield floated beside the head: its points'
+        # weightless second bone named the belly); the game's meshes give slot 22 several names
         for pure in (True, False):
             shield = MV.Mesh(mesh.groups, mesh.positions, None)
             shield.skin = [(0, 4, 1.0, 0.0), (22, 4, 1.0, 0.0), (0, 0, 0.0, 0.0)]
-            shield.bone_aliases, shield.bone_names = {22: ["bone_shield"]}, {22: "bone_shield"}
+            shield.bone_aliases = {22: ["bone_weapon03", "bone_shield01", "bone_shield"]}
             on_hand = MV.Mesh(mesh.groups, mesh.positions, None)
             on_hand.skin = [(0, 4, 1.0, 0.0), (16, 0, 1.0, 0.0), (0, 0, 0.0, 0.0)]
             shield.pure = on_hand.pure = pure
-            got = MV.pose_mesh(shield, MV.Pose(bent, off), (rot, off)).positions[1]
-            want = MV.pose_mesh(on_hand, MV.Pose(bent, off), (rot, off)).positions[1]
+            lbent = list(rot)
+            lbent[16] = (0.0, 0.0, math.sqrt(0.5), math.sqrt(0.5))
+            got = MV.pose_mesh(shield, MV.Pose(lbent, rest), sk).positions[1]
+            want = MV.pose_mesh(on_hand, MV.Pose(lbent, rest), sk).positions[1]
             for g, w in zip(got, want):
                 self.assertAlmostEqual(g, w, places=5)
+        group = MV.Mesh([], [], None)                                   # report #293: the mod's only name
+        group.bone_names = {20: "bone_weapon_group01", 22: "bone_weapon_group03"}
+        self.assertEqual(MV.shield_slots(group), {22})
         # a moment between two frames is drawn between them (the play looked hurried and jerky drawing whole
         # frames only): half way from unturned to half round the up axis = a quarter round; past the last frame
-        # it blends into the first
+        # it blends into the first; a bone with no offset in either frame has none between them
         stand = AN.find(mod, "data/animations/MTW2_Bowman/stand.cas")
         half = MV.Pose.of(type("A", (), {"frames": 2, "rotations": lambda s, k: [(0, 0, 0, 1)] * 20 if k == 0 else
-                                         [(0, 1, 0, 0)] * 20, "offsets": lambda s, k: [(0, k, 0)] * 20})(), 0.5)
+                                         [(0, 1, 0, 0)] * 20,
+                                         "offsets": lambda s, k: [(0, k, 0)] + [None] * 19})(), 0.5)
         for got, want in zip(half.rotations[0], (0, math.sqrt(0.5), 0, math.sqrt(0.5))):
             self.assertAlmostEqual(got, want, places=5)
-        self.assertEqual(half.offsets[0], (0, 0.5, 0))
+        self.assertEqual((half.offsets[0], half.offsets[1]), ((0, 0.5, 0), None))
         self.assertEqual(MV.Pose.of(stand, 2.5).offsets[0], (0, 0.5, 0))
         # a turning horse carries its rider round: the saddle's heading (round the up axis) only
         tipped = MV.Mesh([], [], None)
@@ -15285,30 +16561,48 @@ building smith
         self.assertEqual(AN.skeleton_anims(mod, "no_such"), [])
         self.assertIn("mtw2_halberd_primary", AN.skeletons(mod))         # the checks' set of names (lower case)
 
-    def test_base_pose_of_a_skeleton_only_in_the_animation_set(self):
-        """A skeleton the mod keeps only in the set the game loads (skeletons.dat, no descr_skeleton.txt line): its
-        base pose is the animation its record names as one (..._basepose / ..._default), else its last - the man is
-        posed, not left in the T pose."""
+    def test_skeletons_read_as_the_game_reads_them(self):
+        """A skeleton as the game has it, whatever its bones (a mod's own: the hard-coded man's and horse's trees
+        crushed them): its record in the set the game loads (skeletons.dat: each bone's name, parent, base pose and
+        bind, its scale), the name as written else alike but for the letter case (a record not of that form: none);
+        a mod on descr_skeleton.txt alone from its type's first .cas file (SKELETON_BASE::open: the Scene Root left
+        out); an animation at the scale of its skeleton."""
         import struct
         from campaign_editor import animations as AN
-
-        def body(w):            # 2 frames, 3 bones, each bone's offset; each bone turned (0, 0, 0, w)
-            return struct.pack("<HHB", 2, 3, 3) + struct.pack("<4f", 0, 0, 0, w) * 6 + struct.pack("<3f", 0, 1, 0) * 6
-        stand, base, last = ("data/animations/own/Own_Stand_A_idle.cas", "data/animations/own/Own_basepose.cas",
-                             "data/animations/own/Own_run.cas")
-        _make_anim_set(os.path.join(self.root, "data", "animations"),
-                       {"Own_Man": [stand, base, last], "Own_Odd": [stand, last]},
-                       {stand: [(1.0, body(0.5))], base: [(1.0, body(1.0))], last: [(1.0, body(0.25))]}, (2, 3, 3))
+        anims = os.path.join(self.root, "data", "animations")
+        names, parents, rest = ["bone_root", "bone_neck", "bone_head"], (-1, 0, 1), [(0, 1, 0), (0, 0, 0.5), (0, 0.3, 0)]
+        stand, base = "data/animations/own/Own_Stand_A_idle.cas", "data/animations/own/Own_basepose.cas"
+        body = struct.pack("<HHB", 2, 3, 1) + struct.pack("<4f", 0, 0, 0, 1) * 6 + struct.pack("<3f", 0, 1, 0) * 2
+        _make_anim_set(anims, {"Own_Beast": _m2_skeleton(names, parents, rest, [stand], scale=1.12),
+                               "Own_Tool": [stand, base]},
+                       {stand: [(1.0, body + b"A"), (1.12, body + b"B")], base: [(1.0, body)]})
         mod = ModData(os.path.join(self.root, "data"))
-        rot, off = AN.base_pose(mod, "Own_Man")
-        self.assertEqual((rot[0], len(off)), ((0, 0, 0, 1.0), 3))
-        self.assertEqual(AN.base_pose(mod, "Own_Odd")[0][2], (0, 0, 0, 0.25))      # none named so: the last
-        self.assertIsNone(AN.base_pose(mod, "no_such"))
+        sk = AN.skeleton(mod, "own_beast")
+        self.assertEqual((sk.names, sk.parents, len(sk), sk.bone("BONE_HEAD")), (names, parents, 3, 2))
+        self.assertEqual([tuple(round(v, 4) for v in r) for r in sk.rest], rest)
+        self.assertAlmostEqual(sk.scale, 1.12, places=5)
+        self.assertAlmostEqual(sk.binds[2][7], -1.3, places=5)        # its head 1.3 up in the pose the mesh is made in
+        self.assertEqual(AN.find(mod, stand, sk.scale).data[-1:], b"B")    # the animation at its skeleton's scale
+        self.assertEqual(AN.find(mod, stand).data[-1:], b"A")
+        self.assertIsNone(AN.skeleton(mod, "Own_Tool"))                 # a record of paths only
+        self.assertIsNone(AN.skeleton(mod, "no_such"))
+        # descr_skeleton.txt alone (no set loads): the type's first .cas file
+        shutil.rmtree(anims)
+        os.makedirs(os.path.join(anims, "t"))
+        with open(os.path.join(anims, "t", "first.cas"), "wb") as fh:
+            fh.write(_cas_bytes())
+        write(os.path.join(self.root, "data", "descr_skeleton.txt"),
+              "type Text_Man\nanim stand_a_idle data/animations/t/first.cas\nanim default data/animations/t/first.cas\n"
+              "type Text_Child\nparent Text_Man\nanim run data/animations/t/first.cas\n")
+        mod = ModData(os.path.join(self.root, "data"))
+        for name in ("Text_Man", "Text_Child"):
+            got = AN.skeleton(mod, name)
+            self.assertEqual((got.names, got.parents, got.rest[0]), (["bone_body", "bone_arm"], (-1, 0), (0, 0.5, 0)))
 
     def test_the_3d_view_on_numpy_matches_the_pure_python_one(self):
         """With NumPy (the exe has it) a mesh is posed and drawn on arrays (fastmesh) - the same points to the last
         digit and the same picture as the pure-Python ways a Python without NumPy keeps."""
-        from campaign_editor import meshview as MV
+        from campaign_editor import animations as AN, meshview as MV
         if MV._fast is None:
             self.skipTest("no NumPy")
         try:
@@ -15328,10 +16622,13 @@ building smith
         turned = list(rot)
         turned[1] = (math.sin(0.3), 0.0, 0.0, math.cos(0.3))
         turned[12] = (0.0, math.sin(0.5), 0.0, math.cos(0.5))
-        held = {20: (1.0, 0.0, 0.0, 0.0)}
-        fast = MV.pose_mesh(mesh, MV.Pose(turned, off), (rot, off), held)
+        sk = AN.Skeleton("man", MAN_PARENTS, off, MAN_BONES)
+        held = [(AN.Skeleton("w", (-1, 0), [(0.5, 1.0, 0.0), (0.0, 0.2, 0.0)], ["bone_Rhand", "bone_weapon01"]),
+                 MV.Pose([(0, 0, 0, 1), (1.0, 0.0, 0.0, 0.0)], [None, None]))]
+        mesh.bone_aliases = {20: ["bone_weapon01"]}
+        fast = MV.pose_mesh(mesh, MV.Pose(turned, off), sk, held)
         mesh.pure = True
-        pure = MV.pose_mesh(mesh, MV.Pose(turned, off), (rot, off), held)
+        pure = MV.pose_mesh(mesh, MV.Pose(turned, off), sk, held)
         for a, b in zip(fast.positions, pure.positions):
             for k in range(3):
                 self.assertAlmostEqual(a[k], b[k], places=9)
@@ -15355,38 +16652,28 @@ building smith
             self.assertGreater(near / len(b), 0.95)
 
     def test_a_horse_is_posed_on_its_own_bones(self):
-        """A Medieval II horse (fs_horse: 23 bones - saddle, spine, neck, head, four legs, tail) is posed on its own
-        tree, not a man's (its animation looked broken); a mesh listing its bones by name in another order gets its
-        points' bone numbers put in the animations' order. descr_mount's rider_offset is read per mount type."""
+        """A beast (a Medieval II horse, camel, elephant - or a mod's own) is posed on its own skeleton's tree, read
+        from its record, not a man's (its animation looked broken; a camel and an elephant stood on the man's 20
+        bones); a beast's mesh names no pelvis (with no animation picked it stands in its idle move).
+        descr_mount's rider_offset is read per mount type."""
         import math
-        import struct
-        from campaign_editor import meshview as MV, models as MO
-
-        def names(order):
-            return struct.pack("<I", len(order)) + b"".join(
-                struct.pack("<I", len(n)) + n.encode() + struct.pack("<I", i) for i, n in enumerate(order))
-        alpha = sorted(MV.HORSE_BONES)
-        got = MV._bone_names(b"\x00" * 50 + names(alpha) + b"\x00" * 8)
-        self.assertEqual(got[0], "bone_H_Saddle")
-        self.assertEqual(got[1], "bone_Head")
-        mesh = MV.Mesh([], [(0, 0, 0)], None)
-        mesh.skin = [(alpha.index("bone_Head"), alpha.index("bone_Neck"), 1.0, 0.0)]
-        MV._animal_tree(mesh, got)
-        self.assertEqual(mesh.skin[0][:2], (4, 3))                     # Head, Neck in the animations' order
-        self.assertEqual(mesh.parents, MV.HORSE_PARENTS)
-        man = MV.Mesh([], [(0, 0, 0)], None)
-        man.skin = [(0, 0, 1.0, 0.0)]
-        MV._animal_tree(man, {0: "bone_pelvis", 1: "bone_rthigh"})
-        self.assertIsNone(man.parents)                                  # a man keeps the man's tree
-        # posed on the horse's tree: the head follows the neck turned at Spine1, not a man's arm chain
-        rot = [(0, 0, 0, 1)] * 23
-        off = [(0, 1, 0)] + [(0, 0, 0.5)] * 22
-        mesh.positions = [MV._world(rot, off, MV.HORSE_PARENTS)[1][4]]   # a point on the head
+        from campaign_editor import animations as AN, meshview as MV, models as MO
+        # a toy horse: saddle, spine, neck, head - the head follows the neck turned at the spine
+        names = ["bone_H_Saddle", "bone_Spine", "bone_Neck", "bone_Head"]
+        sk = AN.Skeleton("fs_horse", (-1, 0, 1, 2), [(0, 1, 0), (0, 0, 0.5), (0, 0, 0.5), (0, 0, 0.5)], names)
+        mesh = MV.Mesh([], [(0, 1, 1.5)], None)                      # a point on the head
+        mesh.skin = [(3, 2, 1.0, 0.0)]
+        mesh.bone_aliases = {i: [n] for i, n in enumerate(names)}
+        rot = [(0, 0, 0, 1)] * 4
         turned = list(rot)
-        turned[2] = (0, math.sqrt(0.5), 0, math.sqrt(0.5))              # Spine1 a quarter round the up axis
-        posed = MV.pose_mesh(mesh, MV.Pose(turned, off), (rot, off))
+        turned[1] = (0, math.sqrt(0.5), 0, math.sqrt(0.5))              # the spine a quarter round the up axis
+        posed = MV.pose_mesh(mesh, MV.Pose(turned, [None] * 4), sk)
         self.assertAlmostEqual(posed.positions[0][0], 1.0, places=5)   # the neck and head swung sideways
-        self.assertEqual(len(posed.joints), 23)
+        self.assertEqual(len(posed.joints), 4)
+        self.assertTrue(MV.is_animal(mesh))
+        man = MV.Mesh([], [(0, 0, 0)], None)
+        man.skin, man.bone_aliases = [(0, 0, 1.0, 0.0)], {0: ["bone_pelvis"], 1: ["bone_RThigh"]}
+        self.assertFalse(MV.is_animal(man))
         write(os.path.join(self.root, "data", "descr_mount.txt"),
               "type heavy horse\nclass horse\nmodel Mount_Heavy_Horse\n;rider_offset 0.0, 0.45, 0.35\n"
               "rider_offset\t\t0.0, 0.38, 0.70\n\ntype camel\nclass camel\n")
@@ -16858,8 +18145,8 @@ building smith
         write(os.path.join(camp, "descr_regions.txt"), text + "\treligions { catholic 20 pagan 80 }\n")
         mod = ModData(self.root)
         self.assertEqual(mod.regions("test")["A_R"]["religions"], {"catholic": 90, "pagan": 10})
-        with self.assertRaises(ValueError):                             # not 100 in all
-            edit(ModData(self.root), "test", "alpha", {"regions": {"religions": {"A_R": {"catholic": 50}}}})
+        wp = edit(ModData(self.root), "test", "alpha", {"regions": {"religions": {"A_R": {"catholic": 50}}}})
+        self.assertTrue(any("not 100" in w for _, w in wp.warnings))  # not 100 in all: written, said
         new = {"name": "N_R", "settlement": "Ntown", "creator": "alpha", "rebels": "Rebels", "resources": [],
                "city": (0, 3), "owner": None}
         plan = edit(mod, "test", "alpha", {"regions": {
@@ -17269,6 +18556,36 @@ building smith
         got = EV.picture_files(ModData(self.root), "news", "historic")
         self.assertTrue(all(got.values()))
         self.assertEqual(Image.open(got["roman"]).size, (360, 160))                      # Rome's own size
+
+    def test_event_date_changed_keeps_the_queue(self):
+        """Review 2026-10-22: a date changed in Events (or a later faction's event written) stayed where it was - an
+        event left behind one of a later date never fires (the games read descr_events.txt as a queue). It moves to
+        its place, its comment with it; an event in order stays put; a later faction's event goes in order too."""
+        from campaign_editor import events as EV
+        from campaign_editor import emergence as EM
+        from campaign_editor.plan import Plan
+        camp = os.path.join(self.root, "data", "world", "maps", "campaign", "test")
+        write(os.path.join(camp, "descr_events.txt"),
+              "; events\nevent\thistoric\ta\ndate\t2\n\n; about b\nevent\thistoric\tb\ndate\t5\n\n"
+              "event\thistoric\tc\ndate\t9 winter\n\nevent\tplague\tp\ndate\t12\n\nevent\tplague\tp\ndate\t14\n")
+        mod = ModData(self.root)
+        path = EV.path_of(mod, "test")
+        names = lambda plan: [(e["id"], e["date"]) for e in EV.read(plan.files[path])]
+        plan = Plan(mod, "e", "e", {})
+        EV.apply(plan, "test", {"edit": {"b": {"date": "10"}}})
+        self.assertEqual(names(plan), [("a", "2"), ("c", "9 winter"), ("b", "10"), ("p", "12"), ("p#2", "14")])
+        t = plan.files[path].texts()
+        self.assertEqual(t[t.index("event\thistoric\tb") - 1], "; about b")
+        self.assertTrue(any("date order" in n for _, n in plan.notes))
+        plan = Plan(mod, "e", "e", {})                  # the second of two of one name, to the front; the first edited
+        EV.apply(plan, "test", {"edit": {"p#2": {"date": "1"}, "p": {"date": "13"}}})
+        self.assertEqual(names(plan), [("p", "1"), ("a", "2"), ("b", "5"), ("c", "9 winter"), ("p#2", "13")])
+        plan = Plan(mod, "e", "e", {})
+        EV.apply(plan, "test", {"edit": {"c": {"date": "8"}}})
+        self.assertFalse(any("date order" in n for _, n in plan.notes))
+        plan = Plan(mod, "e", "e", {})
+        EM.set_event(plan, "test", "alpha", "6")
+        self.assertEqual([e["name"] for e in EV.read(plan.files[path])], ["a", "b", "alpha", "c", "p", "p"])
 
     def test_rome_pak_read(self):
         """Rome's data/packs/*.pak: the name table, the end offsets, the files one after another - a file not loose
@@ -19386,6 +20703,7 @@ building smith
         canvas for the card, in order; the map's own picture item ('bg') is left out."""
         try:
             import tkinter as tk
+            import numpy  # noqa: F401  (the release's Windows test job has no NumPy)
             from campaign_editor.glflat import canvas_rows
             root = tk.Tk()
         except Exception as e:
@@ -19872,6 +21190,35 @@ building shrine
         self.assertIsNone(R.drop_faction(line.replace("{ b, c, }", "{ b, }"), "b"))
         self.assertEqual(R.add_faction(line, "d"),
                          "requires ( ( factions { a, b, d, } and x ) or ( factions { b, c, } and y ) )")
+
+    def test_take_unit_shuts_culture_recruit_lines(self):
+        """Review 2026-10-22: a unit taken from a faction kept every recruit line that let it in by its culture or
+        'all' - its towns still recruited it, and Medieval II stops at a recruit line the ownership does not allow
+        (settlement.cpp 'Settlement recruitment availability included unit'). New faction > From zero took the
+        frame's own units the same way (its culture known before the mod knows the faction)."""
+        from campaign_editor import roster as R
+        d = os.path.join(self.root, "data")
+        write(os.path.join(d, "export_descr_buildings.txt"), self.POOL_EDB.replace(
+            'requires factions { slave, }', 'requires factions { eastern, slave, }'))
+        mod = ModData(self.root)
+        plan = Plan(mod, None, "roster")
+        R.take_unit(plan, "alpha", "rebel spear")
+        edb = plan.files[mod.file("edb")].dump().decode("latin-1")
+        self.assertIn('recruit_pool "rebel spear"  1   0.5   4  0  requires factions { slave, }', edb)
+        self.assertTrue(any("written out as the other factions" in m for _, m in plan.warnings), plan.report())
+        # a faction the mod does not know yet: its culture given
+        plan = Plan(mod, None, "roster")
+        R.take_unit(plan, "zorga", "rebel spear", None, "eastern")
+        edb = plan.files[mod.file("edb")].dump().decode("latin-1")
+        self.assertIn('requires factions { alpha, slave, }', edb)
+        # a line of its own name only: as before, the name out
+        write(os.path.join(d, "export_descr_buildings.txt"), self.POOL_EDB.replace(
+            'requires factions { slave, }', 'requires factions { slave, alpha, }'))
+        mod = ModData(self.root)
+        plan = Plan(mod, None, "roster")
+        R.take_unit(plan, "alpha", "rebel spear")
+        edb = plan.files[mod.file("edb")].dump().decode("latin-1")
+        self.assertIn('requires factions { slave, }', edb)
 
     def test_editor_lines_no_cap_of_our_own(self):
         """A key the mod repeats takes any number of lines (no "not more than the mod has"); a one-line key stays
@@ -20496,6 +21843,12 @@ class CampaignScriptTest(unittest.TestCase):
 
             def note(self, f, text):
                 self.notes.append(text)
+
+            def warn(self, f, text):
+                self.notes.append("WARN " + text)
+        plan = P(TextFile.from_bytes("campaign_script.txt", self.TEXT.encode("latin-1")))
+        CS.plan_remove(plan, "x", ["wait_monitors@15"])        # monitors stay: without it they never react - said
+        self.assertTrue(any(n.startswith("WARN wait_monitors") for n in plan.notes), plan.notes)
         plan = P(TextFile.from_bytes("campaign_script.txt", self.TEXT.encode("latin-1")))
         self.assertEqual(CS.plan_remove(plan, "x", ["monitor_event@6", "declare_counter@3"]), 2)
         left = [l.strip() for l in plan.f.texts() if l.strip()]
@@ -20503,6 +21856,7 @@ class CampaignScriptTest(unittest.TestCase):
                                 "wait_monitors", "end_script"])
         CS.plan_remove(plan, "x", [p["id"] for p in CS.read(plan.f)])
         self.assertEqual([l.strip() for l in plan.f.texts() if l.strip()], ["; the mod's script", "script", "end_script"])
+        self.assertFalse(any(n.startswith("WARN") for n in plan.notes), plan.notes)     # no monitor left: no word
 
 
 class ReaderChecksMoreTest(unittest.TestCase):
@@ -20924,6 +22278,78 @@ building castle_port
         self.assertEqual(FB.conditions("x requires factions { a, }  and  event_counter guns 1 ; note"),
                          "event_counter guns 1")
 
+    def test_a_unit_added_to_a_level_gets_a_line_of_its_own(self):
+        """The Roster's building view (the user, 2026-10-22): a unit added to a level that has no line for it gets
+        one for the faction alone - the numbers of the unit's line in the level below, not its conditions; a line
+        for other factions takes the faction in; the unit becomes the faction's."""
+        from campaign_editor import roster as R
+        from campaign_editor.plan import Plan
+        plan = Plan(self.mod, "x", "x")
+        self.assertTrue(R.set_recruit(plan, "alpha", "barracks", "big_barracks", "alpha general"))
+        self.assertTrue(R.set_recruit(plan, "alpha", "barracks", "muster", "rebel spear"))
+        self.assertFalse(R.set_recruit(plan, "alpha", "barracks", "muster", "alpha general"))   # it has it
+        edb = plan.files[self.mod.file("edb")].texts()
+        big = edb.index("        big_barracks requires factions { barbarian, }")
+        self.assertIn('                recruit "alpha general"  2  requires factions { alpha, }', edb[big:])
+        self.assertIn('                recruit "rebel spear"  0  requires factions { slave, alpha, }', edb)
+        self.assertEqual(sum("rebel spear" in l and "alpha" in l for l in edb), 1)
+        self.assertTrue(any("may not build this level yet" in str(n) for n in plan.notes), plan.notes)
+        edu = "\n".join(plan.files[self.mod.file("edu")].texts())
+        self.assertRegex(edu, r"ownership\s+slave, alpha")
+        # a unit no line names anywhere: the game's plain line
+        f = self.mod.load(self.mod.file("edb"))
+        self.assertEqual(R.new_recruit_line(f, "alpha", "new guy", "barracks", "muster"),
+                         'recruit "new guy"  0  requires factions { alpha, }')
+
+    def test_a_unit_taken_from_a_level(self):
+        from campaign_editor import roster as R
+        from campaign_editor.plan import Plan
+        plan = Plan(self.mod, "x", "x")
+        self.assertTrue(R.set_recruit(plan, "alpha", "barracks", "muster", "ghost unit", give=False))
+        self.assertTrue(R.set_recruit(plan, "alpha", "barracks", "muster", "alpha general", give=False))
+        self.assertFalse(R.set_recruit(plan, "alpha", "barracks", "muster", "rebel spear", give=False))
+        edb = "\n".join(plan.files[self.mod.file("edb")].texts())
+        self.assertNotIn("ghost unit", edb)                   # its culture had only alpha: the line goes
+        self.assertNotIn("alpha general", edb)
+        self.assertIn('recruit "rebel spear"  0  requires factions { slave, }', edb)
+        # a line for everyone: written out as the others
+        plan = Plan(self.mod, "x", "x")
+        R.set_recruit(plan, "alpha", "castle_port", "dock", "rebel spear", give=False)
+        edb = "\n".join(plan.files[self.mod.file("edb")].texts())
+        self.assertIn('recruit_pool "rebel spear"  1   0.5   4  0  requires factions { slave, } and '
+                      'building_present_min_level barracks muster', edb)
+
+    def test_adding_a_unit_reaches_every_level_above(self):
+        """Report #283: the game trains only what the town's current level lists - a unit added at a level goes
+        to it and every level above; taken away, from it and every level above (the ones below keep it)."""
+        from campaign_editor import factionbuildings as FB
+        from campaign_editor.edit import edit
+        items = {c["chain"]: c for c in FB.faction_chains(self.mod, "alpha")}
+        bar = items["barracks"]
+        has = {"muster": False, "big_barracks": False}
+        self.assertEqual(FB.upward(bar, "muster", "rebel spear", True, has.get),
+                         [("recruit:barracks:muster:rebel spear", True),
+                          ("recruit:barracks:big_barracks:rebel spear", True)])
+        self.assertEqual(FB.upward(bar, "big_barracks", "rebel spear", True, has.get),
+                         [("recruit:barracks:big_barracks:rebel spear", True)])
+        has["muster"] = True                          # already so in the files: a pick there is dropped
+        self.assertEqual(FB.upward(bar, "muster", "rebel spear", True, has.get)[0][1], None)
+        changes = {"recruit:barracks:muster:rebel spear": True, "recruit:barracks:muster:alpha general": False,
+                   "building:barracks:big_barracks": True}
+        seen = {c["chain"]: c for c in FB.with_changes(list(items.values()), changes)}
+        muster, big = seen["barracks"]["levels"]
+        self.assertEqual([(u["unit"], u["pending"]) for u in muster["units"]],
+                         [("alpha general", "take"), ("ghost unit", None), ("rebel spear", "give")])
+        self.assertEqual((big["has"], big["pending"]), ("own", "give"))
+        self.assertIsNone(items["barracks"]["levels"][1]["has"])         # the read items untouched
+        # written with Apply: the level let in first, then the lines
+        changes["recruit:barracks:big_barracks:rebel spear"] = True
+        plan = edit(self.mod, "test", "alpha", {"roster": changes})
+        edb = plan.files[self.mod.file("edb")].texts()
+        self.assertIn("        big_barracks requires factions { barbarian, alpha, }", edb)
+        self.assertIn('                recruit "rebel spear"  1  requires factions { slave, alpha, }', edb)
+        self.assertNotIn("alpha general", "\n".join(edb))
+
     def test_the_tab_shows_a_chain_and_a_unit(self):
         try:
             import tkinter as tk
@@ -20954,3 +22380,68 @@ building castle_port
             self.assertEqual([u["unit"] for u in v.level["units"]], ["rebel spear"])
         finally:
             root.destroy()
+
+    def test_the_roster_by_buildings_adds_and_takes(self):
+        """The Roster's By buildings tab: a click on a unit under All units adds it to the picked level and every
+        level above; the x on a card takes it from there and above; a level's + gives the ones below too."""
+        try:
+            import tkinter as tk
+            root = tk.Tk()
+        except Exception as e:
+            self.skipTest("no window: %s" % e)
+        from types import SimpleNamespace
+        from campaign_editor.gui_rosterbuildings import RosterBuildings
+        from campaign_editor.gui_garrison import Pictures
+        said = []
+        try:
+            app = SimpleNamespace(pictures=Pictures(), shown_names=lambda: {}, open_unit=None, mod=self.mod,
+                                  v={"template": tk.StringVar(value="alpha")}, editing=lambda: True,
+                                  remember=lambda: None, roster_set={}, roster_changed=lambda: None,
+                                  status=SimpleNamespace(set=said.append))
+            v = RosterBuildings(root, app)
+            v.load(self.mod)
+            v.refresh()
+            self.assertEqual(len(v.items), 3)
+            self.assertTrue(v.visible_units())
+            v.building_list()                                   # + Building: the chains it may not build all of
+            top = next(w for w in v.winfo_children() if isinstance(w, tk.Toplevel))
+            tv = next(w for w in top.winfo_children()[0].winfo_children()[-2].winfo_children()
+                      if w.winfo_class() == "Treeview")
+            self.assertEqual(list(tv.get_children()), ["barracks", "temple_of_x"])
+            top.destroy()
+            bar = next(c for c in v.items if c["chain"] == "barracks")
+            v.show_chain(bar, "big_barracks")
+            v.add("rebel spear")                                # alpha may not build big_barracks yet
+            self.assertEqual(app.roster_set, {})
+            v.give_level(v.chain, "big_barracks", True)
+            self.assertEqual(app.roster_set, {"building:barracks:big_barracks": True})
+            v.show_chain(next(c for c in v.items if c["chain"] == "barracks"), "muster")
+            v.add("rebel spear")
+            self.assertEqual(app.roster_set["recruit:barracks:muster:rebel spear"], True)
+            self.assertEqual(app.roster_set["recruit:barracks:big_barracks:rebel spear"], True)
+            muster = v.level
+            self.assertIn(("rebel spear", "give"), [(u["unit"], u.get("pending")) for u in muster["units"]])
+            v.give_unit("rebel spear", "muster", False)        # the x on the new card: back as it was
+            self.assertNotIn("recruit:barracks:muster:rebel spear", app.roster_set)
+            v.give_unit("alpha general", "muster", False)
+            self.assertIs(app.roster_set["recruit:barracks:muster:alpha general"], False)
+            v.give_chain(v.chain, False)                       # the x on the tile: every level
+            self.assertIs(app.roster_set["building:barracks:muster"], False)
+            self.assertNotIn("building:barracks:big_barracks", app.roster_set)
+        finally:
+            root.destroy()
+
+    def test_settlements_filter_by_owner(self):
+        """Report #295: Settlements shows only the towns one faction holds (england: England's towns only)."""
+        try:
+            from campaign_editor.gui_settlements import owners_of, of_owner
+        except ImportError as e:
+            self.skipTest("no tkinter: %s" % e)
+        rows = [{"region": "London_Province", "owner": "england"},
+                {"region": "Paris_Province", "owner": "france"},
+                {"region": "York_Province", "owner": "england"},
+                {"region": "Rennes_Province", "owner": "rebels"}]
+        self.assertEqual(owners_of(rows), ["(all)", "england", "france", "rebels"])
+        self.assertEqual([r["region"] for r in of_owner(rows, "england")], ["London_Province", "York_Province"])
+        self.assertEqual(len(of_owner(rows, "(all)")), 4)
+        self.assertEqual(of_owner(rows, "spain"), [])

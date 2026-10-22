@@ -259,6 +259,16 @@ def apply(plan, campaign, changes):
         for r in sorted((by_index[k] for k in removed), key=lambda r: -r.line):
             del f.raw[r.line]
             plan.note(f, "%s at %d, %d removed" % (r.kind, r.xy[0], r.xy[1]))
+        # put (moved or new) on a wasteland's land: said where the modder looks (Medieval II's game refuses it -
+        # only Check mod files named it, after the write)
+        from .limits import game_kind
+        if game_kind(mod) == "medieval2":
+            put = [(by_index[k].kind, xy) for k, xy in moved.items() if k not in removed] + \
+                [(a["type"], tuple(a["xy"])) for a in added]
+            for kind, xy in put:
+                w = wasteland_at(mod, campaign, xy)
+                if w:
+                    plan.warn(f, "%s at %d, %d lies on %s, a wasteland - %s" % (kind, xy[0], xy[1], w, WASTE_WORDS))
     tags = changes.get("region_tags") or {}
     if tags:
         set_region_tags(plan, campaign, tags)

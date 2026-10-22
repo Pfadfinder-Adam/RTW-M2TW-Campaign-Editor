@@ -20,49 +20,23 @@ import numpy as np
 # ---------------------------------------------------------------------------
 # Posing
 # ---------------------------------------------------------------------------
-def _static(mesh):
-    """The mesh's points, bones and weights as arrays, made once per mesh."""
+def _static(mesh, rig):
+    """The mesh's points and its rig's slots and shares as arrays, made once per mesh and rig."""
     got = getattr(mesh, "_np", None)
-    if got is None or got[0] is not mesh.arr:
-        skin = np.asarray(mesh.skin, dtype=np.float64)
-        got = (mesh.arr, mesh.arr, skin[:, 0].astype(np.int64),
-               skin[:, 1].astype(np.int64), skin[:, 2].copy(), skin[:, 3].copy())
+    if got is None or got[0] is not mesh.arr or got[1] is not rig:
+        got = (mesh.arr, rig, mesh.arr, np.asarray(rig.i0, dtype=np.int64), np.asarray(rig.i1, dtype=np.int64),
+               np.asarray(rig.p0, dtype=np.float64)[:, None], np.asarray(rig.p1, dtype=np.float64)[:, None])
         mesh._np = got
-    return got[1:]
+    return got[2:]
 
 
-def pose(mesh, n, mats, held_mats):
-    """The posed points [(x, y, z)]. mats {bone: 12 floats (3 x 3 row by row, then the shift)} for bones 0..n-1;
-    held_mats {(weapon bone, hand): 12 floats} - a weapon with its own move in the hand. The same rules as
-    meshview.pose_mesh's loop: a weapon point without a move of its own is held by the hand (its second bone, else
-    the pelvis), a point with no weights is all on its first bone."""
-    P, b0, b1, w0, w1 = _static(mesh)
-    table = [mats[b] for b in range(n)]
-    held_idx = {}
-    for key, m in held_mats.items():
-        held_idx[key] = len(table)
-        table.append(m)
+def pose(mesh, rig, table):
+    """The posed points: meshview.pose_mesh's skin on arrays - each point by its two palette slots (rig: meshview
+    _Rig) and their shares; table [12 floats a slot (3 x 3 row by row, then the shift)]."""
+    P, i0, i1, p, r = _static(mesh, rig)
     T = np.asarray(table, dtype=np.float64)
     M, t = T[:, :9].reshape(-1, 3, 3), T[:, 9:]
-    hand = np.where((b1 > 0) & (b1 < n), b1, 12 if n == 20 else 0)    # meshview.hand_of
-    from .meshview import shield_slots, LEFT_HAND
-    sh = sorted(shield_slots(mesh))
-    if sh and n == 20:                                                  # meshview.holder: a shield the left hand
-        hand = np.where(np.isin(b0, sh), LEFT_HAND, hand)
-    i0 = np.where(b0 >= n, hand, b0)
-    i1 = np.where(b1 >= n, i0, b1)
-    if held_idx:
-        for (wb, h), k in held_idx.items():
-            hit = (b0 == wb) & (hand == h)
-            i0 = np.where(hit, k, i0)
-            i1 = np.where(hit, k, i1)
-    a0 = np.where((w0 <= 0) & (w1 <= 0), 1.0, np.maximum(w0, 0.0))
-    a1 = np.where(i1 == i0, 0.0, np.maximum(w1, 0.0))
-    tw = a0 + a1
-    tw[tw == 0] = 1.0
-    p, r = (a0 / tw)[:, None], (a1 / tw)[:, None]
-    out = p * (np.einsum("nij,nj->ni", M[i0], P) + t[i0]) + r * (np.einsum("nij,nj->ni", M[i1], P) + t[i1])
-    return out
+    return p * (np.einsum("nij,nj->ni", M[i0], P) + t[i0]) + r * (np.einsum("nij,nj->ni", M[i1], P) + t[i1])
 
 
 # ---------------------------------------------------------------------------

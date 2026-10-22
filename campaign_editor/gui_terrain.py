@@ -82,6 +82,12 @@ class TerrainEditor(ttk.Frame):
         self._rivers_tick.pack(side="left", padx=(8, 0))
         ttk.Button(top, text="Undo all changes here", command=self.reset).pack(side="left", padx=(12, 0))
         self.v_shore = tk.BooleanVar(value=True)       # the shore as the game draws it (Land and sea's 2nd row)
+        from . import settings
+        look = settings.get("map_look") or {}
+        # the climates under the sea drawn as fully as the land's (Climates); new land takes its neighbours' climate
+        # (Land and sea) - not the leftover under the water
+        self.v_sea_climates = tk.BooleanVar(value=look.get("sea_climates", True))
+        self.v_land_climate = tk.BooleanVar(value=look.get("land_climate", True))
         self.palette = ttk.Frame(self, padding=(0, 4))
         self.palette.pack(fill="x")
         self.v_colour = tk.StringVar()
@@ -179,6 +185,27 @@ class TerrainEditor(ttk.Frame):
             if self.mod is not None:
                 self.view.render()
 
+    def _look_toggled(self, key, var):
+        """A tick of this editor kept for the next start (settings 'map_look')."""
+        from . import settings
+        look = dict(settings.get("map_look") or {})
+        look[key] = var.get()
+        settings.put("map_look", look)
+
+    def _sea_climates_toggled(self):
+        self._look_toggled("sea_climates", self.v_sea_climates)
+        if self.cmap is not None:
+            self.show()
+
+    def climate_library(self):
+        """Terrain > Climates > Climate library... (gui_climatelib), the picked climate shown first."""
+        if self.mod is None:
+            return
+        from . import terrain as T
+        from .gui_climatelib import open_library
+        names = {"%d,%d,%d" % c: n for n, c, _ in T.climates(self.mod)}
+        open_library(self.app, self.mod, self.app.v_campaign.get(), names.get(self.v_colour.get()))
+
     def _rivers_toggled(self):
         """The rivers, fords and cliffs over the ground, on or off (the same switch as Layers > Rivers, kept)."""
         from . import settings
@@ -216,10 +243,13 @@ class TerrainEditor(ttk.Frame):
 
     def rebind(self, mod):
         lost = 0
-        fresh = self.mod is None or mod.data != self.mod.data
-        if self.mod is not None and self.dirty() and mod.data == self.mod.data and self._signature() != self._sig:
+        camp = self.app.v_campaign.get()
+        # another campaign is another map: the strokes (made on the old one's pictures - the App asked to drop them)
+        # and every count of its tiles go, as with another mod (they stayed and Apply wrote them into this one)
+        fresh = self.mod is None or mod.data != self.mod.data or camp != getattr(self, "_camp", camp)
+        if not fresh and self.dirty() and self._signature() != self._sig:
             lost = self.pending()
-        if lost or self.mod is None or mod.data != self.mod.data or not self.dirty():
+        if lost or fresh or not self.dirty():
             self.ground, self.features, self.climate, self.base = {}, {}, {}, {}
             self.heights, self._hvals, self.hbase = {}, {}, {}
             self.coast, self.cbase = {}, {}
@@ -228,6 +258,10 @@ class TerrainEditor(ttk.Frame):
             self._waste = None                          # the common wasteland: asked again (made on the last Apply?)
         self._off_said = ""                             # a check's finding belongs to the files it looked at
         self._sc = self._shape_ctx = None
+        self._rtiles = None                             # the regions' land tiles counted again on these files
+        self._last_river = None
+        self.__dict__.pop("_sea", None)                 # the sea's colour read again from this map_regions
+        self._camp = camp
         if getattr(self, "view", None) is not None:
             self.view.point_marks = []
         from .moddata import ModData
@@ -299,6 +333,7 @@ class TerrainEditor(ttk.Frame):
             self._apply_memory()
             self._waste_on_map()                        # land painted for a wasteland not written yet reads as its
         self.cmap.show_climates = self.v_what.get() == "climate"
+        self.cmap.show_sea_climates = self.v_sea_climates.get()
         self.cmap.show_heights = self._by_points()
         self.view.brush = self.v_brush.get()
         self.view.shore = self._shore() if self._shore_wanted() else None
@@ -361,6 +396,9 @@ class TerrainEditor(ttk.Frame):
         stroke then went into nothing: "'NoneType' object has no attribute '_optional_map'", report #141)."""
         if self.mod is None and self.app.mod is not None:
             self.app.open_terrain()
+        elif self.mod is not None and self.app.mod is not None and \
+                getattr(self, "_camp", None) != self.app.v_campaign.get():
+            self.rebind(self.app.mod)                   # another campaign picked since: its map, not the old one's
         return self.mod is not None and self.cmap is not None
 
     def _img(self, name):
@@ -409,13 +447,16 @@ class TerrainEditor(ttk.Frame):
         f = self._img("map_features.tga")
         return f.get(*xy) if f and 0 <= xy[0] < f.width and 0 <= xy[1] < f.height else None
 
-    def paint(self, tiles):
+    def paint(self, tiles, what=None, colour=None):
+        """The tile brush on tiles: what ('ground' | 'features' | 'climate' | 'coast') and colour as picked here,
+        or given (Maps > 3D paints with its own picks) - [(tile, colour shown)] of the tiles it took."""
         if not self._bound():
             return []
-        what = self.v_what.get()
+        what = what or self.v_what.get()
         if what == "coast":
             return self.paint_coast(tiles)
-        colour = tuple(int(v) for v in self.v_colour.get().split(",")) if self.v_colour.get() else None
+        if colour is None:
+            colour = tuple(int(v) for v in self.v_colour.get().split(",")) if self.v_colour.get() else None
         if colour is None:
             return []
         store = {"ground": self.ground, "climate": self.climate}.get(what, self.features)
@@ -426,34 +467,31 @@ class TerrainEditor(ttk.Frame):
             if last and max(abs(last[0] - tiles[0][0]), abs(last[1] - tiles[0][1])) >= 1:
                 tiles = T.river_path(last, tiles[0])
         took, why = [], None
+        turned = set()
+        if what == "ground":
+            # a sea ground on land / a land ground on the sea turns the tile, as Land and sea's tile brush does
+            # (regions, heights, ground) - freedom: by cells here too (a tester, R-20261014-093582); all the brush's
+            # tiles in one go, the shore round them risen and smoothed once (tile by tile a big brush lagged)
+            turn = [t for t in tiles if self._current(what, t) != colour and (colour in T.SEA) != self.cmap.is_sea(*t)]
+            if turn:
+                turned = {tuple(t) for t, _ in self.paint_coast(turn, mode="sea" if colour in T.SEA else "land")}
         for t in tiles:
             if self._current(what, t) == colour:
                 continue
-            if what == "ground" and (colour in T.SEA) != self.cmap.is_sea(*t):
-                # a sea ground on land / a land ground on the sea turns the tile, as Land and sea's tile brush
-                # does (regions, heights, ground) - freedom: by cells here too (a tester, R-20261014-093582)
-                if not self.paint_coast([t], mode="sea" if colour in T.SEA else "land"):
-                    why = self._coast_why or "the tile cannot turn into %s here" % (
-                        "sea" if colour in T.SEA else "land")
-                    continue
+            if what == "ground" and (colour in T.SEA) != self.cmap.is_sea(*t) and tuple(t) not in turned:
+                why = self._coast_why or "the tile cannot turn into %s here" % ("sea" if colour in T.SEA else "land")
+                continue
             why = T.paint_problem(self.cmap, what, t, colour, self.standing) or None
             if why:
                 continue
-            self.base.setdefault((what, t), self._current(what, t))
-            if self.base[(what, t)] == colour:
-                store.pop(t, None)
-            else:
-                store[t] = colour
             if what in ("ground", "climate"):
-                img = self._img("map_ground_types.tga" if what == "ground" else "map_climates.tga")
-                # a ground stays on its side of the waterline (the heights lead); each point's own colour kept
-                # for Undo - the tile's block is not one colour on the coast
-                land_at = T.land_points(self._img("map_heights.tga")) if what == "ground" else None
-                for (px, py), c in T.ground_changes({t: colour}, land_at).items():
-                    if img is not None and 0 <= px < img.width and 0 <= py < img.height:
-                        self.cbase.setdefault((what, (px, py)), img.get(px, py))
-                        img.set(px, py, c)
+                self._lay_tile(what, t, colour)
             else:
+                self.base.setdefault((what, t), self._current(what, t))
+                if self.base[(what, t)] == colour:
+                    store.pop(t, None)
+                else:
+                    store[t] = colour
                 self._set_px(self._img("map_features.tga"), t[0], t[1], colour)
             from .mapdata import GROUND_LOOK, CampaignMap
             took.append((t, GROUND_LOOK.get(colour) if what == "ground" else colour if what == "climate" else
@@ -464,6 +502,35 @@ class TerrainEditor(ttk.Frame):
                             ("   (not here: %s)" % why if why else ""))
         self.app._mark_work()
         return took
+
+    def _lay_tile(self, what, t, colour):
+        """Tile t's ground or climate made colour: kept for Undo, Preview and Apply, laid into its picture."""
+        store = self.ground if what == "ground" else self.climate
+        self.base.setdefault((what, t), self._current(what, t))
+        if self.base[(what, t)] == colour:
+            store.pop(t, None)
+        else:
+            store[t] = colour
+        img = self._img("map_ground_types.tga" if what == "ground" else "map_climates.tga")
+        # a ground stays on its side of the waterline (the heights lead); each point's own colour kept
+        # for Undo - the tile's block is not one colour on the coast
+        land_at = T.land_points(self._img("map_heights.tga")) if what == "ground" else None
+        for (px, py), c in T.ground_changes({t: colour}, land_at).items():
+            if img is not None and 0 <= px < img.width and 0 <= py < img.height:
+                self.cbase.setdefault((what, (px, py)), img.get(px, py))
+                img.set(px, py, c)
+
+    def _new_land_climate(self, tiles):
+        """New land tiles take the climate most land round them has (terrain.land_climate) - not the one left under
+        the sea; a climate painted on the sea here before stays (made ready for this land)."""
+        if not self.v_land_climate.get() or self._img("map_climates.tga") is None:
+            return
+        for t in tiles:
+            if t in self.climate or self.cmap.is_sea(*t):
+                continue
+            c = T.land_climate(self.cmap, t)
+            if c is not None and c != self.cmap.climate_at(*t):
+                self._lay_tile("climate", t, c)
 
     def _region_tiles(self):
         """{region: its land tiles now} - counted once, kept up to date by paint_coast."""
@@ -540,6 +607,8 @@ class TerrainEditor(ttk.Frame):
             else:
                 self.coast[t] = "land" if to_land else "sea"
             took.append((t, GROUND_LOOK.get(px["ground"][(2 * t[0] + 1, 2 * t[1] + 1)], (0, 0, 0))))
+        if took and to_land:
+            self._new_land_climate([t for t, _ in took])
         if took and to_land and heights is not None:      # land made tile by tile: what is inland now rises
             # only the land near this move can be further from the sea now (_from_sea looks 5 pixels out) - all the
             # stroke's pixels each move made it slower the longer it went on
@@ -749,6 +818,7 @@ class TerrainEditor(ttk.Frame):
                 self.coast[t] = got["tiles"][t]
             reg.set(t[0], t[1], c)
         self._coast_points(got)
+        self._new_land_climate([t for t, k in got["tiles"].items() if k == "land"])   # the ground made land first
         if got["kept"]:
             self.app.status.set(self.app.status.get() + "   (kept: %s)" % got["kept"][-1])
         return bool(got["heights"] or got["ground"] or got["regions"] or got["hgt"])
@@ -970,16 +1040,31 @@ class TerrainEditor(ttk.Frame):
         self._restore_to({}, {}, {}, {}, {}, None)
         self.app.status.set("Terrain: nothing painted.")
 
+    def swatches(self, what):
+        """[(label, [(colour, name, colour shown)])]: the brushes of what ('ground' | 'features' | 'climate') - this
+        tab's palette and the 3D map's (one list, both the same)."""
+        from .limits import engine_of, game_kind
+        from .mapdata import GROUND_LOOK, CampaignMap
+        if what == "ground":
+            land, sea = T.ground_brushes(game_kind(self.mod) if self.mod else None,
+                                         engine_of(self.mod) if self.mod else None)
+            items = [("land", land, T.GROUND), ("sea", sea, T.GROUND)]
+        elif what == "climate":
+            found = T.climates(self.mod) if self.mod else []
+            items = [("climates", [c for _, c, _ in found], {c: n for n, c, _ in found})]
+        else:
+            m2 = bool(self.mod) and game_kind(self.mod) == "medieval2"
+            items = [("marks", T.feature_brushes("medieval2" if m2 else "rome"), T.FEATURES)]
+        return [(label, [(c, names[c], GROUND_LOOK.get(c) if what == "ground" else c if what == "climate" else
+                          CampaignMap.FEATURE_LOOK.get(c, (20, 20, 20))) for c in colours])
+                for label, colours, names in items]
+
     def fill_palette(self):
         for w in self.palette.winfo_children():
             w.destroy()
         what = self.v_what.get()
         self._rivers_for_mode()
         if what == "ground":
-            from .limits import engine_of, game_kind
-            land, sea = T.ground_brushes(game_kind(self.mod) if self.mod else None,
-                                         engine_of(self.mod) if self.mod else None)
-            items = [("land", land, T.GROUND), ("sea", sea, T.GROUND)]
             self.hint.configure(text=(
                 "Left drag paints the picked ground, right click picks a tile's own, right drag moves the map. "
                 "A tile's ground decides movement, farming and what may stand there. A sea ground painted on land "
@@ -994,12 +1079,26 @@ class TerrainEditor(ttk.Frame):
                 "On Apply: map_ground_types.tga written, map.rwm deleted - the game builds its map again."))
         elif what == "climate":
             found = T.climates(self.mod) if self.mod else []
-            items = [("climates", [c for _, c, _ in found], {c: n for n, c, _ in found})]
+            from .gui_util import tip
+            tip(ttk.Checkbutton(self.palette, text="Climates on the water", variable=self.v_sea_climates,
+                                command=self._sea_climates_toggled),
+                "map_climates.tga has a climate under the sea too: the games' own maps keep the old coasts' climates "
+                "there. The game shows nothing of it on the water, but land made there (Land and sea) starts with "
+                "it - paint it here first, or let new land take its neighbours' climate (Land and sea).").pack(
+                side="top", anchor="w", padx=(4, 2))
+            if found:
+                tip(ttk.Button(self.palette, text="Climate library...", command=self.climate_library),
+                    "Every climate of the mod, how many tiles of this map it covers, and what it gives the game - "
+                    "the campaign map's trees and ground textures, the mountains, the battle map's ground, plants "
+                    "and water, the weather and sounds - file by file, line by line, pictures shown.").pack(
+                    side="top", anchor="w", padx=(4, 2), pady=(2, 4))
             self.hint.configure(text=(
                 "Left drag paints the picked climate, right click picks a tile's own. The climate decides the trees "
                 "and plants on the campaign and battle maps, the snow in winter and the heat (tiring in battle). "
-                "The climates are the mod's own (descr_climates.txt), drawn here in their colours over the land; "
-                "the sea keeps its climate. On Apply: map_climates.tga written, map.rwm deleted." if found else
+                "The climates are the mod's own (descr_climates.txt), drawn here in their colours over the land and, "
+                "with 'Climates on the water', over the sea too (the file has one there as well: what new land "
+                "gets); the sea's may be painted like the land's. On Apply: map_climates.tga written, map.rwm "
+                "deleted." if found else
                 "This mod has no descr_climates.txt, so its climates are not known here."))
         elif what == "coast":
             self._coast_palette()
@@ -1017,7 +1116,6 @@ class TerrainEditor(ttk.Frame):
         else:
             from .limits import game_kind
             m2 = bool(self.mod) and game_kind(self.mod) == "medieval2"
-            items = [("marks", T.feature_brushes("medieval2" if m2 else "rome"), T.FEATURES)]
             self.hint.configure(text=(
                 "Rivers, fords (the tiles where armies cross a river), river sources, cliffs and volcanoes: one per "
                 "tile in map_features.tga. A ford goes on the river's own line; 'nothing' rubs a mark out. The game "
@@ -1026,20 +1124,17 @@ class TerrainEditor(ttk.Frame):
                 "the game will not draw. Not under towns, ports or characters (the game refuses them there)." +
                 (" Land bridge: armies walk across a narrow strait (vanilla has 9, like the Bosporus and the Danish "
                  "islands) - paint a straight strip of 3 tiles: land, sea, land." if m2 else "")))
-        from .mapdata import GROUND_LOOK, CampaignMap
         first = None
         swatches = []
-        for label, colours, names in items:
+        for label, colours in self.swatches(what):
             ttk.Label(self.palette, text=label + ":").pack(side="top", anchor="w", padx=(4, 2))
             # each as wide as its words, wrapping at the side column's width as words in a line (report #338: the
             # buttons in a grid took the widest one's width and ran past the column)
             box = ttk.Frame(self.palette)
             box.pack(side="top", fill="x", padx=(4, 0))
-            for c in colours:
-                look = GROUND_LOOK.get(c) if what == "ground" else c if what == "climate" else \
-                    CampaignMap.FEATURE_LOOK.get(c, (20, 20, 20))
+            for c, name, look in colours:
                 hexc = "#%02x%02x%02x" % look
-                b = ttk.Radiobutton(box, text=names[c], value="%d,%d,%d" % c, variable=self.v_colour,
+                b = ttk.Radiobutton(box, text=name, value="%d,%d,%d" % c, variable=self.v_colour,
                                     style=theme.colour_style(hexc, "Toolbutton"), cursor="hand2")
                 b.pack(side="left", padx=1, pady=1)
                 swatches.append(b.cget("value"))
@@ -1100,10 +1195,16 @@ class TerrainEditor(ttk.Frame):
             "Find ground on the wrong side of the coast: land ground in the water, sea ground on the land.").pack(
             side="left", padx=(16, 0))
         tip(ttk.Checkbutton(more, text="Shore line", variable=self.v_shore, command=self._shore_toggled),
-            "From the zoom set in Settings > Campaign map ('shore line from zoom %', 300 % by default), a light line "
+            "From the zoom set in Settings > Campaign map ('shore line from zoom %', 500 % by default), a light line "
             "shows the shore exactly as the game will draw it (in every mode of this tab): "
             "the game cuts every square of four heights points into two triangles and lays the water at height 0 - "
             "so the shore runs between the points, not along the tiles.").pack(side="left", padx=(12, 0))
+        tip(ttk.Checkbutton(more, text="New land: neighbours' climate", variable=self.v_land_climate,
+                            command=lambda: self._look_toggled("land_climate", self.v_land_climate)),
+            "Land made from the sea takes the climate most land round it has (map_climates.tga). Off: it keeps the "
+            "climate that lay under the water - the games' own maps keep old coasts' climates there (Terrain > "
+            "Climates > Climates on the water shows them). A climate painted on that water first always "
+            "stays.").pack(side="left", padx=(12, 0))
         from .gui_util import one_line
         self.lbl_off = one_line(ttk.Label(more, width=1), getattr(self, "_off_said", ""), side="left", expand=True,
                                 padx=8)

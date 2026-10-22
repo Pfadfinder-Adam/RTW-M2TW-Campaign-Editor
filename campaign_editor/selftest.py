@@ -981,6 +981,27 @@ def s_roster_other(c, mod):
     return edit(mod, c.campaign, c.new, {"roster": ch})
 
 
+@step("Roster by buildings: {edited} gets a unit at a building's first level and every level above it",
+      "the unit in that building's recruitment list at its first level AND after the building grows")
+def s_roster_buildings(c, mod):
+    from . import factionbuildings as FB
+    from .edit import edit
+    items = FB.faction_chains(mod, c.edited)
+    units = [u for c2 in items for lv in c2["levels"] for u in lv["units"] if u["known"]]
+    for ch in items:
+        lvs = [lv for lv in ch["levels"] if lv["has"]]
+        if len(lvs) < 2:
+            continue
+        here = {u["unit"] for u in lvs[0]["units"]}
+        u = next((x["unit"] for x in units if x["unit"] not in here), None)
+        if u is None:
+            continue
+        levels = {lv["name"]: lv for lv in ch["levels"]}
+        pairs = FB.upward(ch, lvs[0]["name"], u, True, lambda n: any(x["unit"] == u for x in levels[n]["units"]))
+        return edit(mod, c.campaign, c.edited, {"roster": {k: g for k, g in pairs if g is not None}})
+    raise Skip("%s builds no chain of two levels with a unit to add" % c.edited)
+
+
 @step("Campaign-map figures: {edited}'s agent shown by another model", "its agent's figure on the campaign map")
 def s_figures(c, mod):
     from . import stratmodels as SM
@@ -1003,6 +1024,45 @@ def s_units(c, mod):
     E.write_new_record(plan, "unit", src, "ce test guard", {     # the window's own writer
         "dict": "ce_test_guard", "recruit": True, "owners": [c.edited, c.new],
         "texts": {"name": "CE Test Guard", "descr": "Made by the test mod", "descr_short": "Test unit"}})
+    return plan
+
+
+@step("Unit texts players read: CE Test Guard's name, short and long description changed",
+      "CE Test Guard is called 'CE Test Guard II' on its card and in the lists; its description window says "
+      "'Texts changed by the test mod'")
+def s_unit_texts(c, mod):
+    from . import editors as E
+    path = mod.text_file("export_units.txt")
+    if not path:
+        raise Skip("no export_units.txt")
+    plan = Plan(mod, "unit texts", "ce_test_guard", {})
+    E.set_text_values(plan, path, {"ce_test_guard": "CE Test Guard II",          # the Units editor's own writer
+                                   "ce_test_guard_descr_short": "Texts changed",
+                                   "ce_test_guard_descr": "Texts changed by the test mod"})
+    return plan
+
+
+@step("Delete unit, its first half: 'CE Test Gone' copied for {edited}, to be taken out by the next step",
+      "nothing to look at (the next step takes it out)")
+def s_unit_gone_made(c, mod):
+    from . import editors as E
+    src = unit_names(mod, c.edited, 1)[0]
+    plan = Plan(mod, "u", "u", {})
+    E.write_new_record(plan, "unit", src, "ce test gone", {
+        "dict": "ce_test_gone", "recruit": True, "owners": [c.edited],
+        "texts": {"name": "CE Test Gone", "descr": "Taken out by the test mod", "descr_short": "Taken out"}})
+    return plan
+
+
+@step("Delete unit: 'CE Test Gone' taken out with its recruit lines and cards",
+      "CE Test Gone is in no recruitment list and not in custom battle; the game loads with no error about it")
+def s_unit_delete(c, mod):
+    from . import editors as E
+    plan = Plan(mod, "unit", "ce test gone", {})
+    try:
+        E.delete_unit(plan, "ce test gone")
+    except ValueError:
+        raise Skip("CE Test Gone was not made (the step before)")
     return plan
 
 
@@ -2869,6 +2929,8 @@ LOOK = "only shows, writes nothing - tried in the window by check-scripts/smoke.
 COVERAGE = {
     "Draw from the map (faction-select map)": ["s_select_map_drawn"],
     "New faction": ["s_new_faction"],
+    "New faction keeps nothing of the template's own (story texts, people, movies, leader's face, town flag, 3D "
+    "symbol, select map)": ["s_new_faction"],
     "New mod folder": RUN + " (CE_Test is made with it)",
     "Edit faction (names, colours, money, towns, garrisons)": ["s_edit"],
     "Victory conditions": ["s_victory"],
@@ -2904,6 +2966,12 @@ COVERAGE = {
     "Settlement names by culture": ["s_culture_names"],
     "Terrain editor: ground and heights": ["s_terrain"],
     "Terrain editor: features and climates": ["s_features"],
+    "Terrain editor: climates on the water, new land takes its neighbours' climate":
+        "unit test test_land_climate_and_sea_climates_view - a view and the Land and sea brush's own choice; "
+        "s_features writes map_climates.tga the same way",
+    "Climate library": "unit test test_climate_passport - it only reads (nothing written)",
+    "Climate library: New climate from this..., Change...": "unit test test_climate_copy_and_slots_changed (written, "
+        "read back, Restore byte-exact) - a new climate is for the modder's own map; the test mod paints none",
     "Land and sea": ["s_coast"],
     "Land and sea: the ground put right under the heights": ["s_ground_coast"],
     "Land and sea: the shape brush and Smooth the coast (the coast as a shape)": ["s_coast_shape"],
@@ -2916,10 +2984,13 @@ COVERAGE = {
     "Religions (Medieval II, Barbarian Invasion)": ["s_religion"],
     "New / Edit faction: Culture": ["s_culture"],
     "Roster: give": ["s_roster", "s_roster_other"],
+    "Roster by buildings: a unit at a level and every level above": ["s_roster_buildings"],
     "Roster: take away": ["s_roster_take"],
     "Campaign-map figures": ["s_figures"],
     "Unit editor: lines": ["s_unit_fields"],
     "Unit editor: new unit step by step": ["s_units"],
+    "Unit editor: delete a unit": ["s_unit_gone_made", "s_unit_delete"],
+    "Unit editor: texts players read": ["s_unit_texts"],
     "Unit editor: replace the battle model": ["s_model"],
     "Unit editor: your own files for a battle model (texture, model file)": ["s_own_model"],
     "Recolour freely (any colour of any picture; Unit editor / Models texture cards, a picture looked at closely)":
@@ -2975,6 +3046,9 @@ COVERAGE = {
     "Make the campaign map 3 x bigger": RUN + " (the x3 copy, when asked)",
     "Check mod files": RUN + " (after every step)",
     "Check mod files: Take them out (untouched copies)": ["s_untouched_copies"],
+    "New faction > From zero... (culture, names, free colours, emblem, the culture's names; recoloured in the same "
+    "Apply)": ["s_new_faction", "s_recolour"],
+    "Check mod files: Traces of another faction": RUN + " (the test mod's new factions are listed after every step)",
     "Restore a backup": RUN + " (check-scripts/testmod.py restores every step byte for byte)",
     "The game's log in plain words": LOOK,
     "View in 3D, play a sound": LOOK,
@@ -2982,6 +3056,8 @@ COVERAGE = {
     "Report a bug / Suggest, Answers to my reports": "sends to the internet - tried by hand",
     "Start the game (the bottom bar)": "starts the game - tried by hand: start CE_Test with it",
     "Credits": LOOK,
+    "Authors and sources of this mod": "unit test SourcesTest - it writes only its own list and text file into the "
+                                       "mod folder, never a game file",
     "A mod from zero, step by step": "unit test test_mod_from_zero_steps (it only opens the editor's own works)",
     "Interface: Sprite sheets (every sprite of the sheets the game reads)": LOOK,
     "Delete this mod's folder": "deletes for good - tried by hand on a copy (the unit test checks what it refuses)",
@@ -3012,7 +3088,8 @@ UI = {
     "Make the campaign map 3 x bigger": "Make the campaign map 3 x bigger",
     "Check and install a pack": "Check and install a pack", "Campaign rules": "Campaign rules",
     "Traits and retinue": "Traits and retinue: a new trait", "Events and later factions": "Events",
-    "Module builder": "Module builder", "Credits": "Credits", "Delete this mod's folder": "Delete this mod's folder",
+    "Module builder": "Module builder", "Credits": "Credits",
+    "Authors and sources of this mod": "Authors and sources of this mod", "Delete this mod's folder": "Delete this mod's folder",
     # the work bar's window buttons (once Tools entries)
     "Events": "Events", "Recolour": "Recolour a faction's pictures",
     "Culture names": "Settlement names by culture", "Many towns": "Many towns: a building, random garrisons",

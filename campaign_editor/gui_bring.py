@@ -612,6 +612,10 @@ class BringWindow(StepWindow):
                         "now?%s" % (facs[0], "\n\n(%s: Recolour... on its own Faction tab later.)" % ", ".join(
                             facs[1:]) if len(facs) > 1 else ""), yes="Recolour...", no="Not now"):
             self.app.recolour_window(facs[0])
+        from .gui_sources import noted                # whose work it is: noted, the author asked for (no block)
+        names = list(self.picked)
+        noted(self.app, self.src.data, "%s %s" % (self.what if n != 1 else self.what[:-1], ", ".join(names[:4]) +
+                                                    (", ..." if len(names) > 4 else "")))
 
 
 def _game(mod):

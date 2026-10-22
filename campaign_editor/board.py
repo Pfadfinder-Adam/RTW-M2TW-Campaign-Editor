@@ -114,3 +114,32 @@ def snap_box(box, others=(), grid=GRID, zoom=1.0, px=SNAP_PX, to_grid=True):
     elif to_grid:
         y = snap(y, grid)
     return x, y, stuck
+
+
+def lines_of(others):
+    """The lines a dragged box may stick to: ([x of each left / middle / right], [y of each top / middle / bottom])."""
+    xs = [o[0] + k for o in others for k in (0, o[2] / 2, o[2])]
+    ys = [o[1] + k for o in others for k in (0, o[3] / 2, o[3])]
+    return xs, ys
+
+
+def snap_edge(v, lines, grid=GRID, zoom=1.0, px=SNAP_PX, to_grid=True):
+    """One edge being dragged (a corner sizing a box): onto the nearest line within px screen pixels, else onto the
+    grid (to_grid), else where it is. -> (where it lands, the line it stuck to or None)."""
+    reach = px / max(zoom, 1e-6)
+    near = min(lines, key=lambda line: abs(line - v), default=None)
+    if near is not None and abs(near - v) <= reach:
+        return near, near
+    return (snap(v, grid) if to_grid else v), None
+
+
+def guide_lines(box, others, eps=0.5):
+    """The guide lines to draw for a box laid down: ([x], [y]) of the other boxes' edges and middles its own edges and
+    middles lie on (Obsidian Canvas / Figma's pink lines: 'this one stands on that one's line')."""
+    x, y, w, h = box
+    xs, ys = lines_of(others)
+    mine_x = (x, x + w / 2, x + w)
+    mine_y = (y, y + h / 2, y + h)
+    gx = sorted({line for line in xs if any(abs(line - m) <= eps for m in mine_x)})
+    gy = sorted({line for line in ys if any(abs(line - m) <= eps for m in mine_y)})
+    return gx, gy
