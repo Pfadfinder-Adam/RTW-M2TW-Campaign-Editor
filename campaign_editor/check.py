@@ -432,7 +432,11 @@ def check_mod(mod, campaign, deep=False, progress=None, found=None):
     say("CHARACTERS: %d in descr_strat.txt" % nchar)
     for n in characters_after_tree(s):
         bad("%s: a character stands after the family tree lines - the game crashes" % n)
-    from .strat import empty_armies
+    from .strat import empty_armies, stray_units
+    for _, a in stray_units(s):
+        bad("%s - the game stops reading the factions there: this faction's family and every faction after it "
+            "(the rebels too) are lost, and playing one of them crashes the start; take the line out or put it "
+            "under an army" % a)
     for a in empty_armies(s):
         if not a.startswith("the garrison of "):     # a town's own one is said with its town below
             bad("%s: an army with no unit - the game stops reading the campaign there ('Must add at least one unit "

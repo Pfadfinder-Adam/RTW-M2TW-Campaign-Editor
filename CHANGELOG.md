@@ -29,6 +29,7 @@
 - New mod folder puts no switched-off engine settings files (descr_ex, descr_caps_ex) in: the mod runs on the engine's defaults as before; the editor writes the line a change needs, Check mod files' Copy them in brings the whole list.
 
 ### Fixed
+- Two changes kept for one Apply (a town's new garrison and new agents on the Map) could leave the garrison's units under an agent - the game then stopped reading the factions there: the factions after it were missing, the rebels' towns empty and playing one of them crashed -> the units stay with their army; Check mod files names such a line and a write never makes a new one.
 - Settings: typing a zoom number redrew the map at every key and held the window, so Close needed a second click -> the map is drawn once the typing stops.
 - New faction: a clone whose template has the same full and short name (the Gauls: Gaul) got its full name as the short one, and words grown from the name (Gaulish) half swapped -> the short name is the one you typed, such words take the new adjective.
 - Units > Battle model: war dogs and pigs had no picture of their own, only their handlers' - the animals are listed now with their own texture, View in 3D and Save its files; chariots and siege engines show their texture too, as do soldiers whose model has no texture line (Rome).

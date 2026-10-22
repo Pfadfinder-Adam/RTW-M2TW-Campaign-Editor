@@ -310,7 +310,7 @@ class Plan:
         """What this write would make that the game cannot read, judged on the files as they will be written (so the
         order of the changes does not matter): an army with no unit (the game stops reading the campaign there - a
         report: most factions vanished), two armies on one tile. One the mod has already is its own and stays."""
-        from .strat import Strat, empty_armies, shared_army_tiles
+        from .strat import Strat, empty_armies, shared_army_tiles, stray_units
         out = []
         changed = self.changed_files()
         for path, f in self.files.items():
@@ -324,6 +324,12 @@ class Plan:
                            "add at least one unit to an army') and every faction after it is lost; give it a unit or "
                            "take it off the map" % (", ".join(new[:8]) + (" and %d more" % (len(new) - 8)
                                                                             if len(new) > 8 else "")))
+            had = {w.split(" (line ")[0] for _, w in stray_units(old)} if old else set()
+            for _, w in stray_units(Strat(f)):
+                if w.split(" (line ")[0] not in had:
+                    out.append("%s - the game stops reading the factions there and every faction after it is lost "
+                               "(the rebels too); this write would leave it so" % w)
+                    break
             was = shared_army_tiles(old) if old else {}
             for xy, names in sorted(shared_army_tiles(Strat(f)).items()):
                 if not set(names) - set(was.get(xy, [])) or self._engine_takes(names):
@@ -738,8 +744,17 @@ def merge_lines(base, ours, theirs):
             a2, a_new = mine_at.pop(i)
             if i in other_at and other_at[i] == (a2, a_new):
                 other_at.pop(i)                       # the same change made twice: once
-            elif i in other_at and other_at[i][0] == i:   # theirs inserts here too: theirs' lines first
-                out += other_at.pop(i)[1]
+            elif i in other_at and other_at[i][0] == i:   # theirs inserts here too
+                b_new = other_at.pop(i)[1]
+                # the one that goes on with the lines above it (a unit after an army's units) first, else theirs:
+                # a town's new garrison and a new agent written at the end of one faction block left the units
+                # under the agent - the game stopped reading the factions there (Keapon_Laffin, 2026-10-22)
+                if a2 == i and _goes_on(base[i - 1] if i else None, a_new) and \
+                        not _goes_on(base[i - 1] if i else None, b_new):
+                    out += a_new
+                    a_new = b_new
+                else:
+                    out += b_new
             out += a_new
             if a2 > i:
                 i = a2
@@ -754,6 +769,16 @@ def merge_lines(base, ours, theirs):
             out.append(base[i])
         i += 1
     return out
+
+
+def _goes_on(above, lines):
+    """lines begin with the same first word as the line above them - they go on with it (more units of one army)."""
+    from .textio import tokens
+    first = next((x for x in lines if x.strip()), None)
+    if above is None or first is None:
+        return False
+    a, b = tokens(above)[:1], tokens(first)[:1]
+    return bool(a) and a == b
 
 
 def rebased(plan):
