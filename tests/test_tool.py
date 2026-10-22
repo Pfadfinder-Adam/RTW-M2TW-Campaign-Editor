@@ -21381,6 +21381,12 @@ class CampaignScriptTest(unittest.TestCase):
 
             def note(self, f, text):
                 self.notes.append(text)
+
+            def warn(self, f, text):
+                self.notes.append("WARN " + text)
+        plan = P(TextFile.from_bytes("campaign_script.txt", self.TEXT.encode("latin-1")))
+        CS.plan_remove(plan, "x", ["wait_monitors@15"])        # monitors stay: without it they never react - said
+        self.assertTrue(any(n.startswith("WARN wait_monitors") for n in plan.notes), plan.notes)
         plan = P(TextFile.from_bytes("campaign_script.txt", self.TEXT.encode("latin-1")))
         self.assertEqual(CS.plan_remove(plan, "x", ["monitor_event@6", "declare_counter@3"]), 2)
         left = [l.strip() for l in plan.f.texts() if l.strip()]
@@ -21388,6 +21394,7 @@ class CampaignScriptTest(unittest.TestCase):
                                 "wait_monitors", "end_script"])
         CS.plan_remove(plan, "x", [p["id"] for p in CS.read(plan.f)])
         self.assertEqual([l.strip() for l in plan.f.texts() if l.strip()], ["; the mod's script", "script", "end_script"])
+        self.assertFalse(any(n.startswith("WARN") for n in plan.notes), plan.notes)     # no monitor left: no word
 
 
 class ReaderChecksMoreTest(unittest.TestCase):
