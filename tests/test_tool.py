@@ -10735,6 +10735,19 @@ building smith
             gl.set_layers(0, 0, np.full((9, 9), sea, np.uint16))                         # a brush: all sand
             mid = gl.render(cam, 64, 40)[20, 12].astype(int)
             self.assertGreater(mid[0], mid[2] + 40)
+            # the colours over the map (Maps > 3D Layers: climates, regions): a blue climate over the sand shows,
+            # none takes it off again
+            clim = np.zeros((9, 9, 3), np.uint8)
+            clim[...] = (0, 0, 255)
+            tint = data.tint_of("climates", climate=clim)
+            self.assertEqual((tint.shape, tuple(tint[0, 0])), ((4, 4, 4), (0, 0, 255, 255)))
+            gl.set_tint(tint)
+            blue = gl.render(cam, 64, 40)[20, 12].astype(int)
+            self.assertGreater(blue[2], mid[2] + 40)
+            gl.set_tint(None)
+            self.assertTrue(np.array_equal(gl.render(cam, 64, 40)[20, 12].astype(int), mid))
+            regs = np.zeros((4, 4, 3), np.uint8)
+            self.assertEqual(int(data.tint_of("regions", regions=regs)[3, 0, 3]), 255)          # land shows
         finally:
             gl.release()
 
@@ -11225,6 +11238,22 @@ building smith
         me.v_paint, me._last_tile = SimpleNamespace(get=lambda: "land"), None
         Map3DView._tiles_tick(me)
         self.assertEqual(calls[-1][:2], ("land", None))                 # the Land and sea brush, by tile
+        # the colours over the map (Layers): what the brushes left, sent to the card - none takes them off
+        tints = []
+        me = SimpleNamespace(gl=SimpleNamespace(set_tint=tints.append, data=SimpleNamespace(
+            tint_of=lambda kind, climate=None, regions=None: (kind, climate is not None, regions is not None))),
+            v_tint=SimpleNamespace(get=lambda: "climates"), _source=lambda: "mod",
+            app=SimpleNamespace(v_campaign=SimpleNamespace(get=lambda: "imperial_campaign")), draw=lambda: None)
+        from unittest import mock
+        try:
+            import numpy  # noqa: F401
+        except ImportError:                              # CI's test job: the rest needs NumPy
+            return
+        with mock.patch("campaign_editor.terrain3d._picture", lambda mod, camp, name: "picture"):
+            Map3DView._send_tint(me)
+        me.v_tint = SimpleNamespace(get=lambda: "none")
+        Map3DView._send_tint(me)
+        self.assertEqual(tints, [("climates", True, False), None])
         # the hover's words: a character's name and what he is, a town's name and owner, a resource's name
         app._map_chars["rome:0"].update(kind="general", faction="romans_julii", army=True, units=5)
         mv.cmap, mv.owners = SimpleNamespace(info={"Latium": {"settlement": "Roma"}}), {"Latium": "romans_senate"}

@@ -87,6 +87,9 @@ as above, or tile by tile **Ground**, **Rivers, cliffs, volcanoes...**, **Climat
 palette), **Land (tiles)** or **Sea (tiles)** (the Land and sea tile brushes). A white square on the ground shows the
 tiles it paints (size 1 one tile, 2 a square of 3 x 3...); the ground and climate show at once, the mountains,
 rivers, trees and borders a moment after the stroke. The Terrain editor's Undo, Preview and Apply are shared.
+**Layers > colours over the map** lays each tile's climate colour (the sea's too - what land raised there will
+get) or its region's colour over the 3D map, and follows the brushes as you paint; picking the Climates brush turns
+the climates on by itself.
 **Whole map** puts the view back. It needs a graphics card with OpenGL 3.3 (any from the last fifteen years); without
 one the bar says why. The game's own **mountains, hills and volcanoes** stand on it too
 (`descr_aerial_map_tile_models.txt`, the models in `terrain/aerial_map/tile_models`), placed as the game places them:

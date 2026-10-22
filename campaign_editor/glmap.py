@@ -248,6 +248,20 @@ class MapData:
         gi = np.where(sea, keys.index("beach"), gi)
         return self._table[ci, gi].astype(np.uint16)
 
+    def tint_of(self, kind, climate=None, regions=None):
+        """The colours laid over the map, a tile each ((H, W, 4) uint8, top row first): 'climates' - each tile's
+        climate colour (map_climates, (h, w, 3) top row first), the sea's too: what new land made there gets;
+        'regions' - each land tile's map_regions colour ((H, W, 3) top row first), the sea left clear."""
+        H, W = (self.rows - 1) // 2, (self.cols - 1) // 2
+        out = np.zeros((H, W, 4), np.uint8)
+        if kind == "climates" and climate is not None and climate.shape[:2] == self.heights.shape:
+            out[..., :3] = climate[1::2, 1::2][:H, :W]
+            out[..., 3] = 255
+        elif kind == "regions" and regions is not None and regions.shape[:2] == (H, W):
+            out[..., :3] = regions
+            out[..., 3] = np.where(self.heights[1::2, 1::2][:H, :W] > 0, 255, 0)
+        return out
+
     def refresh_ground(self, mod, campaign):
         """The brushes changed the ground, climates or regions in memory (land raised out of the water, land sunk
         under it): what the tile models, trees and borders stand on read again, each point's picture made again -
@@ -726,9 +740,22 @@ flat out float kind_v;
 void main() { g = pos.xz * 2.0; n = nrm; kind_v = kind; gl_Position = mvp * vec4(pos, 1.0); }
 """
 
+# colours laid over the map to see what is painted (Maps > 3D: the climates - on the water too -, the regions): one
+# texel a tile, top row first; its alpha how much it shows
+TINT_GLSL = """
+uniform sampler2D tint;
+uniform int tinted;
+vec3 tinted_by(vec3 c, vec2 tile) {
+    if (tinted == 0) return c;
+    ivec2 ts = textureSize(tint, 0);
+    vec4 t = texelFetch(tint, clamp(ivec2(floor(tile)), ivec2(0), ts - 1), 0);
+    return mix(c, dec(t.rgb), t.a * 0.55);
+}
+"""
+
 TERRAIN_FS = """
 #version 330
-""" + COLOUR_GLSL + """
+""" + COLOUR_GLSL + TINT_GLSL + """
 uniform vec3 to_light;
 uniform vec3 ambient;
 uniform vec3 diffuse;
@@ -788,6 +815,7 @@ void main() {
         float sum = max(w0 + w1 + w2 + w3, 1e-4);
         col = (pic(l0, t) * w0 + pic(l1, t) * w1 + pic(l2, t) * w2 + pic(l3, t) * w3) / sum;
     }
+    col = tinted_by(col, g * 0.5);
     vec3 light = ambient + diffuse * max(dot(normalize(n), to_light), 0.0);
     colour = vec4(enc(col * (linear == 1 ? light : min(light, vec3(1.0)))), 1.0);
 }
@@ -999,10 +1027,10 @@ vec3 sea(vec2 w) {                      // the open water's colour at world poin
 
 SEA_FS = """
 #version 330
-""" + SEA_GLSL + """
+""" + SEA_GLSL + TINT_GLSL + """
 out vec4 colour;
 in vec2 w;
-void main() { colour = vec4(enc(sea(w)), 1.0); }
+void main() { colour = vec4(enc(tinted_by(sea(w), w)), 1.0); }
 """
 
 RIVER_VS = """
@@ -1224,6 +1252,9 @@ class GLMap:
                            for k, v in data.model_pictures.items()}
         self.model_masks = {k: self._picture(v, 4, (255, 255, 255, 255)) for k, v in data.model_masks.items()}
         self._white = self._picture(None, 4, (255, 255, 255, 255))
+        H, W = (rows - 1) // 2, (cols - 1) // 2
+        self.tint = self._keep(ctx.texture((max(1, W), max(1, H)), 4, bytes(max(1, W) * max(1, H) * 4)))
+        self.tint.filter = (ctx.NEAREST, ctx.NEAREST)            # a tile's own colour, its edges sharp
         # the grid: one point per heights pixel, two triangles a half-tile square along its SW -> NE diagonal
         gy, gx = np.mgrid[0:rows, 0:cols].astype(np.float32)
         pts = np.stack([gx.ravel(), gy.ravel()], 1)
@@ -1269,6 +1300,11 @@ class GLMap:
                 if name in prog:
                     prog[name].value = unit
             prog["mode"].value = 0 if prog is self.terrain else 1
+        for prog in (self.terrain, self.under, self.sea):
+            if "tint" in prog:
+                prog["tint"].value = 13
+            if "tinted" in prog:
+                prog["tinted"].value = 0
         self.over["pic"].value, self.over["mask"].value = 9, 10
         self.tree["pic"].value = 9
         self.obj["pic"].value = 9
@@ -1411,6 +1447,15 @@ class GLMap:
         self.coast_dirty = True                                  # the shore traced again at the next frame
         self.models_stale = True                                 # the tile models laid again after the stroke
 
+    def set_tint(self, rgba):
+        """Colours over the map: (H, W, 4) uint8, a tile each, top row first (MapData.tint_of), or None for none."""
+        on = rgba is not None
+        if on:
+            self.tint.write(np.ascontiguousarray(rgba, np.uint8).tobytes())
+        for prog in (self.terrain, self.under, self.sea):
+            if "tinted" in prog:
+                prog["tinted"].value = int(on)
+
     def set_layers(self, row, col, block):
         """The ground picture (layer) of a block of points from (row, col) changed on the card."""
         block = np.asarray(block, np.uint16)
@@ -1480,6 +1525,7 @@ class GLMap:
         self.water.use(4)
         self.waves.use(5)
         self.sky.use(6)
+        self.tint.use(13)
         if show.get("sea", True):
             self.sea["mvp"].write(mvp_bytes)
             if "eye" in self.sea:

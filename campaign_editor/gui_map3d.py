@@ -41,6 +41,13 @@ HINT = ("The campaign map in 3D, drawn by the graphics card the way the games dr
         "would not take it; Esc puts it back.")
 
 
+# colours laid over the map to see what is painted (Layers)
+TINTS = (("none", "None"), ("climates", "Climates (the sea's too)"), ("regions", "Regions"))
+TINT_TIPS = {"climates": "Each tile in its climate's colour (map_climates.tga, descr_climates.txt's colours), the "
+                         "sea's too: land raised there takes the climate most land round it has, unless one was "
+                         "painted on that water first.",
+             "regions": "Each land tile in its region's colour (map_regions.tga): the region it belongs to."}
+
 # what Paint paints on the 3D map: the heights (by point), or one of the Terrain editor's tile brushes
 PAINTS = (("heights", "Heights"), ("ground", "Ground"), ("features", "Rivers, cliffs, volcanoes..."),
           ("climate", "Climates"), ("land", "Land (tiles)"), ("sea", "Sea (tiles)"))
@@ -72,12 +79,19 @@ class Map3DView(ttk.Frame):
         from .gui_util import DropPanel
         self.v_show = {key: tk.BooleanVar(value=True) for key, _ in LAYERS}
         self.v_moving = tk.BooleanVar(value=True)
+        self.v_tint = tk.StringVar(value="none")        # colours over the map: 'none' | 'climates' | 'regions'
 
         def build_layers(f):
             for key, label in LAYERS:
                 ttk.Checkbutton(f, text=label, variable=self.v_show[key], command=self._layers_changed).pack(anchor="w")
             ttk.Checkbutton(f, text="The surf and the trees move", variable=self.v_moving,
                             command=self._layers_changed).pack(anchor="w")
+            ttk.Separator(f).pack(fill="x", pady=4)
+            ttk.Label(f, text="colours over the map:").pack(anchor="w")
+            from .gui_util import tip as tip_
+            for val, text in TINTS:
+                tip_(ttk.Radiobutton(f, text=text, value=val, variable=self.v_tint, command=self._send_tint),
+                     TINT_TIPS.get(val, "")).pack(anchor="w")
         lb = ttk.Button(bar, text="Layers \u25be")
         lb.pack(side="left", padx=(theme.BUTTON_GAP * 2, 0))
         self._layers_panel = DropPanel(lb, build_layers)
@@ -345,6 +359,8 @@ class Map3DView(ttk.Frame):
                           "left out): %s" % (len(missing), ", ".join(missing)))
             except Exception:
                 pass
+        if self.v_tint.get() != "none":
+            self._send_tint(draw=False)
         self.draw()
         self._animate()
         return True
@@ -506,6 +522,9 @@ class Map3DView(ttk.Frame):
         body = ttk.Frame(f)
 
         def picked():
+            if self.v_paint.get() == "climate" and self.v_tint.get() == "none":
+                self.v_tint.set("climates")              # the climates painted are seen (the sea's too)
+                self._send_tint()
             for w in body.winfo_children():
                 w.destroy()
             self._brush_body(body, ed)
@@ -1147,6 +1166,30 @@ class Map3DView(ttk.Frame):
                   np.frombuffer(p.raw, np.uint8).reshape(p.height, p.width, 3)[y0:y1 + 1, x0:x1 + 1][::-1]
                   for p in pics]
         self.gl.set_layers((d.rows - 1) - y1, x0, d.layers_of(blocks[0], blocks[1], metres <= 0))
+        if self.v_tint.get() != "none":
+            self._send_tint(draw=False)
+
+    def _send_tint(self, draw=True):
+        """The colours over the map (Layers: climates, regions, none) from the pictures as the brushes leave them,
+        to the card."""
+        if self.gl is None:
+            return
+        import numpy as np
+        from . import terrain3d as T3
+        kind, mod, camp = self.v_tint.get(), self._source(), self.app.v_campaign.get()
+        rgba = None
+        try:
+            if kind == "climates":
+                rgba = self.gl.data.tint_of(kind, climate=T3._picture(mod, camp, "map_climates.tga"))
+            elif kind == "regions":
+                img = mod.region_map(camp)
+                regions = np.frombuffer(bytes(img.raw), np.uint8).reshape(img.height, img.width, 3)[::-1]
+                rgba = self.gl.data.tint_of(kind, regions=regions)
+        except Exception as e:                           # said in the bar, the map still drawn
+            self.lbl.configure(text="the colours over the map cannot be shown: %s" % e)
+        self.gl.set_tint(rgba)
+        if draw:
+            self.draw()
 
     # ---- the mouse and keys ----
     def _press(self, e, how):
