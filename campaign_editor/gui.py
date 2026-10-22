@@ -2431,8 +2431,9 @@ class App(tk.Tk):
         if letter == "a":
             if w is not None and w.winfo_class() in ("Text",):
                 w.tag_add("sel", "1.0", "end-1c")
-            elif w is not None and w.winfo_class() in ("Entry", "TEntry", "TCombobox"):
-                w.selection_range(0, "end")
+            elif w is not None and w.winfo_class() in ("Entry", "TEntry", "TCombobox", "TSpinbox", "Spinbox"):
+                w.selection_range(0, "end")             # a spin box too (the tester's x box became '372382')
+                w.icursor("end")
             return "break"
         shift = bool(e.state & 0x1)
         if letter == "z":
