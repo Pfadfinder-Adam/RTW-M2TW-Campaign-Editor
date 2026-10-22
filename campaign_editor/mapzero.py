@@ -234,10 +234,40 @@ def _swap_xy(line, xy):
     return re.sub(r"x\s*\d+\s*,\s*y\s*\d+", "x %d, y %d" % xy, line, count=1)
 
 
-def _settlement(lines, st, region, creator):
-    """A settlement block copied with its region and its creator changed."""
+def _port_chain(chain):
+    """A chain whose building stands in the port (Rome's port_buildings, Medieval II's port / castle_port)."""
+    c = chain.lower()
+    return c in ("port_buildings", "port", "castle_port") or c.startswith("port_") or c.endswith("_port")
+
+
+def _drop_port_buildings(block):
+    """The settlement's lines without its port buildings' blocks (building { type <port chain> <level> }): its
+    region has no port on the new map (the tester, 2026-10-22: 'Settlement specifies port, but this region is not
+    allowed a port')."""
+    out, i = [], 0
+    while i < len(block):
+        if (tokens(strip_comment(block[i])) or [""])[0] == "building":
+            j, typ = i + 1, None
+            while j < len(block):
+                t = tokens(strip_comment(block[j]))
+                if t[:1] == ["type"] and len(t) > 1:
+                    typ = t[1]
+                if t[:1] == ["}"]:
+                    break
+                j += 1
+            if typ and _port_chain(typ):
+                i = j + 1
+                continue
+        out.append(block[i])
+        i += 1
+    return out
+
+
+def _settlement(lines, st, region, creator, port=True):
+    """A settlement block copied with its region and its creator changed; port False: its port buildings left out
+    (its region has no port on the new map)."""
     out = []
-    for l in lines[st.start:st.end]:
+    for l in (lines[st.start:st.end] if port else _drop_port_buildings(lines[st.start:st.end])):
         t = tokens(strip_comment(l))
         if t[:1] == ["region"]:
             l = re.sub(r"(\bregion\s+)\S+", lambda m: m.group(1) + region, l)
@@ -287,7 +317,7 @@ def _strat_text(mod, campaign, main, picked, lay, resource, rome):
         out += block_top(fb)
         mine = [r for r, o in picked if o == f]
         for r in mine:
-            out += _settlement(lines, fb.settlements[0], r, f)
+            out += _settlement(lines, fb.settlements[0], r, f, port=r == picked[0][0])
         leader = next((c for c in fb.characters if c.role == "leader"), None) or next(
             (c for c in fb.characters if c.named), None)
         out.append(_swap_xy(lines[leader.start], towns[mine[0]]))
@@ -301,7 +331,7 @@ def _strat_text(mod, campaign, main, picked, lay, resource, rome):
         rebel_name = (other.name if other else leader.name).replace("sub_faction", "").strip()
         out += block_top(sb)
         for r in [r for r, o in picked if o == "slave"]:
-            out += _settlement(lines, sb.settlements[0], r, main)
+            out += _settlement(lines, sb.settlements[0], r, main, port=r == picked[0][0])
         rc = next((c for c in sb.characters if any(tokens(l)[:1] == ["army"] for l in lines[c.start:c.end])),
                   sb.characters[0] if sb.characters else None)
         if rc is not None:

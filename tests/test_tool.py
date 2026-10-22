@@ -3449,6 +3449,21 @@ building smith
         self.assertEqual(sum(len(fb.settlements) for fb in st.factions), n)
         self.assertEqual({s.region for fb in st.factions for s in fb.settlements}, set(regions))
 
+    def test_map_from_zero_leaves_port_buildings_where_no_port_is(self):
+        """The tester, 2026-10-22 (6 regions): Etruria's and Apulia's towns kept 'type port_buildings port' on the new
+        map where only the main region has a port - 'Settlement specifies port, but this region is not allowed a
+        port'. A town of a region without a port loses its port buildings, the rest stays."""
+        from campaign_editor import mapzero as MZ
+        block = ["settlement", "{", "\tlevel town", "\tregion Etruria", "\tbuilding", "\t{", "\t\ttype core_building wooden_pallisade",
+                 "\t}", "\tbuilding", "\t{", "\t\ttype port_buildings port", "\t}", "\tbuilding", "\t{",
+                 "\t\ttype castle_port c_port", "\t}", "}"]
+        out = MZ._drop_port_buildings(block)
+        self.assertNotIn("\t\ttype port_buildings port", out)
+        self.assertNotIn("\t\ttype castle_port c_port", out)
+        self.assertIn("\t\ttype core_building wooden_pallisade", out)
+        self.assertEqual(out.count("\tbuilding"), 1)
+        self.assertEqual(out[-1], "}")
+
     def test_campaign_hud_laid_out_as_the_engine(self):
         """Interface > Campaign HUD (the engines' places, hudlayout): the HUD's bottom at 768, its top 768 - the LEFT
         panel's height, the MIDDLE panel on the bottom, the pieces from the mod's own sheet; a changed page shows."""
