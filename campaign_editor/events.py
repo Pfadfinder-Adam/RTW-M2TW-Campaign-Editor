@@ -83,6 +83,53 @@ def date_key(date, rome):
     return int(t[0]) * 2 + (1 if rome and len(t) > 1 and t[1] == "winter" else 0) if rome else int(t[0])
 
 
+def in_order_at(f, date, rome):
+    """Where an event of this date goes in descr_events.txt (f): before the first event of a later date (with the
+    comment lines right above it, which stay on it), else at the file's end (before a last blank line)."""
+    key = date_key(date, rome)
+    later = [e for e in read(f) if key is not None and date_key(e["date"], rome) is not None
+             and date_key(e["date"], rome) > key]
+    if later:
+        at = later[0]["span"][0]
+        while at > 0 and f.text(at - 1).lstrip().startswith(";"):
+            at -= 1
+        return at, True
+    return len(f.raw) - (1 if f.raw and not f.text(len(f.raw) - 1).strip() else 0), False
+
+
+def keep_in_order(f, line, rome):
+    """The event whose `event` line is `line` (the raw line itself - an index or an id would shift as events move)
+    goes to its place in date order after its date changed (the games read the file as a queue: an event left
+    behind one of a later date never fires). True when it moved."""
+    evs = read(f)
+    i = next((k for k, x in enumerate(f.raw) if x is line), None)
+    n = next((k for k, e in enumerate(evs) if e["span"][0] == i), None)
+    if n is None:
+        return False
+    key = date_key(evs[n]["date"], rome)
+    if key is None:
+        return False
+    keys = [date_key(e["date"], rome) for e in evs]
+    before = [k for k in keys[:n] if k is not None]
+    after = [k for k in keys[n + 1:] if k is not None]
+    if all(k <= key for k in before) and all(k >= key for k in after):
+        return False
+    a, b = evs[n]["span"]
+    while a > 0 and f.text(a - 1).lstrip().startswith(";"):
+        a -= 1                                          # its own comment lines go with it
+    while b < len(f) and not f.text(b).strip():
+        b += 1
+    block = f.raw[a:b]
+    f.delete(a, b)
+    at, inside = in_order_at(f, evs[n]["date"], rome)
+    if inside and block[-1].rstrip("\r").strip():
+        block = block + [f.make("")]                   # a blank line keeps it apart from the next event
+    elif not inside and at > 0 and f.text(at - 1).strip():
+        block = [f.make("")] + block
+    f.insert_raw(at, block)
+    return True
+
+
 def calendar(mod, campaign):
     """(start year, start season, years per turn) of the campaign from descr_strat.txt: start_date '-270 summer' /
     '1080 summer', timescale (Medieval II; Rome's turn is half a year unless the file says otherwise)."""
@@ -173,6 +220,7 @@ def apply(plan, campaign, changes):
     rome = _rome(mod)
     f = plan.edit(path)
     texts = dict(changes.get("texts") or {})
+    dated = []                                          # (id, its event line) of the events given a new date
     for name, ch in sorted((changes.get("edit") or {}).items()):
         ev = next((e for e in read(f) if e["id"] == name), None)
         if ev is None:
@@ -189,6 +237,7 @@ def apply(plan, campaign, changes):
             else:
                 f.insert(ev["lines"]["event"] + 1, ["date\t%s" % ch["date"].strip()])
             plan.note(f, "%s: date %s" % (name, ch["date"].strip()))
+            dated.append((name, f.raw[ev["lines"]["event"]]))
         if "position" in ch:
             ev = next(e for e in read(f) if e["id"] == name)
             i = ev["lines"].get("position")
@@ -205,6 +254,7 @@ def apply(plan, campaign, changes):
                     f.insert(ev["lines"].get("date", ev["lines"]["event"]) + 1, [line])
                 plan.note(f, "%s: position %d, %d" % (name, pos[0], pos[1]))
     gone = [e for e in read(f) if e["id"] in set(changes.get("remove") or [])]
+    gone_lines = [f.raw[e["span"][0]] for e in gone]
     for ev in sorted(gone, key=lambda e: -e["span"][0]):        # from the end: the earlier lines keep their place
         name = ev["id"]
         a, b = ev["span"]
@@ -212,6 +262,9 @@ def apply(plan, campaign, changes):
             b += 1                                      # the blank lines after it go with it
         f.delete(a, b)
         plan.note(f, "%s removed" % name)
+    for name, line in dated:                            # after every edit: an id would shift as events move
+        if not any(line is x for x in gone_lines) and keep_in_order(f, line, rome):
+            plan.note(f, "%s: moved to its place in date order (the games read the events as a queue)" % name)
     have = {e["name"].lower() for e in read(f)}
     for ev in changes.get("new") or []:
         name = (ev.get("name") or "").strip()
@@ -229,15 +282,8 @@ def apply(plan, campaign, changes):
             if why:
                 plan.warn(f, "%s: %s" % (name, why))
         # in date order: the games read the events as a queue (date_key)
-        key = date_key(ev["date"], rome)
-        later = [e for e in read(f) if date_key(e["date"], rome) is not None and date_key(e["date"], rome) > key]
-        if later:
-            at = later[0]["span"][0]
-            while at > 0 and f.text(at - 1).lstrip().startswith(";"):
-                at -= 1                                 # the comment lines right above the later event stay on it
-            f.insert(at, lines[1:] + [""])
-        else:
-            f.insert(len(f.raw) - (1 if f.raw and not f.text(len(f.raw) - 1).strip() else 0), lines)
+        at, inside = in_order_at(f, ev["date"], rome)
+        f.insert(at, lines[1:] + [""] if inside else lines)
         have.add(name.lower())
         kind = ev.get("kind") or "historic"
         if kind == "historic":
