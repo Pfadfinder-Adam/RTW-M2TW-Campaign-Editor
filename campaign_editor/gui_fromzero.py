@@ -62,6 +62,7 @@ class FromZeroWindow:
         self.v = {k: tk.StringVar() for k in ("culture", "name", "display_name", "short_name", "adjective",
                                                "people")}
         self.colours = [None, None]
+        self.v_common = tk.BooleanVar(value=True)
         w = self.w = tk.Toplevel(app)
         w.title(TITLE)
         w.transient(app)
@@ -351,6 +352,16 @@ class FromZeroWindow:
                            ("Colours", " / ".join("%d %d %d" % c for c in self.colours if c)),
                            ("Lines in the game's lists made from", shown.get(self.frame(), self.frame()))):
             ttk.Label(f, text="%s: %s" % (label, val)).pack(anchor="w")
+        frame = self.frame()
+        own, common = Z.template_units(self.mod, frame, self.v["culture"].get())
+        if own and len(common) >= Z.MIN_COMMON:
+            ttk.Checkbutton(f, variable=self.v_common, text=(
+                "Units: only the %d its culture shares - not the %d only %s has (Roster > By buildings gives it units "
+                "of its own)" % (len(common), len(own), shown.get(frame, frame)))).pack(anchor="w", pady=(10, 0))
+        elif own:
+            ttk.Label(f, foreground="#a60", wraplength=680, justify="left", text=(
+                "Units: its culture shares only %d, so it keeps the %d only %s has too - Roster > By buildings "
+                "changes them." % (len(common), len(own), shown.get(frame, frame)))).pack(anchor="w", pady=(10, 0))
 
     # ---- the form ----
     def to_form(self):
@@ -373,7 +384,8 @@ class FromZeroWindow:
         if self.pools and not a.name_list.get("(new)"):
             a.name_list["(new)"] = {p: list(v) for p, v in self.pools.items()}
             a.refresh_name_combos()
-        a.zero = {"culture": self.v["culture"].get(), "frame": frame, "campaign": self.camp}
+        a.zero = {"culture": self.v["culture"].get(), "frame": frame, "campaign": self.camp,
+                  "common_units": self.v_common.get()}
         a._from_zero_look()
 
     def finish(self):

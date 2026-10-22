@@ -18,9 +18,13 @@ the game at once, so you can test every change after that straight away. The tem
 5. **Name list** - mixed from every faction of the culture, so it is no one faction's list (Name list... to type
    your own).
 
+6. **Units** (on the last step) - only the units its culture shares, not those only the faction behind it has
+   (ticked by default; a culture that shares fewer than 6 keeps them).
+
 **Fill the form** puts it all on the New faction tab: pick its towns, capital and leader there, then **Create
 faction**. One Apply writes it with its emblem and recolours every picture it got (cards, battle textures,
-sprites) in its own colours. Check mod files lists anything it still shares (TRACES OF ANOTHER FACTION).
+sprites) in its own colours. It then opens on **Roster > By buildings**: give it units of its own there (a unit
+added to a building level reaches every level above). Check mod files lists anything it still shares (TRACES OF ANOTHER FACTION).
 **Forget it** makes it a plain copy of the template again.
 
 ## Steps
