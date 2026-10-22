@@ -47,7 +47,19 @@ class RecordEditor(ttk.Frame):
         self.text_edits = {}                 # {key in export_buildings / export_units: new text}, written on Apply
         self.deletes = []                    # units taken out on Apply (#375), with what names them
         # the list and the record side by side; the line between them is dragged to make the list wider (kept)
-        pane = self.pane = ttk.Panedwindow(self, orient="horizontal")
+        # Buildings: two tabs - Lines (every line of a chain) and By faction (a faction's buildings as the game shows
+        # them, with the units they recruit as cards - gui_factionbuildings; a tester's wish 2026-10-22)
+        host, self.byfaction = self, None
+        if kind == "building":
+            self.tabs = ttk.Notebook(self)
+            self.tabs.pack(fill="both", expand=True)
+            host = ttk.Frame(self.tabs)
+            self.tabs.add(host, text="Lines")
+            from .gui_factionbuildings import FactionBuildings
+            self.byfaction = FactionBuildings(self.tabs, app, self)
+            self.tabs.add(self.byfaction, text="By faction")
+            self.tabs.bind("<<NotebookTabChanged>>", lambda e: self._tab_changed(), add="+")
+        pane = self.pane = ttk.Panedwindow(host, orient="horizontal")
         pane.pack(fill="both", expand=True)
         side = ttk.Frame(pane, padding=(0, 0, 6, 0))
         pane.add(side, weight=0)
@@ -469,6 +481,8 @@ class RecordEditor(ttk.Frame):
             self.blocks = E.unit_blocks(f) if self.kind == "unit" else E.building_blocks(f)
         self._fill_filters()
         self.fill_list()
+        if self.byfaction is not None:
+            self.byfaction.load(mod)
         for w in self._form().winfo_children():
             w.destroy()
         for w in self.pics.winfo_children():
@@ -477,6 +491,16 @@ class RecordEditor(ttk.Frame):
             "export_descr_unit.txt" if self.kind == "unit" else "export_descr_buildings.txt"))
         if was:                             # read again after a write or an Undo: the one on show stays on show (the
             self.pick(was)                  # tester, 2026-10-22: the form went blank until the unit was clicked)
+
+    def _tab_changed(self):
+        """By faction came up: it reads the file as the Lines tab has it now (the text typed there too)."""
+        if self.tabs.select() == str(self.byfaction):
+            self.byfaction._stale = True
+            self.byfaction.shown()
+
+    def show_lines_tab(self):
+        if self.byfaction is not None:
+            self.tabs.select(0)
 
     def _fill_filters(self):
         """The Show list: by owner (faction or culture), by kind, mercenaries apart."""

@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### Added
+- Buildings: a **By faction** tab beside the lines - pick a faction and see its buildings as the game shows them: the chains it may build as pictures grouped by type, a chain's levels side by side (cost, turns, the town they need), the units each level recruits for it as cards (the hover says how: pool, experience, conditions), a click on a card shows the unit on the right with where else it is recruited; Lines of this building / Open in Units go to the lines. Both games.
 - Units: Delete this unit... (beside New unit) takes a unit out on Apply with its recruit lines, its men in the armies and garrisons, the mercenary pools, the rebels' lists and its cards; Restore puts it back.
 - Units: Texts players read - the unit's name, short and long description are changed right in the Units editor.
 - Units: 'Pictures for' can be 'all owners (the same picture)' - Import or Make a card puts one card / description picture in for every faction that has the unit.

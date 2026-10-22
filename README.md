@@ -196,7 +196,7 @@ All on my YouTube channel **[Pfadfinder](https://www.youtube.com/channel/UC8j5rv
 |---|---|
 | **Factions** | a new faction cloned from another (or edited): names, colours, money, towns, leader and heir, garrisons, buildings, diplomacy, victory conditions; a faction renamed everywhere |
 | **Campaign map** | towns, ports, armies, agents and fleets dragged; regions painted, renamed, merged or deleted (a wasteland with REX / M2EX); the map grown, cut or made 3 x bigger; terrain, rivers, climates and heights painted |
-| **Units and buildings** | every line as a field; new ones step by step or from nothing; models swapped, your own textures and models put in, voices heard; brought from another mod or a unit pack |
+| **Units and buildings** | every line as a field; a faction's buildings as the game shows them, with the units each level recruits as cards; new ones step by step or from nothing; models swapped, your own textures and models put in, voices heard; brought from another mod or a unit pack |
 | **Characters** | traits, retinue, ages, names; the family tree as the game draws it |
 | **Pictures** | every picture of a faction replaced, recoloured to its colours, its emblem and banners made |
 | **Rules and scripts** | every campaign setting in plain words; add-ons (Sack Settlement, Avoid Growth, Recruitment Order, Player Diplomacy) and your own modules made of blocks, like Scratch |
