@@ -9,6 +9,11 @@ from .strat import FEMALE_KINDS, Strat, RE_XY, character_line, first_names, unit
 from .textio import strip_comment, tokens
 
 
+# a surname missing from the name list is not a stop (engine source game/character_record.cpp, game_rtw the same: 'The
+# surname %s wasn't found in the names database - This isn't fatal, but may be undesirable'); a missing FIRST name stays
+# refused (rules.md: the game crashes on it)
+SURNAME_WHY = " (the game only notes it in its log: 'This isn't fatal')"
+
 def _set_xy(text, xy):
     return RE_XY.sub("x %d, y %d" % xy, text, 1)
 
@@ -272,7 +277,9 @@ def _with_buildings(plan, f, region, raw, picked, size=None):
         if lv and not chain.lower().startswith("core") and not ranks_ok(lv, town_level):
             plan.warn(f, "%s: %s needs a %s, the settlement is a %s" % (region, level, lv.settlement_min, town_level))
     if len({c for c, _ in picked}) != len(picked):
-        raise ValueError("%s: one level per building chain" % region)
+        # the game does not check it (engine source culture_db.cpp / building_db.cpp create each building line as
+        # it comes): said, not refused
+        plan.warn(f, "%s: two levels of one building chain - the game puts up both as written" % region)
     plan.note(f, "%s: %d building(s) set by hand (%s)" % (region, len(picked), town_level))
     return set_buildings(raw, picked, f.make)
 
@@ -560,7 +567,8 @@ def build_start(plan, campaign, start):
                              "string for; pick one from the list" % (role, first, pool_of))
         rest = name[len(first):].strip()
         if rest and pool and rest not in pool.get("surnames", []):
-            raise ValueError("%s: surname '%s' is not in the %s surname list" % (role, rest, pool_of))
+            plan.warn(None, "%s: surname '%s' is not in the %s surname list - the game shows no surname%s"
+                      % (role, rest, pool_of, SURNAME_WHY))
         region, xy = spots[role]
         if region in custom:
             units = template_army[:1] + custom[region]                # bodyguard + your garrison
@@ -818,7 +826,8 @@ def extra_characters(plan, f, campaign, chars, pool, armies_at, owner=None):
                              % (kind, first, "women's" if rtw_kind in FEMALE_KINDS else "men's"))
         rest = name[len(first):].strip()
         if rest and names_from and rest not in names_from.get("surnames", []):
-            raise ValueError("%s: surname '%s' is not in the surname list" % (kind, rest))
+            plan.warn(f, "%s: surname '%s' is not in the surname list - the game shows no surname%s"
+                      % (kind, rest, SURNAME_WHY))
         xy = c.get("xy")
         if not xy:
             raise ValueError("%s %s is not placed on the map yet" % (kind, name))

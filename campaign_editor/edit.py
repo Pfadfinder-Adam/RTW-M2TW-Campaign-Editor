@@ -17,6 +17,12 @@ RE_RGB = re.compile(r"red\s*(\d+)\s*,\s*green\s*(\d+)\s*,\s*blue\s*(\d+)")
 RE_KEY = re.compile(r"^(\s*\{)([A-Za-z0-9_]+)(\}.*)$")
 
 
+# taking out a faction's leader or heir is the modder's choice: the game makes the first named character (not the heir)
+# the leader itself and only logs it (engine source world.cpp, game_rtw/world.cpp: 'has no faction leader, so setting
+# one automatically'); with no named character left it logs 'this faction will be toast'
+ROLE_GONE = ("%s was %s's %s - taken out; the game makes its first named character (not the heir) the leader "
+             "itself - pick another in the faction's window if you want someone else")
+
 def _unescape(v):
     """A string value as text: '\\n' is a line break; the file's own line breaks
     inside a long value are only wrapping."""
@@ -613,8 +619,7 @@ def map_changes(plan, campaign, changes):
             if c is None:
                 raise ValueError("%s at %d, %d is not a character of %s" % (m["name"], src[0], src[1], fac))
             if c.role:
-                raise ValueError("%s is %s's %s - the faction needs him; make another the %s first" % (
-                    c.name, fac, c.role, c.role))
+                plan.warn(None, ROLE_GONE % (c.name, fac, c.role))
             gone.append((c, fac))
     for c, fac in sorted(gone, key=lambda x: -x[0].start):
         take_off_map(plan, f, fac, c)
@@ -736,8 +741,7 @@ def _army_edits(plan, f, faction=None, units=None, remove=None):
         if c is None:
             raise ValueError("%s at %d, %d is not a character of %s" % (m["name"], src[0], src[1], faction))
         if what == "remove" and c.role:
-            raise ValueError("%s is %s's %s - the faction needs him; make another the %s first" % (
-                c.name, faction, c.role, c.role))
+            plan.warn(None, ROLE_GONE % (c.name, faction, c.role))
         found.append((c, what, m))
     for c, what, m in sorted(found, key=lambda x: -x[0].start):
         chunk = f.texts()[c.start:c.end]
@@ -819,7 +823,9 @@ def _people(plan, f, now):
                              % (role, first, plan.new))
         rest = name[len(first):].strip()
         if rest and pool and rest not in pool.get("surnames", []):
-            raise ValueError("%s: surname '%s' is not in %s's surname list" % (role, rest, plan.new))
+            from .start import SURNAME_WHY
+            plan.warn(f, "%s: surname '%s' is not in %s's surname list - the game shows no surname%s"
+                      % (role, rest, plan.new, SURNAME_WHY))
         line = f.text(c.start)
         if name != have["name"]:
             from .family import rename_in_tree

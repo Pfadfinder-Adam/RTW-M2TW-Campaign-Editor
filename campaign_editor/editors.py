@@ -1213,7 +1213,7 @@ def line_limits(f, kind):
 # - a key the mod repeats somewhere (officer, recruit lines, bonuses, upgrades) takes any number, except the
 #   original exes' own caps below - and those only when no REX / M2EX runs the game (limits.lifted).
 LIST_KEYS = {"recruit", "recruit_pool", "retrain", "retrain_pool"}       # repeatable even where the mod has one
-GAME_CAPS = {("unit", "officer"): 3}      # TWC wiki Hardcoded Limits (RTW + M2TW): at most 3 officers
+GAME_CAPS = {("unit", "officer"): 3}      # engine source unit_db.h MAX_UNIT_OFFICERS 3 (both games)
 
 
 def room_for(f, kind, block, place, level, key, limits, pending=0, mod=None):
@@ -1235,9 +1235,10 @@ def room_for(f, kind, block, place, level, key, limits, pending=0, mod=None):
             k, "unit" if kind == "unit" else "building level") if have >= 1 else None
     cap = GAME_CAPS.get((kind, k))
     if cap and have >= cap:
-        from .limits import lifted
-        if not (mod is not None and lifted(mod, "units")):
-            return "the original game takes at most %d '%s' lines (REX / M2EX not found beside the game)" % (cap, k)
+        from .limits import engine_of
+        if not (mod is not None and engine_of(mod)):   # REX / M2EX take it and ignore past 3 (Check mod files says so)
+            return "the original game takes at most %d '%s' lines - more stops it (REX / M2EX not found beside the " \
+                   "game; they keep 3 and ignore the rest)" % (cap, k)
     return None
 
 

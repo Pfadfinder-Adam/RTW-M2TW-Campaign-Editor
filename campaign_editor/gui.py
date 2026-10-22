@@ -3658,14 +3658,15 @@ class App(tk.Tk):
 
         def sums():
             t = sum(values().values())
-            total.configure(text="in all %d%%%s" % (t, "" if t == 100 else " - must be 100"),
+            total.configure(text="in all %d%%%s" % (t, "" if t == 100 else " - the game's own files make it 100"),
                             foreground="" if t == 100 else "#c00000")
         sums()
 
         def ok():
             rel = values()
-            if sum(rel.values()) != 100:
-                messagebox.showerror(APP, "the religions must add up to 100", parent=w)
+            if sum(rel.values()) != 100 and not messagebox.askyesno(
+                    APP, "The religions add up to %d%%, not 100. The game reads each share as written (it does not "
+                         "check the sum). Keep them so?" % sum(rel.values()), parent=w):
                 return
             keep(rel)
             w.destroy()
@@ -6354,9 +6355,9 @@ class App(tk.Tk):
             return
         c = self.field[i]
         if c.get("existing"):
-            if c.get("role"):
-                messagebox.showerror(APP, "%s is the faction's %s - the faction needs him; make another the %s "
-                                          "first." % (c["name"], c["role"], c["role"]))
+            if c.get("role") and not messagebox.askyesno(
+                    APP, "%s is the faction's %s. Take him out anyway? The game then makes the faction's first named "
+                         "character (not the heir) the leader itself." % (c["name"], c["role"])):
                 return
             self.removed_existing.append({"name": c["name"], "from": c["from"]})
             self.char_moves.pop(c["cid"], None)
