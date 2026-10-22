@@ -27,6 +27,7 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, simpledialog, ttk
 
 from . import board as B
+from . import gui_appearance
 from . import look as LK
 from .gui_look import PIECES, YELLOW, all_widgets, ask_style, can_move
 
@@ -35,6 +36,10 @@ TITLE = "Layout board"
 WINDOWS = (("settings_window", "Settings"), ("show_help", "Help"), ("mod_zero_window", "A mod from zero"),
            ("game_log_window", "The game's log in plain words"), ("show_log", "Log"),
            ("credits_window", "Credits"))          # (Game manifest asks for a folder first: not gathered)
+# the windows the works open, laid out too once a mod is loaded (the user, 2026-10-22: 'every page and window
+# already laid out'): (App method, title on the board); a town's window shows the first town
+MOD_WINDOWS = (("town_window", "A town"), ("rebels_window", "Rebels"), ("mercenaries_window", "Mercenaries"),
+               ("map_size_window", "Change the map's size"), ("sources_window", "Authors and sources"))
 TAB_WORKS = ("map", "edit", "new")             # works whose tabs are pages of their own
 SKIP_TABS = ("3D",)                            # starts the graphics card's map: shown when opened, not gathered
 WAIT_WORK, WAIT_TAB, WAIT_WINDOW = 350, 220, 450   # ms a page is given to draw itself before its picture
@@ -58,6 +63,14 @@ GRID_STEPS = ("4", "8", "16", "32")            # px of the editor's window betwe
 
 def _alt(e):
     return bool(e.state & (0x20000 if sys.platform == "win32" else 0x0008))
+
+
+def _look_now():
+    """The look the pages' pictures are taken in (Light / Dark and the own colours): a picture of another one is
+    taken again when the board opens."""
+    from . import theme
+    colours, font = theme.custom()
+    return [theme.dark(), [list(kv) for kv in sorted(colours.items())], list(font) if font else None]
 
 
 def _words(key):
@@ -253,19 +266,21 @@ class LayoutBoard(tk.Toplevel):
         self.bind("<Delete>", lambda e: self._hide_picked())
         for k, d in (("Left", (-1, 0)), ("Right", (1, 0)), ("Up", (0, -1)), ("Down", (0, 1))):
             self.bind("<%s>" % k, lambda e, d=d: self._nudge(*d, big=bool(e.state & 1)))
-        if self.pages:
+        if self.pages and all(p.get("look") == _look_now() for p in self.pages):
             self.after(50, self.fit)
-        else:
+        else:                                  # none yet, or taken in another look (light pictures on a dark board)
             self.after(150, self.refresh)
 
     # ---- the window ----
     def _build(self):
+        from . import theme
         bar = ttk.Frame(self, padding=(6, 4))
         bar.pack(fill="x")
         for text, cmd in (("Refresh all pages", self.refresh), ("Undo", self.undo), ("Redo", self.redo),
-                          ("Fit", self.fit)):
+                          ("Fit", self.fit), ("Appearance", self.appearance)):
             ttk.Button(bar, text=text, command=cmd).pack(side="left", padx=(0, 4))
-        self.b_accept = ttk.Button(bar, text="Accept", command=self.accept, state="disabled", style="Play.TButton")
+        self.b_accept = ttk.Button(bar, text="Accept", command=self.accept, state="disabled")
+        theme.paint(self.b_accept, "#316434")              # green, greyed while there is nothing to accept
         self.b_accept.pack(side="left", padx=(4, 4))
         self.b_discard = ttk.Button(bar, text="Discard", command=self.discard, state="disabled")
         self.b_discard.pack(side="left", padx=(0, 4))
@@ -293,6 +308,8 @@ class LayoutBoard(tk.Toplevel):
         xs = ttk.Scrollbar(body, orient="horizontal", command=self.cv.xview)
         self.cv.configure(yscrollcommand=lambda *a: (ys.set(*a), self._later_pictures()),
                           xscrollcommand=lambda *a: (xs.set(*a), self._later_pictures()))
+        self.side = None                       # the Appearance panel, when shown
+        self.ys = ys
         ys.pack(side="right", fill="y")
         xs.pack(side="bottom", fill="x")
         self.cv.pack(fill="both", expand=True)
@@ -312,6 +329,37 @@ class LayoutBoard(tk.Toplevel):
         cv.bind("<Button-4>", lambda e: self._wheel(e, 1))
         cv.bind("<Button-5>", lambda e: self._wheel(e, -1))
         cv.bind("<Configure>", lambda e: self._later_pictures())
+
+    def appearance(self):
+        """The Appearance panel at the board's side (shown / hidden): the whole editor's colours and font."""
+        if self.side is not None:
+            self.side.destroy()
+            self.side = None
+            return
+        self.side = gui_appearance.AppearancePanel(self.ys.master, self.app, on_change=self._look_changed)
+        for w in all_widgets(self.side):
+            w._look_skip = True
+        self.side.pack(side="right", fill="y", before=self.ys)
+
+    def _look_changed(self):
+        """The whole look changed: the board's ground follows it, every page's picture is taken again once the
+        changes stop for a moment."""
+        from . import theme
+        self.ground = "#25272b" if theme.dark() else "#c9ccd2"
+        self.title_ink = "#eeeeee" if theme.dark() else "#111111"
+        self.cv.configure(background=self.ground)
+        self.draw()
+        if getattr(self, "_theme_job", None):
+            self.after_cancel(self._theme_job)
+        self.v_line.set("The editor's look changed - the pages' pictures are taken again in a moment.")
+        self._theme_job = self.after(1500, self._theme_pictures)
+
+    def _theme_pictures(self):
+        self._theme_job = None
+        if self._busy:
+            self._theme_job = self.after(1500, self._theme_pictures)
+            return
+        self.refresh()
 
     def close(self):
         if self.draft:
@@ -374,7 +422,15 @@ class LayoutBoard(tk.Toplevel):
                 else:
                     out.append(("work:" + k, app.WORK_TITLES.get(k, k), "Works"))
         out += [("window:" + m, t, "Windows") for m, t in WINDOWS if hasattr(app, m)]
+        if getattr(app, "mod", None) is not None:
+            out += [("window:" + m, t, "Windows of the works") for m, t in MOD_WINDOWS if hasattr(app, m)]
         return out
+
+    def _first_town(self):
+        try:
+            return sorted(self.app.owners_after())[0]
+        except Exception:                                   # noqa: BLE001 - no campaign, no towns
+            return None
 
     def _open(self, pid):
         """The page shown in the editor: a work (and its tab), or a Tools window (-> the window, or None)."""
@@ -398,6 +454,11 @@ class LayoutBoard(tk.Toplevel):
         fn = getattr(app, name, None)
         if fn is None:
             return None
+        if name == "town_window":
+            region = self._first_town()
+            if region is None:
+                return None
+            fn = (lambda f=fn, r=region: f(r))
         with _quiet():                                   # a window that would ask first (no game log yet): not shown
             app.once(name, fn)()
         for w in app.winfo_children():
@@ -513,7 +574,7 @@ class LayoutBoard(tk.Toplevel):
         picture = snap(top)
         pieces, hidden = pieces_of(self.look, top)
         page = {"id": pid, "title": title, "group": group, "size": [top.winfo_width(), top.winfo_height()],
-                "pieces": pieces, "hidden": hidden}
+                "pieces": pieces, "hidden": hidden, "look": _look_now()}
         self._keep(page, picture)
         for key in [k for k, (pid_, _) in self.accepted.items() if pid_ == pid]:
             del self.accepted[key]
@@ -548,7 +609,9 @@ class LayoutBoard(tk.Toplevel):
         return places, total, list(zip(order, tops))
 
     def draw(self):
+        from . import theme
         cv, z = self.cv, self.zoom
+        pal = theme.palette()
         cv.delete("all")
         self._shown.clear()
         places, total, heads = self._places()
@@ -565,16 +628,16 @@ class LayoutBoard(tk.Toplevel):
             w, h = p["size"]
             cv.create_text(x * z, y * z - 3, text=p["title"], anchor="sw", fill=self.title_ink, width=max(w * z, 20),
                            font=("", title_px))
-            cv.create_rectangle(x * z, y * z, (x + w) * z, (y + h) * z, fill="#f0f0f0", outline="#777777",
+            cv.create_rectangle(x * z, y * z, (x + w) * z, (y + h) * z, fill=pal["bg"], outline=pal["border"],
                                 tags=("card", "card:" + p["id"]))
             if p["id"] not in self.pictures or self.pictures[p["id"]] is None:
                 for pc in p["pieces"]:                   # no picture: each piece drawn as a box with its words
                     bx, by, bw, bh = pc.get("was") or pc["box"]     # where the editor has it
                     cv.create_rectangle((x + bx) * z, (y + by) * z, (x + bx + bw) * z, (y + by + bh) * z,
-                                        fill="#e1e1e1", outline="#9a9a9a")
+                                        fill=pal["button"], outline=pal["border"])
                     if pc["text"] and z >= 0.3:
                         cv.create_text((x + bx + bw / 2) * z, (y + by + bh / 2) * z, text=pc["text"][:30],
-                                       font=("", max(6, int(9 * z * 1.6))), fill="#222222")
+                                       font=("", max(6, int(9 * z * 1.6))), fill=pal["fg"])
             if self.v_frames.get():
                 for pc in p["pieces"]:
                     bx, by, bw, bh = pc["box"]
@@ -668,10 +731,11 @@ class LayoutBoard(tk.Toplevel):
                 cv.create_image((x + nx) * z, (y + ny) * z, image=photo, anchor="nw", tags="draft")
             elif pic is None:                            # no picture: the piece as a box with its words
                 cv.create_rectangle((x + nx) * z, (y + ny) * z, (x + nx + nw) * z, (y + ny + nh) * z,
-                                    fill="#e1e1e1", outline="#9a9a9a", tags="draft")
+                                    fill=theme.palette()["button"], outline=theme.palette()["border"],
+                                    tags="draft")
                 if pc["text"] and z >= 0.3:
                     cv.create_text((x + nx + nw / 2) * z, (y + ny + nh / 2) * z, text=pc["text"][:30],
-                                   font=("", max(6, int(9 * z * 1.6))), fill="#222222", tags="draft")
+                                   font=("", max(6, int(9 * z * 1.6))), fill=theme.palette()["fg"], tags="draft")
             if any(entry.get(k) for k in ("text",) + LK.STYLE_KEYS) or \
                     any(k in (self.draft.get(key) or {}) for k in ("text",) + LK.STYLE_KEYS):
                 words = LK.shown_words(entry, self.look.word(pc["text"]) if pc["text"] else "")
@@ -1258,4 +1322,4 @@ def open_board(app):
     return b
 
 
-__all__ = ["LayoutBoard", "open_board", "snap", "pieces_of", "WINDOWS"]
+__all__ = ["LayoutBoard", "open_board", "snap", "pieces_of", "WINDOWS", "MOD_WINDOWS"]

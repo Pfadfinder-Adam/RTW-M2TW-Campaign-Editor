@@ -135,6 +135,14 @@ def _bundled(ok, fail):
     except Exception as e:                                  # noqa: BLE001
         fail("the credits (CREDITS.md)", e)
     try:
+        from . import themes as TH
+        own = [t for t in TH.available() if not t["own"]]
+        if len(own) < 2:
+            raise ValueError("%d in %s" % (len(own), TH.builtin_dir()))
+        ok("%d built-in themes" % len(own))
+    except Exception as e:                                  # noqa: BLE001
+        fail("the built-in themes", e)
+    try:
         folder = os.path.dirname(AD.assets_dir())          # assets/ (the add-ons are assets/addons)
         icons = [n for n in os.listdir(folder) if n.lower().startswith("icon") and n.endswith(".png")]
         if not icons:

@@ -25,8 +25,11 @@ from . import log
 
 LOOK_NAME = "_look.json"
 LANG_FOLDER = "_lang"
+SNIP_FOLDER = "_snippets"
 BOARD_FOLDER = "_look_board"
-KEYS = ("text", "tip", "width", "hidden", "to", "where", "xy", "up", "size", "bg", "fg", "font", "emoji")
+KEYS = ("text", "tip", "width", "hidden", "to", "where", "xy", "up", "size", "bg", "fg", "font", "emoji", "off")
+# 'off': parts a snippet under the own look gives a piece that the own look takes away (a piece a snippet hides,
+# shown again)
 STYLE_KEYS = ("bg", "fg", "font", "emoji")     # how a piece looks (copied from one piece to another together)
 
 
@@ -120,6 +123,110 @@ def font_of(spec, now):
 def deeper(rgb, by=0.85):
     """A colour a little darker (a button pressed / under the mouse) as '#rrggbb'."""
     return "#%02x%02x%02x" % tuple(max(0, min(255, int(c * by))) for c in rgb)
+
+
+# ---- snippets: sets of piece changes switched on and off (Obsidian's CSS snippets) ----
+def snippets_dir():
+    return _home(SNIP_FOLDER)
+
+
+def snippets(folder=None):
+    """Every snippet: [{'name', 'path', 'on', 'pieces', 'order'}] by name. A snippet is a look file (load / save) with
+    a name and an on / off switch: its changes lie under the modder's own, the ones switched on in name order."""
+    folder = folder or snippets_dir()
+    out = []
+    try:
+        names = sorted(os.listdir(folder)) if folder else []
+    except OSError:
+        names = []
+    for n in names:
+        if not n.lower().endswith(".json"):
+            continue
+        path = os.path.join(folder, n)
+        try:
+            with open(path, encoding="utf-8") as fh:
+                head = json.load(fh)
+        except (OSError, ValueError):
+            continue
+        if not isinstance(head, dict) or not isinstance(head.get("pieces"), dict):
+            continue
+        got = load(path)
+        out.append({"name": str(head.get("name") or n[:-5])[:60], "path": path, "on": head.get("on", True) is not False,
+                    "pieces": got["pieces"], "order": got["order"]})
+    return sorted(out, key=lambda s: s["name"].lower())
+
+
+def save_snippet(name, look, on=True, folder=None):
+    """A look's pieces kept as a snippet named name (switched on or off) -> its path, or None."""
+    folder = folder or snippets_dir()
+    if not folder:
+        return None
+    safe = "".join(c if c.isalnum() or c in " -_" else "_" for c in name).strip() or "Snippet"
+    path = os.path.join(folder, safe + ".json")
+    pieces = {k: v for k, v in look["pieces"].items() if v}
+    data = {"version": 1, "name": name.strip() or safe, "on": bool(on), "pieces": pieces,
+            "order": [k for k in look.get("order", []) if k in pieces and "to" in pieces[k]]}
+    try:
+        os.makedirs(folder, exist_ok=True)
+        with open(path, "w", encoding="utf-8") as fh:
+            json.dump(data, fh, indent=1, ensure_ascii=False)
+        return path
+    except OSError:
+        return None
+
+
+def set_snippet_on(path, on):
+    """A snippet switched on or off (kept in its file)."""
+    try:
+        with open(path, encoding="utf-8") as fh:
+            data = json.load(fh)
+        data["on"] = bool(on)
+        with open(path, "w", encoding="utf-8") as fh:
+            json.dump(data, fh, indent=1, ensure_ascii=False)
+        return True
+    except (OSError, ValueError, TypeError):
+        return False
+
+
+def layered(own, snips=()):
+    """The look in force: the snippets switched on, one over another, and the modder's own over them all (a part
+    of a piece the own look sets wins) -> {'pieces', 'order'}."""
+    pieces, order = {}, []
+    for layer in [s for s in snips if s.get("on")] + [own]:
+        for k, e in layer["pieces"].items():
+            got = merged(pieces.get(k), {a: b for a, b in e.items() if a != "off"})
+            for a in e.get("off") or ():
+                got.pop(a, None)
+            pieces[k] = got
+        order += [k for k in layer.get("order", []) if k in pieces]
+    for k, e in list(pieces.items()):                  # in a row and free at once: the later layer said which
+        if "to" in e and "xy" in e:
+            own_e = own["pieces"].get(k, {})
+            e.pop("to" if "xy" in own_e else "xy", None)
+            if "xy" not in e:
+                e.pop("up", None)
+            else:
+                e.pop("where", None)
+    seen, last = set(), []
+    for k in reversed(order):
+        if k not in seen and "to" in pieces.get(k, {}):
+            seen.add(k)
+            last.append(k)
+    return {"pieces": {k: e for k, e in pieces.items() if e}, "order": last[::-1]}
+
+
+def own_part(base, entry):
+    """What the modder's own look must hold so that a piece shows entry over the snippets' base: the parts that
+    differ from it."""
+    base, entry = base or {}, entry or {}
+    own = {k: v for k, v in entry.items() if base.get(k) != v}
+    for group in (("xy", "up"), ("to", "where")):     # a place is said whole, never half over the base's
+        if any(k in own for k in group):
+            own.update({k: entry[k] for k in group if k in entry})
+    off = sorted(k for k in base if k not in entry and k != "off")
+    if off:
+        own["off"] = off
+    return own
 
 
 # ---- the layout board (gui_lookboard): every page of the editor laid out side by side ----
@@ -329,6 +436,7 @@ def template(have=None, seen=()):
     return {"language": "", "by": "", "words": out}
 
 
-__all__ = ["load", "save", "set_entry", "merged", "shown_words", "font_of", "deeper", "STYLE_KEYS", "look_file", "board_dir", "load_board", "save_board", "lay_cards",
+__all__ = ["load", "save", "set_entry", "merged", "snippets", "save_snippet", "set_snippet_on", "layered",
+           "own_part", "snippets_dir", "shown_words", "font_of", "deeper", "STYLE_KEYS", "look_file", "board_dir", "load_board", "save_board", "lay_cards",
            "piece_at", "drop_beside", "free_spot", "languages", "read_language", "add_language", "words",
            "template", "KEYS"]

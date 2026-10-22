@@ -40,7 +40,22 @@ BG_OPTS = ("background", "activebackground", "highlightbackground", "troughcolor
            "readonlybackground", "disabledbackground")
 FG_OPTS = ("foreground", "activeforeground", "insertbackground", "disabledforeground", "highlightcolor")
 
-_state = {"dark": False, "root": None, "done": {}, "base": None}
+_state = {"dark": False, "root": None, "done": {}, "base": None, "custom": {}, "font": None, "fonts0": {},
+          "seen": []}
+# the modder's own colours over the light / dark palette (the user, 2026-10-22: 'change the colour of the whole
+# thing, not piece by piece', Obsidian's Appearance): {palette key or a COLOURED style name: '#rrggbb'} and a font
+# [family or '', size or 0] for every window - kept in the settings ('theme_colours', 'theme_font')
+NAMES = {"bg": "Background", "fg": "Words", "field": "Fields and lists", "muted": "Quiet words",
+         "border": "Frames", "select": "Picked line", "selectfg": "Picked line's words",
+         "accent": "Open tab / pressed", "tab": "Tabs", "trough": "Scrollbar track", "button": "Buttons",
+         "active": "Under the mouse", "link": "Links and '?' marks"}
+COLOURED_NAMES = {"Play.TButton": "Play button", "PlayNoMod.TButton": "Play (no mod)",
+                  "Report.TButton": "Report a bug / Suggest", "GitHubNew.TButton": "GitHub (new version)",
+                  "Kofi.TButton": "Ko-fi", "Discord.TButton": "Discord", "YouTube.TButton": "YouTube",
+                  "GitHub.TButton": "GitHub", "Sponsor.TButton": "GitHub Sponsors",
+                  "Support.TMenubutton": "Support me on..."}
+FONTS = ("TkDefaultFont", "TkTextFont", "TkMenuFont", "TkHeadingFont", "TkCaptionFont", "TkSmallCaptionFont",
+         "TkIconFont", "TkTooltipFont")
 
 
 def dark():
@@ -48,7 +63,24 @@ def dark():
 
 
 def palette():
-    return DARK if _state["dark"] else LIGHT
+    base = DARK if _state["dark"] else LIGHT
+    own = {k: v for k, v in _state["custom"].items() if k in base}
+    return dict(base, **own) if own else base
+
+
+def custom():
+    """The modder's own colours ({key: '#rrggbb'}) and font ([family, size] or None) now in force."""
+    return dict(_state["custom"]), _state["font"]
+
+
+def set_custom(root, colours=None, font=None, is_dark=None):
+    """New own colours / font for every window (None / {} = the light or dark look as it comes) - over Dark or Light
+    when is_dark says which -, kept for every start."""
+    settings.put("theme_colours", {k: v for k, v in (colours or {}).items() if v})
+    settings.put("theme_font", list(font) if font and any(font) else None)
+    if is_dark is not None:
+        settings.put("theme", "dark" if is_dark else "light")
+    apply(root, _state["dark"] if is_dark is None else bool(is_dark))
 
 
 # a change not yet written: given (green) / taken away (red) - pale under dark words, deep under light ones
@@ -199,15 +231,15 @@ def _translate_one(root, opt, value, bg_orig):
     if known is None:
         known = _PAL_HEX[keys] = {}
         for k in reversed(keys):                 # the first key wins, as the loop it replaces
-            for pal in (DARK, LIGHT):
+            for pal in _state["seen"] + [DARK, LIGHT]:
                 c = _rgb(root, pal[k])
                 if c is not None:
                     known[_hex(c)] = k
     if hx in known:
         return cur[known[hx]]
-    if not _state["dark"]:
+    if not (_state["dark"] or _state["custom"]):
         return None
-    p = DARK
+    p = cur
     if hx in NAMED:
         return p[NAMED[hx]]
     lum = sum(rgb) / 3.0
@@ -319,6 +351,11 @@ def _style(root):
     st.map("Toolbutton", background=[("selected", p["accent"]), ("pressed", p["accent"]), ("active", p["active"])])
     for name, (colour, deep, *words) in COLOURED.items():
         ink = words[0] if words else "#ffffff"
+        if _state["custom"].get(name):                     # the modder's own colour for it, words that read on it
+            colour = _state["custom"][name]
+            rgb = _rgb(root, colour) or (128, 128, 128)
+            deep = _hex(tuple(int(v * 0.85) for v in rgb))
+            ink = "#000000" if on_colour(rgb) == "black" else "#ffffff"
         st.configure(name, background=colour, foreground=ink)
         st.map(name, background=[("pressed", deep), ("active", deep)],
                foreground=[("disabled", "#555555" if words else "#dddddd")])
@@ -362,6 +399,14 @@ def apply(root, is_dark=None):
         is_dark = settings.get("theme") == "dark"
     first = _state["root"] is None
     _state["root"], _state["dark"] = root, bool(is_dark)
+    own = settings.get("theme_colours") or {}
+    _state["custom"] = {k: v for k, v in own.items() if isinstance(v, str) and v.startswith("#")} \
+        if isinstance(own, dict) else {}
+    pal = palette()
+    if pal not in _state["seen"]:                          # a colour of a look used before becomes this one's
+        _state["seen"].append(pal)
+    _PAL_HEX.clear()
+    _fonts(root, settings.get("theme_font"))
     _style(root)
     if first:
         root.bind_all("<Map>", _mapped, add="+")
@@ -372,6 +417,26 @@ def apply(root, is_dark=None):
     except tk.TclError:
         pass
     _walk(root)
+
+
+def _fonts(root, spec):
+    """Every window's font: the named Tk fonts set to [family, size] ('' / 0 keep the system's), or back."""
+    from tkinter import font as tkfont
+    spec = (list(spec) + ["", 0])[:2] if isinstance(spec, (list, tuple)) else ["", 0]
+    _state["font"] = spec if any(spec) else None
+    for name in FONTS:
+        try:
+            f = tkfont.nametofont(name, root=root)
+        except (tk.TclError, TypeError):
+            try:
+                f = tkfont.nametofont(name)
+            except tk.TclError:
+                continue
+        first = _state["fonts0"].setdefault(name, {"family": f.actual("family"), "size": f.cget("size")})
+        size = first["size"]
+        if spec[1]:
+            size = int(spec[1])
+        f.configure(family=spec[0] or first["family"], size=size)
 
 
 def toggle(root):
