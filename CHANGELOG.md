@@ -25,6 +25,7 @@
 - New mod folder puts no switched-off engine settings files (descr_ex, descr_caps_ex) in: the mod runs on the engine's defaults as before; the editor writes the line a change needs, Check mod files' Copy them in brings the whole list.
 
 ### Fixed
+- Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
 - Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
 - Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
 - Bring a faction: a horde faction lost its horde lines (it could not wander after losing its last town) -> its horde lines come along, with the unit names it got here.
@@ -68,6 +69,7 @@
 - **Changed**: the faction-select map and minimap use the 3D map's picture where a ground's texture was not found; a name given twice in a faction gets a free one instead of a refused write.
 
 ### Fixed
+- Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
 - Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
 - Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
 - New faction > From another mod: a name list typed in the window was replaced by the other mod's, so the leader typed from it was refused (naming the template) -> the typed list wins; the message names the faction whose list it is.
@@ -340,6 +342,7 @@
   line of the block** in both editors; the editor remembers whether it was open.
 
 ### Fixed
+- Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
 - Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
 - Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
 - Maps > 3D: rebel villages (a region with no settlement in descr_strat.txt) were not shown -> each stands there, as in the game; Rome's wonders stand on the map with their own models.
@@ -770,6 +773,7 @@
   release's page.
 
 ### Fixed
+- Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
 - Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
 - Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
 - **View in 3D: the camera jerked while an animation played** - each frame was sized anew; the view now keeps its
@@ -1050,6 +1054,7 @@
   test mod.
 
 ### Fixed
+- Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
 - Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
 - Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
 - **Add-ons (Sack Settlement, both games; Avoid Growth): the game's script console and other script texts turned
@@ -1140,6 +1145,7 @@
 - Long explanations at the top of Mercenaries, Map size and the 3 x bigger map are one line now; the rest shows on the '?'.
 
 ### Fixed
+- Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
 - Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
 - Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
 - Backups that were put back (Restore, Undo this write) stayed in `CampaignEditor_backups` as `*_restored` folders, one per undo. They are deleted now, and the ones older versions left are taken away when the mod is loaded.
@@ -1159,6 +1165,7 @@
 ## 0.30.1 - 2026-10-07
 
 ### Fixed
+- Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
 - Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
 - Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
 - Edit faction on a faction the mod has but the campaign does not (no block in its `descr_strat.txt`): said in plain words what to do (another campaign, or bring it in as a new / later faction).
@@ -1171,6 +1178,7 @@
 ## 0.30.0 - 2026-10-07
 
 ### Fixed
+- Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
 - Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
 - Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
 - Windows: two writes in the same second could be put back by Restore in the wrong order (the files' own times are too coarse there); every backup now keeps the exact moment it was made. The game's log kept with the editor's logs got every line ending doubled.
@@ -1730,6 +1738,7 @@
   tree), so the pictures, the battle model and the voice have the room; Add line... opens them.
 
 ### Fixed
+- Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
 - Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
 - Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
 - **Terrain tab**: the map showed tiny or not at all when the tab opened - it was fitted before the tab had its size; it is fitted again once it has one.
@@ -2090,6 +2099,7 @@
   starts from there. 'Not now' asks with the next version, 'Don't ask again' never; Settings > Folders has the button.
 
 ### Fixed
+- Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
 - Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
 - Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
 - **The bigger map (x3) keeps the rules of the games' own maps** (five reports from Divide and Conquer, all of them
@@ -2148,6 +2158,7 @@
   list opens on the add-on of the loaded game.
 
 ### Fixed
+- Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
 - Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
 - Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
 - **A new Medieval II faction keeps its template's `ai_label` and `denari_kings_purse`**: they were lost, so the AI
@@ -2215,6 +2226,7 @@
   faction a script names that the mod lacks. "Open another log..." reads any other one.
 
 ### Fixed
+- Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
 - Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
 - Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
 - **M2EX / REX not seen** (a player with M2EX got "the original exe cannot take more"): the engine is found in
@@ -2241,6 +2253,7 @@
   resource, a region's last land, a river tile, or a port's last land. Undo / Redo stroke, Preview, one backup.
 
 ### Fixed
+- Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
 - Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
 - Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
 - **The bigger map (Tools > Make the campaign map 3 x bigger) - played in the game, it was flat and square:**
@@ -2284,6 +2297,7 @@
   one over the armies, agents and fleets (name, tile, or a unit inside the army, e.g. "knight").
 
 ### Fixed
+- Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
 - Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
 - Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
 - A mod without `descr_names.txt` (e.g. a small Medieval II add-on mod) no longer stops the window when a template
@@ -2343,6 +2357,7 @@
   and the Victory block.
 
 ### Fixed
+- Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
 - Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
 - Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
 - **Medieval II diplomacy**: the tab now reads and writes `faction_standings` (-1.0 .. 1.0) - before it showed every
@@ -2421,6 +2436,7 @@
   out (and the names of services in it) scared people off; the wiki page keeps the details.
 
 ### Fixed
+- Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
 - Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
 - Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
 - **"modeldb: a number expected at ..." on a mod's battle_models.modeldb**: a
@@ -2481,6 +2497,7 @@
   of its template's); drawing one from the faction's towns comes back in a later release.
 
 ### Fixed
+- Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
 - Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
 - Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
 - **A unit given to a faction was listed twice in a building's description**:
@@ -2558,6 +2575,7 @@
   mod does not have are refused - as is leaving out the governor's chain.
 
 ### Fixed
+- Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
 - Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
 - Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
 - **A region or its town could not be renamed** (a user asked; a double click on the town list only adds the town):
@@ -2597,6 +2615,7 @@
   and New religion. The files keep the internal name.
 
 ### Fixed
+- Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
 - Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
 - Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
 - **Buildings whose list says `factions { all, }`** (a modder's way to let everyone build them) were taken as
@@ -2619,6 +2638,7 @@
 ## 0.19.0 - 2026-09-30
 
 ### Fixed
+- Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
 - Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
 - Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
 - **A faction picked in New faction mode** (to change it, not to copy it) no longer ends in a puzzling "nothing to
@@ -2666,6 +2686,7 @@
 - **An icon of its own** for the exe and the window: a gear ring round a Roman "R" and a medieval "M" (drawn for the editor, no game pictures).
 
 ### Fixed
+- Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
 - Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
 - Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
 - Settlement names by culture under M2EX: checked in the game, so Preview no longer warns that it is untested there.
@@ -2676,6 +2697,7 @@
 ## 0.18.1 - 2026-09-30
 
 ### Fixed
+- Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
 - Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
 - Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
 - **Barbarian Invasion: regions read and written right.** BI's descr_regions.txt has a `legion: ...` line after
@@ -2690,6 +2712,7 @@
   built from its code must stay open under GPL-3.0 and keep the author's copyright notice.
 
 ### Fixed (from the user's tests)
+- Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
 - Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
 - Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
 - **Medieval II: a new army, agent or fleet of the rebels never showed up in the game.** In Medieval II the rebels
@@ -2705,6 +2728,7 @@
   towns list, or more room for the roster cards.
 
 ### Fixed (from the modders' guides, checked on the vanilla files)
+- Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
 - Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
 - Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
 - **REX / M2EX: the original game's limits no longer hold a modder back.** With REX or M2EX beside the game the
@@ -2768,6 +2792,7 @@ Asked on Discord: where are the rebels?
   and Medieval II (rebels take a town, a captain and a new army written, Restore byte-exact) and in the window.
 
 ### Fixed
+- Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
 - Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
 - Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
 - **A new faction no longer takes its template's shadow / spawn ties** (BI / Medieval II `descr_sm_factions`):
@@ -2780,6 +2805,7 @@ Asked on Discord: where are the rebels?
 REX's new features, read from REX's own notes, and two things the tool got wrong on Medieval II.
 
 ### Fixed
+- Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
 - Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
 - Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
 - **Medieval II recruitment lines**: Medieval II recruits with `recruit_pool` lines (the vanilla buildings file has
@@ -2814,6 +2840,7 @@ and ran with the changes, and its own log converts buildings the same way the to
 building not specified ... building will disappear during conversion").
 
 ### Fixed
+- Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
 - Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
 - Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
 - **City / castle with a size set by hand**: Inverness (a castle town) made a city and raised to a large town got
@@ -2839,6 +2866,7 @@ building not specified ... building will disappear during conversion").
   warning that one was missing.
 
 ### Fixed
+- Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
 - Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
 - Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
 - **"<army> stands on x, y - move it first" when moving a town**: taking Odessus sent its
@@ -2876,6 +2904,7 @@ building not specified ... building will disappear during conversion").
 ## 0.14.1 - 2026-09-29
 
 ### Fixed
+- Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
 - Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
 - Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
 - **Name list... on Medieval II**: vanilla M2 has surname keys with a space (`de Lyon`, `von Saxony`, `al Rashid` -
@@ -2927,6 +2956,7 @@ plain Rome copy (the julii taking Mediolanium); not yet tested in the game.
   town has now ("(shown: Medhlan)"). A name set in Names by culture... shows on the map the moment OK is pressed.
 
 ### Fixed
+- Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
 - Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
 - Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
 - **New mod folder made from Barbarian Invasion or Alexander** (REX): its start file now starts that game (`-bi` /
@@ -2961,6 +2991,7 @@ Medieval II copies, in the window on Linux and with the deep Check; the flag sym
   Two writes made by one Apply are undone in the right order.
 
 ### Fixed
+- Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
 - Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
 - Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
 - Building editor: **Add line** refused a new `recruit` line once a level had as many as the busiest level of the
@@ -3002,6 +3033,7 @@ its own pictures shown everywhere, the painted terrain drawn; the bugs he found 
   `RTW-M2TW-Campaign-Editor-files`; a log an older version left there moves into `logs` by itself.
 
 ### Fixed
+- Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
 - Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
 - Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
 - **Two characters of one faction with the same name**: the game skipped the second ("duplicated character name
@@ -3050,6 +3082,7 @@ its own pictures shown everywhere, the painted terrain drawn; the bugs he found 
 - The map draws each feature in its own colour (rivers, fords, sources, cliffs, volcanoes).
 
 ### Fixed
+- Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
 - Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
 - Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
 - Medieval II's impassable land (`64 64 64` in map_ground_types) now refuses characters like mountains do.
@@ -3057,6 +3090,7 @@ its own pictures shown everywhere, the painted terrain drawn; the bugs he found 
 ## 0.9.4 - 2026-09-29
 
 ### Fixed
+- Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
 - Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
 - Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
 - **Barbarian Invasion (bi) would not load its campaign** ("invalid literal for int() ... 'Pictii'"): an entry
@@ -3095,6 +3129,7 @@ its own pictures shown everywhere, the painted terrain drawn; the bugs he found 
   `descr_regions.txt` lines of a region of the map (builder, rebels, region tags, triumph, farming).
 
 ### Fixed
+- Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
 - Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
 - Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
 - A new region shows in the towns list on the Faction tab at once (it only came after Apply).
@@ -3115,6 +3150,7 @@ its own pictures shown everywhere, the painted terrain drawn; the bugs he found 
 - README: how to install (the exe in a folder of its own) and what the tool does with your own pictures.
 
 ### Fixed
+- Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
 - Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
 - Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
 - Restore removes the folders a run made for its new files when they are left empty.
@@ -3132,6 +3168,7 @@ its own pictures shown everywhere, the painted terrain drawn; the bugs he found 
   Checked on the vanilla files of both games (julii, england): preview, write, Restore byte for byte.
 
 ### Fixed
+- Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
 - Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
 - Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
 - Renaming the leader or heir on the Faction tab now renames him on the family tree (`relative`
@@ -3140,6 +3177,7 @@ its own pictures shown everywhere, the painted terrain drawn; the bugs he found 
 ## 0.7.5 - 2026-09-29
 
 ### Fixed
+- Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
 - Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
 - Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
 - **Medieval II: crash on load after taking a castle** ("The castle core building level should be
@@ -3154,6 +3192,7 @@ its own pictures shown everywhere, the painted terrain drawn; the bugs he found 
 ## 0.7.4 - 2026-09-28
 
 ### Fixed
+- Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
 - Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
 - Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
 - **Art tab: the picture list was squeezed to a strip** by the campaign-select map blown up to 2x;
@@ -3176,6 +3215,7 @@ its own pictures shown everywhere, the painted terrain drawn; the bugs he found 
 ## 0.7.1 - 2026-09-28
 
 ### Fixed
+- Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
 - Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
 - Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
 - **Preview / Apply changes, Undo, Tools... disappeared** when a tab was taller than the window
@@ -3199,6 +3239,7 @@ The first release since 0.1.2: it holds 0.2.0 - 0.6.0 below (those were test bui
   zeroed dialog cannot break the game.
 
 ### Fixed
+- Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
 - Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
 - Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
 - **Campaign-select map (Medieval II) lit in the wrong place in the game** (shifted right): the
@@ -3338,6 +3379,7 @@ Fixes from a run through every part of the tool as a user (vanilla and HLR).
   texts, pictures).
 
 ### Fixed
+- Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
 - Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
 - Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
 - A new faction now also gets the template's mouse-over, selected and grey
@@ -3359,6 +3401,7 @@ Fixes from a run through every part of the tool as a user (vanilla and HLR).
 - A template fills the new faction's empty fields (money, colours).
 
 ### Fixed
+- Map from zero with several regions: towns of regions without a port kept their port buildings (an error line in the game) -> only the region with the port keeps them.
 - Ctrl+A in a number box (Place and size, and other spin boxes) with a Russian keyboard layout did not pick the text -> it picks it, so what you type replaces the old number.
 - Interface: Apply changes with nothing changed said Done and left an empty backup -> it says there is nothing to write yet.
 - A princess (witch) takes a woman's name from descr_names.
