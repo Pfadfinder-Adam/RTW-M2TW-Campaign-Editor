@@ -3173,6 +3173,16 @@ building smith
         unit = next(l for l in text[i:].split("\n") if l.strip().startswith("unit"))
         write(p, text[:i + 5] + (unit + "\n") * 25 + text[i + 5:])
         self.assertTrue(any(n >= 25 for n in check.big_stacks(ModData(self.root), "test")))
+        # the tester's game run 2026-10-22: Medieval II's switch is Options > Game Settings > Army Size; Rome
+        # (with REX) kept 20 whatever ARMY_MODE said - the line says which
+        from types import SimpleNamespace
+        img = SimpleNamespace(width=10, height=10)
+        for kind, eng, words in (("medieval2", "M2EX.exe", "Game Settings > Army Size"),
+                                 ("rome", "REX.exe", "not yet seen working in Rome")):
+            with mock.patch("campaign_editor.limits.game_kind", return_value=kind), \
+                    mock.patch("campaign_editor.limits.faction_limit", return_value={"engine": eng}):
+                lines = [m for m, _ in check.engine_limits(ModData(self.root), "test", [], [], [], img)]
+            self.assertTrue(any(words in m for m in lines), lines)
 
     def test_sprite_picture_replaced_on_its_page(self):
         """Sprite sheets made editable (from Wholesome Queen's campaign UI editor): a sprite's picture goes into its

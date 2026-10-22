@@ -889,9 +889,12 @@ def engine_limits(mod, campaign, regions, units, blds, img):
                 "limit; max_factions follows the factions on every Apply)" % engine[:-4], False)]
         big = big_stacks(mod, campaign)
         if big:
-            out.append(("%d stack(s) hold more than 20 units (the most: %d) - the game keeps them only with 'ARMY SIZE = "
-                        "40 UNITS' picked in its options; with 20 the units past 20 are left out (a line in the log, "
-                        "no crash)" % (len(big), max(big)), False))
+            how = ("Options > Game Settings > Army Size = 40 units, before a NEW campaign" if kind != "rome" else
+                   "'ARMY SIZE = 40 UNITS' - not yet seen working in Rome (with REX): a game test kept 20 even with "
+                   "ARMY_MODE:3 in preferences\\preferences.txt")
+            out.append(("%d stack(s) hold more than 20 units (the most: %d) - the game keeps them only with %s; with "
+                        "20 the units past 20 are left out (a line in the log, no crash)" % (len(big), max(big), how),
+                        False))
         from .gamefix import engine_files_words
         words = engine_files_words(mod)
         if words:                               # a problem line, so Check mod files gives it its button
