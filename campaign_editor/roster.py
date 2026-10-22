@@ -385,37 +385,45 @@ def set_recruit(plan, faction, chain, level, unit, give=True):
         return False
     cultures = mod.factions()
     for i, _, _, _ in reversed(let_in):
-        text = e.text(i)
-        names = factions_in(text)
-        now = covers(names, faction, culture)
-        if names is None:                               # no factions list: everyone - a list of the others
-            code = strip_comment(text).rstrip()
-            rest = [n for n, _ in cultures if n != faction]
-            body = "factions { %s}" % "".join("%s, " % n for n in rest)
-            if re.search(r"\srequires\s", code + " "):
-                code = re.sub(r"\srequires\s", " requires %s and " % body, code, count=1)
-            else:
-                code = "%s  requires %s" % (code, body)
-            e.set(i, code + text[len(strip_comment(text).rstrip()):])
-            plan.warn(e, "%s: the %s line was for everyone - written out as the other factions, so that only %s "
-                         "loses it" % (where, unit, faction))
-        elif len(factions_groups(text)) > 1:
-            new = drop_faction(text, faction) if now == "own" else None
-            if new is None:
-                plan.warn(e, "%s: a recruit line of several faction groups lets %s in - rewrite it in Buildings"
-                          % (where, faction))
-                continue
-            e.set(i, new)
-        else:
-            rest = _spelled_out(names, faction, cultures)
-            if rest:
-                e.set(i, with_factions(text, rest))
-            else:
-                e.delete(i, i + 1)
-            if now in ("culture", "all"):
-                plan.warn(e, "%s: '%s' on the %s line written out as the other factions, so that only %s loses it"
-                          % (where, " ".join(names), unit, faction))
+        _shut_line(plan, e, i, faction, culture, cultures, where, unit)
     plan.note(e, "%s no longer recruited by %s in %s" % (unit, faction, where))
+    return True
+
+
+def _shut_line(plan, e, i, faction, culture, cultures, where, unit):
+    """One recruit line no longer lets the faction in: its name out, a culture or 'all' written out as the other
+    factions, a line with no factions list given one of the others; a line left with none goes; a line of several
+    REX groups that lets it in by a group of its own (or its culture) is left for a person (warned)."""
+    text = e.text(i)
+    names = factions_in(text)
+    now = covers(names, faction, culture)
+    if names is None:                               # no factions list: everyone - a list of the others
+        code = strip_comment(text).rstrip()
+        rest = [n for n, _ in cultures if n != faction]
+        body = "factions { %s}" % "".join("%s, " % n for n in rest)
+        if re.search(r"\srequires\s", code + " "):
+            code = re.sub(r"\srequires\s", " requires %s and " % body, code, count=1)
+        else:
+            code = "%s  requires %s" % (code, body)
+        e.set(i, code + text[len(strip_comment(text).rstrip()):])
+        plan.warn(e, "%s: the %s line was for everyone - written out as the other factions, so that only %s "
+                     "loses it" % (where, unit, faction))
+    elif len(factions_groups(text)) > 1:
+        new = drop_faction(text, faction) if now == "own" else None
+        if new is None:
+            plan.warn(e, "%s: a recruit line of several faction groups lets %s in - rewrite it in Buildings"
+                      % (where, faction))
+            return False
+        e.set(i, new)
+    else:
+        rest = _spelled_out(names, faction, cultures)
+        if rest:
+            e.set(i, with_factions(text, rest))
+        else:
+            e.delete(i, i + 1)
+        if now in ("culture", "all"):
+            plan.warn(e, "%s: '%s' on the %s line written out as the other factions, so that only %s loses it"
+                      % (where, " ".join(names), unit, faction))
     return True
 
 
@@ -430,11 +438,17 @@ def give_cards(plan, faction, unit):
         copy_cards(plan, faction, dic, owners)
 
 
-def take_unit(plan, faction, unit, campaign=None):
+def take_unit(plan, faction, unit, campaign=None, culture=None):
     """The unit is no longer the faction's: ownership, the faction's name out of
-    the recruit lines (a line left with no faction goes), a warning for its armies
-    that hold the unit (they keep it; the game lets them)."""
+    the recruit lines (a line left with no faction goes), a recruit line that still
+    lets it in by its culture, 'all' or no factions list written out as the other
+    factions (Medieval II stops at a town whose building recruits a unit the
+    faction's ownership does not allow - settlement.cpp 'Settlement recruitment
+    availability included unit'), a warning for its armies that hold the unit
+    (they keep it; the game lets them). culture: the faction's when the mod does
+    not know it yet (a faction being made)."""
     mod = plan.mod
+    culture = culture or mod.culture(faction)
     own_unit(plan, faction, unit, False)
     edb_p = mod.file("edb")
     if edb_p:
@@ -454,6 +468,14 @@ def take_unit(plan, faction, unit, campaign=None):
                 else:
                     e.delete(i, i + 1)
                 gone.append("%s/%s" % (chain, level))
+        cultures = mod.factions()
+        if faction not in dict(cultures):
+            cultures = cultures + [(faction, culture)]
+        for i, _, chain, level in reversed([r for r in recruit_lines(e) if r[1] == unit]):
+            if covers(factions_in(e.text(i)), faction, culture) in ("culture", "all"):
+                where = "%s/%s" % (chain, level)
+                if _shut_line(plan, e, i, faction, culture, cultures, where, unit) and where not in gone:
+                    gone.append(where)
         if gone:
             plan.note(e, "%s no longer recruited by %s in %s" % (unit, faction, ", ".join(reversed(gone))))
     for camp in ([campaign] if campaign else mod.campaigns()):
