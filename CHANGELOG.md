@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### Added
+- Tools > Layout board: every page of the editor (each work, its tabs, the Tools windows) laid out side by side on one canvas - drag a button into another place in its row, or with Alt exactly where you drop it; drag its corners to size it; right click to rename it, give it a hover text, hide it or take it back. Each change shows in the editor at once and is kept for every start; Undo / Redo, Back to how it was.
 - Buildings: a **By faction** tab beside the lines - pick a faction and see its buildings as the game shows them: the chains it may build as pictures grouped by type, a chain's levels side by side (cost, turns, the town they need), the units each level recruits for it as cards (the hover says how: pool, experience, conditions), a click on a card shows the unit on the right with where else it is recruited; Lines of this building / Open in Units go to the lines. Both games.
 - Units: Delete this unit... (beside New unit) takes a unit out on Apply with its recruit lines, its men in the armies and garrisons, the mercenary pools, the rebels' lists and its cards; Restore puts it back.
 - Units: Texts players read - the unit's name, short and long description are changed right in the Units editor.
