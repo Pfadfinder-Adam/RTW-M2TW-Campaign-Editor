@@ -20255,3 +20255,169 @@ class RexSoldiersLineTest(unittest.TestCase):
         u = read_units(TextFile.from_bytes("export_descr_unit.txt", text.encode("latin-1")))[0]
         self.assertEqual(u.soldiers, 50)
         self.assertIn("50 men", u.summary())
+
+
+class FactionBuildingsTest(unittest.TestCase):
+    """The Buildings work's 'By faction' tab (a tester's wish, 2026-10-22): a faction's chains, their levels and the
+    units each level recruits for it, both games."""
+
+    EDB = """building barracks
+{
+    levels muster big_barracks
+    {
+        muster requires factions { barbarian, alpha, }
+        {
+            capability
+            {
+                recruit "rebel spear"  0  requires factions { slave, }
+                recruit "alpha general"  2  requires factions { alpha, } and hidden_resource rome
+                recruit "ghost unit"  0  requires factions { eastern, }
+            }
+            construction  2
+            cost  400
+            settlement_min town
+            upgrades
+            {
+                big_barracks
+            }
+        }
+        big_barracks requires factions { barbarian, }
+        {
+            capability
+            {
+                recruit "rebel spear"  1  requires factions { slave, }
+            }
+            construction  3
+            cost  900
+            settlement_min large_town
+        }
+    }
+}
+building temple_of_x
+{
+    levels shrine
+    {
+        shrine requires factions { slave, }
+        {
+            capability
+            {
+            }
+            construction  1
+            cost  50
+            settlement_min village
+        }
+    }
+}
+building castle_port
+{
+    levels dock
+    {
+        dock castle requires factions { alpha, }
+        {
+            capability
+            {
+                recruit_pool "rebel spear"  1   0.5   4  0  requires factions { all, } and building_present_min_level barracks muster
+            }
+            construction  1
+            cost  100
+            settlement_min town
+        }
+    }
+}
+"""
+
+    def setUp(self):
+        self.root = tempfile.mkdtemp()
+        make_minimod(self.root)
+        write(os.path.join(self.root, "data", "export_descr_buildings.txt"), self.EDB)
+        write(os.path.join(self.root, "data", "text", "export_buildings.txt"),
+              "{muster}\tmuster\n{muster_eastern}\tAlpha Drill Yard\n{muster_eastern_desc}\tWhere alphas drill.\n"
+              "{big_barracks}\tBig Barracks\n", utf16=True)
+        self.mod = ModData(self.root)
+
+    def tearDown(self):
+        shutil.rmtree(self.root)
+
+    def test_a_faction_s_chains_levels_and_recruits(self):
+        from campaign_editor import factionbuildings as FB
+        items = {c["chain"]: c for c in FB.faction_chains(self.mod, "alpha")}
+        self.assertEqual(list(items), ["barracks", "temple_of_x", "castle_port"])
+        bar = items["barracks"]
+        self.assertTrue(bar["builds"])
+        self.assertFalse(items["temple_of_x"]["builds"])                # slave's only
+        self.assertTrue(items["castle_port"]["castle"])
+        self.assertFalse(bar["castle"])
+        muster, big = bar["levels"]
+        self.assertEqual((muster["has"], muster["cost"], muster["turns"], muster["town"]), ("own", 400, 2, "town"))
+        self.assertIsNone(big["has"])                                   # barbarian only: not alpha's (eastern)
+        # alpha's own line and its culture's line; the slave's line counted for the others
+        self.assertEqual([(u["unit"], u["has"]) for u in muster["units"]],
+                         [("alpha general", "own"), ("ghost unit", "culture")])
+        self.assertEqual(muster["others"], 1)
+        gen, ghost = muster["units"]
+        self.assertEqual(gen["needs"], "hidden_resource rome")
+        self.assertEqual(gen["numbers"], {"experience": 2})
+        self.assertTrue(gen["known"])
+        self.assertFalse(ghost["known"])                                # export_descr_unit.txt lacks it
+        self.assertIn("Unknown unit type", FB.unit_words(ghost))
+        self.assertIn("only when: hidden_resource rome", FB.unit_words(gen))
+        # Medieval II's pool line: its numbers in plain words, 'all' lets everyone in
+        pool = items["castle_port"]["levels"][0]["units"][0]
+        self.assertEqual(pool["numbers"], {"start": 1, "per_turn": 0.5, "most": 4, "experience": 0})
+        self.assertEqual(pool["has"], "all")
+        self.assertEqual(pool["needs"], "building_present_min_level barracks muster")
+        self.assertIn("starts with 1, grows 0.5 a turn, holds at most 4", FB.unit_words(pool))
+        self.assertEqual(FB.recruited_in(list(items.values()), "alpha general"), [("barracks", "muster")])
+        self.assertEqual(FB.recruited_in(list(items.values()), "rebel spear"), [("castle_port", "dock")])
+        # the slave sees its own lines, not alpha's
+        slave = {c["chain"]: c for c in FB.faction_chains(self.mod, "slave")}
+        self.assertEqual([u["unit"] for u in slave["barracks"]["levels"][0]["units"]], ["rebel spear"])
+        self.assertTrue(slave["temple_of_x"]["builds"])
+
+    def test_grouped_and_named(self):
+        from campaign_editor import factionbuildings as FB
+        items = FB.faction_chains(self.mod, "alpha")
+        self.assertEqual([(g, [c["chain"] for c in cs]) for g, cs in FB.grouped(items)],
+                         [("military", ["barracks", "castle_port"])])
+        everyone = FB.grouped(items, everyone=True)
+        self.assertEqual([g for g, _ in everyone], ["military", "temple"])
+        self.assertEqual(FB.grouped(items, find="PORT")[0][1][0]["chain"], "castle_port")
+        idx = FB.text_index(self.mod, "export_buildings.txt")
+        # the culture's own name first; the plain key that only repeats the level's name is not a name
+        self.assertEqual(FB.level_shown(idx, "muster", "alpha", "eastern"), ("Alpha Drill Yard", "Where alphas drill."))
+        self.assertEqual(FB.level_shown(idx, "muster", "slave", "barbarian"), ("", ""))
+        self.assertEqual(FB.level_shown(idx, "big_barracks", "slave", "barbarian")[0], "Big Barracks")
+        self.assertEqual(FB.conditions("x requires factions { a, } and factions { b, }"), "")
+        self.assertEqual(FB.conditions("x requires factions { a, }  and  event_counter guns 1 ; note"),
+                         "event_counter guns 1")
+
+    def test_the_tab_shows_a_chain_and_a_unit(self):
+        try:
+            import tkinter as tk
+            root = tk.Tk()
+        except Exception as e:
+            self.skipTest("no window: %s" % e)
+        from types import SimpleNamespace
+        from campaign_editor.gui_factionbuildings import FactionBuildings
+        from campaign_editor.gui_garrison import Pictures
+        opened = []
+        try:
+            app = SimpleNamespace(pictures=Pictures(), shown_names=lambda: {}, open_unit=opened.append)
+            v = FactionBuildings(root, app, None)
+            v.load(self.mod)
+            v.refresh()
+            self.assertEqual(v._faction(), "alpha")
+            self.assertEqual(len(v.items), 3)
+            bar = next(c for c in v.items if c["chain"] == "barracks")
+            v.show_chain(bar)
+            self.assertEqual(v.level["name"], "muster")
+            v.show_unit("alpha general")
+            self.assertEqual(v.preview.faction, "alpha")
+            v.open_unit()
+            self.assertEqual(opened, ["alpha general"])
+            v.v_fac.set("slave")
+            v._read()                                          # the picked chain kept for the new faction
+            self.assertEqual(v.chain["chain"], "barracks")
+            self.assertEqual([u["unit"] for u in v.level["units"]], ["rebel spear"])
+        finally:
+            root.destroy()
