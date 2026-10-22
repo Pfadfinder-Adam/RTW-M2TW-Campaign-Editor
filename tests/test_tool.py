@@ -10267,8 +10267,9 @@ building smith
             data.set_strat(mod, "test", (3, 0))                           # moved
             self.assertTrue(np.allclose(data.objects[None][0, [0, 2]], [3.5, 3.5]))
             self.assertIs(data._objs[1], loader)
-            self.assertTrue(data.lift_out(lambda o: True))               # taken into the hand (3D carry)
-            self.assertEqual((data.objects, sorted(data.ghost)), ({}, [None]))
+            with mock.patch.object(MM, "build_each", side_effect=AssertionError("laid anew")):
+                self.assertTrue(data.lift_out(lambda o: True))           # taken into the hand (3D carry): the
+            self.assertEqual((data.objects, sorted(data.ghost)), ({}, [None]))     # pieces laid before, joined
             data.put_back()                                               # Esc: back where it stood
             self.assertEqual((sorted(data.objects), data.ghost), ([None], {}))
             # let go on another tile: only what was carried is laid again there, the map is not laid anew (a
@@ -10649,6 +10650,26 @@ building smith
         west[2, 1] = west[2, 0] = True
         self.assertEqual(MM._port_dock(2, 2, west), (90, (1, 2)))
 
+    def test_map_in_3d_texture_names_as_the_game_finds_them(self):
+        """A model's part names its texture plainly, without an ending, or with a path (data\\models_strat\\...):
+        each found where the game finds it; one not found is listed (it is drawn white - an HLR tester)."""
+        try:
+            import numpy  # noqa: F401
+        except ImportError:
+            self.skipTest("NumPy not installed")
+        from campaign_editor import mapmodels as MM
+        have = {"models_strat/textures/pot.tga", "models_strat/textures/basket.tga"}
+        loader = MM.Loader(None)
+        loader.picture = lambda rel: True if rel in have else None
+        self.assertEqual(loader._texture("models_strat/resource_pot.cas", "pot.tga"), "models_strat/textures/pot.tga")
+        self.assertEqual(loader._texture("models_strat/resource_pot.cas", "basket"), "models_strat/textures/basket.tga")
+        self.assertEqual(loader._texture("models_strat/resource_pot.cas", "data\\models_strat\\textures\\pot.tga"),
+                         "models_strat/textures/pot.tga")
+        self.assertEqual(loader._texture("models_strat/resource_pot.cas", "C:\\work\\tex\\basket.tga"),
+                         "models_strat/textures/basket.tga")
+        self.assertIsNone(loader._texture("models_strat/resource_pot.cas", "lid.tga"))
+        self.assertEqual(loader.missing, {"lid.tga"})
+
     def test_map_in_3d_carries_a_figure_as_the_map(self):
         """The user, 2026-10-17: figures moved on the 3D map as on the Map - the left button on one (an army in a
         town: on the town), let go on another tile: the Map's own check and move (Undo, Apply), the 3D map laid again;
@@ -10687,6 +10708,31 @@ building smith
         # what is carried: the 3D map's own objects of that thing on that tile
         pick = Map3DView._picks("place", ("port", "Latium"), (3, 3))
         self.assertTrue(pick({"kind": "port_sea", "xy": (3, 3)}) and not pick({"kind": "town", "xy": (3, 3)}))
+        # a click alone lifts nothing (a tester: a stall at every click on a resource); the mouse moved with the
+        # button held lifts it
+        lifted = []
+        me = SimpleNamespace(app=app, _tile=lambda x, y: (1, 1), _map_lists=lambda: None, _carry=None,
+                             _things_at=lambda t: [("res", "r7", "gold")], DRAG_START=4, _paint=False,
+                             _carry_start=lambda e: lifted.append((e.x, e.y)), _tip_hide=lambda: None,
+                             _hover=lambda e: None)
+        Map3DView._carry_press(me, SimpleNamespace(x=10, y=10))
+        Map3DView._drag_paint(me, SimpleNamespace(x=12, y=11))          # a hand's tremble: still a click
+        self.assertEqual(lifted, [])
+        Map3DView._drag_paint(me, SimpleNamespace(x=15, y=10))
+        self.assertEqual(lifted, [(15, 10)])
+        # the hover's words: a character's name and what he is, a town's name and owner, a resource's name
+        app._map_chars["rome:0"].update(kind="general", faction="romans_julii", army=True, units=5)
+        mv.cmap, mv.owners = SimpleNamespace(info={"Latium": {"settlement": "Roma"}}), {"Latium": "romans_senate"}
+        app.res_shown = lambda: [{"id": "f3", "kind": "fort", "owner": "gauls", "xy": (1, 1)}]
+        import sys
+        from unittest import mock
+        fake = SimpleNamespace(hover_name=lambda ch: "Captain " + ch["name"])     # gui_map needs Pillow's ImageTk
+        with mock.patch.dict(sys.modules, {"campaign_editor.gui_map": fake}):
+            text = Map3DView._tip_text(SimpleNamespace(app=app), [("char", "rome:0", "Flavius"),
+                                                                 ("place", ("city", "Latium"), "Latium town"),
+                                                                 ("res", "f3", "fort")])
+        self.assertEqual(text.splitlines(), ["Captain Flavius", "   general of romans_julii, 5 unit(s)",
+                                             "Roma (Latium) - town", "   owner romans_senate", "fort of gauls"])
 
     def test_map_in_3d_figures_face_the_camera(self):
         """Reports #330 / #331: the figures on the 3D map stood with their backs to the camera, in Rome and in

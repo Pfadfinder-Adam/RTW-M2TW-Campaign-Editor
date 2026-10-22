@@ -26,6 +26,7 @@
 - Coast & heights drawn by the graphics card straight into the window on Windows (the map, the shore line and the brush; moving, zooming and painting no longer remake a picture each time); the frame's time shows beside the zoom. Elsewhere, or if the card fails, it draws as before.
 - The editor's own look: Tools > Edit the editor's look - drag any button, tick or label anywhere, rename it, give it a hover text or a width, hide it, take it back; kept for every start. The editor's language from a language file (Settings), and Words to translate writes every word for translators.
 - Settlements: an Owner filter - pick a faction and see only the towns it holds.
+- Maps > 3D: the mouse resting on an army, agent, fleet, town, port, resource or fort shows its name beside it, as on the Map (who he is, his faction and units; the town's owner).
 
 ### Changed
 - Maps: the '?' of Bigger map (x3)... stands after the button, no longer beside the zoom's own '?'.
@@ -40,6 +41,8 @@
 - Maps (and 3D): an army taken out of its town went back into it when the town was moved after -> it stays where you put it; one left in the town still goes with it.
 - Maps > 3D: a white frame showed on empty ground and none on the army or resource you had moved -> the 3D map shows the Map's changes again (and says so in its bar when it cannot).
 - Maps > 3D: thin pale lines along the edges of some ground squares on some graphics cards -> the ground is drawn without them.
+- Maps > 3D: a click on a resource, army or town made the map stall for a moment -> a click alone does nothing, and lifting something to carry it is quick.
+- Maps > 3D: a model's texture named with a path in it is found; whatever is still drawn white is named in the editor's log for a report.
 - New mod folder on the plain game: the game could not keep its built map (an error in its log, the map built again at every start) -> the new mod has the folder the game keeps it in.
 - Recolour: a faction with no secondary colour could not be previewed or written (an error) -> it recolours like any other.
 - Map from zero: the old campaign script kept running on the new map and filled the game's log with errors -> the new map gets an empty script; Undo of a map write left the map file the game had built for it -> it goes too, so the game builds the old map again.
