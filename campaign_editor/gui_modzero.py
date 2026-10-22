@@ -67,6 +67,11 @@ def go(app, what):
         app.start_game()
     else:
         _work(app, what)
+        if what in getattr(app, "SIDE_TABS", {}):          # its own tab, whatever tab of the campaign was open (the
+            try:                                            # tester, 2026-10-22: 'New faction' showed Buildings)
+                app.select_tab(app.SIDE_TABS[what])
+            except Exception:
+                pass
 
 
 def _work(app, key):
@@ -103,7 +108,12 @@ def open_window(app):
             if key in status:
                 status[key].configure(text=("✓ " if done else "") + words,
                                       foreground="#1c6b1c" if done else ("#555" if done is None else "#a05a00"))
-    refresh()
+    def tick():                     # the steps follow what was done in the editor's own windows (a new mod folder,
+        if not w.winfo_exists():    # a map from zero) without coming back here first (the tester, 2026-10-22)
+            return
+        refresh()
+        w.after(1500, tick)
+    tick()
     w.bind("<FocusIn>", refresh)
     ttk.Button(f, text="Close", command=w.destroy).grid(row=2 * len(STEPS) + 1, column=2, sticky="e", pady=(12, 0))
     return w
