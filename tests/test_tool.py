@@ -3693,6 +3693,60 @@ building smith
         self.assertEqual(B.snap_box((1060, 101, 200, 100), [hud])[:2], (1056, 96))   # too far: the grid only
         self.assertEqual(B.snap_box((1060, 101, 200, 100), [hud], to_grid=False)[:2], (1060, 101))
 
+    def test_campaign_hud_lies_on_a_board_with_a_screenshot_card(self):
+        """Interface > Campaign HUD on the board: everything in view first, a screenshot laid over the HUD is dragged
+        aside onto the grid and back onto the HUD's corner, a click (no move) picks the piece under it, the middle
+        button moves the board."""
+        try:
+            import tkinter as tk
+            from PIL import Image, ImageTk  # noqa: F401
+            root = tk.Tk()
+        except Exception as e:
+            self.skipTest("no window / Pillow: %s" % e)
+        from types import SimpleNamespace as NS
+        from unittest import mock
+        from campaign_editor import hudlayout as H
+        from campaign_editor.gui_hud import HudPanel
+        items = [{"piece": "end turn", "sprite": "END", "sheet": "strat3", "page": "p", "box": (965, 712, 52, 53)}]
+        sp = NS(changed_page=lambda p: None, changed_boxes=lambda: {})
+        root.geometry("1000x700")
+        try:
+            with mock.patch.object(H, "pieces", lambda m: items), mock.patch.object(H, "missing", lambda m: []), \
+                    mock.patch.object(H, "compose", lambda m, c, page_picture=None, boxes=None, screen=None:
+                                      Image.new("RGB", screen, (90, 20, 20))):
+                p = HudPanel(root, NS(mod=object()), NS(ensure_sprites=lambda: sp))
+                p.pack(fill="both", expand=True)
+                p.load()
+                root.update()
+                c = p.c
+                self.assertLess(c.zoom, 1)                                  # 1024 x 768 fitted into the window
+                p._shot, p._shot_xy = Image.new("RGBA", (1024, 768), (0, 200, 0, 255)), (0, 0)
+                p.v_shot.set(True)
+                c.fit_content()
+                root.update()
+                z = c.zoom
+
+                def drag(a, b):
+                    (x0, y0), (x1, y1) = c.to_screen(*a), c.to_screen(*b)
+                    c.event_generate("<ButtonPress-1>", x=int(x0), y=int(y0))
+                    c.event_generate("<B1-Motion>", x=int(x1), y=int(y1))
+                    c.event_generate("<ButtonRelease-1>", x=int(x1), y=int(y1))
+                    root.update()
+                drag((500, 300), (1600, 305))
+                self.assertEqual(p._shot_xy, (1104, 0))                     # aside, on the grid
+                self.assertEqual(p._everything(), (0, 0, 2128, 768))
+                drag((1600, 300), (500 + 3 / z, 303))
+                self.assertEqual(p._shot_xy, (0, 0))                        # back: stuck to the HUD's corner
+                drag((990, 740), (990, 740))
+                self.assertEqual(p.picked["piece"], "end turn")
+                ox, oy = c.view.ox, c.view.oy
+                c.event_generate("<ButtonPress-2>", x=100, y=100)
+                c.event_generate("<B2-Motion>", x=150, y=130)
+                c.event_generate("<ButtonRelease-2>", x=150, y=130)
+                self.assertEqual((c.view.ox - ox, c.view.oy - oy), (50, 30))
+        finally:
+            root.destroy()
+
     def test_sprite_change_waits_for_apply_in_the_interface_work(self):
         """A sprite's picture replaced on the Sprite sheets tab is a change of the Interface work: counted for Apply,
         in its plan, undone by Undo on that tab."""

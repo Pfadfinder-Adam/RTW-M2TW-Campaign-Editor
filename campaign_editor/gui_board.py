@@ -10,9 +10,18 @@ board - so they move the same way:
 The left button stays the owner's (picking, dragging cards). After every change of view on_view() is called and the
 owner draws its things again with to_screen / picture(); the grid (grid=True) is drawn under them by the board."""
 
+import sys
 import tkinter as tk
 
 from . import board as B
+
+
+def alt_held(e):
+    """Alt held during the mouse event e - 'put it anywhere, no snapping'. Its bit differs: Windows 0x20000 (its
+    0x0008 is Num Lock, on for most people), a Mac's Option 0x0010, X11's Mod1 0x0008."""
+    state = getattr(e, "state", 0) or 0
+    bit = 0x20000 if sys.platform == "win32" else 0x0010 if sys.platform == "darwin" else 0x0008
+    return bool(state & bit)
 
 
 GRID_RGB = (78, 78, 78, 255)
@@ -157,7 +166,6 @@ class Board(tk.Canvas):
         sx1, sy1 = self.to_screen(x + w, y + h)
         vx0, vy0, vx1, vy1 = max(sx0, 0), max(sy0, 0), min(sx1, cw), min(sy1, ch)
         if vx1 - vx0 < 1 or vy1 - vy0 < 1:
-            self._photos.pop(tag, None)
             return None
         kx, ky = img.size[0] / (sx1 - sx0), img.size[1] / (sy1 - sy0)          # picture pixels per screen pixel
         crop = img.crop((int((vx0 - sx0) * kx), int((vy0 - sy0) * ky),
@@ -170,8 +178,11 @@ class Board(tk.Canvas):
             a = crop.getchannel("A").point(lambda v: int(v * max(0.0, alpha)))
             crop.putalpha(a)
         photo = ImageTk.PhotoImage(crop)
-        self._photos[tag] = photo
-        return self.create_image(vx0, vy0, image=photo, anchor="nw", tags=tag)
+        item = self.create_image(vx0, vy0, image=photo, anchor="nw", tags=tag)
+        alive = set(self.find_all())                     # each picture kept while its item is on the canvas
+        self._photos = {k: v for k, v in self._photos.items() if k in alive}
+        self._photos[item] = photo
+        return item
 
     def box(self, x, y, w, h, **kw):
         """A rectangle round the world box (x, y, w, h)."""
@@ -241,4 +252,4 @@ class Board(tk.Canvas):
         return "break"
 
 
-__all__ = ["Board"]
+__all__ = ["Board", "alt_held"]
