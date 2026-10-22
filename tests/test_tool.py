@@ -3634,6 +3634,27 @@ building smith
         for p, data in before.items():
             self.assertEqual(open(p, "rb").read(), data)
 
+    def test_test_mod_deletes_a_unit_and_changes_its_texts(self):
+        """The test mod's steps for #375: a unit's texts players read changed; a unit made and taken out again."""
+        import types
+        from campaign_editor import editors as E, selftest as ST
+        c = types.SimpleNamespace(campaign="test", edited="alpha", new="alpha")
+        with open(os.path.join(self.root, "data", "text", "export_units.txt"), "w", encoding="utf-16") as fh:
+            fh.write("\u00ac\n{some_unit}\tSome Unit\n")
+        for fn in (ST.s_units, ST.s_unit_texts, ST.s_unit_gone_made):
+            fn(c, ModData(self.root)).apply()
+        mod = ModData(self.root)
+        units = "\n".join(mod.load(mod.text_file("export_units.txt")).texts())
+        self.assertIn("CE Test Guard II", units)
+        self.assertIn("Texts changed by the test mod", units)
+        self.assertIn("ce test gone", [b[0] for b in E.unit_blocks(mod.load(mod.file("edu")))])
+        ST.s_unit_delete(c, mod).apply()
+        mod = ModData(self.root)
+        self.assertNotIn("ce test gone", [b[0] for b in E.unit_blocks(mod.load(mod.file("edu")))])
+        self.assertNotIn("ce test gone", open(mod.file("edb"), encoding="latin-1").read())
+        with self.assertRaises(ST.Skip):                       # nothing to take out: said, not a failure
+            ST.s_unit_delete(c, mod)
+
     def test_unit_texts_changed_in_the_unit_editor(self):
         """#375: a unit's name and descriptions players read are changed in the Units editor and written to
         export_units.txt on Apply (as the buildings' texts are)."""
