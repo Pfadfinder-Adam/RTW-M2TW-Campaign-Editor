@@ -32,7 +32,9 @@ HINT = ("The campaign map in 3D, drawn by the graphics card the way the games dr
         "Heights brush: the left button raises or lowers the land under the circle while held (Ctrl + wheel or [ ] "
         "for its size) - the brush of Coast & heights, its Undo and Apply shared. The relief stands as "
         "high as in the game; the towns, ports, resources, armies, agents and fleets stand as descr_strat.txt will have them (what the Map moved or added before the write included), with the roads and region borders. "
-        "The left button carries an army, agent or fleet (one in a town stands on its roofs) to another tile: a white "
+        "The mouse resting on an army, agent, fleet, town, port, resource or fort shows its name beside it. "
+        "The left button held and moved carries an army, agent or fleet (one in a town stands on its roofs) to another "
+        "tile (a click alone moves nothing): a white "
         "frame shows the tile it goes to; the same move as on the Map (Undo, Preview, Apply), refused where the game "
         "would not take it; Esc puts it back.")
 
@@ -130,6 +132,7 @@ class Map3DView(ttk.Frame):
         c.bind("<B1-Motion>", self._drag_paint)
         c.bind("<ButtonRelease-1>", self._paint_end)
         c.bind("<Leave>", lambda e: self._hover(None))
+        self.bind("<Unmap>", lambda e: self._tip_hide(), add="+")     # another tab: the hover's box goes too
         c.bind("<Escape>", lambda e: self._carry_stop())
         c.bind("<Control-MouseWheel>", lambda e: self._resize(1 if e.delta > 0 else -1))
         c.bind("<Control-Button-4>", lambda e: self._resize(1))
@@ -291,9 +294,19 @@ class Map3DView(ttk.Frame):
                 return
             if self._gpu_ready(got["data"], stamp, got["time"]):
                 self._strat_for = key
+                self.after(100, self._lists_later)
         th = threading.Thread(target=work, daemon=True)
         th.start()
         self.after(250, done)
+
+    def _lists_later(self):
+        """The Map's lists read once the picture shows, so the first hover's names and the first carry do not wait
+        for them."""
+        try:
+            if self.app.mod is not None and self.winfo_viewable():
+                self._map_lists()
+        except Exception:                                # the hover then shows nothing until the Map is read
+            pass
 
     def _gpu_ready(self, data, stamp, took):
         """The card takes the map (main thread: OpenGL lives here) - False when it cannot (said in the bar)."""
@@ -312,6 +325,14 @@ class Map3DView(ttk.Frame):
             self.gcam = glmap.Camera(data)
         notes = "; ".join(data.notes)
         self.lbl.configure(text="made in %.1f s%s" % (took, (" - " + notes) if notes else ""))
+        missing = getattr(data, "objects_missing", None)
+        if missing:                                      # drawn white on the map: each named for a report
+            try:
+                from . import log
+                log.write("Maps > 3D: %d model(s) / texture(s) of what stands on the map not found (drawn white or "
+                          "left out): %s" % (len(missing), ", ".join(missing)))
+            except Exception:
+                pass
         self.draw()
         self._animate()
         return True
@@ -523,6 +544,93 @@ class Map3DView(ttk.Frame):
     def _hover(self, e):
         self._mouse = None if e is None else (e.x, e.y)
         self._draw_ring()
+        if e is None or self._carry is not None or self.v_brush_on.get():
+            self._tip_hide()
+            return
+        got = getattr(self, "_hover_at", None)           # what _hover_frame found under the mouse just now
+        here = got[2] if got is not None and self._on() else []
+        self._tip_show(e, self._tip_text(here))
+
+    def _tip_text(self, here):
+        """What the mouse rests on in a few lines, as the Map's name beside the mouse: a character's name (an army
+        with no named man: its captain), what he is, of which faction, his army's units; a town's name and owner; a
+        resource's name; a fort's owner."""
+        from .gui_map import hover_name
+        app = self.app
+        mv = getattr(app, "map_view", None)
+        cm = getattr(mv, "cmap", None)
+        lines = []
+        for what, key, name in here:
+            if what == "char":
+                ch = (getattr(app, "_map_chars", None) or {}).get(key) or {}
+                lines.append(hover_name(ch) or name)
+                lines.append("   %s of %s%s" % (ch.get("kind") or "character", ch.get("faction") or "?",
+                                                ", %d unit(s)" % ch["units"] if ch.get("army") and ch.get("units")
+                                                else ""))
+            elif what == "place":
+                kind, region = key
+                info = (getattr(cm, "info", None) or {}).get(region, {}) if cm is not None else {}
+                town = info.get("settlement") or region
+                owner = (getattr(mv, "owners", None) or {}).get(region)
+                lines.append("%s%s - %s" % (town, " (%s)" % region if town != region else "",
+                                            "town" if kind == "city" else "port"))
+                if owner:
+                    lines.append("   owner %s" % owner)
+            elif what == "res":
+                r = next((r for r in app.res_shown() if r["id"] == key), None) if hasattr(app, "res_shown") else None
+                if r is not None and str(key).startswith(("r", "n")):
+                    from .resources import shown_name
+                    try:
+                        lines.append("%s (resource)" % shown_name(app.mod, r["kind"]))
+                    except Exception:
+                        lines.append("%s (resource)" % r["kind"])
+                elif r is not None:
+                    lines.append("%s%s" % (r.get("type") if r["kind"] == "landmark" and r.get("type") else r["kind"],
+                                           " of %s" % r["owner"] if r.get("owner") else ""))
+                else:
+                    lines.append(name)
+            else:
+                lines.append(name)
+        return "\n".join(lines)
+
+    def _tip_show(self, e, text):
+        """The words beside the mouse in a small box (the Map's look); none: the box goes. A window of its own: the
+        card draws over the canvas, so nothing drawn on the canvas would show."""
+        if not text:
+            self._tip_hide()
+            return
+        tw = getattr(self, "_tipwin", None)
+        try:
+            if tw is None or not tw.winfo_exists():
+                tw = self._tipwin = tk.Toplevel(self)
+                tw.wm_overrideredirect(True)
+                try:
+                    tw.wm_attributes("-topmost", True)
+                except tk.TclError:
+                    pass
+                tw.configure(background="#8a7a52")
+                self._tiplbl = tk.Label(tw, justify="left", background="#2a2418", foreground="#f4ecd0",
+                                        font=("", 9, "bold"), padx=4, pady=2)
+                self._tiplbl.pack(padx=1, pady=1)
+            if self._tiplbl.cget("text") != text:
+                self._tiplbl.configure(text=text)
+            x, y = e.x_root + 14, e.y_root + 20
+            tw.update_idletasks()
+            sw, sh = tw.winfo_screenwidth(), tw.winfo_screenheight()
+            w, h = tw.winfo_reqwidth(), tw.winfo_reqheight()
+            x, y = min(x, sw - w - 4), (y if y + h < sh - 4 else e.y_root - h - 14)     # kept on the screen
+            tw.wm_geometry("+%d+%d" % (x, y))
+            tw.deiconify()
+        except tk.TclError:
+            self._tipwin = None
+
+    def _tip_hide(self):
+        tw = getattr(self, "_tipwin", None)
+        if tw is not None:
+            try:
+                tw.withdraw()
+            except tk.TclError:
+                self._tipwin = None
 
     def _tile(self, x, y):
         got = self._point(x, y)
@@ -605,19 +713,34 @@ class Map3DView(ttk.Frame):
             kinds = ("town", "wall") if key[0] == "city" else ("port", "port_sea")
         return lambda o: o["kind"] in kinds and tuple(o["xy"]) == tile
 
-    def _carry_start(self, e):
-        """The left button on anything the Map moves - an army, agent or fleet (an army in a town: on the town), a
-        town, a port, a resource, a fort: it is lifted and goes with the mouse, drawn where it would stand, until let
-        go (report #331: everything on the map, as on the Map; following the mouse, no wait)."""
-        app, tile = self.app, self._tile(e.x, e.y)
+    # the mouse moves this many pixels with the left button held before a figure is lifted: a click alone lifts
+    # nothing (a tester: a stall at every click on a resource)
+    DRAG_START = 4
+
+    def _map_lists(self):
+        """The Map's lists of what stands where and its moves, read once (the 3D map's hover and carry use them)."""
+        app = self.app
+        if getattr(app, "_map_moved", None) is None or getattr(getattr(app, "map_view", None), "cmap", None) is None:
+            app.show_map()
+
+    def _carry_press(self, e):
+        """The left button pressed: what stands on that tile is remembered; it is lifted only once the mouse moves
+        with the button held (_carry_start)."""
+        tile = self._tile(e.x, e.y)
+        self._pressed = None
         if tile is None:
             return
-        if getattr(app, "_map_moved", None) is None or getattr(getattr(app, "map_view", None), "cmap", None) is None:
-            app.show_map()                               # the Map's lists of what stands where and its moves
+        self._map_lists()
         here = self._things_at(tile)
-        if not here:
-            return
-        what, key, name = here[0]
+        if here:
+            self._pressed = (e.x, e.y, here[0], tile)
+
+    def _carry_start(self, e):
+        """The left button held on anything the Map moves - an army, agent or fleet (an army in a town: on the town),
+        a town, a port, a resource, a fort - and the mouse moved: it is lifted and goes with the mouse, drawn where it
+        would stand, until let go (report #331: everything on the map, as on the Map; following the mouse, no wait)."""
+        x0, y0, (what, key, name), tile = self._pressed
+        self._pressed = None
         self._carry, self._mouse = (what, key, name, tile), (e.x, e.y)
         self.gl.ghost_shift = (0.0, 0.0, 0.0)
         if self.gl.data.lift_out(self._picks(what, key, tile)):
@@ -745,10 +868,11 @@ class Map3DView(ttk.Frame):
 
     def _paint_start(self, e):
         self.canvas.focus_set()
+        self._tip_hide()
         if not self._on():
             return
         if not self.v_brush_on.get():
-            self._carry_start(e)
+            self._carry_press(e)
             return
         ed = self._terrain()
         if ed is None:
@@ -771,6 +895,10 @@ class Map3DView(ttk.Frame):
             if getattr(self, "_grab_job", None) is None:
                 self._grab_job = self.after_idle(self._grab_tick)
             return
+        pressed = getattr(self, "_pressed", None)
+        if pressed is not None and max(abs(e.x - pressed[0]), abs(e.y - pressed[1])) >= self.DRAG_START:
+            self._tip_hide()
+            self._carry_start(e)
         if self._carry is not None:
             self._carry_follow(e)
             return
@@ -796,6 +924,7 @@ class Map3DView(ttk.Frame):
             self.draw(half=True)
 
     def _paint_end(self, e):
+        self._pressed = None                             # a click alone: nothing lifted, nothing laid again
         if self._carry is not None:
             self._carry_end(e)
             return
@@ -888,6 +1017,7 @@ class Map3DView(ttk.Frame):
     # ---- the mouse and keys ----
     def _press(self, e, how):
         self.canvas.focus_set()
+        self._tip_hide()
         self._drag = (how, e.x, e.y)
 
     def _motion(self, e):

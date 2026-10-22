@@ -20,6 +20,7 @@ import os
 import numpy as np
 
 from . import terrain as T
+from .terrain import ground_file                # noqa: F401 - its home is terrain (no NumPy needed there)
 
 GROUND_KEYS = {
     (0, 128, 128): "fertility_low", (96, 160, 64): "fertility_medium", (101, 124, 0): "fertility_high",
@@ -92,15 +93,6 @@ def picture_choices(mod, keys, winter=False):
                     files.append(f)
             out[(cname, key)] = files
     return names, out, density
-
-
-def ground_file(name):
-    """The path under data/ of a picture named in descr_aerial_map_ground_types.txt: the game puts the name after
-    data/terrain/aerial_map/ground_types/ as it stands, so a mod may climb out with '../' (HLR names
-    '../../../../data/terrain/aerial_map/ground_types/x.tga' - the same folder reached from the game's root)."""
-    import posixpath
-    p = posixpath.normpath("data/terrain/aerial_map/ground_types/" + name.replace("\\", "/"))
-    return p[5:] if p.lower().startswith("data/") else p.lstrip("./")
 
 
 def _texture(mod, name, period):
