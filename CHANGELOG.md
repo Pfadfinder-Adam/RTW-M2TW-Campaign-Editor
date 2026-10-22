@@ -24,6 +24,7 @@
 - The game stopped? The editor notices it (after Start the game, or at its next start when it was closed) and asks once whether to send a report - the reason in one line, nothing sent without your click; can be switched off in Settings.
 - Coast & heights drawn by the graphics card straight into the window on Windows (the map, the shore line and the brush; moving, zooming and painting no longer remake a picture each time); the frame's time shows beside the zoom. Elsewhere, or if the card fails, it draws as before.
 - The editor's own look: Tools > Edit the editor's look - drag any button, tick or label anywhere, rename it, give it a hover text or a width, hide it, take it back; kept for every start. The editor's language from a language file (Settings), and Words to translate writes every word for translators.
+- Settlements: an Owner filter - pick a faction and see only the towns it holds.
 
 ### Changed
 - Maps: the '?' of Bigger map (x3)... stands after the button, no longer beside the zoom's own '?'.

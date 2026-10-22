@@ -20845,3 +20845,18 @@ building castle_port
             self.assertEqual([u["unit"] for u in v.level["units"]], ["rebel spear"])
         finally:
             root.destroy()
+
+    def test_settlements_filter_by_owner(self):
+        """Report #295: Settlements shows only the towns one faction holds (england: England's towns only)."""
+        try:
+            from campaign_editor.gui_settlements import owners_of, of_owner
+        except ImportError as e:
+            self.skipTest("no tkinter: %s" % e)
+        rows = [{"region": "London_Province", "owner": "england"},
+                {"region": "Paris_Province", "owner": "france"},
+                {"region": "York_Province", "owner": "england"},
+                {"region": "Rennes_Province", "owner": "rebels"}]
+        self.assertEqual(owners_of(rows), ["(all)", "england", "france", "rebels"])
+        self.assertEqual([r["region"] for r in of_owner(rows, "england")], ["London_Province", "York_Province"])
+        self.assertEqual(len(of_owner(rows, "(all)")), 4)
+        self.assertEqual(of_owner(rows, "spain"), [])
