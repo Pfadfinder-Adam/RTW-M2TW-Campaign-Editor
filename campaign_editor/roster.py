@@ -557,9 +557,11 @@ def set_level(plan, faction, chain, level, give=True, campaign=None):
         new = [f for f, _ in cultures if f != faction]
         code = strip_comment(text).rstrip()
         rest = text[len(code):]
-        if " requires " in " %s " % code:
-            head, _, cond = code.partition("requires")
-            new_text = "%srequires factions { %s} and %s%s" % (head, "".join("%s, " % n for n in new), cond.strip(), rest)
+        m = re.search(r"(?<![A-Za-z0-9_])requires(?![A-Za-z0-9_])", code)
+        if m:
+            head, cond = code[:m.start()], code[m.end():].strip()
+            new_text = "%srequires factions { %s}%s%s" % (head, "".join("%s, " % n for n in new),
+                                                         " and " + cond if cond else "", rest)
         else:
             new_text = "%s requires factions { %s}%s" % (code, "".join("%s, " % n for n in new), rest)
         e.set(i, new_text)
