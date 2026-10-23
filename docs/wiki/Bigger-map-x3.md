@@ -2,7 +2,7 @@
 
 The whole campaign map made 3 x bigger, with everything tied to it.
 
-**Bigger map (x3)...** (Maps, on the map's bar beside the zoom) (beta), Rome (with REX) and Medieval II (with M2EX). Each tile of
+**Map tools > Bigger map (x3)...** (Maps, on the map's bar beside the zoom) (beta), Rome (with REX) and Medieval II (with M2EX). Each tile of
 `map_regions.tga` becomes a 3 x 3 block; everything tied to the map is converted with it.
 
 **The window** says the map's size now and after and asks for its values - the hills and mountains (times higher),

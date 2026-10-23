@@ -327,11 +327,11 @@ removes it). Towns the mod's own campaign script renames are shown grey and are 
 
 ## Make the map 3 x bigger
 
-**Bigger map (x3)...** (on the map's bar, beside the zoom) turns every tile into a 3 x 3 block (both games), in five
+**Map tools > Bigger map (x3)...** (on the map's bar, beside the zoom) turns every tile into a 3 x 3 block (both games), in five
 steps you look over one by one; towns, armies, resources, the coast, heights, rivers, the map's pictures and the
 campaign's scripts follow. The window, its steps and values, and what each file becomes: [[Bigger map x3]].
 
-**Map from zero...** beside it puts a small new map in the campaign's place - an island, a region with its town,
+**Map tools > Map from zero...** puts a small new map in the campaign's place - an island, a region with its town,
 a port and a resource, a faction and the rebels, or as many regions and factions as you ask - to grow yourself
 (a backup first; Restore puts the old map back). More in [[Reference]].
 
