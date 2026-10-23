@@ -232,7 +232,9 @@ def _texts(plan, now, campaign):
         set_to["ST_" + F] = o["short_name"]
     adj_old, adj_new = now.get("adjective"), o.get("adjective")
     adj = (adj_old, adj_new) if adj_old and adj_new and adj_old != adj_new else None
-    if o.get("description") is not None and o.get("description") != now.get("description"):
+    # an empty box is the same as no string (Medieval II has no {F_DESCR} tooltip: its greyed box sends "") - never
+    # an empty string added for it (tester 2026-10-23: Apply wrote an empty {EGYPT_DESCR} into expanded.txt)
+    if o.get("description") is not None and o["description"] != (now.get("description") or ""):
         set_to[F + "_DESCR"] = o["description"]
     for suffix, k in EXTRA_TEXTS.items():
         if k in now and o.get(k) is not None and o[k] != now[k]:
@@ -248,7 +250,7 @@ def _texts(plan, now, campaign):
                             "it (Medieval II: text/expanded.txt - a mod with only expanded.txt.strings.bin needs the "
                             ".txt first)" % (words, o[k], plan.new.upper()))
     long_new = o.get("long_description")
-    if long_new is not None and long_new != now.get("long_description"):
+    if long_new is not None and long_new != (now.get("long_description") or ""):
         keys = {m.group(2).upper() for p in plan.mod.campaign_text_files(campaign)
                 for l in plan.mod.load(p).texts() for m in [RE_KEY.match(l)] if m}
         set_to[description_key(plan.new, campaign, keys) + "_DESCR"] = long_new
@@ -294,7 +296,7 @@ def _texts(plan, now, campaign):
             plan.note(f, "%d string(s) changed" % len(edits))
         found.update(RE_KEY.match(texts[a]).group(2).upper() for a, _, _ in edits)
         found.update(m.group(2).upper() for t in texts for m in [RE_KEY.match(t)] if m and m.group(2).upper() in set_to)
-    _add_missing(plan, campaign, {k: v for k, v in set_to.items() if k not in found})
+    _add_missing(plan, campaign, {k: v for k, v in set_to.items() if k not in found and v.strip()})
 
 
 def _add_missing(plan, campaign, missing):
