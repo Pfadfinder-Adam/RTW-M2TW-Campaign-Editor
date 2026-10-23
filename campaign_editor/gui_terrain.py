@@ -80,7 +80,11 @@ class TerrainEditor(ttk.Frame):
         self._rivers_tick = ttk.Checkbutton(self._paint_end, text="Rivers", variable=self.v_rivers_here,
                                             command=self._rivers_toggled)
         self._rivers_tick.pack(side="left", padx=(8, 0))
-        ttk.Button(top, text="Undo all changes here", command=self.reset).pack(side="left", padx=(12, 0))
+        # short: the tab row's bar ran past a 1280 px window's edge ('Undo al...')
+        from .gui_util import tip
+        tip(ttk.Button(top, text="Undo all", command=self.reset), "Undo all changes here: every stroke of the "
+            "Terrain and Coast & heights tabs not written yet goes (Ctrl+Z takes back one stroke).").pack(
+            side="left", padx=(12, 0))
         self.v_shore = tk.BooleanVar(value=True)       # the shore as the game draws it (Land and sea's 2nd row)
         from . import settings
         look = settings.get("map_look") or {}
