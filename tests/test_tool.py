@@ -13825,7 +13825,7 @@ building smith
             fh.write(text)
         mod = ModData(self.root)
         plan = build(mod, "test", "alpha", "beta", {"start": {"regions": ["B_R"], "leader": {"name": "Boris"},
-                                                              "denari": 777}})
+                                                              "denari": 777, "superfaction": True}})
         s = Strat(plan.files[sp])
         fb = s.faction("beta")
         head = [l.strip() for l in s.lines[fb.start + 1:fb.end] if l.strip() and not l.startswith(";")][:3]
@@ -13835,11 +13835,20 @@ building smith
         self.addCleanup(setattr, E, "is_bi", E.is_bi)
         E.is_bi = lambda m: True                               # plain Rome takes no later faction
         later = build(ModData(self.root), "test", "alpha", "gamma", {"start": {
-            "way": "event", "date": "5 summer", "region": "B_R", "re_emergent": True, "regions": [], "leader": None}})
+            "way": "event", "date": "5 summer", "region": "B_R", "re_emergent": True, "regions": [], "leader": None,
+            "superfaction": True}})
         s = Strat(later.files[sp])
         fb = s.faction("gamma")
         head = [l.strip().split()[0] for l in s.lines[fb.start + 1:fb.end] if l.strip() and not l.startswith(";")]
         self.assertEqual(head[:5], ["superfaction", "ai_label", "dead_until_resurrected", "re_emergent", "denari"])
+        # a new faction is no house of the template's master unless asked (#414: a clone of the Julii shared sight
+        # and wars with a clone of the Brutii - both 'superfaction romans_senate')
+        alone = build(ModData(self.root), "test", "alpha", "delta", {"start": {"regions": ["B_R"],
+                                                                                "leader": {"name": "Boris"}}})
+        s = Strat(alone.files[sp])
+        self.assertIsNone(s.superfaction("delta"))
+        self.assertEqual(s.superfaction("alpha"), "slave")
+        self.assertTrue(any("superfaction slave' not taken" in n for _, n in alone.notes))
         plan.apply()
         # a mod written by 0.29.1 / 0.29.2: denari first - found and put right
         with open(sp) as fh:

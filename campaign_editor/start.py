@@ -321,6 +321,12 @@ def build_start(plan, campaign, start):
         if tk[0] in ("settlement", "character", "character_record", "relative", "army", "navy", "fleet") or \
                 tk[0].startswith("{"):
             break
+        if tk[0] == "superfaction" and not start.get("superfaction"):
+            # the template's tie to its master (Rome: a Roman house under romans_senate - shared sight, wars together,
+            # the Senate's missions) is the template's own: a new faction stands alone unless asked (report #414)
+            plan.note(f, "%s's 'superfaction %s' not taken: %s is no house of %s (New faction: tick 'one of %s's "
+                         "houses' for that)" % (t, " ".join(tk[1:]), new, " ".join(tk[1:]), " ".join(tk[1:])))
+            continue
         if tk[0] != "denari" and tk[0] not in DEAD_WORDS:      # dead at the start: the new faction's own choice
             head_lines.append(f.text(i).rstrip("\r"))
     if start.get("way", "map") != "map":
