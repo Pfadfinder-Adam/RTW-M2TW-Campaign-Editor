@@ -10157,6 +10157,22 @@ building smith
         fb = Strat(plan.files[mod.campaign_file("test", "descr_strat.txt")]).faction("beta")
         self.assertTrue(any(c.name == "Brude" for c in fb.characters))
 
+    def test_level_taken_from_everyone_line(self):
+        """Review: a level with no factions list taken from one faction - its 'requires' with nothing after it got
+        'requires factions { ... } and ' (a dangling 'and' the game cannot read); a condition after it stays."""
+        from campaign_editor import roster as R
+        d = os.path.join(self.root, "data")
+        for head, want in (("muster city requires", "muster city requires factions { slave, }"),
+                           ("muster city requires building_present_min_level x y",
+                            "muster city requires factions { slave, } and building_present_min_level x y")):
+            write(os.path.join(d, "export_descr_buildings.txt"), self.POOL_EDB.replace(
+                "muster city requires factions { barbarian, alpha, }", head))
+            mod = ModData(self.root)
+            plan = Plan(mod, None, "roster")
+            R.set_level(plan, "alpha", "barracks", "muster", give=False)
+            edb = plan.files[mod.file("edb")].dump().decode("latin-1")
+            self.assertIn(want + "\r\n", edb)
+
     def test_brought_faction_recruits_what_it_owns(self):
         """Review 2026-10-23 (a dry run on Medieval II: Scotland brought on England): the brought faction got every
         recruit line of its frame's own units it does not own (Medieval II stops at such a town: settlement.cpp), and
