@@ -21,6 +21,11 @@ TITLE = "Campaign HUD"
 SCREENS = ["1024 x 768 (the layout)", "1280 x 1024", "1600 x 900", "1920 x 1080", "2560 x 1440"]
 
 
+def is_whole_screen(w, h):
+    """A screenshot of a whole game screen (the games start at 800 x 600) - not a part cut out of one."""
+    return w >= 800 and h >= 600
+
+
 class HudPanel(ttk.Frame):
     def __init__(self, master, app, interface):
         super().__init__(master)
@@ -251,13 +256,20 @@ class HudPanel(ttk.Frame):
             messagebox.showerror(TITLE, "%s cannot be read: %s" % (path, e), parent=self)
             return
         w, h = self._shot.size
-        self.v_screen.set("%d x %d" % (w, h))           # the HUD stretched to the screenshot's own screen
+        whole = is_whole_screen(w, h)
+        if whole:
+            self.v_screen.set("%d x %d" % (w, h))       # the HUD stretched to the screenshot's own screen
         self.v_shot.set(True)
-        self._shot_xy = (0, 0)                          # laid exactly over the HUD; dragged aside to compare
+        sw, sh = self._screen()
+        # a whole screen lies exactly over the HUD; a cut-out piece (the HUD alone) over its bottom, the Screen kept
+        # (report #413: a 693 x 236 cut-out made the HUD a 693 x 236 'screen')
+        self._shot_xy = (0, 0) if whole else ((sw - w) // 2, sh - h)
         self.redraw()
         self.c.fit_content()
-        self.lbl.configure(text="Your screenshot (%d x %d) over the HUD - O shows / hides it, [ ] or the slider: how "
-                                "much of it shows; drag it aside to compare them side by side" % (w, h))
+        self.lbl.configure(text=("Your screenshot (%d x %d) over the HUD - O shows / hides it, [ ] or the slider: how "
+                                 "much of it shows; drag it aside to compare them side by side" % (w, h)) + (
+            "" if whole else ". It is a part of a screen, so 'Screen' stays %d x %d - pick the screen it was taken "
+                             "on there" % (sw, sh)))
 
     def _shot_back(self):
         self._shot_xy = (0, 0)
