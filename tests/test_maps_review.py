@@ -109,6 +109,25 @@ class ClimatesViewTest(unittest.TestCase):
         self.assertIsNotNone(cm._climates_fast(False))
 
 
+    def test_a_cut_short_heights_file_says_nothing_under_the_mouse(self):
+        """map_heights.hgt cut short (under 8 bytes) stopped the map's status line with a struct error: the map read
+        it on its own; now through terrain.read_hgt, which gives None."""
+        try:
+            from campaign_editor.mapdata import CampaignMap
+        except ImportError:
+            self.skipTest("no Pillow")
+        d = tempfile.mkdtemp()
+        try:
+            path = os.path.join(d, "map_heights.hgt")
+            with open(path, "wb") as fh:
+                fh.write(b"\x01\x00")
+            cm = CampaignMap.__new__(CampaignMap)
+            cm.mod, cm.campaign = SimpleNamespace(campaign_file=lambda camp, name: path), "c"
+            self.assertIsNone(cm._hgt_at(0, 0))
+        finally:
+            shutil.rmtree(d)
+
+
 class ResourceOnWastelandTest(unittest.TestCase):
     def setUp(self):
         from campaign_editor.minimod import make

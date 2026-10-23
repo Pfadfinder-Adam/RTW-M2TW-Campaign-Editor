@@ -299,19 +299,10 @@ class CampaignMap:
         return text
 
     def _hgt_at(self, px, py):
-        if "_hgt" not in self.__dict__:
-            import struct
-            from array import array
+        if "_hgt" not in self.__dict__:                 # the one reader (a file cut short read None, never a crash
+            from .terrain import read_hgt               # under the mouse)
             path = self.mod.campaign_file(self.campaign, "map_heights.hgt")
-            self._hgt = None
-            if path:
-                with open(path, "rb") as fh:
-                    raw = fh.read()
-                w, h = struct.unpack("<II", raw[:8])
-                vals = array("f")
-                vals.frombytes(raw[8:8 + 4 * w * h])
-                if len(vals) == w * h:
-                    self._hgt = (w, h, vals)
+            self._hgt = read_hgt(path) if path else None
         if self._hgt is None:
             return None
         w, h, vals = self._hgt
