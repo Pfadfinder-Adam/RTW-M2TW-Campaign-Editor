@@ -39,6 +39,7 @@ class Board(tk.Canvas):
         self.on_view, self.on_right_click = on_view, on_right_click
         self.content_box, self.selection_box = content_box, selection_box
         self._pan, self._space, self._photos, self._fitted = None, False, {}, False
+        self._soon = None                              # a redraw waiting for the wheel / drag events to stop coming
         for seq in ("<MouseWheel>", "<Button-4>", "<Button-5>"):
             self.bind(seq, self._wheel)
         self.bind("<ButtonPress-2>", lambda e: self._pan_start(e, 2))
@@ -86,6 +87,9 @@ class Board(tk.Canvas):
 
     def changed(self):
         """The view moved: the grid again, then the owner's things."""
+        if self._soon is not None:
+            self.after_cancel(self._soon)
+            self._soon = None
         self.delete("board-grid")
         if self.grid_on:
             self._draw_grid()
@@ -93,13 +97,19 @@ class Board(tk.Canvas):
             self.on_view()
         self.tag_lower("board-grid")
 
-    def pan(self, dx, dy):
-        self.view.pan(dx, dy)
-        self.changed()
+    def changed_soon(self):
+        """changed() once the mouse's events waiting now are read: a quick turn of the wheel or a drag gives many
+        steps, each drew the whole window again - it lagged (report #409, zoom 50 - 175 %); one drawing for them."""
+        if self._soon is None:
+            self._soon = self.after_idle(self.changed)
 
-    def zoom_step(self, up, at=None, fine=False):
+    def pan(self, dx, dy, soon=False):
+        self.view.pan(dx, dy)
+        self.changed_soon() if soon else self.changed()
+
+    def zoom_step(self, up, at=None, fine=False, soon=False):
         self.view.zoom_at(up, at or tuple(v / 2 for v in self.size()), fine=fine)
-        self.changed()
+        self.changed_soon() if soon else self.changed()
 
     def set_zoom(self, z, at=None):
         self.view.set_zoom(z, at or tuple(v / 2 for v in self.size()))
@@ -196,7 +206,7 @@ class Board(tk.Canvas):
             up = e.num == 4
         else:
             up = (getattr(e, "delta", 0) or 0) > 0
-        self.zoom_step(up, (e.x, e.y), fine=bool((getattr(e, "state", 0) or 0) & 0x0001))
+        self.zoom_step(up, (e.x, e.y), fine=bool((getattr(e, "state", 0) or 0) & 0x0001), soon=True)
         return "break"
 
     def _space_down(self, e):
@@ -238,7 +248,7 @@ class Board(tk.Canvas):
         if not moved and abs(e.x - x) + abs(e.y - y) < 4:
             return "break"                       # a click, not a drag yet
         self._pan = (button, e.x, e.y, True)
-        self.pan(e.x - x, e.y - y)
+        self.pan(e.x - x, e.y - y, soon=True)
         return "break"
 
     def _pan_end(self, e):

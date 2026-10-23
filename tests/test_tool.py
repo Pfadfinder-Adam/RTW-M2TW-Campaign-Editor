@@ -4244,6 +4244,18 @@ building smith
                 c.event_generate("<B2-Motion>", x=150, y=130)
                 c.event_generate("<ButtonRelease-2>", x=150, y=130)
                 self.assertEqual((c.view.ox - ox, c.view.oy - oy), (50, 30))
+                # a quick turn of the wheel is drawn once, a hover moves only the piece's frame (#409: it lagged)
+                root.update()
+                drawn, real = [], c.picture
+                with mock.patch.object(c, "picture", side_effect=lambda *a, **k: (drawn.append(a), real(*a, **k))[1]):
+                    for _ in range(4):
+                        c.event_generate("<MouseWheel>", x=300, y=300, delta=120)
+                    root.update()
+                    self.assertEqual(len(drawn), 2)                         # the HUD and the screenshot, once
+                    p._motion(NS(**dict(zip("xy", c.to_screen(970, 720)))))
+                    self.assertEqual(p.hover["piece"], "end turn")
+                    self.assertEqual(len(drawn), 2)
+                self.assertTrue(c.find_withtag("hud-mark"))
         finally:
             root.destroy()
 

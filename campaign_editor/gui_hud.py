@@ -26,7 +26,7 @@ class HudPanel(ttk.Frame):
         super().__init__(master)
         self.app, self.interface = app, interface
         self.mod, self.items, self.picked, self.hover = None, [], None, None
-        self._img = None
+        self._img, self._drawn = None, None             # the HUD picture; (it, the view) it was last drawn for
         self._shot = None                               # the screenshot laid over (Pillow RGBA), or None
         bar = ttk.Frame(self, padding=(10, 8, 10, 4))
         bar.pack(fill="x")
@@ -141,26 +141,37 @@ class HudPanel(ttk.Frame):
         return x * fx - 8, y * fy - 8, (x + w) * fx + 8, (y + h) * fy + 8
 
     def show(self):
+        """The pictures drawn again only when the view, the HUD or the screenshot changed - a hover over a piece only
+        moves its frame (it drew the whole HUD again at every piece the mouse crossed: report #409's lag)."""
         c = self.c
-        c.delete("hud")
         self.lbl_zoom.configure(text="%d %%" % round(c.zoom * 100))
-        if self._img is None:
-            return
-        w, h = self._img.size
-        c.picture(self._img, 0, 0, "hud")
         sb = self._shot_box()
+        key = (c.zoom, c.view.ox, c.view.oy, c.size(), sb, self.v_alpha.get() if sb else None)
+        if self._img is None or self._drawn is None or self._drawn[0] is not self._img or self._drawn[1] != key \
+                or not c.find_withtag("hud"):
+            c.delete("hud")
+            self._drawn = None
+            if self._img is None:
+                c.delete("hud-mark")
+                return
+            w, h = self._img.size
+            c.picture(self._img, 0, 0, "hud")
+            if sb:
+                x, y, sw, sh = sb
+                over = x < w and y < h and x + sw > 0 and y + sh > 0     # over the HUD: see-through; beside it: whole
+                c.picture(self._shot, x, y, "hud",
+                          alpha=max(0, min(100, self.v_alpha.get())) / 100.0 if over else None)
+            self._drawn = (self._img, key)
+        c.delete("hud-mark")
         if sb:
-            x, y, sw, sh = sb
-            over = x < w and y < h and x + sw > 0 and y + sh > 0     # over the HUD: see-through; beside it: whole
-            c.picture(self._shot, x, y, "hud", alpha=max(0, min(100, self.v_alpha.get())) / 100.0 if over else None)
-            c.box(x, y, sw, sh, outline="#6fa8dc", width=1, tags="hud")
+            c.box(*sb, outline="#6fa8dc", width=1, tags="hud-mark")
         fx, fy = self._factor()
         for p, colour in ((self.hover, "#ffffff"), (self.picked, "#ffd24a")):
             if p is not None:
                 x, y, pw, ph = p["box"]
-                c.box(x * fx, y * fy, pw * fx, ph * fy, outline=colour, width=2, tags="hud")
+                c.box(x * fx, y * fy, pw * fx, ph * fy, outline=colour, width=2, tags="hud-mark")
         for o in self._stuck:                                  # the guide lines of what the screenshot stuck to
-            c.box(*o, outline="#ff5ec4", width=1, dash=(4, 3), tags="hud")
+            c.box(*o, outline="#ff5ec4", width=1, dash=(4, 3), tags="hud-mark")
 
     def _factor(self):
         """World units (screen pixels) per layout pixel, x and y (the screen stretches them apart)."""
@@ -235,6 +246,7 @@ class HudPanel(ttk.Frame):
             from PIL import Image
             with Image.open(path) as im:
                 self._shot = im.convert("RGBA")
+                self._drawn = None
         except Exception as e:
             messagebox.showerror(TITLE, "%s cannot be read: %s" % (path, e), parent=self)
             return
@@ -254,6 +266,7 @@ class HudPanel(ttk.Frame):
 
     def _shot_away(self):
         self._shot = None
+        self._drawn = None
         self.v_shot.set(False)
         self.show()
 
