@@ -378,7 +378,7 @@ def level_problem(rule, text):
     t = text.strip()
     if t in CITY_LEVELS + CASTLE_LEVELS:
         return None
-    hint = " ('moot_and_bailey' - the game's own spelling)" if t.lower() == "motte_and_bailey" else ""
+    hint = " ('moot_and_bailey' - the game's own spelling)" if t.lower() in ("motte_and_bailey", "moat_and_bailey") else ""
     return "no settlement level the game knows%s: one of %s" % (hint, ", ".join(CITY_LEVELS + CASTLE_LEVELS))
 
 
