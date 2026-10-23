@@ -118,6 +118,16 @@ def mod_target(data_dir, name):
     return os.path.join(game, "mods", name) if is_medieval2(game) else os.path.join(game, name)
 
 
+def free_name(data_dir, name):
+    """name, or name_2, name_3 ... - the first no folder of the game's mods has yet (the New mod folder window
+    proposed M2_New when it was there already and said so only after Create - a tester)."""
+    got, n = name, 1
+    while os.path.exists(mod_target(data_dir, got)):
+        n += 1
+        got = "%s_%d" % (name, n)
+    return got
+
+
 def _cfg(base_dir, base_name, name):
     """Medieval II's <name>.cfg: the base mod's own with its folder renamed, else a plain one."""
     if base_name and os.path.isdir(base_dir):

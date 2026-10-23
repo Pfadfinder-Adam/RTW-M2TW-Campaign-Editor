@@ -9959,6 +9959,15 @@ building smith
         self.assertIn("back into a city", conversion_words(castle))
         self.assertEqual(conversion_words({"chain": "core_building", "levels": [{"kind": "city"}]}), "")
 
+    def test_new_mod_folder_proposes_a_free_name(self):
+        """A tester: New mod folder proposed M2_New though it was there, said so only after Create."""
+        from campaign_editor.newmod import free_name, mod_target
+        data = os.path.join(self.root, "data")
+        self.assertEqual(free_name(data, "CE_Free"), "CE_Free")
+        os.makedirs(mod_target(data, "CE_Free"))
+        os.makedirs(mod_target(data, "CE_Free_2"))
+        self.assertEqual(free_name(data, "CE_Free"), "CE_Free_3")
+
     def test_new_regions_town_on_ground_the_game_refuses(self):
         """A report (#420, kgcm): a new region's town on a tile the engine will not take a settlement on (mountains,
         dense forest, impassable - culture_db / world.cpp is_settlement_placement_on_a_valid_tile) - the game skips

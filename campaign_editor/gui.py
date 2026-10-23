@@ -22,7 +22,7 @@ from .buildings import (POP_MIN, SETTLEMENT_LEVELS, BuildingPictures, core_need,
 from .mapdata import CampaignMap, faction_colours
 from .moddata import ModData
 from .mapedit import orig as place_orig, place_problem, port_fleets, sea_spot
-from .newmod import create_mod, game_of, game_root_of, is_game, is_medieval2, list_mods, mod_target
+from .newmod import create_mod, free_name, game_of, game_root_of, is_game, is_medieval2, list_mods, mod_target
 from .edit import edit as edit_faction, read_faction
 from .gui_buildings import NONE, BuildingsEditor
 from .gui_diplomacy import DiplomacyEditor
@@ -5120,7 +5120,8 @@ class App(tk.Tk):
         ttk.Label(frm, text="Created in:  %s" % os.path.dirname(mod_target(self.mod.data, "x"))).grid(
             row=1, column=0, columnspan=2, sticky="w", pady=(0, 8))
         ttk.Label(frm, text="New mod name").grid(row=2, column=0, sticky="w")
-        v_name = tk.StringVar(value=(base or ("M2" if m2 else "RTW")) + "_" + (self.v["name"].get().strip().capitalize() or "New"))
+        v_name = tk.StringVar(value=free_name(self.mod.data, (base or ("M2" if m2 else "RTW")) + "_" + (
+            self.v["name"].get().strip().capitalize() or "New")))
         e_name = ttk.Entry(frm, textvariable=v_name, width=30)
         e_name.grid(row=3, column=0, sticky="we", padx=(0, 6))
         e_name.focus_set()                              # the proposed name picked: typing replaces it (the tester)
