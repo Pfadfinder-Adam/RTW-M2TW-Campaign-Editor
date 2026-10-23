@@ -9130,6 +9130,41 @@ building smith
         with open(os.path.join(gcamp, "radar_map1.tga"), "rb") as fh:
             self.assertEqual(fh.read(), old)
 
+    def test_map_size_moves_water_surface_with_the_map(self):
+        """Adam, 2026-10-23, watching the tester grow a map: the sea kept the old coasts' outline, shifted off the
+        land. water_surface.tga (the sea's colour picture) is stretched by the game over the whole map
+        (sea_plane.cpp), so it keeps its size and its picture moves and squeezes with the map; the new sea takes the
+        deep sea's colour. flat_sea makes it one colour. Checked with and without Pillow (CI has none)."""
+        from campaign_editor import mapresize as MR
+        from campaign_editor.tga import read_tga_bytes
+        from campaign_editor.tga import read_tga
+        camp = os.path.join(self.root, "data", "world", "maps", "campaign", "test")
+        regions = read_tga(os.path.join(camp, "map_regions.tga"))
+        w, h = regions.width, regions.height
+        deep, coast = (10, 20, 90), (250, 250, 250)
+        pixels = [[coast if x < 4 or y >= 12 else deep for x in range(16)] for y in range(16)]    # coasts: left, top
+        path = os.path.join(camp, "water_surface.tga")
+        write_tga(path, 16, 16, pixels)
+        with open(path, "rb") as fh:
+            old = fh.read()
+        got = read_tga_bytes(MR.water_shifted(old, w, h, w, 0, 0, 0, None))     # the map twice as wide, at the left
+        self.assertEqual((got.width, got.height), (16, 16))                      # its own size kept
+        self.assertEqual(got.get(1, 8), deep)                                    # the new sea: the common colour
+        self.assertEqual(got.get(9, 8), coast)                                   # the old left edge, now mid-picture
+        self.assertEqual(got.get(14, 8), deep)
+        cut = read_tga_bytes(MR.water_shifted(old, 16, 16, -4, 0, 0, 0, None))  # the coast's columns cut off
+        self.assertNotIn(coast, {cut.get(x, y) for x in range(1, 16) for y in range(10)})
+        flat = read_tga_bytes(MR.water_shifted(old, w, h, 2, 0, 0, 0, None, flat=True))
+        self.assertEqual({flat.get(x, y) for x in range(16) for y in range(16)}, {deep})
+        plan = Plan(ModData(os.path.join(self.root, "data")), "map", "map_size", {})
+        MR.plan_resize(plan, "test", top=-1, clear=True)                # (the little map has no sea to grow)
+        self.assertIn(path, plan.binaries)
+        self.assertTrue(plan.binaries[path] != old)                            # the top coast squeezed up
+        plan = Plan(ModData(os.path.join(self.root, "data")), "map", "map_size", {})
+        MR.plan_resize(plan, "test", top=-1, clear=True, flat_sea=True)
+        flat = read_tga_bytes(plan.binaries[path])
+        self.assertEqual(len({flat.get(x, y) for x in range(16) for y in range(16)}), 1)
+
     def test_map_size_writes_the_games_descr_terrain_into_a_thin_mod(self):
         """The game sizes every map layer by descr_terrain.txt (world_map.cpp). A mod keeping only what it changes,
         with its own map_regions.tga but the game's descr_terrain.txt: the size was never written (the file was looked
