@@ -594,6 +594,35 @@ class ModelViewer(tk.Toplevel):
             self._anim_box(None)
         self.load()
 
+    @classmethod
+    def last_open(cls):
+        """The 3D window open now that was opened last, or None (a report takes what it drew - gui_report)."""
+        for w in reversed(list(cls._open.values())):
+            try:
+                if w.winfo_exists():
+                    return w
+            except tk.TclError:
+                continue
+        return None
+
+    def report_files(self):
+        """[(name in a report's zip, bytes)]: the skeletons, animations and meshes this view drew with
+        (animations.debug_files) and what was picked (state.txt)."""
+        sks = list(self.info.skeletons)
+        for held in (getattr(self.info, "weapons", {}) or {}).values():
+            sks += list(held)
+        if self.mount:
+            sks += list(self.mount[0].skeletons)
+        anims = [getattr(self.anim, "name", None)]
+        for sk in sks:                                  # each one's 'default' (the binds) and the move on show
+            moves = self._moves_of(sk)
+            anims += [moves.get("default"), moves.get((self.anim_key or "").lower())]
+        state = ["model %s, skeleton picked %s, animation %s (%s), frame %s, mount %s" % (
+            self.info.name, self.v_skel.get(), self.anim_key, getattr(self.anim, "name", None), self.frame,
+            self.mount[1] if self.mount else None)]
+        files = AN.debug_files(self.mod, sks, anims, [self.path, self.mount_path if self.mount else None])
+        return [("3d_view/state.txt", "\n".join(state).encode("utf-8"))] + files
+
     def _lod_name(self, i):
         return "%d - %s" % (i, "closest" if i == 0 else "farther") if i < len(self.info.meshes) else "-"
 

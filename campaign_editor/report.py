@@ -444,9 +444,10 @@ def doctor(files):
     return v["headline"] if v else ""
 
 
-def build_zip(texts, message="", contact="", info=None, pictures=(), words=(), doctor=""):
+def build_zip(texts, message="", contact="", info=None, pictures=(), words=(), doctor="", blobs=()):
     """The report's zip as bytes: report.txt (the crash doctor's word first, what happened, the contact, the set-up),
-    the scrubbed logs, the pictures (as they are - the user picked them)."""
+    the scrubbed logs, the pictures (as they are - the user picked them), blobs: [(name, bytes)] of game files as
+    they are (View in 3D's skeletons, animations and meshes - gui_meshview.report_files)."""
     info = dict(info or {})
     head = ["The game's log says: %s" % scrub(doctor, words), ""] if doctor else []
     head += ["What happened:", scrub(message.strip(), words) or "(not said)", "",
@@ -460,6 +461,9 @@ def build_zip(texts, message="", contact="", info=None, pictures=(), words=(), d
         for p in list(pictures)[:PICTURES]:
             name, data = small_picture(p)
             z.writestr("pictures/" + scrub(name, words), data)
+        for name, data in blobs:                   # a text's paths lose the user's name like the logs
+            z.writestr(scrub(name, words), scrub(data.decode("utf-8", "replace"), words).encode("utf-8")
+                       if name.endswith(".txt") else data)
     return buf.getvalue()
 
 

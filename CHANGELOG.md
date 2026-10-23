@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### Added
+- Report a bug with a View in 3D window open: the report takes that window's picture and the files the model was drawn with - its skeletons (their records and descr_skeleton.txt lines), the animation on show and each skeleton's default, the meshes, and a note of which animation set was read and how (a tick to leave them out). A mod's model that looks wrong can be drawn again the same way and fixed.
 - Recolour freely: any colour of any picture made another, not only the faction's colours - click a colour on a battle texture, campaign-map figure, card or button, pick the new colour or turn it with the sliders; its light and shade kept, faces left alone, several changes in a row, a brush to add or keep. On every texture card (Unit editor, Models tab) and every picture opened big; a texture of the game is copied, never written over; a unit's texture can change for that unit only. Both games, a backup, Restore gives it back.
 
 ### Changed
