@@ -4760,6 +4760,11 @@ class App(tk.Tk):
                 log.write("Backups already put back taken away: %d *_restored folder(s)" % n)
         except Exception:
             pass
+        from .newmod import unshare_caches
+        own = unshare_caches(os.path.dirname(os.path.abspath(self.mod.data)))
+        if own:                                     # the game wrote through these into the base mod's files
+            log.write("The game's caches made this mod's own (they were hard links to the base mod's): %s"
+                      % ", ".join(self.mod.rel(p) for p in own[:10]))
         self.roster_editor.forget()
         self.family_editor.forget()
         # remembered for the next start: this mod, its game folder, the campaign picked in it

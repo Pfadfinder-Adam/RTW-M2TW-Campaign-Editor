@@ -635,6 +635,29 @@ class ToolTest(unittest.TestCase):
                                  "bi/data/descr_sm_factions.txt"})
         self.assertEqual(sorted(skipped), ["HLR", "mods/mymod", "thin"])
 
+    def test_an_older_linked_mod_gets_its_own_game_caches(self):
+        """A mod an older version made of hard links shares map.rwm / *.db with its base mod, and the game rewrites
+        those in place - into the base mod's own file. On load each still shared becomes the mod's own copy (same
+        bytes); other linked files stay links; a mod not made with links is left alone."""
+        import json
+        from campaign_editor.newmod import MARKER, unshare_caches
+        base, mod = os.path.join(self.root, "HLR"), os.path.join(self.root, "mine")
+        for rel in ("data/world/maps/base/map.rwm", "data/x.db", "data/models/a.cas"):
+            write(os.path.join(base, *rel.split("/")), "cache " + rel)
+            os.makedirs(os.path.dirname(os.path.join(mod, *rel.split("/"))), exist_ok=True)
+            os.link(os.path.join(base, *rel.split("/")), os.path.join(mod, *rel.split("/")))
+        write(os.path.join(mod, MARKER), json.dumps({"base": "HLR", "linked": False}))
+        self.assertEqual(unshare_caches(mod), [])                       # not made with links: nothing done
+        write(os.path.join(mod, MARKER), json.dumps({"base": "HLR", "linked": True}))
+        got = unshare_caches(mod)
+        self.assertEqual(sorted(os.path.basename(p) for p in got), ["map.rwm", "x.db"])
+        rwm = os.path.join(mod, "data", "world", "maps", "base", "map.rwm")
+        self.assertEqual(os.stat(rwm).st_nlink, 1)
+        with open(rwm) as fh:
+            self.assertEqual(fh.read(), "cache data/world/maps/base/map.rwm")
+        self.assertEqual(os.stat(os.path.join(mod, "data", "models", "a.cas")).st_nlink, 2)   # a model stays linked
+        self.assertEqual(unshare_caches(mod), [])
+
     def test_modeldb_miscounted_name_and_two_models_of_one_name(self):
         """Check mod files on battle_models.modeldb: the game reads it as a Boost text archive - a string is its length,
         ONE space, then that many letters - so a space too many by hand (the modders' '3 spaces crash') makes a name
