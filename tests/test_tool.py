@@ -5862,6 +5862,14 @@ building smith
         lost = good.replace("<region>logo</region>", "<region>lost_region</region>")
         write(os.path.join(d, "menu", "Rome.lnt"), lost)
         self.assertIn("the game stops when it opens that menu", " ".join(L.problems(mod)))
+        quit_own = good.replace("      <identifier>UIP_EMPTY_ART</identifier>", "      <identifier>UIP_ERROR_DIALOG</identifier>")
+        write(os.path.join(d, "menu", "Rome.lnt"), quit_own)
+        write(os.path.join(d, "menu", "textures", "FE_texture1.tga"), "x")
+        got = L.problems(mod)                                       # Maha, 2026-10-23: a quit box picture never drawn
+        self.assertEqual(len(got), 1, got)
+        self.assertIn("main_logo (UIP_ERROR_DIALOG) has a picture of its own, 'logo_obj', which the game never draws",
+                      got[0])
+        self.assertIn("border_4pix_black_gold2.tga", got[0])
 
     def test_skeleton_parent_read_in_any_case(self):
         """#347: a mod's skeleton listing only its own few moves takes the rest from its parent - 'Type' / 'Parent'
@@ -6196,6 +6204,12 @@ building smith
         self.assertEqual(MD.kind("UIP_STATIC_TEXT", "empty_art", False), "static")
         self.assertEqual(MD.kind("UIP_MENU_BUTTON", "empty_push_button", False), "button")
         self.assertEqual(MD.kind("UIP_MENU_BUTTON", "logo", True), "art")
+        # the 'Exit program?' box (UIP_ERROR_DIALOG of CONFIRM_YES_NO) and a frame are the menus' shared frame, even
+        # with a picture of their own - the game never draws that picture (Maha, 2026-10-23)
+        self.assertEqual(MD.kind("UIP_ERROR_DIALOG", "empty_art", False), "dialog")
+        self.assertEqual(MD.kind("UIP_ERROR_DIALOG", "quit_box_own", True), "dialog")
+        self.assertEqual(MD.kind("UIP_ERROR_DIALOG_SMALL", "x", True), "dialog")
+        self.assertEqual(MD.kind("UIP_BORDER", "frame_own", True), "border")
         self.assertEqual(MD.text_colour("static"), ((255, 223, 127), True))
         self.assertEqual(MD.text_colour("button"), ((255, 221, 119), False))
         try:
@@ -6215,6 +6229,22 @@ building smith
         sl = MD.slider(parts, 120, 20, value=0)
         self.assertEqual((sl.getpixel((5, 5))[0], sl.getpixel((115, 5))[0], sl.getpixel((25, 5))[0]), (120, 130, 70))
         self.assertIsNone(MD.tick(lambda name: None, 20))
+        box, off = MD.piece_image(parts, "dialog", 448, 288)        # UI_DIALOGTEXT::draw: from 8 px outside
+        self.assertEqual((box.size, off), ((464, 304), 8))
+        self.assertEqual(MD.piece_image(parts, "border", 100, 40)[0].size, (100, 40))
+        # a new frame from a picture of the whole box: its corners / edges / middle into the cells draw_border uses
+        pic = Image.new("RGBA", (464, 304), (0, 0, 200, 255))
+        pic.paste((255, 0, 0, 255), (0, 0, 16, 16))                    # top-left corner red
+        pic.paste((0, 255, 0, 255), (16, 0, 448, 16))                  # top edge green
+        sheet = MD.frame_sheet(pic, (464, 304), old=grid, cell=64)
+        self.assertEqual(sheet.size, (256, 256))
+        self.assertEqual(sheet.getpixel((32, 32)), (255, 0, 0, 255))   # cell 0
+        self.assertEqual(sheet.getpixel((96, 32)), (0, 255, 0, 255))   # cell 1
+        self.assertEqual(sheet.getpixel((96, 96)), (0, 0, 200, 255))   # cell 5, the middle
+        self.assertEqual(sheet.getpixel((160, 32))[0], 20)             # cell 2 is never drawn: the old frame's
+        f2, _ = MD.framed(lambda name: sheet, 100, 40)
+        self.assertEqual([f2.getpixel(p)[:3] for p in ((2, 2), (50, 2), (50, 28))],
+                         [(255, 0, 0), (0, 255, 0), (0, 0, 200)])
 
     def test_menu_backdrop_is_the_games_video(self):
         """#296: the menu backdrop is a video (Rome Dump0000.m1v, Medieval II Dump0000.bik) - the <fmv> block names it
