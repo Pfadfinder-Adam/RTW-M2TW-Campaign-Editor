@@ -83,6 +83,31 @@ def strings(mod, name):
     return out
 
 
+def region_label_keys(mod, campaign):
+    """([paths], {key as spelled}) of the campaign's region and town names table as the game finds it (engine source
+    map_regions_db.cpp open_names_string_table: data/text/<campaign>_regions_and_settlement_names.txt or its
+    .strings.bin, else the same in the campaign's folder; the mod's keys laid over the game's). The keys are spelled
+    as written - the game finds them letter for letter (a HASHED_STRING_TABLE, an exact map). ([], None) when there
+    is none."""
+    name = ("%s_regions_and_settlement_names.txt" % campaign.replace("\\", "/").rstrip("/").split("/")[-1]).lower()
+    folders = list(mod.text_dirs()) + list(mod.campaign_dirs(campaign) if hasattr(mod, "campaign_dirs") else [])
+    paths, keys = [], set()
+    for folder in folders:
+        for n in sorted(os.listdir(folder)):
+            p = os.path.join(folder, n)
+            if n.lower() == name:
+                paths.append(p)
+                for line in mod.load(p).texts():
+                    m = re.match(r"\s*\{([^}]+)\}", line)
+                    if m:
+                        keys.add(m.group(1))
+            elif n.lower() == name + ".strings.bin":
+                paths.append(p)
+                with open(p, "rb") as fh:
+                    keys |= set(read_strings_bin(fh.read()))
+    return paths, (keys if paths else None)
+
+
 def shown(table, key):
     """The text players see for a key, else the key made readable (Promising_Defender -> Promising Defender)."""
     got = table.get((key or "").upper())
