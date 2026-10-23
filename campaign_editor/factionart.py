@@ -308,14 +308,14 @@ def extra_pictures(mod, faction):
             continue
         with open(got[1], "rb") as fh:
             raw = fh.read()
-        base = os.path.dirname(os.path.relpath(got[1], mod.data)).replace("\\", "/")
+        base = os.path.dirname(got[0])          # data-relative, also when the model is the game's under the mod
         for m in re.finditer(rb"textures[\\/]([^\x00\\/]{1,80}?\.tga)", raw, re.I):
             p = texture(base + "/textures/" + m.group(1).decode("latin-1"))
             if p:
                 out.append({"path": p, "label": "faction symbol (3D) texture", "users": set(users),
                             "kind": "symbol", "ref": ref, "cas": got[1], "tex": m.group(1).decode("latin-1"),
-                            "where": "the faction's 3D symbol (%s): the faction-select screen and the campaign "
-                                     "map's faction panels" % os.path.basename(ref)})
+                            "where": "the faction's 3D symbol (%s) over its towns, forts and ports on the campaign "
+                                     "map that hold no army (an army there shows the flag)" % os.path.basename(ref)})
     bb = mod.find("descr_building_battle.txt")
     if bb:
         whose = {}

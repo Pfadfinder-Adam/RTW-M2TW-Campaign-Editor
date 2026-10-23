@@ -1,6 +1,7 @@
-"""A Rome faction's symbols that live on shared sheets, not in files of their own:
+"""A faction's symbols that live on shared sheets, not in files of their own:
 
-- the **flag symbol** on the campaign map (armies, towns, fleets): descr_sm_factions.txt
+- the **flag symbol** on the campaign map (armies, towns, fleets; Rome and Medieval II alike - the engine's
+  standard_display reads descr_standards.txt the same way in both): descr_sm_factions.txt
   `standard_index k` picks slot k of the banner sheets - data/banners/symbols<k//4 + 1>.tga.dds,
   128 x 128 DXT5, four 64 x 64 symbols: k%4 = top left, top right, bottom left, bottom right
   (vanilla RTW: julii 0 = the laurel, brutii 1 = the dagger, scipii 2 = the wolf, senate 3 = the eagle).
@@ -689,10 +690,9 @@ def use_xml(plan):
 
 
 def give_own(plan, faction):
-    """A new faction: its own flag slot (Rome) and its own logos (the engine's xml sheets or the plain game's binary
+    """A new faction: its own flag slot and its own logos (the engine's xml sheets or the plain game's binary
     ones), the template's pictures in them."""
-    if rome(plan.mod):
-        own_flag(plan, faction)
+    own_flag(plan, faction)
     if not can_own_logo(plan.mod, LOGO, plan):
         if not logo_of(plan, faction, LOGO):
             return                                   # no logo line at all: nothing shared to say
@@ -708,7 +708,7 @@ def entries(mod, faction):
     """The Art tab's cards for these symbols: {'path', 'rel' (the pick key), 'label', 'where', 'size',
     'crop', 'note'}."""
     out = []
-    got = flag_of(mod, faction) if rome(mod) else None
+    got = flag_of(mod, faction)
     if got and got["sheet"]:
         box = got["box"]
         out.append({"path": got["sheet"], "rel": FLAG, "label": LABELS[FLAG][0], "where": LABELS[FLAG][1],
