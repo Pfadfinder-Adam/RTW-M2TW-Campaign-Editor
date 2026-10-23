@@ -4354,6 +4354,18 @@ building smith
                 go("map")
                 go("faction")
                 self.assertEqual(app.tab_name(), "Diplomacy")
+                # Ctrl+1 .. Ctrl+9 count the tabs on show: never a hidden map tab among the faction ones
+                shown = [app.nb.tab(t, "text").strip() for t in app.nb.tabs() if app.nb.tab(t, "state") != "hidden"]
+                for i in range(9):
+                    app._tab_key(i)
+                    app.update()
+                    self.assertEqual(app.tab_name(), shown[min(i, len(shown) - 1)] if i < len(shown) else
+                                     app.tab_name())
+                    self.assertNotIn(app.tab_name(), app.MAP_TABS)
+                go("map")
+                app._tab_key(1)
+                app.update()
+                self.assertEqual(app.tab_name(), "Terrain")
         finally:
             app.destroy()
 

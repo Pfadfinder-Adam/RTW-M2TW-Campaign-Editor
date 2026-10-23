@@ -52,27 +52,36 @@ Nothing is written until you press Apply, and every Apply makes a backup first:
 Tools > Restore a backup puts your files back exactly as they were. So try things freely.
 
 I WANT TO...  (pick the work in the row at the top, then use the tabs)
-  make a new faction ............ New faction: pick a faction to copy (the template),
-                                  type the new one's name on the Faction tab
-  change a faction that exists .. Edit faction: pick the faction, change what you want
+  make a new faction ............ Factions > New faction: pick a faction to copy (the template) and
+                                  type the new one's names - or From zero... (nothing of the template
+                                  shows) / From another mod...
+  change a faction that exists .. Factions > Edit faction: pick the faction, change what you want
                                   (in New faction the faction you pick is only the template -
                                   nothing is written for it; use Edit faction to change it)
-  give / take towns, armies ..... Edit faction: Map (a click on a town), Units & armies (garrisons,
-                                  armies, agents, fleets), Map (click towns, drag characters)
-  change the campaign map ....... Map tab (move towns and ports, paint regions, resources)
-                                  and Maps' Terrain tab (ground, rivers, climates, heights)
+  give / take towns, armies ..... Maps (right click a town or an army), Edit faction: Towns on the
+                                  map..., Units & armies (garrisons, armies, agents, fleets)
+  change the campaign map ....... Maps: its Map tab (move towns and ports, paint regions, resources),
+                                  Terrain (ground, rivers, climates), Coast & heights, 3D
   a building / garrisons in many  Maps: Select, drag a box (left button), right click
     towns at once ............... (or Edit faction's Buildings: Many towns at once...)
   join two regions into one ..... Map: Merge regions - the one that stays, then the one that goes
   grow or cut the map ........... Map: Change size... under the map - drag its edges out (sea)
                                   or in (cut); Bigger map (x3)... beside the zoom for 3 x the tiles
   change a unit or a building ... Units / Buildings
-  make a new unit or building ... Unit / Buildings: New unit (New building) step by step...
+  make a new unit or building ... Units / Buildings: New unit (New building) step by step...
+  which units each building gives  Edit faction: Roster > By buildings (a unit added to a level
+                                  comes with every higher level too)
   change a unit's look .......... Units: Battle model - View in 3D..., Replace model...
   hear a unit, give it a voice .. Units: Voice in battle - Play, Put in my own...
   edit characters and families .. Characters (or the Faction tab in Edit faction)
   put in a mod made by others ... Tools > Check and install a pack...
-  change the campaign's rules ... Campaign rules... (top row): ages, agents, towns, diplomacy, unit sizes
+  change the campaign's rules ... Campaign rules (top row): ages, agents, towns, diplomacy, unit sizes
+  events, traits, mercenaries,    Events, Traits and retinue, Mercenaries, Rebels (top row)
+    rebels
+  recolour a faction's pictures . Recolour (top row): cards, textures, symbols in its colours
+  the game's menu screens ....... Interface (top row): move, size, copy and remove their pieces
+  the editor's own look ......... Tools > Layout board...: move, rename, hide buttons; Appearance:
+                                  colours, font, themes (Light, Dark...), snippets
   add a religion ................ Religions > New religion... (Medieval II; Rome has no religions)
   add Sack Settlement ........... Add-ons (Rome + REX): who may sack, reward, what stays standing
   make your own script, no code . Module builder (top row; REX / M2EX): WHEN something happens, IF ...,
@@ -80,6 +89,7 @@ I WANT TO...  (pick the work in the row at the top, then use the tabs)
   rename a region or its town ... Edit region... (Map, or Rename... beside the towns list): the names
                                   players see and the names in the files (changed everywhere)
   make a copy of the mod to work on  New mod folder... (the base mod stays untouched)
+  a whole mod, step by step ..... Tools > A mod from zero, step by step...
 
 START
   0. Best: the exe in the game's folder (beside RomeTW.exe / medieval2.exe) - then the Mod list shows every mod
@@ -116,8 +126,10 @@ THE TABS
   Diplomacy    how the faction and every other one feel about each other at the start.
   Art          every picture of the faction with where the game shows it: Replace... takes any
                picture and makes it the right size and format; Back to the original.
+  Models       the faction's figures on the campaign map, their textures, 3D.
   Roster       (Edit) every unit and building level and whether the faction has it:
                Give / Take away - everything tied to it (recruit lines, cards...) follows.
+               By buildings: the faction's buildings, their levels and the units each gives.
 
 UNIT EDITOR / BUILDING EDITOR
   Pick a unit (a building chain) on the left; every line is a field - change it, it turns
@@ -149,7 +161,7 @@ TERRAIN EDITOR
   the next start.
 
 TOOLS
-  Tools > Check mod files (was Check mod): reads every file of the mod and says in plain words what the game
+  Tools > Check mod files: reads every file of the mod and says in plain words what the game
   would stumble on (missing pictures, broken lines, crash rules). With a faction picked it also lists every place the faction is named (game, REX and mod files told apart).
   Check and install a pack: a "copy these files over data" mod checked file by file first -
     what is new, what it replaces and what that would lose (REX's own files, pictures of
@@ -165,6 +177,8 @@ ADD-ONS
   first; Take it out removes it). Sack Settlement (Rome + REX): a 4th choice when a town is
   taken - it is torn down to its walls and roads, you get a reward, the rebels get the ruins.
   Who may sack: only the player, everyone, hordes (factions without a town), picked factions.
+
+THE BOTTOM BAR
   Report a bug / Suggest: a problem (with the logs, your names cut out - Show what is sent) or an idea, a few
     words and screenshots go to the author in one click, no account needed. The author's answer comes back
     to its tab Answers to my reports ("(1 new)" on the button) - reply there with Send the answer.
@@ -174,7 +188,7 @@ ADD-ONS
 
 KEYS
   Ctrl+Z undo, Ctrl+Y redo    Ctrl+P preview    Ctrl+S apply    F5 load again    F1 this help
-  Ctrl+1 .. Ctrl+5 the tabs    Map: wheel zooms, right drag moves the map, left drag moves a marker
+  Ctrl+1 .. Ctrl+9 the tabs    Map: wheel zooms, right drag moves the map, left drag moves a marker
 
 THE GAMES
   Rome: Total War, Barbarian Invasion, Alexander - plain or with REX.
@@ -2443,9 +2457,19 @@ class App(tk.Tk):
         self.bind_all("<Control-s>", lambda e: self.create())
         self.bind_all("<F1>", lambda e: self.show_help())
         self.bind_all("<F5>", lambda e: self.load_clicked())
-        for i in range(5):
-            self.bind_all("<Control-Key-%d>" % (i + 1), lambda e, i=i: None if self.map_work() else self.nb.select(i))
+        for i in range(9):
+            self.bind_all("<Control-Key-%d>" % (i + 1), lambda e, i=i: self._tab_key(i))
         self.bind_all("<Control-KeyPress>", self._layout_keys)
+
+    def _tab_key(self, i):
+        """Ctrl+1 .. Ctrl+9: the i-th tab the work shows (Maps its own; New / Edit faction theirs) - counted among
+        the shown ones: by the notebook's own index Ctrl+5 brought a hidden map tab into the faction tabs."""
+        if not self.nb.winfo_ismapped():
+            return None
+        shown = [t for t in self.nb.tabs() if self.nb.tab(t, "state") != "hidden"]
+        if i < len(shown):
+            self.nb.select(shown[i])
+        return "break"
 
     # Windows key codes of the letters the shortcuts use: with a non-Latin keyboard layout (Russian, Greek...) Tk
     # names the key by its own letter ('Cyrillic_ya' for Z), so <Control-z> never fires - the key's code still says Z.
