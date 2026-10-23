@@ -109,6 +109,17 @@ def sm_factions(plan):
             r, g, b = plan.opts["secondary_colour"]
             text = re.sub(r"red\s*\d+\s*,\s*green\s*\d+\s*,\s*blue\s*\d+", "red %d, green %d, blue %d" % (r, g, b), text)
         out.append(text + ("\r" if raw.endswith("\r") else ""))
+    # a colour picked for it that the template's block has no line for (a mod's faction with no secondary colour):
+    # the line added after its other colour - it was not written at all
+    for key in ("primary_colour", "secondary_colour"):
+        rgb = plan.opts.get(key)
+        have = [k for k, raw in enumerate(out) if tokens(raw)[:1] in (["primary_colour"], ["secondary_colour"])]
+        if rgb and have and not any(tokens(out[k])[:1] == [key] for k in have):
+            k = have[0]
+            line = re.sub(r"^(\s*)\S+", lambda m: m.group(1) + key, out[k].rstrip("\r"), count=1)
+            line = re.sub(r"red\s*\d+\s*,\s*green\s*\d+\s*,\s*blue\s*\d+", "red %d, green %d, blue %d" % tuple(rgb),
+                          line.split(";")[0].rstrip())
+            out.insert(k + 1 if key == "secondary_colour" else k, line + ("\r" if out[k].endswith("\r") else ""))
     if out[-1].strip():
         out.append(f.make(""))
     at = starts[names.index("slave")] if "slave" in names else len(f)

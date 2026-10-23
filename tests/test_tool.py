@@ -1908,6 +1908,25 @@ building smith
         self.assertEqual(R.colour_pair([[1, 2, 3], [4, 5, 6]]), ((1, 2, 3), (4, 5, 6)))
         self.assertNotEqual(R.colour_pair([(1, 2, 3), None]), R.colour_pair([(1, 2, 3), (4, 5, 6)]))
 
+    def test_edit_faction_colour_line_missing(self):
+        """Review 2026-10-23: a faction with no secondary_colour line (a mod's goths, report R-20261022-46D767) got
+        none when Edit faction picked one - nothing was written, nothing said. The line is added after its primary."""
+        from campaign_editor.edit import edit
+        p = ModData(self.root).file("sm_factions")
+        with open(p, encoding="latin-1") as fh:
+            text = fh.read()
+        write(p, text.replace("secondary_colour\t\tred 4, green 5, blue 6\n", "", 1))
+        mod = ModData(self.root)
+        plan = edit(mod, "test", "alpha", {"secondary_colour": (7, 8, 9)})
+        out = plan.files[p].dump().decode("latin-1")
+        self.assertIn("primary_colour\t\tred 1, green 2, blue 3\r\nsecondary_colour\t\tred 7, green 8, blue 9", out)
+        # New faction from such a template with a secondary colour picked: the clone gets the line too
+        plan = build(ModData(self.root), "test", "alpha", "beta", {"primary_colour": (20, 30, 40),
+                                                                   "secondary_colour": (50, 60, 70),
+                                                                   "start": {"regions": ["B_R"], "leader": {"name": "Boris"}}})
+        out = plan.files[p].dump().decode("latin-1")
+        self.assertIn("red 20, green 30, blue 40\r\nsecondary_colour\t\tred 50, green 60, blue 70", out)
+
     def test_recolour_finds_the_templates_cards_under_a_thin_mod(self):
         """Report R-20261009-4D53CB (the test mod on Rome with REX): a clone's cards stayed its template's red after
         Recolour - in a thin mod the template's cards lie in the game's data only, so none was found to compare with
