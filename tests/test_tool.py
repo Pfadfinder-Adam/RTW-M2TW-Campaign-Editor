@@ -22789,6 +22789,57 @@ building castle_port
         self.assertEqual([u["unit"] for u in slave["barracks"]["levels"][0]["units"]], ["rebel spear"])
         self.assertTrue(slave["temple_of_x"]["builds"])
 
+    def test_stats_lines_for_one_faction_or_culture(self):
+        """#374: Buildings > Stats for the faction / culture picked in Show - the levels it may not build and the lines
+        its factions lists keep out are left out; a line for its culture or for all stays."""
+        from campaign_editor import editors as E, factionbuildings as FB
+        f = self.mod.load(self.mod.file("edb"))
+        (_, a, b), = [blk for blk in E.building_blocks(f) if blk[0] == "barracks"]
+        texts = lambda lines: sorted(f.text(i).strip() for i in lines)
+        alpha = FB.lines_for_others(f, a, b, "alpha", "eastern")
+        self.assertIn('recruit "rebel spear"  0  requires factions { slave, }', texts(alpha))
+        self.assertNotIn('recruit "ghost unit"  0  requires factions { eastern, }', texts(alpha))
+        self.assertNotIn('recruit "alpha general"  2  requires factions { alpha, } and hidden_resource rome',
+                         texts(alpha))
+        self.assertIn("big_barracks requires factions { barbarian, }", texts(alpha))     # the whole level goes
+        self.assertIn("cost  900", texts(alpha))
+        self.assertNotIn("cost  400", texts(alpha))
+        # a culture alone: its own lines stay, a faction's own line goes
+        eastern = texts(FB.lines_for_others(f, a, b, None, "eastern"))
+        self.assertIn("muster requires factions { barbarian, alpha, }", eastern)          # no level for 'eastern'
+        barbarian = texts(FB.lines_for_others(f, a, b, None, "barbarian"))
+        self.assertNotIn("muster requires factions { barbarian, alpha, }", barbarian)
+        self.assertIn('recruit "alpha general"  2  requires factions { alpha, } and hidden_resource rome', barbarian)
+        # a pool line for all stays for anyone
+        (_, a, b), = [blk for blk in E.building_blocks(f) if blk[0] == "castle_port"]
+        self.assertEqual(FB.lines_for_others(f, a, b, "alpha", "eastern"), set())
+
+    def test_stats_tick_follows_show(self):
+        """#374: the Stats window's 'Only the lines for ...' takes the faction / culture of the Show list."""
+        try:
+            from campaign_editor import gui_editors as GE
+        except Exception as e:
+            self.skipTest("no tkinter: %s" % e)
+        import types
+        f = self.mod.load(self.mod.file("edb"))
+        from campaign_editor import editors as E
+        blk = next(b for b in E.building_blocks(f) if b[0] == "barracks")
+        var = lambda v: types.SimpleNamespace(get=lambda: v)
+        me = types.SimpleNamespace(kind="building", current=blk, v_only=var(True), _src=lambda: f,
+                                   _cultures={"alpha": "eastern"})
+        me._only_for = lambda: GE.RecordEditor._only_for(me)
+        me.v_show = var("faction: alpha - The Alphas")
+        self.assertEqual(me._only_for(), ("alpha", "eastern"))
+        hidden = GE.RecordEditor._hidden_lines(me)
+        self.assertTrue(any("rebel spear" in f.text(i) for i in hidden))
+        me.v_show = var("culture: barbarian")
+        self.assertEqual(me._only_for(), (None, "barbarian"))
+        me.v_show = var("type: military")
+        self.assertIsNone(me._only_for())
+        self.assertEqual(GE.RecordEditor._hidden_lines(me), set())
+        me.v_show, me.v_only = var("faction: alpha"), var(False)                # the tick off: every line
+        self.assertEqual(GE.RecordEditor._hidden_lines(me), set())
+
     def test_grouped_and_named(self):
         from campaign_editor import factionbuildings as FB
         items = FB.faction_chains(self.mod, "alpha")
