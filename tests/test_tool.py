@@ -1918,6 +1918,17 @@ building smith
         self.assertRegex(text, r"(?m)^faction\s+delta\b")
         self.assertNotRegex(text, r"(?<![A-Za-z0-9_])Alpha(?![A-Za-z0-9_])")
 
+    def test_rename_faction_refuses_words_the_game_reads_otherwise(self):
+        """A faction named 'all', 'none', 'merc'... or like a culture means something else to the game (building_battle,
+        the modeldb, the movie tracks; a culture is hidden by the faction of its name) - refused; a name the exes look
+        for themselves (romans_senate, slavs...) renamed with a warning of what goes."""
+        from campaign_editor import factionrename as FR
+        mod = ModData(self.root)
+        for bad in ("all", "merc", "none", (mod.culture("alpha") or "x").lower()):
+            self.assertIsNotNone(FR.problems(mod, "alpha", bad), bad)
+        self.assertIsNone(FR.problems(mod, "alpha", "delta"))
+        self.assertIn("slavs", FR.HARD_CODED)
+
     def test_rename_faction_reaches_glued_names_and_the_games_files(self):
         """Report R-20261009-CDDAF0 (the test mod on Medieval II with M2EX): venice renamed venice_ce, then the game
         closed at start - 'Unknown attribute type(Combat_V_Faction_Venice)': the trait effect glues the faction's
@@ -1936,6 +1947,12 @@ building smith
         write(os.path.join(camp, "campaign_script.txt"), "script\n\tif I_LocalFaction alpha\n\t\tset_counter "
               "alpha_intro 1\n\tend_if\nend_script\n")
         write(os.path.join(game, "data", "scripts_alpha.nut"), "local f = \"alpha\";\n")
+        # the game reads faction names in any case: a capital 'Alpha' left in a file stopped the game after a rename;
+        # REX's Combat_V_<faction> too; the campaign folder's leader picture and description (found by the name)
+        write(os.path.join(camp, "descr_win_conditions.txt"), "Alpha\nhold_regions B_R\n")
+        write(os.path.join(game, "data", "export_descr_ancillaries.txt"), "    Effect Combat_V_alpha 1\n")
+        write(os.path.join(camp, "leader_pic_alpha.tga"), "pic")
+        write(os.path.join(camp, "description_alpha.txt"), "words")
         data, _ = create_mod(os.path.join(game, "data"), "Beta")
         mod = ModData(data)
         plan = Plan(mod, "rename", "alpha_ce", {})
@@ -1953,6 +1970,13 @@ building smith
         self.assertIn("Combat_V_Faction_alphabet 1", mine)                 # another name, left
         self.assertIn("Condition FactionType alpha_ce", mine)
         self.assertIn("Trait Fearsalpha", mine)                            # a trait's own name stays
+        mcamp = os.path.join(data, "world", "maps", "campaign", "test")
+        with open(os.path.join(mcamp, "descr_win_conditions.txt")) as fh:
+            self.assertEqual(fh.read(), "Alpha_ce\nhold_regions B_R\n")
+        with open(os.path.join(data, "export_descr_ancillaries.txt")) as fh:
+            self.assertEqual(fh.read(), "    Effect Combat_V_alpha_ce 1\n")
+        for n in ("leader_pic_alpha_ce.tga", "description_alpha_ce.txt"):
+            self.assertTrue(os.path.isfile(os.path.join(mcamp, n)), n)
 
     def test_recolour_faction_with_no_secondary_colour(self):
         """Report R-20261022-46D767 (Rome with REX): Recolour of a faction with no secondary colour stopped at
