@@ -26,7 +26,9 @@ changes simply goes back to its place.
 **Tools > Layout board...** does the same on one big canvas, with every page already laid out: each work of the
 main window, the tabs of Maps and Factions and the Tools windows side by side (the editor opens each one in turn the
 first time and keeps their pictures; **Refresh all pages** takes them again, after you load a mod for example). The
-wheel zooms, the middle button moves the board. Drag a button, tick or label with the left button: it stays exactly
+board moves as the Campaign HUD's: the wheel zooms at the mouse (Shift: in small steps), the middle button, Space +
+the left one or the left one on the empty board drag it, Shift+1 shows everything, Shift+2 the picked piece, Shift+0
+is 100 %. Drag a button, tick or label with the left button: it stays exactly
 where you drop it. On the way its edges and middle stick to the lines the other pieces (and the window's edges)
 stand on - a pink line shows which - and, with **Grid** ticked, to a grid (4, 8, 16 or 32 px; **Stick to lines**
 turns the lines off). Hold **Alt** (or tick **In a row**) to put it into the row beside the piece nearest to where

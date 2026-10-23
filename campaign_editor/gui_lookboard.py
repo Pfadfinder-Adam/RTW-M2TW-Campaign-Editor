@@ -29,6 +29,7 @@ from tkinter import filedialog, messagebox, simpledialog, ttk
 from . import board as B
 from . import gui_appearance
 from . import look as LK
+from .gui_board import Board, alt_held
 from .gui_look import PIECES, YELLOW, all_widgets, ask_style, can_move
 
 TITLE = "Layout board"
@@ -44,13 +45,14 @@ TAB_WORKS = ("map", "edit", "new")             # works whose tabs are pages of t
 SKIP_TABS = ("3D",)                            # starts the graphics card's map: shown when opened, not gathered
 WAIT_WORK, WAIT_TAB, WAIT_WINDOW = 350, 220, 450   # ms a page is given to draw itself before its picture
 HANDLE = 5                                     # px (on the screen) of a corner handle
-ZOOMS = (0.08, 0.1, 0.125, 0.16, 0.2, 0.25, 0.32, 0.4, 0.5, 0.63, 0.8, 1.0, 1.25, 1.6, 2.0)
+FAR = 10 ** 7                                  # the canvas's own scroll region: the board's view is gui_board's
 CHANGED = "#ff8a00"                            # the dot on a piece the look changed
-HELP = ("Every page of the editor side by side. The wheel zooms, the middle button (or the left one on the empty "
-        "board) moves the board. Click a button, tick or label to pick it; drag it with the left button and it "
+HELP = ("Every page of the editor side by side. The board moves as the Campaign HUD's: the wheel zooms at the "
+        "mouse (Shift: in small steps), the middle button, Space + the left one or the left one on the empty board "
+        "drag it, Shift+1 shows everything, Shift+2 the picked piece, Shift+0 is 100 %. Click a button, tick or label to pick it; drag it with the left button and it "
         "stays exactly where you drop it: its edges stick to the lines the other pieces stand on (pink lines), "
         "and to the grid when Grid is ticked. Hold Alt (or tick In a row) to put it into the row beside the piece "
-        "nearest to where you drop it. Drag its corners to size it; the arrows move it a pixel (Shift: 10). Right "
+        "nearest to where you drop it. Drag its corners to size it; the arrows move a free one a pixel (Shift: 10), else the board. Right "
         "click a piece or a page for the rest: rename, hover text, size, hide, back to how it was, show it in the "
         "editor. Your changes are a draft drawn on the board: Accept puts them all on the editor (kept for every "
         "start in CampaignEditor_look.json), Discard drops them, Undo / Redo step through them. Refresh takes the "
@@ -59,10 +61,6 @@ HELP = ("Every page of the editor side by side. The wheel zooms, the middle butt
 GUIDE = "#ff3fa4"                              # the pink guide line: a piece stands on another's line
 GRID_INK = "#8fb4ff"                           # the grid's lines over a page
 GRID_STEPS = ("4", "8", "16", "32")            # px of the editor's window between two grid lines
-
-
-def _alt(e):
-    return bool(e.state & (0x20000 if sys.platform == "win32" else 0x0008))
 
 
 def _look_now():
@@ -240,7 +238,6 @@ class LayoutBoard(tk.Toplevel):
         self.pages = LK.load_board()
         self.pictures = {}                     # page id -> PIL picture
         self._shown = {}                       # page id -> (zoom, PhotoImage)
-        self.zoom = 0.2
         self.picked = None                     # (page id, piece) or (page id, None) for a page
         self._drag = self._busy = self._job = None
         self._dirty = set()
@@ -302,33 +299,25 @@ class LayoutBoard(tk.Toplevel):
         body.pack(fill="both", expand=True)
         from . import theme
         self.ground = "#25272b" if theme.dark() else "#c9ccd2"
-        self.cv = tk.Canvas(body, background=self.ground, highlightthickness=0, cursor="arrow")
+        # the board moves and zooms as the Campaign HUD's (gui_board: the wheel at the mouse, the middle button or
+        # Space + the left one drag it, Shift+1 everything, Shift+2 the picked piece, Shift+0 100 %); its things are
+        # drawn at world x zoom and the canvas's own view follows the board's offset (_view)
+        self.cv = Board(body, grid=False, background=self.ground, cursor="arrow", on_view=self._view,
+                        content_box=self._content_box, selection_box=self._selection_box)
+        self.cv.configure(scrollregion=(-FAR, -FAR, FAR, FAR), confine=False)
         theme.leave_alone(self.cv)
-        ys = ttk.Scrollbar(body, orient="vertical", command=self.cv.yview)
-        xs = ttk.Scrollbar(body, orient="horizontal", command=self.cv.xview)
-        self.cv.configure(yscrollcommand=lambda *a: (ys.set(*a), self._later_pictures()),
-                          xscrollcommand=lambda *a: (xs.set(*a), self._later_pictures()))
         self.side = None                       # the Appearance panel, when shown
-        self.ys = ys
-        ys.pack(side="right", fill="y")
-        xs.pack(side="bottom", fill="x")
         self.cv.pack(fill="both", expand=True)
         self.title_ink = "#eeeeee" if theme.dark() else "#111111"
         self.hidden_ink = "#ffb070" if theme.dark() else "#7a2e00"
         self.v_line = tk.StringVar(self, value="")
         ttk.Label(self, textvariable=self.v_line, padding=(8, 2)).pack(fill="x")
         cv = self.cv
-        cv.bind("<ButtonPress-1>", self._press)
-        cv.bind("<B1-Motion>", self._motion)
-        cv.bind("<ButtonRelease-1>", self._release)
+        cv.on_press, cv.on_drag, cv.on_release = self._press, self._motion, self._release
         cv.bind("<ButtonPress-3>", self._menu)
         cv.bind("<Motion>", self._hover)
-        cv.bind("<ButtonPress-2>", lambda e: cv.scan_mark(e.x, e.y))
-        cv.bind("<B2-Motion>", lambda e: cv.scan_dragto(e.x, e.y, gain=1))
-        cv.bind("<MouseWheel>", lambda e: self._wheel(e, 1 if e.delta > 0 else -1))
-        cv.bind("<Button-4>", lambda e: self._wheel(e, 1))
-        cv.bind("<Button-5>", lambda e: self._wheel(e, -1))
-        cv.bind("<Configure>", lambda e: self._later_pictures())
+        for k, d in (("Left", (-1, 0)), ("Right", (1, 0)), ("Up", (0, -1)), ("Down", (0, 1))):
+            cv.bind("<%s>" % k, lambda e, d=d: self._arrow(e, *d))
 
     def appearance(self):
         """The Appearance panel at the board's side (shown / hidden): the whole editor's colours and font."""
@@ -336,10 +325,10 @@ class LayoutBoard(tk.Toplevel):
             self.side.destroy()
             self.side = None
             return
-        self.side = gui_appearance.AppearancePanel(self.ys.master, self.app, on_change=self._look_changed)
+        self.side = gui_appearance.AppearancePanel(self.cv.master, self.app, on_change=self._look_changed)
         for w in all_widgets(self.side):
             w._look_skip = True
-        self.side.pack(side="right", fill="y", before=self.ys)
+        self.side.pack(side="right", fill="y", before=self.cv)
 
     def _look_changed(self):
         """The whole look changed: the board's ground follows it, every page's picture is taken again once the
@@ -614,6 +603,7 @@ class LayoutBoard(tk.Toplevel):
         pal = theme.palette()
         cv.delete("all")
         self._shown.clear()
+        self._drawn_at = z
         places, total, heads = self._places()
         self.places = places
         title_px = max(7, min(14, int(36 * z)))
@@ -621,7 +611,6 @@ class LayoutBoard(tk.Toplevel):
             first = (top + 2 * LK.CARD_HEAD) * z - title_px * 2 - 8
             cv.create_text(0, first, text=name, anchor="sw", fill=self.title_ink,
                            font=("", max(9, min(22, int(60 * z))), "bold"))
-        cv.configure(scrollregion=(-200 * z, -200 * z, (total[0] + 200) * z, (total[1] + 200) * z))
         changed = self.look.data["pieces"]
         for p in self.pages:
             x, y = places[p["id"]]
@@ -793,32 +782,54 @@ class LayoutBoard(tk.Toplevel):
                 cv.create_rectangle(hx - HANDLE, hy - HANDLE, hx + HANDLE, hy + HANDLE, fill=YELLOW,
                                     outline="#000000", tags="mark")
 
-    # ---- the view ----
+    # ---- the view (gui_board.Board's) ----
+    @property
+    def zoom(self):
+        return self.cv.zoom
+
+    @zoom.setter
+    def zoom(self, z):
+        self.cv.view.zoom = z
+        self.draw()
+
+    def _view(self):
+        """The board moved or zoomed: the canvas shows world x zoom from the board's offset; drawn again only when
+        the zoom changed (a pan just shows more pages' pictures)."""
+        cv, v = self.cv, self.cv.view
+        cv.xview_moveto((-v.ox + FAR) / (2.0 * FAR))
+        cv.yview_moveto((-v.oy + FAR) / (2.0 * FAR))
+        if getattr(self, "_drawn_at", None) != v.zoom:
+            self.draw()
+        else:
+            self._later_pictures()
+
+    def _content_box(self):
+        if not self.pages:
+            return None
+        _, total, _ = self._places()
+        return (-40, -40, total[0] + 40, total[1] + 40)
+
+    def _selection_box(self):
+        if not self.picked or self.picked[0] not in getattr(self, "places", {}):
+            return None
+        pid, pc = self.picked
+        x, y = self.places[pid]
+        bx, by, bw, bh = pc["box"] if pc else (0, 0) + tuple(self._page(pid)["size"])
+        return (x + bx - 20, y + by - 20, x + bx + bw + 20, y + by + bh + 20)
+
     def fit(self):
         if not self.pages:
             return
         self.update_idletasks()
-        _, total, _ = self._places()
-        w, h = max(self.cv.winfo_width(), 200), max(self.cv.winfo_height(), 200)
-        want = min(w / (total[0] + 400), h / (total[1] + 400))
-        self.zoom = max([s for s in ZOOMS if s <= want] or [ZOOMS[0]])
-        self.draw()
-        self.cv.xview_moveto(0)
-        self.cv.yview_moveto(0)
+        self.cv.fit_content()
 
-    def _wheel(self, e, step):
-        i = min(range(len(ZOOMS)), key=lambda k: abs(ZOOMS[k] - self.zoom))
-        j = max(0, min(len(ZOOMS) - 1, i + step))
-        if j == i:
-            return
-        wx, wy = self.cv.canvasx(e.x) / self.zoom, self.cv.canvasy(e.y) / self.zoom
-        self.zoom = ZOOMS[j]
-        self.draw()
-        x0 = float(self.cv.cget("scrollregion").split()[0])
-        y0 = float(self.cv.cget("scrollregion").split()[1])
-        r = [float(v) for v in self.cv.cget("scrollregion").split()]
-        self.cv.xview_moveto((wx * self.zoom - e.x - x0) / max(r[2] - r[0], 1))
-        self.cv.yview_moveto((wy * self.zoom - e.y - y0) / max(r[3] - r[1], 1))
+    def _arrow(self, e, dx, dy):
+        """The arrows move a picked free piece (Shift: 10 px), else the board."""
+        if self.picked and self.picked[1] and "xy" in self._entry(self.picked[1]["key"]):
+            self._nudge(dx, dy, big=bool(e.state & 1))
+        else:
+            self.cv.pan(-dx * 60, -dy * 60)
+        return "break"
 
     def _world(self, e):
         return self.cv.canvasx(e.x) / self.zoom, self.cv.canvasy(e.y) / self.zoom
@@ -878,8 +889,7 @@ class LayoutBoard(tk.Toplevel):
         if p is None:
             self.picked = None
             self._marks()
-            self.cv.scan_mark(e.x, e.y)
-            self._drag = {"kind": "pan"}
+            self._drag = {"kind": "pan", "at": (e.x, e.y)}
             return
         self.picked = (p["id"], pc)
         self._marks()
@@ -892,7 +902,8 @@ class LayoutBoard(tk.Toplevel):
         if not d:
             return
         if d["kind"] == "pan":
-            self.cv.scan_dragto(e.x, e.y, gain=1)
+            self.cv.pan(e.x - d["at"][0], e.y - d["at"][1])
+            d["at"] = (e.x, e.y)
             return
         wx, wy = self._world(e)
         dx, dy = wx - d["start"][0], wy - d["start"][1]
@@ -918,7 +929,7 @@ class LayoutBoard(tk.Toplevel):
                 y1 = max(B.snap_edge(y1 + dy, ys, step, self.zoom, to_grid=grid)[0], y0 + 8)
             d["new"] = [int(round(x0)), int(round(y0)), int(round(x1 - x0)), int(round(y1 - y0))]
         else:
-            d["free"] = not (self.v_row.get() or _alt(e))
+            d["free"] = not (self.v_row.get() or alt_held(e))
             nx, ny = bx + dx, by + dy
             if d["free"]:
                 nx, ny, _ = B.snap_box((nx, ny, bw, bh), others, grid=step, zoom=self.zoom, to_grid=grid)
