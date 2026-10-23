@@ -1,0 +1,66 @@
+name: public
+
+# The code lives in a private repository; people see the public one, Pfadfinder-Adam/RTW-M2TW-Campaign-Editor:
+# its README, wiki and releases. This job copies there what changed on main:
+#   - docs/wiki/*.md into the public repository's wiki (a git repository of its own, <repo>.wiki.git);
+#   - the files named in .github/public_files.txt (README, CHANGELOG, the pictures they show...) into the
+#     public repository itself - only from the private one (in the public one they are already there).
+# Pages made only in the wiki's web editor are kept, and so are files of the public repository not in the list.
+# From the private repository it needs the secret PUBLIC_REPO_TOKEN: a token that may write the public repository.
+on:
+  push:
+    branches: [main]
+    paths: ["docs/wiki/**", "README.md", "CHANGELOG.md", "CREDITS.md", "SECURITY.md", "LICENSE",
+            "assets/icon_256.png", "docs/images/**", ".github/FUNDING.yml", ".github/public_files.txt"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  PUBLIC_REPO: Pfadfinder-Adam/RTW-M2TW-Campaign-Editor
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Copy into the public repository and its wiki
+        env:
+          TOKEN: ${{ github.repository == 'Pfadfinder-Adam/RTW-M2TW-Campaign-Editor' && secrets.GITHUB_TOKEN || secrets.PUBLIC_REPO_TOKEN }}
+          SAME: ${{ github.repository == 'Pfadfinder-Adam/RTW-M2TW-Campaign-Editor' }}
+        run: |
+          if [ -z "$TOKEN" ]; then
+            echo "::error::The secret PUBLIC_REPO_TOKEN is not set in this repository (Settings > Secrets and variables > Actions)"
+            exit 1
+          fi
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          src="$PWD"
+          push() {   # $1 = the folder of a clone, $2 = the commit's words
+            cd "$1"
+            git add -A
+            if git diff --cached --quiet; then
+              echo "$1 is up to date."
+            else
+              git commit -q -m "$2 ${GITHUB_SHA::7}"
+              git push -q
+            fi
+            cd "$src"
+          }
+          git clone -q --depth 1 "https://x-access-token:${TOKEN}@github.com/${PUBLIC_REPO}.wiki.git" "$RUNNER_TEMP/wiki"
+          cp docs/wiki/*.md "$RUNNER_TEMP/wiki/"
+          push "$RUNNER_TEMP/wiki" "Wiki from docs/wiki at"
+          if [ "$SAME" != "true" ]; then
+            git clone -q --depth 1 "https://x-access-token:${TOKEN}@github.com/${PUBLIC_REPO}.git" "$RUNNER_TEMP/public"
+            grep -v '^#' .github/public_files.txt | while read -r f; do
+              [ -n "$f" ] || continue
+              mkdir -p "$RUNNER_TEMP/public/$(dirname "$f")"
+              if [ "${f%/}" != "$f" ]; then
+                mkdir -p "$RUNNER_TEMP/public/$f" && cp -r "$f". "$RUNNER_TEMP/public/$f"
+              else
+                cp "$f" "$RUNNER_TEMP/public/$f"
+              fi
+            done
+            push "$RUNNER_TEMP/public" "The page, its pictures and texts from the editor's source at"
+          fi

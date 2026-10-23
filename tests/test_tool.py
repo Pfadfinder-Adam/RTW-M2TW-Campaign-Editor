@@ -13338,6 +13338,8 @@ building smith
         body = RN.notes(log, "v1.2.0", "owner/repo")
         url = "https://github.com/owner/repo/releases/download/v1.2.0/RTW-M2TW-Campaign-Editor.exe"
         self.assertTrue(body.startswith("### [⬇ Download RTW-M2TW-Campaign-Editor.exe](%s)" % url))
+        self.assertIn("(%s)" % url.replace(".exe", "-linux.tar.gz"), body)       # the Linux program beside it
+        self.assertLess(body.index("-linux.tar.gz"), body.index("<details>"))
         short, fold = body.index("- **Added**: own logos"), body.index("<details>")
         self.assertLess(short, fold)
         self.assertIn("<summary>", body)
