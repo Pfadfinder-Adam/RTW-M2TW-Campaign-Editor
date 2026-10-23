@@ -1,6 +1,6 @@
 """The text of a release page (release.yml): this version's part of CHANGELOG.md, laid out so nobody scrolls to the
 bottom to download - GitHub always puts the Assets list there:
-  1. a download link to the exe of this release;
+  1. a download link to the exe of this release, and one to the Linux program (macOS: the exe with Wine);
   2. the version's '### In short' part (a few lines: the big things added, fixed, changed);
   3. everything else of the version in a fold, closed at first.
 Run: python .github/release_notes.py <version> <owner/repo>  ->  release_notes.md"""
@@ -9,6 +9,7 @@ import re
 import sys
 
 EXE = "RTW-M2TW-Campaign-Editor.exe"
+LINUX = "RTW-M2TW-Campaign-Editor-linux.tar.gz"
 SHORT = "### In short"
 
 
@@ -39,8 +40,10 @@ def notes(changelog, version, repo):
             if in_short:
                 continue
         (short if in_short else rest).append(line)
-    url = "https://github.com/%s/releases/download/v%s/%s" % (repo, version, EXE)
-    out = ["### [⬇ Download %s](%s)" % (EXE, url), ""]
+    url = "https://github.com/%s/releases/download/v%s/%%s" % (repo, version)
+    out = ["### [⬇ Download %s](%s)" % (EXE, url % EXE), "",
+           "Linux: [%s](%s) (unpack, then start `RTW-M2TW-Campaign-Editor`). macOS: the Windows exe with Wine."
+           % (LINUX, url % LINUX), ""]
     if "\n".join(short).strip():
         out += ["\n".join(short).strip(), ""]
     out += ["<details>", "<summary><b>Everything in this release</b> (click to open)</summary>", "",
