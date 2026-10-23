@@ -60,8 +60,10 @@ def snap_window(widget, path):
         return False
 
 
-def open_report(app, message="", kind="bug", tab=None):
-    """tab 'answers' opens on Answers to my reports (the Report button does when one came)."""
+def open_report(app, message="", kind="bug", tab=None, view3d=None):
+    """tab 'answers' opens on Answers to my reports (the Report button does when one came). view3d: a View in 3D
+    window (gui_meshview.ModelViewer) - a report of the 3D model kind, from that window's own button: its picture and
+    the files it drew the model with go along (the ordinary report takes none)."""
     game = mod_dir = None
     if app.mod:
         from .newmod import game_of
@@ -73,17 +75,16 @@ def open_report(app, message="", kind="bug", tab=None):
     shot = os.path.join(log.logs_dir() or os.path.expanduser("~"), "editor_window.png")
     if kind == "bug" and snap_window(app, shot):
         pictures.append(shot)
-    # a 3D window open: its picture and the files it drew the model with go too (a mod's crushed knights could not
-    # be drawn again without them - the user, 2026-10-23)
-    from .gui_meshview import ModelViewer
-    view3d = ModelViewer.last_open() if kind == "bug" else None
+    # the 3D model kind: the window's picture and the files it drew the model with (a mod's crushed knights could
+    # not be drawn again without them - the user, 2026-10-23)
     if view3d is not None:
         shot3d = os.path.join(log.logs_dir() or os.path.expanduser("~"), "view_3d_window.png")
         if snap_window(view3d, shot3d):
             pictures.append(shot3d)
 
     w = tk.Toplevel(app)
-    w.title("Report a bug or suggest an idea")
+    w.title("Report a problem with a 3D model (%s)" % view3d.info.name if view3d is not None else
+            "Report a bug or suggest an idea")
     w.transient(app)
     nb = ttk.Notebook(w)
     nb.pack(fill="both", expand=True)
@@ -290,6 +291,8 @@ def open_report(app, message="", kind="bug", tab=None):
         if listing:
             texts.append((report.MOD_FILES, listing))
         info = dict(kind=ui["kind"], **report.about(app.mod, _version()))
+        if view3d is not None:                      # the report's type: what the author opens it with
+            info["type"] = "3D model (%s)" % view3d.info.name
         data = report.build_zip(texts, ui["msg"], ui["contact"], info, pictures, hide, doctor=said,
                                 blobs=ui.get("blobs", ()))
         texts = texts + [(n, report.scrub(d.decode("utf-8", "replace"), hide)) for n, d in ui.get("blobs", ())
@@ -352,7 +355,8 @@ def open_report(app, message="", kind="bug", tab=None):
                 result["packed"] = _, info, _, hide, data = pack(ui)
                 result["sending"] = True
                 result["id"], result["issue"] = report.send(
-                    data, ("Idea: " if info["kind"] == "suggestion" else "Bug: ") + report.scrub(
+                    data, ("Idea: " if info["kind"] == "suggestion" else "Bug (3D model): " if "type" in info
+                           else "Bug: ") + report.scrub(
                         ("The game's log says: %s\n\n" % said if said and info["kind"] != "suggestion" else "") + msg,
                         hide),
                     ui["contact"].strip(), info, full=True, timeout=SEND_LIMIT)

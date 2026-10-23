@@ -150,6 +150,9 @@ class ModelViewer(tk.Toplevel):
             ttk.Button(mk, text="Make a card...", command=lambda: self.make_picture(False)).pack(side="left")
             ttk.Button(mk, text="Make a picture...", command=lambda: self.make_picture(True)).pack(
                 side="left", padx=4)
+        # a problem with this model goes as its own kind of report, with the files it was drawn with (the user,
+        # 2026-10-23: 'the 3D window's own report button - it takes the files it needs, not the ordinary report')
+        ttk.Button(side, text="Report a problem with this model...", command=self.report).pack(anchor="w", pady=(8, 0))
         # short lines, the long words on their '?' (the user, 2026-10-10: the grey text stretched the window), and
         # only this game's words (a Medieval II model's window spoke of Rome)
         from .gui_util import ShortHint
@@ -594,16 +597,11 @@ class ModelViewer(tk.Toplevel):
             self._anim_box(None)
         self.load()
 
-    @classmethod
-    def last_open(cls):
-        """The 3D window open now that was opened last, or None (a report takes what it drew - gui_report)."""
-        for w in reversed(list(cls._open.values())):
-            try:
-                if w.winfo_exists():
-                    return w
-            except tk.TclError:
-                continue
-        return None
+    def report(self):
+        """Report a problem with this model: the report window of the 3D kind - this window's picture and the files
+        it drew the model with go along (report_files)."""
+        from .gui_report import open_report
+        open_report(self._root(), kind="bug", view3d=self)
 
     def report_files(self):
         """[(name in a report's zip, bytes)]: the skeletons, animations and meshes this view drew with
