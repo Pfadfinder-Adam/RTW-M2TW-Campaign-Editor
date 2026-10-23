@@ -10,6 +10,7 @@
 - Layout board: the board moves and zooms the same way as the Campaign HUD's - the wheel at the mouse (Shift in small steps), the middle button or Space + left drag it, Shift+1 everything, Shift+2 the picked piece, Shift+0 100 %; the arrows move the board when no free piece is picked.
 
 ### Fixed
+- View in 3D (Medieval II): a mod whose animation pack the game built itself (Europa Barbarorum II) named its animations with the mod's folder in front, so the editor found none of them for the skeletons -> the folder is left out, as descr_skeleton.txt names them; a model whose material name has a letter like 'ó' was cut there -> read whole.
 - Six tools now work exactly as the game does it (read from REX's and M2EX's own source):
   - **Map size**: in a mod holding only its changes, descr_terrain.txt (the game sizes the whole map by it) and map_heights.hgt were left at the old size -> written into the mod; each map file is found where the game finds it (the campaign's folder, then base); Medieval II's camera / clickable boxes (restrict_strat_camera, restrict_clickable_rect) move with the map.
   - **New mod folder**: with hard links the game's own map.rwm and .db files were the base mod's too, and the game rewrites them in place -> always copied; the base's saves and preferences are not brought along; a mod built on the plain game gets the game's music by region (Medieval II), custom tiles and .hgt, which the game then reads only from the mod.
