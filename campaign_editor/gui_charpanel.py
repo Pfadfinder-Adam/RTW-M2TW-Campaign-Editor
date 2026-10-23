@@ -8,6 +8,20 @@ from tkinter import ttk
 
 
 PARCHMENT, INK, MUTED, GOLD = "#efe6d2", "#2b2118", "#6b5a45", "#b08d3c"
+# the same parchment look darkened for the Dark look (the user, 2026-10-23: 'make it dark too'): a large light page
+# glared in the dark window
+DARK_LOOK = {"parchment": "#2b2620", "ink": "#ece2cc", "muted": "#b3a487", "gold": "#c9a24a", "photo": "#3d3529",
+             "card": "#3a3328", "pip": "#6e6250", "line": "#a08a60", "female": "#4b3239", "male": "#2e3a4c",
+             "nobody": "#3a3a3a", "couple": "#c25a70", "pick": "#5b8ff0"}
+LIGHT_LOOK = {"parchment": PARCHMENT, "ink": INK, "muted": MUTED, "gold": GOLD, "photo": "#d8cdb4", "card": "#e6dcc3",
+              "pip": "#b9ab8e", "line": "#6b5a3a", "female": "#f6dfe3", "male": "#dfe7f3", "nobody": "#e0e0e0",
+              "couple": "#a0364b", "pick": "#1c5bd6"}
+
+
+def look():
+    """The panel's and the family tree's colours for the look in force (light parchment or dark)."""
+    from . import theme
+    return DARK_LOOK if theme.dark() else LIGHT_LOOK
 PIP = {"Command": "#c9a227", "Chivalry": "#3d6fb8", "Dread": "#8a1f1f", "Loyalty": "#3f7f3f",
        "Authority": "#7a2ea0", "Piety": "#9c7a2a", "Influence": "#3d6fb8", "Management": "#3f7f3f",
        "Subterfuge": "#555555", "Charm": "#c05080", "Finance": "#c9a227"}
@@ -17,7 +31,8 @@ class CharacterPanel(ttk.Frame):
     def __init__(self, master, on_pip=None):
         super().__init__(master)
         self.on_pip = on_pip                 # on_pip(attribute, value): a click on the pips
-        self.cv = tk.Canvas(self, bg=PARCHMENT, highlightthickness=0)
+        self.cv = tk.Canvas(self, bg=look()["parchment"], highlightthickness=0)
+        self.cv.bind("<<ThemeChanged>>", lambda e: self.redraw(), add="+")      # Light / Dark switched
         ys = ttk.Scrollbar(self, orient="vertical", command=self.cv.yview)
         self.cv.configure(yscrollcommand=ys.set)
         ys.pack(side="right", fill="y")
@@ -48,6 +63,9 @@ class CharacterPanel(ttk.Frame):
 
     def redraw(self):
         c = self.cv
+        L = look()
+        INK, MUTED, GOLD = L["ink"], L["muted"], L["gold"]
+        c.configure(bg=L["parchment"])
         c.delete("all")
         self._imgs = []
         if not self._last or not self._last[0]:
@@ -60,7 +78,7 @@ class CharacterPanel(ttk.Frame):
         pw, ph = 104, 144
         img = image(portrait, pw, ph) if image and portrait else None
         c.create_rectangle(x0 - 4, y - 4, x0 + pw + 4, y + ph + 4, outline=GOLD, width=4)
-        c.create_rectangle(x0, y, x0 + pw, y + ph, fill="#d8cdb4", outline="")
+        c.create_rectangle(x0, y, x0 + pw, y + ph, fill=L["photo"], outline="")
         if img:
             self._imgs.append(img)
             c.create_image(x0 + pw / 2, y + ph / 2, image=img)
@@ -103,7 +121,7 @@ class CharacterPanel(ttk.Frame):
         for shown, anc, pic, eff in d["retinue"]:
             if x + cw > w - 8 and x > x0:
                 x, y = x0, y + chh + 10
-            c.create_rectangle(x, y, x + cw - 8, y + chh, outline=GOLD, width=2, fill="#e6dcc3")
+            c.create_rectangle(x, y, x + cw - 8, y + chh, outline=GOLD, width=2, fill=L["card"])
             im = image(pic, cw - 16, 96) if image and pic else None
             if im:
                 self._imgs.append(im)
@@ -137,5 +155,5 @@ class CharacterPanel(ttk.Frame):
                 r = 7 if j % 2 == 0 else 3
                 a = -math.pi / 2 + j * math.pi / 5
                 pts += [cx + r * math.cos(a), y + r * math.sin(a)]
-            c.create_polygon(pts, fill=colour if k < value else "", outline=colour if k < value else "#b9ab8e",
+            c.create_polygon(pts, fill=colour if k < value else "", outline=colour if k < value else look()["pip"],
                              tags=("pips_" + name,) if self.on_pip and name else ())
