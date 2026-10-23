@@ -8,6 +8,8 @@ buttons_composite2 as a square of the piece's width; a slider is arrows 12 / 13,
 slider_composite2. Pillow does the drawing; every function takes a parts(name) -> RGBA image or None.
 """
 
+from .lnt import FRAME_ONLY
+
 BUTTON_TEXT = (255, 221, 119)            # piece texts, normal (highlighted / pressed: white; disabled: grey 128)
 STATIC_TEXT = (255, 223, 127)            # UIP_STATIC_TEXT, list rows - with a black shadow 1 px left, 1 px down
 HIGHLIGHT = (255, 247, 119, 164)         # yellow_highlight: a list's chosen row
@@ -18,9 +20,12 @@ SLIDER = "slider_composite2.tga"
 
 def kind(identifier, object_id, has_art):
     """How the game draws a piece: 'art' (its own picture), 'tick', 'slider', 'textbox', 'dropdown', 'list',
-    'border', 'static' (words with a shadow), 'button' (words only), or 'none' (empty_art)."""
+    'border', 'dialog' (a message box: the frame from 8 px outside), 'static' (words with a shadow), 'button' (words
+    only), or 'none' (empty_art). A FRAME_ONLY piece is its frame even with a picture of its own (never drawn)."""
     ident = (identifier or "").upper()
     obj = (object_id or "").lower()
+    if ident in FRAME_ONLY:
+        return "border" if ident == "UIP_BORDER" else "dialog"
     if has_art:
         return "art"
     if "SLIDER" in ident:
@@ -118,7 +123,7 @@ def piece_image(parts, k, w, h):
         return tick(parts, w), 0
     if k == "slider":
         return slider(parts, w, h), 0
-    if k in ("textbox", "dropdown", "list"):
+    if k in ("textbox", "dropdown", "list", "dialog"):
         img, off = framed(parts, w, h)
         if img is not None and k == "dropdown":
             arrow = parts(TICKS)
@@ -132,6 +137,26 @@ def piece_image(parts, k, w, h):
     return None, 0
 
 
+def frame_sheet(picture, box, old=None, cell=128):
+    """A new FRAME (4 x 4 cells of cell px, RGBA) from a picture of the whole box as it should look - box = (w, h) the
+    game draws the frame at: its corners 16 x 16, its edges 16 px wide, the rest the centre (draw_border). The nine
+    parts of the picture go into their cells; the cells draw_border never uses keep the old frame's (scaled)."""
+    from PIL import Image
+    pic = picture.convert("RGBA")
+    sheet = Image.new("RGBA", (4 * cell, 4 * cell), (0, 0, 0, 0))
+    if old is not None:
+        sheet.paste(old.convert("RGBA").resize(sheet.size, Image.BILINEAR), (0, 0))
+    bw = max(1, min(pic.width // 2 - 1, round(16 * pic.width / max(1, box[0]))))
+    bh = max(1, min(pic.height // 2 - 1, round(16 * pic.height / max(1, box[1]))))
+    xs = (0, bw, pic.width - bw, pic.width)
+    ys = (0, bh, pic.height - bh, pic.height)
+    for n, (col, row) in ((0, (0, 0)), (1, (1, 0)), (3, (2, 0)), (4, (0, 1)), (5, (1, 1)), (7, (2, 1)),
+                          (12, (0, 2)), (13, (1, 2)), (15, (2, 2))):
+        part = pic.crop((xs[col], ys[row], xs[col + 1], ys[row + 1])).resize((cell, cell), Image.LANCZOS)
+        sheet.paste(part, (cell * (n % 4), cell * (n // 4)))
+    return sheet
+
+
 def text_colour(k):
     """(colour, shadow?) of a piece's words as the game writes them."""
     if k in ("static", "list"):
@@ -139,5 +164,5 @@ def text_colour(k):
     return BUTTON_TEXT, False
 
 
-__all__ = ["kind", "cell", "nine_slice", "tick", "slider", "framed", "piece_image", "text_colour", "BUTTON_TEXT",
-           "STATIC_TEXT", "HIGHLIGHT"]
+__all__ = ["kind", "cell", "nine_slice", "tick", "slider", "framed", "piece_image", "frame_sheet", "text_colour",
+           "BUTTON_TEXT", "STATIC_TEXT", "HIGHLIGHT", "FRAME", "FRAME_ONLY"]

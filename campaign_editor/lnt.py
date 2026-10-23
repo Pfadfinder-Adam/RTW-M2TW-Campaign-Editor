@@ -618,6 +618,12 @@ def find(mod):
 
 # pieces the game draws itself (no picture of their own) - never a problem
 SELF_DRAWN = ("empty_", "fmv_backdrop")
+# pieces whose own picture the game never draws: it draws the menus' shared frame menu/border_4pix_black_gold2.tga
+# (menudraw.FRAME) instead - menu_layout.cpp builds their art and never hands it over; UI_DIALOGTEXT::draw /
+# UI_BORDER::draw, both games. The 'Exit program?' box is the UIP_ERROR_DIALOG of the page CONFIRM_YES_NO
+# (OnQuitMenu -> OnConfirmYN), so its look is that frame, shared by every message box, text box, list, drop-down and
+# border of the menus (Discord, Maha 2026-10-23: a new quit box picture changed nothing).
+FRAME_ONLY = ("UIP_BORDER", "UIP_ERROR_DIALOG", "UIP_ERROR_DIALOG_SMALL")
 # pages the games make in their code, not in the file (their own buttons lead there): Rome / BI / Alexander,
 # Medieval II
 ENGINE_PAGES = {"CB_custom_army", "Historical_battle_details", "PC_choose_faction"}
@@ -679,6 +685,12 @@ def problems(mod):
                 said.add(obj)
                 out.append("menu %s, page %s: the piece %s shows '%s', a picture no texture region of the file "
                            "has - it shows nothing" % (name, page, x["name"], obj))
+            if (x["identifier"] or "").upper() in FRAME_ONLY and obj and not obj.startswith(SELF_DRAWN) and \
+                    obj not in known_objs and lnt.art(x) is not None:
+                out.append("menu %s, page %s: the piece %s (%s) has a picture of its own, '%s', which the game never "
+                           "draws - it draws the menus' shared frame data/menu/border_4pix_black_gold2.tga there "
+                           "(Interface: Replace picture on the piece changes that frame)"
+                           % (name, page, x["name"], x["identifier"], obj))
     for obj, state, region in [m for m in lnt.missing_regions() if m not in known_missing]:
         out.append("menu %s: the picture '%s' (%s) is drawn from the region '%s', which no texture of the file has - "
                    "the game stops when it opens that menu" % (name, obj, STATES.get(state, state), region))

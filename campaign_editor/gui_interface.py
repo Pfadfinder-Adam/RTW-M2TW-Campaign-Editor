@@ -24,7 +24,9 @@ WORDS = "#ffdd77"                                    # the menus' gold words (Ro
 HANDLE = 7                                   # the corner square that sizes a piece, in screen pixels
 SHOWN = (("normal", None), ("mouse over", "highlighted"), ("pressed", "selected"), ("ticked", "checked"))
 KINDS = {"UIP_MENU_BUTTON": "a button that opens a page", "UIP_BACK_BUTTON": "the back button",
-         "UIP_STATIC_TEXT": "words", "UIP_EMPTY_ART": "a picture"}
+         "UIP_STATIC_TEXT": "words", "UIP_EMPTY_ART": "a picture",
+         "UIP_ERROR_DIALOG": "a message box (Exit program?, errors, yes / no)", "UIP_ERROR_DIALOG_SMALL": "a message box",
+         "UIP_BORDER": "a frame"}
 
 
 class InterfacePanel(ttk.Frame):
@@ -46,6 +48,7 @@ class InterfacePanel(ttk.Frame):
         self._pil = {}                       # Pillow pictures at the layout's size: words, pieces the game draws
         self._gpu = None                     # the graphics card draws the page (glmenu): None = not asked yet
         self._drag = None
+        self.frame = None
         self._build()
         self.load()
 
@@ -66,6 +69,7 @@ class InterfacePanel(ttk.Frame):
         self.page, self.picked = None, None
         self._pics, self._tex, self._fonts, self._pil = {}, {}, {}, {}
         self.own_files = {}                             # own pictures made here {file: TGA bytes}, written by Apply
+        self.frame = None                               # the menus' shared frame waiting: TGA bytes, b"" = the game's
         self.lb_pages.delete(0, "end")
         self.tv.delete(*self.tv.get_children())
         if self.doc:
@@ -104,7 +108,7 @@ class InterfacePanel(ttk.Frame):
         return self._menus_dirty() or self._sprites_dirty()
 
     def _menus_dirty(self):
-        return bool(self.doc) and self.doc.dump() != self.saved
+        return bool(self.doc) and (self.doc.dump() != self.saved or self.frame is not None)
 
     def _sprites_dirty(self):
         return self.sprites is not None and self.sprites.dirty()
@@ -138,6 +142,8 @@ class InterfacePanel(ttk.Frame):
         if not self.doc:
             return plan
         L.plan_write(plan, self._path, self.doc)
+        if self.frame is not None:
+            self._frame_into(plan)
         used = {os.path.normcase(self.own_path(t)) for t in self.doc.textures()}
         for path, data in self.own_files.items():          # the own pictures the layout names now
             if os.path.normcase(path) in used:
@@ -149,6 +155,54 @@ class InterfacePanel(ttk.Frame):
                 if os.path.normcase(p) not in used and n.lower().endswith(".tga"):
                     plan.delete(p, "an own menu picture no piece shows any more")
         return plan
+
+    def frame_path(self):
+        """The menus' shared frame as this mod's layout file names it (data/menu/border_4pix_black_gold2.tga)."""
+        from . import menudraw as MD
+        return self.own_path(MD.FRAME)
+
+    def game_frame(self):
+        """The game's own frame file (its data folder, not the mod's), or None."""
+        from . import menudraw as MD
+        from .campaignrules import game_data
+        try:
+            gd = game_data(self.mod)
+        except (OSError, ValueError):
+            return None
+        from .moddata import ci_path
+        p = ci_path(gd, "menu/" + MD.FRAME) if gd else None
+        return p if p and os.path.isfile(p) else None
+
+    def own_frame(self):
+        """The mod's own frame file (one the game's data does not hold there), or None."""
+        from . import menudraw as MD
+        p = L.texture_file(self.mod, self._path, MD.FRAME)
+        game = self.game_frame()
+        if not p or (game and os.path.normcase(os.path.abspath(p)) == os.path.normcase(os.path.abspath(game))):
+            return None
+        return p
+
+    def set_frame(self, data):
+        """The shared frame waiting for Apply changes: TGA bytes, b"" = the game's again, None = as it is."""
+        from . import menudraw as MD
+        self._remember()
+        self.frame = data
+        self._tex.pop(MD.FRAME, None)
+        self._pics.clear()
+        self._pil.clear()
+
+    def _frame_into(self, plan):
+        path = self.frame_path()
+        if self.frame:
+            plan.binary(path, self.frame)
+            plan.note(None, "data/menu/%s: the menus' frame (message boxes as Exit program?, text boxes, lists, "
+                            "drop-downs, borders) is the new picture" % os.path.basename(path))
+            return
+        game, mine = self.game_frame(), self.own_frame()
+        if game and mine:
+            with open(game, "rb") as fh:
+                plan.binary(mine, fh.read())
+            plan.note(None, "data/menu/%s: the game's frame again" % os.path.basename(path))
 
     def _on_sprites(self):
         return self.sprites is not None and self.nb.index(self.nb.select()) in (1, 2)    # the HUD works through it
@@ -423,10 +477,17 @@ class InterfacePanel(ttk.Frame):
                           command=lambda: self.ask_value("text", "The text key of its words (menu_english.txt):"))
         m.add_command(label="Tooltip (text key): %s..." % (x["tooltip"] or "none"),
                       command=lambda: self.ask_value("tooltip", "The text key of its tooltip:"))
-        if x["object"] in self.doc.objects():
-            m.add_command(label="Pictures of its states (normal, mouse over, pressed)...", command=self.ask_states)
         from . import gui_interface_own as OWN
-        m.add_command(label="Replace picture... (what it does stays)", command=lambda: OWN.ask_picture(self))
+        from . import menudraw as MD
+        if (x["identifier"] or "").upper() in MD.FRAME_ONLY:      # the game draws the menus' shared frame here
+            m.add_command(label="Replace picture... (the menus' shared frame)", command=lambda: OWN.ask_frame(self))
+            if self.frame or (self.frame is None and self.own_frame()):
+                m.add_command(label="Back to the game's frame", command=lambda: OWN.frame_back(self))
+        else:
+            if x["object"] in self.doc.objects():
+                m.add_command(label="Pictures of its states (normal, mouse over, pressed)...",
+                              command=self.ask_states)
+            m.add_command(label="Replace picture... (what it does stays)", command=lambda: OWN.ask_picture(self))
         if self.doc.game_object(x["object"]) is not None:
             m.add_command(label="Back to the game's picture", command=lambda: OWN.back_to_game(self))
         m.add_command(label="Picture library...", command=lambda: OWN.Library(self))
@@ -661,7 +722,18 @@ class InterfacePanel(ttk.Frame):
         """A part picture of data/menu (buttons_composite2.tga...) as RGBA, cached; None when not there."""
         if name not in self._tex:
             self._tex[name] = None
+            from . import menudraw as MD
             p = L.texture_file(self.mod, self._path, name)
+            if name == MD.FRAME and self.frame == b"":       # the game's own frame again, waiting
+                p = self.game_frame()
+            elif name == MD.FRAME and self.frame:            # a new frame waiting
+                try:
+                    import io
+                    from PIL import Image
+                    self._tex[name] = Image.open(io.BytesIO(self.frame)).convert("RGBA")
+                except Exception:
+                    pass
+                return self._tex[name]
             if p:
                 try:
                     from .recolour import read_picture
@@ -843,8 +915,8 @@ class InterfacePanel(ttk.Frame):
             if self.v_back.get() and self._film(x):
                 self._draw_film(x)
             state = self._state(x)
-            pic = self._picture(x, s, state) if self.v_back.get() else None
             k = MD.kind(x["identifier"], x["object"], self.doc.art(x) is not None)
+            pic = self._picture(x, s, state) if self.v_back.get() and k == "art" else None
             if pic is not None:
                 c.create_image(x0, y0, image=pic, anchor="nw")
             else:
@@ -938,7 +1010,7 @@ class InterfacePanel(ttk.Frame):
                 film(x)
             state = self._state(x)
             k = MD.kind(x["identifier"], x["object"], self.doc.art(x) is not None)
-            if not (self.v_back.get() and art(x, state)):
+            if not (self.v_back.get() and k == "art" and art(x, state)):
                 img, off = self._drawn_pil(k, (x1 - x0) / s, (y1 - y0) / s) if self.v_back.get() else (None, 0)
                 if img is not None:                     # what the game draws itself, from its own parts
                     left, top = x0 - off * s, y0 - off * s
@@ -1099,7 +1171,7 @@ class InterfacePanel(ttk.Frame):
 
     # ---- changes ----
     def _remember(self):
-        self.undo.append((list(self.doc.lines), self.page, self.picked))
+        self.undo.append(self._now())
         self.redo.clear()
         self.after_idle(self._marked)
 
@@ -1110,8 +1182,17 @@ class InterfacePanel(ttk.Frame):
             if f is not None:
                 f()
 
+    def _now(self):
+        return list(self.doc.lines), self.page, self.picked, self.frame
+
     def _restore(self, state):
-        lines, page, picked = state
+        lines, page, picked, frame = state
+        if frame is not self.frame:
+            from . import menudraw as MD
+            self.frame = frame
+            self._tex.pop(MD.FRAME, None)
+            self._pics.clear()
+            self._pil.clear()
         self.doc.lines = list(lines)
         self.doc.parse()
         self.fill_pages()
@@ -1120,7 +1201,7 @@ class InterfacePanel(ttk.Frame):
     def do_undo(self):
         if not self.undo:
             return False
-        self.redo.append((list(self.doc.lines), self.page, self.picked))
+        self.redo.append(self._now())
         self._restore(self.undo.pop())
         self._marked()
         return True
@@ -1128,7 +1209,7 @@ class InterfacePanel(ttk.Frame):
     def do_redo(self):
         if not self.redo:
             return False
-        self.undo.append((list(self.doc.lines), self.page, self.picked))
+        self.undo.append(self._now())
         self._restore(self.redo.pop())
         self._marked()
         return True
