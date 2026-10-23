@@ -6039,6 +6039,18 @@ building smith
                 self.assertIn("main|Map|TCheckbutton:relief", keys)
                 self.assertIn("main|Map|TButton:Rename...#2", keys)            # the second of one name
                 self.assertIn("main||TEntry:after:Size:", keys)                # no words: the words before it
+                # a box of a thousand pictures without words (Recolour's) is seen at once (#411: each walked back
+                # over every one before it - seconds); each named by the words before them all
+                grid = ttk.Frame(root)
+                ttk.Label(grid, text="Colours:").grid(row=0, column=0)
+                for i in range(1000):
+                    tk.Label(grid, width=1, bg="#%06x" % (i * 4099)).grid(row=1 + i // 50, column=i % 50)
+                asked, real = [], tk.Misc.winfo_class
+                with mock.patch.object(tk.Misc, "winfo_class", lambda w: (asked.append(1), real(w))[1]):
+                    grid.pack()
+                    root.update()
+                self.assertLess(len(asked), 20000)                             # it was half a million
+                self.assertIn("main||Label:after:Colours:#1000", look.by_key)
                 load = look.by_key["main||TButton:Load"]
                 self.assertEqual(load.cget("text"), "Cargar")                 # the language's words
                 self.assertEqual(look.by_key["main||TButton:Tools"].cget("text"), "Tools")   # none: English
