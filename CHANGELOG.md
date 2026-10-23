@@ -15,6 +15,7 @@
 - New faction > From another mod: the new faction could recruit its frame's own units it does not own (Medieval II stops at such a town) and could not recruit the units it shares with this mod -> its recruit lines follow the units it owns.
 - Edit faction / New faction: a colour picked for a faction with no secondary colour line was not written -> the line is added.
 - Recolour of a new faction not created yet: pictures in a folder spelled in other capitals kept the template's colours -> found and recoloured.
+- Medieval II: a wasteland's town given back (Place its town) could stand touching another region at a corner, which stops the game - now refused there, as for every other town.
 - Factions after Maps opens on the faction's form (or the tab it was on), not on an empty Buildings tab.
 - A label whose words change after it was cut with '...' shows them whole again ('Religion (Medieva' in the faction form).
 - Terrain's Undo all and the Settlements' Owner filter are no longer past the edge of a 1280 px window.

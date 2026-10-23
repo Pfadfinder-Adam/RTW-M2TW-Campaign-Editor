@@ -630,6 +630,13 @@ def town_problem(mod, campaign, region, xy, name=None):
     why = mod.land_problem(campaign, (x, y))
     if why:
         return why
+    # the 8 tiles round a town: its own region or sea - Medieval II stops on another region at a corner too (the
+    # check every other town placing makes, mapedit.ring_problems; the four sides alone let a corner through)
+    from .mapedit import owner_of, ports, ring_problems
+    serious = [m for s, m in ring_problems(mod, campaign, owner_of(mod, campaign), {region: (x, y)},
+                                           dict(ports(mod, campaign)), touched=({(x, y)}, {region})) if s]
+    if serious:
+        return serious[0]
     if name is not None:
         if not re.match(r"^[A-Za-z0-9_\-]+$", name or ""):
             return "the town's name in the files may use letters, digits, _ and - (no spaces)"
