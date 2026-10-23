@@ -191,8 +191,8 @@ def _string(d, p):
     if not 1 <= n <= 200 or p + 4 + n > len(d):
         return None
     b = d[p + 4:p + 4 + n]
-    if not all(32 <= c < 127 for c in b):
-        return None
+    if not all(32 <= c != 127 for c in b):      # bytes, as the game keeps them: a Latin-1 letter is a letter
+        return None                              # (Europa Barbarorum II's 'antenaeArcóbriga_01' material)
     return b.decode("latin-1"), p + 4 + n
 
 
