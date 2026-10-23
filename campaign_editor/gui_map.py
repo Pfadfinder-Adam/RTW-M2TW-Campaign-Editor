@@ -207,12 +207,13 @@ class MapView(ttk.Frame):
         self.region_marks, self.on_region_click = {}, None    # mark_regions: a window's regions coloured, clicks to it
         self.point_marks = []                                 # mark_points: points a check found, ringed
         self.shore = None                 # (map_heights picture, metres(px, py)): the shore drawn as the game cuts it
-        tip(ttk.Checkbutton(lbar, text="Merge regions", variable=self.v_merge, command=self._merge_toggled),
+        self.merge_tick = tip(ttk.Checkbutton(lbar, text="Merge regions", variable=self.v_merge, command=self._merge_toggled),
             "Join two regions into one (a map with too many regions): click the region that stays (yellow), then "
             "its neighbour that goes (red), then 'Merge them' under the map - the second region's town and region "
             "go from every file and all its land becomes the first one's; the first stays as it is. Only the "
             "regions and the town names are drawn meanwhile. A click on a picked region drops it. Written at "
-            "once with a backup (Undo this write / Tools > Restore).").pack(side="left", padx=(4, 4))
+            "once with a backup (Undo this write / Tools > Restore).")
+        self.merge_tick.pack(side="left", padx=(4, 4))
         self.lbl_layers = ttk.Label(lbar, text="", foreground="#666")
         self.lbl_layers.pack(side="left", padx=8)
         for v in (self.v_pol, self.v_borders, self.v_towns, self.v_rebels, self.v_names, self.v_ports, self.v_chars, self.v_res,

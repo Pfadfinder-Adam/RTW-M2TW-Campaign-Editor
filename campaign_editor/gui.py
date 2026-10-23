@@ -64,9 +64,10 @@ I WANT TO...  (pick the work in the row at the top, then use the tabs)
                                   Terrain (ground, rivers, climates), Coast & heights, 3D
   a building / garrisons in many  Maps: Select, drag a box (left button), right click
     towns at once ............... (or Edit faction's Buildings: Many towns at once...)
-  join two regions into one ..... Map: Merge regions - the one that stays, then the one that goes
-  grow or cut the map ........... Map: Change size... under the map - drag its edges out (sea)
-                                  or in (cut); Bigger map (x3)... beside the zoom for 3 x the tiles
+  join two regions into one ..... Maps: Map tools > Merge regions - the one that stays, then the one that goes
+  grow or cut the map ........... Maps: Map tools > Change size... - drag its edges out (sea)
+                                  or in (cut); Map tools > Bigger map (x3)... for 3 x the tiles,
+                                  Map from zero... for a small new map
   change a unit or a building ... Units / Buildings
   make a new unit or building ... Units / Buildings: New unit (New building) step by step...
   which units each building gives  Edit faction: Roster > By buildings (a unit added to a level
@@ -913,21 +914,39 @@ class App(tk.Tk):
             "campaign_editor.gui_scriptmap", fromlist=["open_script"]).open_script(self, sid)   # a script's scroll
         self.map_view.on_script_move = lambda sid, xy: __import__(
             "campaign_editor.gui_scriptmap", fromlist=["move"]).move(self, sid, xy)
-        # Bigger map (x3) on the map's own bar, left of its zoom (- 100% + Fit stay together), with its own '?'
-        # saying what it does (once on the top row; a tester: 'not between the zoom's plus and minus')
-        from .gui_util import hint as _hint, tip as _tip
+        # the map's whole-map tools in ONE drop-down on its bar (the user, 2026-10-23: 'tools in one menu - change size,
+        # bigger map and the rest'): the bar was wider than a 1280 px window and cut its last tick (Signs and tools)
+        from .gui_util import menu_button
+        mb = ttk.Menubutton(self.map_view.zoom_bar, text="Map tools")
+        mm = tk.Menu(mb, tearoff=False)
+        hints = {"Bigger map (x3)...": "Make the campaign map 3 x bigger (beta): every tile becomes 3 x 3, in five "
+                                       "steps with a backup first.",
+                 "Map from zero...": "A new small map in place of this campaign's: one island, one region with its "
+                                     "town, a port and a resource, one faction and the rebels (a backup first; Restore "
+                                     "puts the old map back).",
+                 "Change size...": "Tiles added at an edge (deep sea) or cut off; everything on the map moves with "
+                                   "them.",
+                 "Save picture...": "The map as you see it now, saved as a picture."}
+        for label, cmd in (("Change size...", lambda: self.map_view._resize()),
+                           ("Bigger map (x3)...", self.once("upscale_map", lambda: self.upscale_map())),
+                           ("Map from zero...", self.once("map_zero", lambda: self.map_from_zero())),
+                           ("Save picture...", lambda: self.map_view.save_picture())):
+            mm.add_command(label=label, command=cmd)
+        # Merge regions too: a switch of the menu here, its tick off the bar (Find had no room left)
+        mm.add_separator()
+        mm.add_checkbutton(label="Merge regions", variable=self.map_view.v_merge,
+                           command=self.map_view._merge_toggled)
+        hints["Merge regions"] = ("Join two regions into one: click the region that stays (yellow), then its "
+                                  "neighbour that goes (red), then 'Merge them' under the map.")
+        self.map_view.merge_tick.pack_forget()
+        mm.bind("<<MenuSelect>>", lambda e: self.status.set(hints.get(self._menu_label(mm), "")))
+        menu_button(mb, mm)
+        mb.pack(side="left")
         from .gui_upscale import WHAT_HAPPENS
-        # its '?' AFTER it (the author, 2026-10-22: not beside the zoom's '?'; once before it, R-20261014-7D5272)
-        up = _tip(ttk.Button(self.map_view.zoom_bar, text="Bigger map (x3)...", command=self.once(
-            "upscale_map", lambda: self.upscale_map())), "make the campaign map 3 x bigger (beta)")
-        up.pack(side="left")
-        q = _hint(self.map_view.zoom_bar, WHAT_HAPPENS, width=520)
-        q.pack(side="left", padx=(2, 0))
-        _tip(ttk.Button(self.map_view.zoom_bar, text="Map from zero...", command=self.once(
-            "map_zero", lambda: self.map_from_zero())),
-            "a new small map in place of this campaign's: one island, one region with its town, a port and a "
-            "resource, one faction (Rome: the Gauls, Medieval II: France) and the rebels - the start of your own "
-            "map (a backup first; Restore puts the old map back)").pack(side="left", padx=(4, 0))
+        from .gui_util import hint as _hint
+        _hint(self.map_view.zoom_bar, "Map tools: Change size... (tiles added at an edge or cut off), Bigger map "
+                                      "(x3)... (beta)  - " + WHAT_HAPPENS + "  Map from zero... (a small new map to "
+                                      "grow yourself), Save picture..., Merge regions (two regions into one).", width=520).pack(side="left", padx=(2, 0))
         self.map_view.on_tool = self.map_tool
         self.map_view.on_resize = self.map_size_window    # Change size... beside the map's size
         self.v_borders = self.map_view.v_borders
@@ -7383,6 +7402,13 @@ class App(tk.Tk):
                                 "added to a level reaches every level above). Start a NEW campaign to see it." % name)
             except (tk.TclError, ValueError, AttributeError) as e:
                 log.write("Roster after a faction from zero: %s" % e)
+
+    @staticmethod
+    def _menu_label(menu):
+        try:
+            return menu.entrycget("active", "label")
+        except tk.TclError:
+            return ""
 
     def _menu_hint(self, menu):
         try:
