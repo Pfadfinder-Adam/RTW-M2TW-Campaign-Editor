@@ -145,5 +145,47 @@ class ResourceOnWastelandTest(unittest.TestCase):
         self.assertFalse(any("wasteland" in w for _, w in plan.warnings))
 
 
+    def test_a_wastelands_town_never_touches_another_region_at_a_corner_in_medieval2(self):
+        """A wasteland given its town again (Place its town) checked only the tile's four sides: a tile touching
+        another region at a corner went through - Medieval II stops on it (the rule every other town placing keeps).
+        Rome: allowed (its vanilla never does it, HLR's REX plays with a few)."""
+        from campaign_editor import regiondelete as RD
+        from campaign_editor.minimod import write
+        from campaign_editor.moddata import ModData
+        from campaign_editor.plan import Plan
+        write(os.path.join(self.root, "data", "descr_ex.txt"), "max_factions 31\n")
+        write(os.path.join(self.root, "data", "descr_religions.txt"), "religions\n{\n\tcatholic\n}\n")
+        from campaign_editor.minimod import write_tga
+        mod = ModData(self.root)
+        a, b = (mod.regions("test")[r]["colour"] for r in ("A_R", "B_R"))
+        px = [[a if x < 4 else b for x in range(9)] for y in range(9)]   # a map big enough for an inner tile
+        px[4][1], px[4][6] = (0, 0, 0), (0, 0, 0)
+        write_tga(mod.campaign_file("test", "map_regions.tga"), 9, 9, px)
+        for name in ("map_ground_types.tga", "map_features.tga", "map_heights.tga"):
+            if mod.campaign_file("test", name):                 # (their old size no longer fits: not read)
+                os.remove(mod.campaign_file("test", name))
+        mod = ModData(self.root)
+        plan = Plan(mod, "delete", "B_R", {})
+        RD.delete(plan, "test", "B_R", waste=True)
+        plan.apply()
+        mod = ModData(self.root)
+        img, col = mod.region_map("test"), mod.regions("test")["B_R"]["colour"]
+        other = next(v["colour"] for r, v in mod.regions("test").items() if r != "B_R")
+        inside = [(x, y) for x in range(2, img.width - 2) for y in range(2, img.height - 2)
+                  if all(img.get(x + a, y + b) == col for a in (-1, 0, 1) for b in (-1, 0, 1))
+                  and not mod.land_problem("test", (x, y))]
+        self.assertTrue(inside, "the fixture's B_R has an inner tile")
+        x, y = inside[0]
+
+        def corner(mod):                                # another region's land at the tile's corner (in memory)
+            mod.region_map("test").set(x + 1, y + 1, other)
+            return mod
+        self.assertIsNone(RD.town_problem(mod, "test", "B_R", (x, y)))
+        why = RD.town_problem(corner(ModData(self.root)), "test", "B_R", (x, y))
+        self.assertIn("8 tiles round a town", why or "")
+        os.remove(os.path.join(self.root, "data", "descr_religions.txt"))
+        self.assertIsNone(RD.town_problem(corner(ModData(self.root)), "test", "B_R", (x, y)))
+
+
 if __name__ == "__main__":
     unittest.main()
