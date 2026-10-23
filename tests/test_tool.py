@@ -4369,6 +4369,42 @@ building smith
         finally:
             app.destroy()
 
+    def test_undo_on_a_work_that_was_a_window(self):
+        """Events, Traits, Mercenaries, Rebels, Recolour, Campaign rules keep their own steps (AutoKeep._undo): the
+        main window's Undo / Ctrl+Z on that work takes them, not a message naming a button the work has not."""
+        try:
+            from unittest import mock
+            from campaign_editor import gui
+            app = gui.App()
+        except Exception as e:                        # no tkinter / no display
+            self.skipTest("no tkinter window: %s" % e)
+        try:
+            with mock.patch("tkinter.messagebox.showinfo"), mock.patch("tkinter.messagebox.showerror"), \
+                    mock.patch("tkinter.messagebox.askyesno", return_value=False):
+                app.v_path.set(os.path.join(self.root, "data"))
+                app.load()
+                app.update()
+                for work in ("events", "traits", "rebels", "mercs", "rules"):
+                    app.v_work.set(work)
+                    app.work_changed()
+                    app.update()
+                    page = app.editor()
+                    if hasattr(page, "_undo"):              # the fixture has its files (else a note says why not)
+                        break
+                self.assertTrue(hasattr(page, "_undo"), work)
+                with mock.patch.object(page, "_undo") as undo, mock.patch.object(page, "_redo") as redo:
+                    self.assertEqual(app.undo(), "break")
+                    self.assertEqual(app.redo(), "break")
+                undo.assert_called_once_with()
+                redo.assert_called_once_with()
+                app.v_work.set("settlements")                  # no steps of its own: says so, names no button
+                app.work_changed()
+                app.update()
+                app.undo()
+                self.assertIn("no Undo of its own", app.status.get())
+        finally:
+            app.destroy()
+
     def test_faction_form_starts_empty(self):
         """The user, 2026-10-21: 'I made a faction, picked another - the fields were still full; remove it all by
         hand?'. New faction opened after Edit faction, another template, another faction in Edit: nothing of the one
