@@ -9,7 +9,7 @@ from tkinter import messagebox, ttk
 
 from . import rawfiles as RF
 from .gui_textblock import BlockText
-from .gui_util import AutoKeep, ShortHint, one_window
+from .gui_util import AutoKeep, one_window
 from .plan import Plan
 
 TITLE = "Any game file, as it is written"
@@ -29,12 +29,8 @@ class RawFilesWindow(AutoKeep, tk.Toplevel):
         self.path = None
         top = ttk.Frame(self, padding=8)
         top.pack(fill="both", expand=True)
-        ShortHint(top, foreground="#555", justify="left", wraplength=1140, text=(
-            "Every text file the game reads - the mod's own and the game's under it, as the game finds them. Pick "
-            "one and change it as in Notepad: only the lines you change are written, with a backup (Restore brings "
-            "it back). A file of the game's own data is written as the mod's own copy.")).pack(fill="x")
         body = ttk.Panedwindow(top, orient="horizontal")
-        body.pack(fill="both", expand=True, pady=6)
+        body.pack(fill="both", expand=True, pady=(0, 6))
         left = ttk.Frame(body)
         body.add(left, weight=0)
         fb = ttk.Frame(left)
