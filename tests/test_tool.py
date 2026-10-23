@@ -616,6 +616,25 @@ class ToolTest(unittest.TestCase):
         for p in (os.path.join("g", "data", "descr_strat.txt"), os.path.join("g", "data", "text", "names.txt")):
             self.assertEqual(TextFile.from_bytes(p, b"x").encoding, "latin-1")
 
+    def test_game_manifest_leaves_every_mod_out(self):
+        """Tools > Game manifest lists the game's own files only: a mod beside the exe, one holding only its changes
+        (no factions list - before taken as the game's own, file by file), Medieval II's mods/<name> (before all of
+        them went in) - but Kingdoms' expansions in mods/ and Rome's bi / alexander are the game's."""
+        import gzip
+        import json
+        from campaign_editor.scan import make_manifest
+        game = os.path.join(self.root, "g")
+        for rel in ("medieval2.exe", "data/descr_sm_factions.txt", "HLR/data/descr_sm_factions.txt",
+                    "thin/data/text/x.txt", "mods/mymod/data/world/maps/a.txt", "mods/teutonic/data/text/t.txt",
+                    "bi/data/descr_sm_factions.txt", "CampaignEditor/CampaignEditor_settings.json"):
+            write(os.path.join(game, *rel.split("/")), "x")
+        out, n, skipped = make_manifest(game)
+        with gzip.open(out, "rt", encoding="utf-8") as fh:
+            files = set(json.load(fh)["files"])
+        self.assertEqual(files, {"medieval2.exe", "data/descr_sm_factions.txt", "mods/teutonic/data/text/t.txt",
+                                 "bi/data/descr_sm_factions.txt"})
+        self.assertEqual(sorted(skipped), ["HLR", "mods/mymod", "thin"])
+
     def test_modeldb_miscounted_name_and_two_models_of_one_name(self):
         """Check mod files on battle_models.modeldb: the game reads it as a Boost text archive - a string is its length,
         ONE space, then that many letters - so a space too many by hand (the modders' '3 spaces crash') makes a name
