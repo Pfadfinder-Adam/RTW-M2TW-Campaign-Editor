@@ -1827,6 +1827,49 @@ building smith
         self.assertIn("world/maps/campaign/test/leader_pic_alpha.tga", rels)
         self.assertFalse(any(r.startswith("..") for r in rels))
 
+    def test_medieval2_campaign_map_flags_on_the_art_tab(self):
+        """Discord (2026-10-23, a Venice player): Art > Flags and banners had only the battle banners - nothing for the
+        campaign map. The engine (standard_display) makes Medieval II's army and fleet flags as Rome's: descr_standards'
+        one white flag dyed in the faction's colours with its standard_index slot of banners/symbolsN - the card was
+        shown for Rome only. The 3D symbol (descr_sm_factions 'symbol', its texture named in the .cas) stands over its
+        towns without an army - said so (it read 'the faction-select screen'), found under a thin mod too."""
+        try:
+            from PIL import Image
+        except ImportError:
+            self.skipTest("Pillow is not installed")
+        from unittest import mock
+        from campaign_editor import factionart as FA, symbols as SY
+        from campaign_editor.factionart import image_dds
+        game, _ = self._game()
+        gd = os.path.join(game, "data")
+        write(os.path.join(gd, "descr_sm_factions.txt"), SM.replace(
+            "culture\t\teastern\n", "culture\t\teastern\nsymbol\t\tmodels_strat/symbol_alpha.CAS\n"
+            "standard_index\t\t1\n", 1))
+        write(os.path.join(gd, "descr_standards.txt"), "file_army_banner\tdata/banners/strat_flag.cas\n"
+              "factions\nsymbols\t\tbanners/symbols1.tga\nrebels_factions\nsymbols\t\tbanners/symbols7.tga\n")
+        sheet = Image.new("RGBA", (128, 128), (0, 0, 0, 0))
+        sheet.paste(Image.new("RGBA", (64, 64), (0, 200, 0, 255)), (64, 0))      # slot 1: top right, green
+        os.makedirs(os.path.join(gd, "banners"))
+        with open(os.path.join(gd, "banners", "symbols1.tga.dds"), "wb") as fh:
+            fh.write(image_dds(sheet))
+        os.makedirs(os.path.join(gd, "models_strat", "textures"))
+        with open(os.path.join(gd, "models_strat", "symbol_alpha.cas"), "wb") as fh:
+            fh.write(b"\x00" * 40 + b"textures\\#banner_symbol_alpha.tga\x00" + b"\x00" * 8)
+        with open(os.path.join(gd, "models_strat", "textures", "#banner_symbol_alpha.tga.dds"), "wb") as fh:
+            fh.write(image_dds(Image.new("RGBA", (32, 32), (200, 0, 0, 255))))
+        data, _ = create_mod(gd, "Beta")
+        mod = ModData(data)
+        self.assertTrue(mod.under)
+        with mock.patch.object(SY, "rome", lambda m: False):
+            flags = {e["rel"]: e for e in FA.faction_pictures(mod, "test", "alpha") if FA.art_group(e) == "flags"}
+            self.assertIn(SY.FLAG, flags)
+            self.assertIn("armies", flags[SY.FLAG]["where"])
+            self.assertEqual(flags[SY.FLAG]["crop"], (64, 0, 64, 64))
+            self.assertEqual(SY.flag_image(mod, "alpha").getpixel((10, 10))[:3], (0, 200, 0))
+            three_d = flags["models_strat/textures/#banner_symbol_alpha.tga.dds"]
+            self.assertIn("over its towns", three_d["where"])
+            self.assertEqual(three_d["label"], "faction symbol (3D) texture")
+
     def test_rename_region_reaches_the_games_files_in_a_thin_mod(self):
         """A region renamed in a mod folder that keeps only what it changes: a file only the game's data has that names
         it (here its mercenary pool) is renamed too - as the mod's own copy, the game's untouched."""
@@ -5103,12 +5146,15 @@ building smith
     def test_emblem_says_which_flags_the_game_makes_itself(self):
         """Rome's army and fleet flags on the campaign map are one white flag the game dyes in the faction's colours
         with its symbol slot (descr_standards.txt), the generals' banners the battle banner: nothing to write, the
-        emblem window says so - for Rome only."""
+        emblem window says so. Medieval II's engine makes its army flags the same way (standard_display), its
+        generals carry banners of their own."""
         from campaign_editor import emblem as E
         said = E.game_made("rome")
         self.assertIn("armies and fleets", said)
         self.assertIn("generals'", said)
-        self.assertEqual(E.game_made("medieval2"), "")
+        self.assertIn("armies and fleets", E.game_made("medieval2"))
+        self.assertNotIn("generals'", E.game_made("medieval2"))
+        self.assertEqual(E.game_made("other"), "")
 
     def test_levels_a_faction_never_reaches_are_found(self):
         """A faction's towns grow only as far as the highest governor's building it may build (vanilla Rome's

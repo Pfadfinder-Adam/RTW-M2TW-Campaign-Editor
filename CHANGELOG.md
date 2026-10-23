@@ -10,6 +10,7 @@
 - Layout board: the board moves and zooms the same way as the Campaign HUD's - the wheel at the mouse (Shift in small steps), the middle button or Space + left drag it, Shift+1 everything, Shift+2 the picked piece, Shift+0 100 %; the arrows move the board when no free piece is picked.
 
 ### Fixed
+- Art > Flags and banners (Medieval II): only the battle banners were there, nothing for the campaign map -> the flag symbol over the faction's armies and fleets (its slot of banners/symbolsN, as the game takes it) is there to replace, and the 3D symbol's texture says it stands over its towns that hold no army; a new faction gets a flag slot of its own.
 - Interface: dragging a menu piece whose x / y line the mod left unclosed stopped with an error -> it moves.
 - Putting the editor into the game's folder: the first copy warned 'Failed to remove temporary directory' when it closed -> the new copy starts on its own.
 - Campaign HUD and the Layout board: zooming with the wheel and moving the mouse over the HUD lagged -> drawn once per turn of the wheel; a hover only moves the frame.

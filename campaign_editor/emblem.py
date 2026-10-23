@@ -26,7 +26,9 @@ DEFAULT = {"roll": 1.4, "grey": 0.75}
 # gives the general's, the unit's and the mini banner the same standard_texture)
 GAME_MADE = {"rome": "The flags over its armies and fleets on the campaign map are made by the game itself: one white "
                      "flag dyed in the faction's two colours with the flag symbol made here; its generals' and small "
-                     "banners in battle are the battle banner."}
+                     "banners in battle are the battle banner.",
+             "medieval2": "The flags over its armies and fleets on the campaign map are made by the game itself: one "
+                          "white flag dyed in the faction's two colours with the flag symbol made here."}
 
 
 def game_made(game):
