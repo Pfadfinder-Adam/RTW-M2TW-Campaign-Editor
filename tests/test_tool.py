@@ -9199,6 +9199,11 @@ building smith
         self.assertEqual([s for s, _ in launch.problems(how, data)], [True, False])
         put(os.path.join(m2, "mods", "x", "x.cfg"), b"[features]\r\nmod = mods/x\r\n")
         self.assertEqual(launch.problems(how, data), [])
+        # the game reads mod = under [features] only, up to a '#' (M2EX Options.cpp): elsewhere it starts no mod
+        put(os.path.join(m2, "mods", "x", "x.cfg"), b"[io]\r\nmod = mods/x\r\n[features]\r\n")
+        self.assertEqual([s for s, _ in launch.problems(how, data)], [False])
+        put(os.path.join(m2, "mods", "x", "x.cfg"), b"[features]\r\nmod = \"mods\\x\" # mine\r\n")
+        self.assertEqual(launch.problems(how, data), [])
         put(os.path.join(m2, "mods", "x", "Start_x.bat"), b"kingdoms.exe @mods/x/x.cfg\r\n")
         bat = launch.start_line(data)
         self.assertEqual([s for s, _ in launch.problems(bat, data)], [True])       # kingdoms.exe is not there
@@ -9208,6 +9213,13 @@ building smith
         put(os.path.join(m2, "mods", "x", "x.cfg"), b"[features]\r\nmod = mods/kirsi\r\n")
         self.assertEqual(launch.named_folder(data), "kirsi")
         self.assertTrue(any(st and "rename the folder to kirsi" in w for st, w in launch.problems(bat, data)))
+        # Rome: REX reads -mod: only up to a space - a mod folder with a space starts the plain game: refused
+        rome = os.path.join(self.root, "romesp")
+        put(os.path.join(rome, "REX.exe"))
+        put(os.path.join(rome, "data", "descr_sm_factions.txt"))
+        put(os.path.join(rome, "My Mod", "data", "descr_sm_factions.txt"))
+        d = os.path.join(rome, "My Mod", "data")
+        self.assertTrue(any(st and "space" in w for st, w in launch.problems(launch.start_line(d), d)))
 
     def test_start_the_game_with_the_loaded_mod(self):
         """Start the game: the mod's own start script (Start_<name>.bat first; not an unpacker's .bat), else the

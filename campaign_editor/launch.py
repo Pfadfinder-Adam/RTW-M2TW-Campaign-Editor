@@ -173,6 +173,11 @@ def problems(how, data):
     game = game_of(data)
     _, base = game_root_of(data)
     want = named_folder(data)
+    if base and not is_medieval2(game):
+        where = os.path.relpath(os.path.dirname(data), game).replace(os.sep, "/")
+        if " " in where:                        # REX takes -mod: up to the first space, case as written (core.cpp)
+            out.append((True, "the mod's folder %s has a space in its name - Rome reads -mod: only up to the "
+                              "space and starts without the mod; rename the folder without spaces" % where))
     if want:
         out.append((True, "the mod's own start script / .cfg look for it in mods\\%s, but it lies in %s - rename "
                           "the folder to %s (the game cannot find it under another name)" % (want, base, want)))
@@ -203,14 +208,33 @@ def problems(how, data):
     return out
 
 
+def cfg_value(text, section, key):
+    """A .cfg's value as the game reads it (M2EX Options.cpp): the key under its [section] only, up to a '#'
+    comment (';' is no comment there), quotes and spaces around it dropped; None when there is none."""
+    cur, got = None, None
+    for line in text.splitlines():
+        line = line.split("#", 1)[0].strip()
+        m = re.match(r"^\[([^\]]*)\]$", line)
+        if m:
+            cur = m.group(1).strip().lower()
+            continue
+        k, eq, v = line.partition("=")
+        if eq and cur == section and k.strip().lower() == key:
+            got = v.strip().strip('"').strip()
+    return got
+
+
 def _cfg_problems(path, base):
     """Medieval II's mod .cfg: [features] mod = mods/<name>, or the game starts without the mod (file_first is not
-    asked for: whether a mod = line needs it is not known for sure)."""
-    text = _text(path)
+    asked for: M2EX takes it as on, and a mod's own files come before the game's packs either way)."""
     out = []
-    if base and not re.search(r"^\s*mod\s*=\s*mods[/\\]+%s\b" % re.escape(base), text, re.I | re.M):
-        out.append((False, "%s does not name the mod's folder (mod = mods/%s under [features]) - the game may "
-                           "start without the mod" % (os.path.basename(path), base)))
+    if not base:
+        return out
+    v = cfg_value(_text(path), "features", "mod")
+    if v is None or re.sub(r"[/\\]+", "/", v).strip("/").lower() != "mods/%s" % base.lower():
+        out.append((False, "%s does not name the mod's folder (mod = mods/%s under [features]%s) - the game may "
+                           "start without the mod" % (os.path.basename(path), base,
+                                                       "; it says %s" % v if v else "")))
     return out
 
 
