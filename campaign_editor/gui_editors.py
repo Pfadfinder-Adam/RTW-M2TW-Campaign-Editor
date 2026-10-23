@@ -469,7 +469,9 @@ class RecordEditor(ttk.Frame):
         from .limits import game_kind
         facs = [f for f, _ in self.mod.factions()] + sorted({c for _, c in self.mod.factions() if c}) \
             if self.mod else []
-        info = lineinfo.about(self.kind, line, game_kind(self.mod) == "medieval2" if self.mod else False, facs)
+        from .accents import names as accent_names
+        info = lineinfo.about(self.kind, line, game_kind(self.mod) == "medieval2" if self.mod else False, facs,
+                              accent_names(self.mod) if self.mod else None)
         if info["key"] and self.mod and self.path():             # a line like it: another of the same key here
             f = self._src()
             info["example"] = next((f.text(i).strip() for i in range(len(f.raw))

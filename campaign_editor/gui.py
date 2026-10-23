@@ -105,7 +105,8 @@ START
 
 THE TABS
   New faction / Edit faction
-               names, texts, colours, AI, money, playable, religion (Medieval II), capital, leader,
+               names, texts, colours, AI, money, playable, religion and voice accent (Medieval II),
+               capital, leader,
                heir; beside them the faction's family tree and characters (Edit). Its towns:
                Towns on the map... / Capital on the map... (Maps opens for the pick;
                nothing typed is lost). Name list...: its own men's names, surnames, women's names.
@@ -622,6 +623,25 @@ class App(tk.Tk):
         self.cb_religion = ttk.Combobox(lf, textvariable=self.v["religion"], state="readonly")
         field("Religion", self.cb_religion)
         self.m2_rows = [lf.grid_slaves(row=row - 1, column=c)[0] for c in (0, 1)]
+        # Medieval II: the voice accent its men, generals and agents speak (descr_sounds_accents.txt, accents.py);
+        # Rome speaks by culture - the row is greyed there like the religion's
+        self.v["accent"] = tk.StringVar()
+        acc_cell = ttk.Frame(lf)
+        self.cb_accent = ttk.Combobox(acc_cell, textvariable=self.v["accent"], state="readonly", width=FIELD_W - 14)
+        self.cb_accent.pack(side="left")
+        self.b_accents = ttk.Button(acc_cell, text="Accents...", command=self.accents_window)
+        self.b_accents.pack(side="left", padx=(theme.BUTTON_GAP, 0))
+        field("Voice accent", acc_cell)
+        self.m2_rows.append(lf.grid_slaves(row=row - 1, column=0)[0])
+        from .gui_util import tip
+        tip(self.cb_accent, "The voices it speaks with: its soldiers' orders and name calls in battle, its general's "
+                            "speech before battle, its agents and diplomats on the map. Medieval II reads them from "
+                            "descr_sounds_accents.txt; a faction named in no accent has no voice. A new faction keeps "
+                            "its template's unless another is picked. Rome has no accents: its voices follow the "
+                            "culture.")
+        tip(self.b_accents, "Every accent of the mod with its factions and the sound files that speak it; New accent "
+                            "(the voices of another copied, so nothing is silent) and Remove accent - each with "
+                            "Preview and a backup.")
         # its culture (descr_sm_factions.txt, both games): towns' models, portraits, buildings and units follow it
         # (culture.py; the user, 2026-10-17)
         self.v["culture"] = tk.StringVar()
@@ -2221,7 +2241,8 @@ class App(tk.Tk):
         self._clear_form()                               # nothing of the faction shown before stays
         self.editing_now = now
         self.v["name"].set(faction)
-        for k in ("display_name", "short_name", "adjective", "ai", "religion", "culture", "leader_title", "heir_title"):
+        for k in ("display_name", "short_name", "adjective", "ai", "religion", "accent", "culture", "leader_title",
+                  "heir_title"):
             self.v[k].set(now.get(k) or "")
         for k, ws in self.extra_rows.items():
             self.v[k].set(now.get(k) or "")
@@ -4881,6 +4902,12 @@ class App(tk.Tk):
                                                             if r["name"] not in names(self.mod)]
         else:
             self.v["religion"].set("")
+        from .accents import has_accents, names as accent_names
+        speaks = bool(self.mod) and has_accents(self.mod)
+        self.cb_accent["values"] = accent_names(self.mod) if speaks else []
+        self.cb_accent.configure(state="readonly" if speaks else "disabled")
+        if not speaks:
+            self.v["accent"].set("")
 
     def _rebind(self, ed):
         lost = ed.rebind(self.mod)
@@ -5501,6 +5528,11 @@ class App(tk.Tk):
         if now.get("religion") and (not r or r == getattr(self, "_auto_religion", None)):
             self._auto_religion = now["religion"]
             self.v["religion"].set(now["religion"])
+        # and the voice accent (Medieval II), the same way
+        a = self.v["accent"].get()
+        if now.get("accent") and (not a or a == getattr(self, "_auto_accent", None)):
+            self._auto_accent = now["accent"]
+            self.v["accent"].set(now["accent"])
         # the titles and colours stay EMPTY (the user, 2026-10-22: the form shows nothing of the template but what
         # the game needs - AI, culture, money, religion); left empty, Apply keeps the template's in the files
         for key, b in (("primary", self.b_primary), ("secondary", self.b_secondary)):
@@ -5545,7 +5577,7 @@ class App(tk.Tk):
                 self.dip_set.clear()
             else:
                 setattr(self, k, [] if isinstance(getattr(self, k, None), list) else {})
-        self._auto_titles, self._auto_denari, self._auto_religion = {}, None, None
+        self._auto_titles, self._auto_denari, self._auto_religion, self._auto_accent = {}, None, None, None
         self.v_playable.set(True)
         self.v_art.set(True)
         self.v_super.set(False)
@@ -5778,6 +5810,146 @@ class App(tk.Tk):
             self.v["template"].set(new)
             self.template_changed()
         self.status.set("%s is %s now in every file; Undo this write puts it back." % (old, new))
+
+    def accents_window(self):
+        """Faction tab > Voice accent > Accents...: every accent of the mod with its factions and the sound files that
+        speak it; New accent (another's voices copied) and Remove accent (its factions to another) - each its own
+        write with Preview and a backup (accents.py). Rome: its voices follow the culture, said."""
+        from . import accents as AC
+        if not self.mod:
+            return
+        if not AC.has_accents(self.mod):
+            messagebox.showinfo(APP, "Rome has no voice accents: its sound files speak by culture (roman, greek, "
+                                     "barbarian, eastern...), so a faction speaks with the voices of its culture. "
+                                     "Change the Culture on this tab to give it other voices - its towns, portraits "
+                                     "and buildings follow the culture too.", parent=self)
+            return
+        w = tk.Toplevel(self)
+        w.title("Voice accents")
+        w.transient(self)
+        ttk.Label(w, wraplength=560, justify="left", text=(
+            "Each accent and the factions that speak it (descr_sounds_accents.txt). The sound files hold each "
+            "accent's lines - a faction whose accent no file speaks is silent. A faction's own accent is picked on "
+            "the Faction tab (Voice accent).")).pack(fill="x", padx=8, pady=(8, 4))
+        box = ttk.Frame(w)
+        box.pack(fill="both", expand=True, padx=8)
+        tv = ttk.Treeview(box, columns=("factions", "files"), height=10)
+        tv.heading("#0", text="Accent")
+        tv.heading("factions", text="Factions")
+        tv.heading("files", text="Sound files speaking it")
+        tv.column("#0", width=130)
+        tv.column("factions", width=300)
+        tv.column("files", width=150)
+        sb = ttk.Scrollbar(box, orient="vertical", command=tv.yview)
+        tv.configure(yscrollcommand=sb.set)
+        tv.pack(side="left", fill="both", expand=True)
+        sb.pack(side="right", fill="y")
+
+        def fill():
+            tv.delete(*tv.get_children())
+            spoken = AC.voiced(self.mod)
+            for a in AC.read(self.mod):
+                files = spoken.get(a.name, [])
+                tv.insert("", "end", iid=a.name, text=a.name, values=(
+                    ", ".join(a.factions) or "(none)", "%d" % len(files) if files else "none - silent"))
+            self.cb_accent["values"] = AC.names(self.mod)
+
+        def picked():
+            sel = tv.selection()
+            return sel[0] if sel else None
+
+        def write(plan, what):
+            if not ask(APP, "%s\n\n%s in %d file(s)? A backup is made first (Undo this write puts it back)."
+                       % (plan.report()[:3000], what, len(plan.changed_files())), yes="Write it", no="Cancel",
+                       parent=w):
+                return False
+            try:
+                bdir = plan.apply()
+            except Exception as e:
+                messagebox.showerror(APP, "Not written: %s" % e, parent=w)
+                return False
+            log.write("%s (backup %s)\n%s" % (what, bdir, plan.report()))
+            self.mod._cache.clear()
+            fill()
+            self.status.set("%s - written; Undo this write puts it back." % what)
+            return True
+
+        def ask_accent(title, text, choices):
+            """A small window: a word typed (choices None) or an accent picked; returns it or None."""
+            d = tk.Toplevel(w)
+            d.title(title)
+            d.transient(w)
+            ttk.Label(d, text=text, wraplength=380, justify="left").pack(fill="x", padx=8, pady=(8, 4))
+            var = tk.StringVar(value=choices[0] if choices else "")
+            if choices:
+                ttk.Combobox(d, textvariable=var, values=choices, state="readonly").pack(padx=8, fill="x")
+            else:
+                e = ttk.Entry(d, textvariable=var)
+                e.pack(padx=8, fill="x")
+                e.focus_set()
+            got = {}
+            row = ttk.Frame(d)
+            row.pack(pady=8)
+            ttk.Button(row, text="OK", command=lambda: (got.setdefault("v", var.get().strip()), d.destroy())).pack(
+                side="left", padx=4)
+            ttk.Button(row, text="Cancel", command=d.destroy).pack(side="left", padx=4)
+            d.bind("<Return>", lambda e: (got.setdefault("v", var.get().strip()), d.destroy()))
+            d.grab_set()
+            d.wait_window()
+            return got.get("v") or None
+
+        def new():
+            if self.unwritten():
+                messagebox.showinfo(APP, "Other changes wait for Apply. Apply (or undo) them first.", parent=w)
+                return
+            have = AC.names(self.mod)
+            name = ask_accent("New accent", "The new accent's name (one word: letters, digits and _ - e.g. "
+                                            "Venetian):", None)
+            if not name:
+                return
+            like = ask_accent("New accent", "Until it has sounds of its own, %s speaks like:" % name,
+                              ([picked()] if picked() else []) + [a for a in have if a != picked()])
+            if not like:
+                return
+            plan = Plan(self.mod, "accent", name)
+            try:
+                AC.new_accent(plan, name, like)
+            except (ValueError, OSError) as e:
+                messagebox.showerror(APP, "Not made: %s." % e, parent=w)
+                return
+            if write(plan, "New accent %s, speaking like %s" % (name, like)):
+                tv.selection_set(name)
+                self.v["accent"].set(name)        # the faction on the tab speaks it once Apply writes the form
+
+        def remove():
+            name = picked()
+            if not name:
+                messagebox.showinfo(APP, "Pick the accent to remove in the list.", parent=w)
+                return
+            if self.unwritten():
+                messagebox.showinfo(APP, "Other changes wait for Apply. Apply (or undo) them first.", parent=w)
+                return
+            others = [a for a in AC.names(self.mod) if a != name]
+            if not others:
+                messagebox.showinfo(APP, "%s is the only accent - the factions would have no voice." % name, parent=w)
+                return
+            to = ask_accent("Remove accent", "Remove %s: its factions speak, from now on:" % name, others)
+            if not to:
+                return
+            plan = Plan(self.mod, "accent", name)
+            try:
+                AC.remove_accent(plan, name, to)
+            except (ValueError, OSError) as e:
+                messagebox.showerror(APP, "Not removed: %s." % e, parent=w)
+                return
+            if write(plan, "Accent %s removed, its factions speak %s" % (name, to)) and self.v["accent"].get() == name:
+                self.v["accent"].set(to)
+        bar = ttk.Frame(w)
+        bar.pack(fill="x", padx=8, pady=8)
+        ttk.Button(bar, text="New accent...", command=new).pack(side="left", padx=(0, theme.BUTTON_GAP))
+        ttk.Button(bar, text="Remove accent...", command=remove).pack(side="left")
+        ttk.Button(bar, text="Close", command=w.destroy).pack(side="right")
+        fill()
 
     def show_family_button(self):
         """The Faction tab's Family tree button: what a click does, and whose family it is."""
@@ -6706,6 +6878,7 @@ class App(tk.Tk):
             "description": self.t_descr.get("1.0", "end").strip(),
             "long_description": self.t_long.get("1.0", "end").strip(),
             "religion": (v.get("religion") or None) if self._m2() else None,
+            "accent": v.get("accent") or None,                  # emptied where the game has no accents
             "culture": v.get("culture") or None,
             "leader_title": v["leader_title"] or None, "heir_title": v["heir_title"] or None,
             "primary_colour": self.colours["primary"], "secondary_colour": self.colours["secondary"],
@@ -6758,6 +6931,7 @@ class App(tk.Tk):
             "description": self.t_descr.get("1.0", "end").strip(),
             "long_description": self.t_long.get("1.0", "end").strip(),
             "religion": (v.get("religion") or None) if self._m2() else None,
+            "accent": v.get("accent") or None,                  # emptied where the game has no accents
             "culture": v.get("culture") or None,
             "primary_colour": self.colours["primary"], "secondary_colour": self.colours["secondary"],
             "ai": v["ai"], "denari": int(v["denari"]) if v["denari"].isdigit() else None,

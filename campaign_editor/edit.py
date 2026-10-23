@@ -100,6 +100,9 @@ def read_faction(mod, campaign, faction):
     rel = faction_religion(mod, faction)
     if rel:
         out["religion"] = rel                                     # Medieval II
+    from .accents import accent_of, has_accents
+    if has_accents(mod):
+        out["accent"] = accent_of(mod, faction) or ""             # Medieval II; Rome speaks by its culture
     out["regions"] = [st.region for st in fb.settlements]
     for c in fb.characters:
         if c.role in ("leader", "heir") and c.role not in out:
@@ -131,6 +134,9 @@ def edit(mod, campaign, faction, opts):
     if opts.get("religion") and opts["religion"] != now.get("religion"):   # after a new religion is written
         from .religions import set_faction_religion
         set_faction_religion(plan, faction, opts["religion"])
+    if opts.get("accent") and opts["accent"] != now.get("accent"):         # Medieval II: the voices it speaks
+        from .accents import set_accent
+        set_accent(plan, faction, opts["accent"])
     if opts.get("culture") and opts["culture"] != now.get("culture"):      # its towns, pictures, units follow
         from .culture import set_faction_culture
         set_faction_culture(plan, faction, opts["culture"])

@@ -182,6 +182,10 @@ def build(mod, campaign, template, new, opts):
     if opts.get("religion"):             # Medieval II: the clone's own religion (the template's is kept otherwise)
         from .religions import set_faction_religion
         set_faction_religion(plan, new, opts["religion"])
+    if opts.get("accent"):               # Medieval II: the voice accent it speaks (the template's otherwise; a
+        from .accents import accent_of, set_accent        # brought faction's own when this mod has it)
+        if opts["accent"] not in (accent_of(mod, template), accent_of(plan, new)):
+            set_accent(plan, new, opts["accent"])
     if opts.get("culture") and opts["culture"] != mod.culture(template):    # its own culture (the template's else)
         from .culture import set_faction_culture
         set_faction_culture(plan, new, opts["culture"])
