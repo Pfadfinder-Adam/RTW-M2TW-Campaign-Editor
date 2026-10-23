@@ -5817,6 +5817,12 @@ building smith
         p = slip.root.find("layout").find("lpage").find("UI piece")
         self.assertEqual((p.get("identifier"), p.get("object_id")), ("button", "obj"))
         self.assertEqual(len(slip.problems), 2)
+        # a <y> never closed, a <x> closed in capitals (#405 'line 8862 is not a <y> line' on a drag): moved, the
+        # rest of each line kept
+        slip = Lnt(piece.replace("<object_id>obj</object_id>", "<Parameters>\r\n        <x>5</X>\r\n"
+                                 "        <y>7\r\n      </Parameters>"))
+        slip.move("p", "b", x=10, y=20)
+        self.assertIn("        <x>10</X>\r\n        <y>20\r\n", slip.dump().decode("latin-1"))
         # a modder's comments, one line and several (#305: '</lpage> closes nothing open (open: <!-- HEADING ...')
         noted = ("<layout>\r\n  <!-- HEADING WITH TITLE \"FACTIONS\" I THINK -->\r\n  <lpage>a\r\n  <!-- two\r\n"
                  "  <lpage>b -->\r\n  </lpage>\r\n</layout>\r\n")
