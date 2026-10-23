@@ -8807,6 +8807,31 @@ building smith
         self.assertNotIn("data/text/dump.txt", [r[0] for r in rows])
         self.assertEqual(FC.complete(mod, "slave", "test"), ([], 0))
         self.assertNotIn("data/descr_banners.txt", [r[0] for r in FC.complete(mod, "alpha", "test")[0]])
+        # '_' joins: a unit egypt_chariot is not the faction egypt (it looked present)
+        with open(os.path.join(self.root, "data", "descr_banners.txt"), "w") as fh:
+            fh.write("faction alpha\nfaction beta\nbanner gamma_spears\n")
+        self.assertIn("data/descr_banners.txt", [r[0] for r in FC.complete(ModData(self.root), "gamma", "test")[0]])
+
+    def test_is_this_faction_complete_says_what_the_game_stops_on(self):
+        """What the engine itself stops on for a faction comes first: no 'type general' for it in descr_character
+        (create_floating_general - a crash when it gets a captain), a faction listed at the top of descr_strat with no
+        block, or a block in no list (the campaign does not load)."""
+        from campaign_editor import factioncheck as FC
+        ch = os.path.join(self.root, "data", "descr_character.txt")
+        with open(ch, encoding="latin-1") as fh:
+            text = fh.read()
+        mod = ModData(self.root)
+        self.assertEqual([r[0] for r in FC.stops(mod, "alpha", "test")], ["data/descr_character.txt"])
+        write(ch, text + "\ntype\t\tgeneral\nfaction\t\tslave, Alpha\ndictionary\t2\n")
+        self.assertEqual(FC.stops(ModData(self.root), "alpha", "test"), [])
+        strat = os.path.join(self.root, "data", "world", "maps", "campaign", "test", "descr_strat.txt")
+        with open(strat, encoding="latin-1") as fh:
+            st = fh.read()
+        write(strat, st.replace("playable\n\talpha\nend", "playable\nend"))
+        why = FC.stops(ModData(self.root), "alpha", "test")
+        self.assertEqual(len(why), 1)
+        self.assertIn("in none of the playable", why[0][1])
+        self.assertIn("STOPS", "\n".join(FC.words([], 0, "alpha", why)))
 
     def test_map_size_moves_pictures_and_places(self):
         """Map size: a picture grows by the tiles asked (deep sea's value in the new points) and back again pixel for
