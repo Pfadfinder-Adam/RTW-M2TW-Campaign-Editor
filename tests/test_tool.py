@@ -616,6 +616,48 @@ class ToolTest(unittest.TestCase):
         for p in (os.path.join("g", "data", "descr_strat.txt"), os.path.join("g", "data", "text", "names.txt")):
             self.assertEqual(TextFile.from_bytes(p, b"x").encoding, "latin-1")
 
+    def test_game_manifest_leaves_every_mod_out(self):
+        """Tools > Game manifest lists the game's own files only: a mod beside the exe, one holding only its changes
+        (no factions list - before taken as the game's own, file by file), Medieval II's mods/<name> (before all of
+        them went in) - but Kingdoms' expansions in mods/ and Rome's bi / alexander are the game's."""
+        import gzip
+        import json
+        from campaign_editor.scan import make_manifest
+        game = os.path.join(self.root, "g")
+        for rel in ("medieval2.exe", "data/descr_sm_factions.txt", "HLR/data/descr_sm_factions.txt",
+                    "thin/data/text/x.txt", "mods/mymod/data/world/maps/a.txt", "mods/teutonic/data/text/t.txt",
+                    "bi/data/descr_sm_factions.txt", "CampaignEditor/CampaignEditor_settings.json"):
+            write(os.path.join(game, *rel.split("/")), "x")
+        out, n, skipped = make_manifest(game)
+        with gzip.open(out, "rt", encoding="utf-8") as fh:
+            files = set(json.load(fh)["files"])
+        self.assertEqual(files, {"medieval2.exe", "data/descr_sm_factions.txt", "mods/teutonic/data/text/t.txt",
+                                 "bi/data/descr_sm_factions.txt"})
+        self.assertEqual(sorted(skipped), ["HLR", "mods/mymod", "thin"])
+
+    def test_an_older_linked_mod_gets_its_own_game_caches(self):
+        """A mod an older version made of hard links shares map.rwm / *.db with its base mod, and the game rewrites
+        those in place - into the base mod's own file. On load each still shared becomes the mod's own copy (same
+        bytes); other linked files stay links; a mod not made with links is left alone."""
+        import json
+        from campaign_editor.newmod import MARKER, unshare_caches
+        base, mod = os.path.join(self.root, "HLR"), os.path.join(self.root, "mine")
+        for rel in ("data/world/maps/base/map.rwm", "data/x.db", "data/models/a.cas"):
+            write(os.path.join(base, *rel.split("/")), "cache " + rel)
+            os.makedirs(os.path.dirname(os.path.join(mod, *rel.split("/"))), exist_ok=True)
+            os.link(os.path.join(base, *rel.split("/")), os.path.join(mod, *rel.split("/")))
+        write(os.path.join(mod, MARKER), json.dumps({"base": "HLR", "linked": False}))
+        self.assertEqual(unshare_caches(mod), [])                       # not made with links: nothing done
+        write(os.path.join(mod, MARKER), json.dumps({"base": "HLR", "linked": True}))
+        got = unshare_caches(mod)
+        self.assertEqual(sorted(os.path.basename(p) for p in got), ["map.rwm", "x.db"])
+        rwm = os.path.join(mod, "data", "world", "maps", "base", "map.rwm")
+        self.assertEqual(os.stat(rwm).st_nlink, 1)
+        with open(rwm) as fh:
+            self.assertEqual(fh.read(), "cache data/world/maps/base/map.rwm")
+        self.assertEqual(os.stat(os.path.join(mod, "data", "models", "a.cas")).st_nlink, 2)   # a model stays linked
+        self.assertEqual(unshare_caches(mod), [])
+
     def test_modeldb_miscounted_name_and_two_models_of_one_name(self):
         """Check mod files on battle_models.modeldb: the game reads it as a Boost text archive - a string is its length,
         ONE space, then that many letters - so a space too many by hand (the modders' '3 spaces crash') makes a name
@@ -2457,6 +2499,79 @@ building smith
         restore(ModData(self.root), backups(ModData(self.root))[0])
         after = {k: v for k, v in tree_hash(self.root).items() if not k.startswith(("faction_tool_backups", "CampaignEditor_backups"))}
         self.assertEqual(before, after)
+
+    def test_town_tile_and_port_land_as_the_game_reads_them(self):
+        """Report R-20261023-D68B3A (Medieval II with M2EX, kgcm, two new regions): their towns stood on mountains -
+        the game skips such a region ('invalid tile ... skipping region': no town, no owner) and crashed as the
+        campaign started. A new region's town there is refused, Check names a town there. A port belongs to the
+        first land next to it looking down, right, up, left (WORLD_MAP::create_regions), not to most of the land
+        round it: two ports in one region ('we already have a port position') are named, a move refused."""
+        from campaign_editor.check import double_port_problems, town_tile_problems
+        from campaign_editor.mapedit import double_ports, place_problem, ports
+        from campaign_editor.regionedit import region_problems
+        camp = os.path.join(self.root, "data", "world", "maps", "campaign", "test")
+        R, B, K, S, W = (255, 0, 0), (0, 0, 255), (0, 0, 0), (41, 140, 233), (255, 255, 255)
+        px = [[R, R, R, B, B, B, S],                     # y = 0, the bottom row
+              [R, K, R, B, K, B, S],
+              [R, R, R, B, B, W, S],
+              [R, R, R, R, B, S, S],
+              [R, R, R, R, W, S, S]]
+        write_tga(os.path.join(camp, "map_regions.tga"), 7, 5, px)
+        flat, mountains = (0, 128, 128), (98, 65, 65)
+        ground = [[mountains if (x, y) in ((3, 3), (1, 7)) else flat for x in range(15)] for y in range(11)]
+        write_tga(os.path.join(camp, "map_ground_types.tga"), 15, 11, ground)
+        mod = ModData(self.root)
+        # the port at 4, 4: A_R's land on two sides, B_R's below it - the game gives it to B_R, which has one at 5, 2
+        self.assertEqual(ports(mod, "test"), {"B_R": (5, 2)})
+        self.assertEqual(double_ports(mod, "test"), {"B_R": [(5, 2), (4, 4)]})
+        got = double_port_problems(mod, "test")
+        self.assertEqual(len(got), 1)
+        self.assertIn("B_R gets 2 ports", got[0])
+        # A_R's town at 1, 1 stands on mountains (map_ground_types' 2x + 1, 2y + 1)
+        got = town_tile_problems(mod, "test")
+        self.assertEqual(len(got), 1)
+        self.assertIn("the town of A_R at 1, 1 stands on mountains", got[0])
+        # a port moved where the land below it is another region's: refused
+        px[4][4] = R
+        write_tga(os.path.join(camp, "map_regions.tga"), 7, 5, px)
+        mod = ModData(self.root)
+        why = place_problem(mod, "test", "port", "A_R", (4, 4))
+        self.assertIn("the port would be B_R's, not A_R's", why)
+        # a port on mountains: refused (the game's own map editor refuses it, is_port_placement_on_a_valid_tile)
+        ground[9][9] = mountains
+        write_tga(os.path.join(camp, "map_ground_types.tga"), 15, 11, ground)
+        self.assertEqual(place_problem(ModData(self.root), "test", "port", "A_R", (4, 4)), "mountains")
+        ground[9][9] = flat
+        write_tga(os.path.join(camp, "map_ground_types.tga"), 15, 11, ground)
+        # a new region's town on mountains: refused
+        new = [{"name": "N_R", "settlement": "Ntown", "city": (0, 3), "port": None}]
+        errors, _ = region_problems(mod, "test", {(0, 3): "N_R", (0, 4): "N_R", (1, 4): "N_R"}, new)
+        self.assertTrue(any("N_R: the town stands on mountains" in e for e in errors), errors)
+        new[0]["city"] = (0, 4)
+        errors, _ = region_problems(mod, "test", {(0, 3): "N_R", (0, 4): "N_R", (1, 4): "N_R"}, new)
+        self.assertFalse(any("the town stands on" in e for e in errors), errors)
+
+    def test_crash_doctor_puts_the_skipped_region_first(self):
+        """R-20261023-D68B3A: the editor's report named 'Unknown settlement level : moat_and_bailey' (the mod's own
+        descr_campaign_db.xml, the game went on) first; the town the game skipped - the crash's cause - comes first."""
+        from campaign_editor import gamelog
+        log = "\n".join([
+            "18:47:17.412 [data.campaign_db] [error] Unknown settlement level : moat_and_bailey",
+            "18:47:17.412 [core.assert] [fatal] ERROR: src\\game\\campaign_db.cpp(670)",
+            "Unknown settlement level : moat_and_bailey",
+            "  at   src/core/system/assert.cpp (431): Core::RetailAssertLog+194",
+            "18:47:23.320 [core.assert] [fatal] ERROR: src\\game\\world_map.cpp(8763)",
+            "You have chosen an invalid tile(438,208) for a settlement position in region(130).",
+            "PLACEMENT_TOO_MOUNTAINOUS",
+            "  at   src/core/system/assert.cpp (431): Core::RetailAssertLog+194",
+            "18:47:28.520 [core.assert] [fatal] ERROR: src\\game\\world.cpp(4404)",
+            "You have chosen an invalid tile(438, 208) for the settlement of Soukhumi, skipping region",
+            "  at   src/core/system/assert.cpp (431): Core::RetailAssertLog+194"] + ["18:47:44.356 [ai.prod] [info] x"] * 200)
+        v = gamelog.verdict(log)
+        self.assertIn("the one that crashes it later: The town of region number 130 stands at 438, 208", v["headline"])
+        self.assertIn("TOO_MOUNTAINOUS", v["headline"])
+        self.assertTrue(any("The town Soukhumi stands at 438, 208" in w for w in v["serious"]))
+        self.assertTrue(any("moot_and_bailey - the game's own spelling" in w for w in v["serious"]))
 
     def test_town_ring_rule(self):
         """The 8 tiles round a town are its own region or sea (0 exceptions in vanilla Rome and Medieval II), and
@@ -5216,7 +5331,8 @@ building smith
         write(os.path.join(camp, "bar_regions_and_settlement_names.txt"), "{A_R}\tA\n", utf16=True)
         mod = ModData(self.root)
         self.assertEqual(os.path.basename(mod.region_labels_file("custom/foo")), "foo_regions_and_settlement_names.txt")
-        self.assertEqual(os.path.dirname(mod.region_labels_file("custom/bar")), camp)
+        self.assertEqual(os.path.normpath(os.path.dirname(mod.region_labels_file("custom/bar"))),
+                         os.path.normpath(camp))      # Windows: 'custom/bar' joined with '\\' (tester 2026-10-23)
         self.assertIsNone(mod.region_labels_file("custom/none"))
 
     def test_override_packs_come_before_data_pack(self):
@@ -5862,6 +5978,14 @@ building smith
         lost = good.replace("<region>logo</region>", "<region>lost_region</region>")
         write(os.path.join(d, "menu", "Rome.lnt"), lost)
         self.assertIn("the game stops when it opens that menu", " ".join(L.problems(mod)))
+        quit_own = good.replace("      <identifier>UIP_EMPTY_ART</identifier>", "      <identifier>UIP_ERROR_DIALOG</identifier>")
+        write(os.path.join(d, "menu", "Rome.lnt"), quit_own)
+        write(os.path.join(d, "menu", "textures", "FE_texture1.tga"), "x")
+        got = L.problems(mod)                                       # Maha, 2026-10-23: a quit box picture never drawn
+        self.assertEqual(len(got), 1, got)
+        self.assertIn("main_logo (UIP_ERROR_DIALOG) has a picture of its own, 'logo_obj', which the game never draws",
+                      got[0])
+        self.assertIn("border_4pix_black_gold2.tga", got[0])
 
     def test_skeleton_parent_read_in_any_case(self):
         """#347: a mod's skeleton listing only its own few moves takes the rest from its parent - 'Type' / 'Parent'
@@ -6196,6 +6320,12 @@ building smith
         self.assertEqual(MD.kind("UIP_STATIC_TEXT", "empty_art", False), "static")
         self.assertEqual(MD.kind("UIP_MENU_BUTTON", "empty_push_button", False), "button")
         self.assertEqual(MD.kind("UIP_MENU_BUTTON", "logo", True), "art")
+        # the 'Exit program?' box (UIP_ERROR_DIALOG of CONFIRM_YES_NO) and a frame are the menus' shared frame, even
+        # with a picture of their own - the game never draws that picture (Maha, 2026-10-23)
+        self.assertEqual(MD.kind("UIP_ERROR_DIALOG", "empty_art", False), "dialog")
+        self.assertEqual(MD.kind("UIP_ERROR_DIALOG", "quit_box_own", True), "dialog")
+        self.assertEqual(MD.kind("UIP_ERROR_DIALOG_SMALL", "x", True), "dialog")
+        self.assertEqual(MD.kind("UIP_BORDER", "frame_own", True), "border")
         self.assertEqual(MD.text_colour("static"), ((255, 223, 127), True))
         self.assertEqual(MD.text_colour("button"), ((255, 221, 119), False))
         try:
@@ -6215,6 +6345,22 @@ building smith
         sl = MD.slider(parts, 120, 20, value=0)
         self.assertEqual((sl.getpixel((5, 5))[0], sl.getpixel((115, 5))[0], sl.getpixel((25, 5))[0]), (120, 130, 70))
         self.assertIsNone(MD.tick(lambda name: None, 20))
+        box, off = MD.piece_image(parts, "dialog", 448, 288)        # UI_DIALOGTEXT::draw: from 8 px outside
+        self.assertEqual((box.size, off), ((464, 304), 8))
+        self.assertEqual(MD.piece_image(parts, "border", 100, 40)[0].size, (100, 40))
+        # a new frame from a picture of the whole box: its corners / edges / middle into the cells draw_border uses
+        pic = Image.new("RGBA", (464, 304), (0, 0, 200, 255))
+        pic.paste((255, 0, 0, 255), (0, 0, 16, 16))                    # top-left corner red
+        pic.paste((0, 255, 0, 255), (16, 0, 448, 16))                  # top edge green
+        sheet = MD.frame_sheet(pic, (464, 304), old=grid, cell=64)
+        self.assertEqual(sheet.size, (256, 256))
+        self.assertEqual(sheet.getpixel((32, 32)), (255, 0, 0, 255))   # cell 0
+        self.assertEqual(sheet.getpixel((96, 32)), (0, 255, 0, 255))   # cell 1
+        self.assertEqual(sheet.getpixel((96, 96)), (0, 0, 200, 255))   # cell 5, the middle
+        self.assertEqual(sheet.getpixel((160, 32))[0], 20)             # cell 2 is never drawn: the old frame's
+        f2, _ = MD.framed(lambda name: sheet, 100, 40)
+        self.assertEqual([f2.getpixel(p)[:3] for p in ((2, 2), (50, 2), (50, 28))],
+                         [(255, 0, 0), (0, 255, 0), (0, 0, 200)])
 
     def test_menu_backdrop_is_the_games_video(self):
         """#296: the menu backdrop is a video (Rome Dump0000.m1v, Medieval II Dump0000.bik) - the <fmv> block names it
@@ -9130,6 +9276,41 @@ building smith
         with open(os.path.join(gcamp, "radar_map1.tga"), "rb") as fh:
             self.assertEqual(fh.read(), old)
 
+    def test_map_size_moves_water_surface_with_the_map(self):
+        """Adam, 2026-10-23, watching the tester grow a map: the sea kept the old coasts' outline, shifted off the
+        land. water_surface.tga (the sea's colour picture) is stretched by the game over the whole map
+        (sea_plane.cpp), so it keeps its size and its picture moves and squeezes with the map; the new sea takes the
+        deep sea's colour. flat_sea makes it one colour. Checked with and without Pillow (CI has none)."""
+        from campaign_editor import mapresize as MR
+        from campaign_editor.tga import read_tga_bytes
+        from campaign_editor.tga import read_tga
+        camp = os.path.join(self.root, "data", "world", "maps", "campaign", "test")
+        regions = read_tga(os.path.join(camp, "map_regions.tga"))
+        w, h = regions.width, regions.height
+        deep, coast = (10, 20, 90), (250, 250, 250)
+        pixels = [[coast if x < 4 or y >= 12 else deep for x in range(16)] for y in range(16)]    # coasts: left, top
+        path = os.path.join(camp, "water_surface.tga")
+        write_tga(path, 16, 16, pixels)
+        with open(path, "rb") as fh:
+            old = fh.read()
+        got = read_tga_bytes(MR.water_shifted(old, w, h, w, 0, 0, 0, None))     # the map twice as wide, at the left
+        self.assertEqual((got.width, got.height), (16, 16))                      # its own size kept
+        self.assertEqual(got.get(1, 8), deep)                                    # the new sea: the common colour
+        self.assertEqual(got.get(9, 8), coast)                                   # the old left edge, now mid-picture
+        self.assertEqual(got.get(14, 8), deep)
+        cut = read_tga_bytes(MR.water_shifted(old, 16, 16, -4, 0, 0, 0, None))  # the coast's columns cut off
+        self.assertNotIn(coast, {cut.get(x, y) for x in range(1, 16) for y in range(10)})
+        flat = read_tga_bytes(MR.water_shifted(old, w, h, 2, 0, 0, 0, None, flat=True))
+        self.assertEqual({flat.get(x, y) for x in range(16) for y in range(16)}, {deep})
+        plan = Plan(ModData(os.path.join(self.root, "data")), "map", "map_size", {})
+        MR.plan_resize(plan, "test", top=-1, clear=True)                # (the little map has no sea to grow)
+        self.assertIn(path, plan.binaries)
+        self.assertTrue(plan.binaries[path] != old)                            # the top coast squeezed up
+        plan = Plan(ModData(os.path.join(self.root, "data")), "map", "map_size", {})
+        MR.plan_resize(plan, "test", top=-1, clear=True, flat_sea=True)
+        flat = read_tga_bytes(plan.binaries[path])
+        self.assertEqual(len({flat.get(x, y) for x in range(16) for y in range(16)}), 1)
+
     def test_map_size_writes_the_games_descr_terrain_into_a_thin_mod(self):
         """The game sizes every map layer by descr_terrain.txt (world_map.cpp). A mod keeping only what it changes,
         with its own map_regions.tga but the game's descr_terrain.txt: the size was never written (the file was looked
@@ -10564,6 +10745,7 @@ building smith
                                edit=lambda p: None)
         src = SimpleNamespace(culture=lambda f: None)
         stubs = dict(bring_units=lambda *a: ([], [], {}), start_of=lambda *a: None, bring_sm_files=lambda *a: None, bring_horde=lambda *a: None,
+                     bring_battle_textures=lambda *a: 0,
                      own_select_map=lambda *a: None, bring_characters=lambda *a: None, bring_figures=lambda *a: None,
                      bring_names=lambda *a: called.append(a))
         with mock.patch.multiple(FB, **stubs), mock.patch("campaign_editor.moddata.ModData", lambda p: src), \
@@ -10864,6 +11046,92 @@ building smith
                                      "texture\tpicts,\tdata/models_strat/textures/navy_celts.tga",
                                      "model_flexi\tdata/models_strat/navy_barb.cas, max"])
             self.assertEqual(sorted(files), ["models_strat/navy_barb.cas", "models_strat/textures/navy_celts.tga.dds"])
+
+    def test_brought_unit_shared_when_only_its_eras_differ(self):
+        """Yuri's Wales from the Britannia campaign into his mod (2026-10-23, 'only the first tab filled'): a mod's
+        own faction stands in its units' 'era N' lines (the engine reads them as faction lists, unit_db.cpp), so
+        every unit it shares with this mod looked different and came again as 'Mailed Knights 2' with copies of
+        its models. Now a unit differing only in its faction lists is shared - owned, and in the eras the other
+        mod gives it."""
+        from campaign_editor import factionbring as FB
+        mod = ModData(self.root)
+        edu = mod.file("edu")
+        with open(edu, encoding="latin-1") as fh:
+            text = fh.read()
+        block = "\ntype\t\tpike\ndictionary\tpike\ncategory infantry\nownership\t%s\nera 0\t%s\nera 1\t%s\n"
+        write(edu, text + block % ("slave, alpha,", "slave, alpha, ; the rebels", "alpha"))
+        with tempfile.TemporaryDirectory() as src:
+            shutil.copytree(self.root, src, dirs_exist_ok=True)
+            write(os.path.join(src, "data", "export_descr_unit.txt"), text + block % ("zz", "zz", "slave"))
+            self.assertTrue(FB._same_unit(*[["category infantry", "ownership x", "era 0 %s" % f] for f in "xy"]))
+            plan = Plan(mod, "alpha", "beta", {})
+            shared, brought, names = FB.bring_units(plan, ModData(src), "zz", "beta")
+            self.assertEqual((shared, brought), (["pike"], []))
+            got = plan.edit(edu).texts()
+            self.assertIn("ownership\tslave, alpha, beta,", got)
+            self.assertIn("era 0\tslave, alpha, beta, ; the rebels", got)
+            self.assertIn("era 1\talpha", got)                      # the other mod gave it no era 1
+
+    def test_brought_faction_wears_its_own_battle_textures(self):
+        """A brought faction's men wore its frame's textures in battle (the frame's lines copied for it - Scots in
+        English colours, Wales of another mod likewise): a battle model both mods have with the same meshes gets
+        the brought faction's own texture lines for the new one, their files brought when this mod lacks them."""
+        from campaign_editor import factionbring as FB
+        mod = ModData(self.root)
+        dmb = "type\t\tpike\nskeleton\tfs_spear\ntexture\talpha, data/models_unit/textures/pike_alpha.tga\n" \
+              "%smodel_flexi_m\tdata/models_unit/pike.cas, max\n\n"
+        write(os.path.join(mod.data, "descr_model_battle.txt"),
+              dmb % "texture\tbeta, data/models_unit/textures/pike_alpha.tga\n")
+        with tempfile.TemporaryDirectory() as src:
+            os.makedirs(os.path.join(src, "data", "models_unit", "textures"))
+            write(os.path.join(src, "data", "descr_sm_factions.txt"), "faction\tzz\nculture\teastern\n")
+            write(os.path.join(src, "data", "descr_model_battle.txt"),
+                  dmb % "texture\tzz, data/models_unit/textures/pike_zz.tga\n")
+            write(os.path.join(src, "data", "models_unit", "textures", "pike_zz.tga.dds"), "x")
+            plan = Plan(mod, "alpha", "beta", {})
+            self.assertEqual(FB.bring_battle_textures(plan, ModData(src), "zz", "beta"), 1)
+            got = plan.edit(mod.file("model_battle")).texts()
+            self.assertIn("texture\tbeta, data/models_unit/textures/pike_zz.tga", got)
+            self.assertIn("texture\talpha, data/models_unit/textures/pike_alpha.tga", got)
+            self.assertNotIn("texture\tbeta, data/models_unit/textures/pike_alpha.tga", got)
+            self.assertEqual([os.path.relpath(d, mod.data).replace("\\", "/") for _, d in plan.copies],
+                             ["models_unit/textures/pike_zz.tga.dds"])
+            # another model under the same name (other meshes): left as it is
+            write(os.path.join(src, "data", "descr_model_battle.txt"),
+                  (dmb % "texture\tzz, data/models_unit/textures/pike_zz.tga\n").replace("pike.cas", "pike2.cas"))
+            plan = Plan(mod, "alpha", "beta", {})
+            self.assertEqual(FB.bring_battle_textures(plan, ModData(src), "zz", "beta"), 0)
+
+    def test_brought_pictures_found_by_their_place_not_their_name(self):
+        """A mod's faction whose pictures do not carry its name (Wales flying 'faction_banner_scotland', Scotland's
+        'princess_scottland'): they were left out and the new faction got EMPTY banners and figures. Each goes where
+        the frame's picture of the same place was copied - the same line, the banner blocks most alike, the same
+        kind of picture."""
+        from unittest import mock
+        from campaign_editor import factionart as FA
+        from campaign_editor import factionbring as FB
+        pics = {"wales": [{"rel": "ui/captain banners/captain_card_scotland.tga", "path": "/x/card", "label": "card"},
+                          {"rel": "banners/textures/faction_banner_scotland.texture", "path": "/x/ban",
+                           "label": "battle banner faction_banner_scotland.texture",
+                           "extra": {"kind": "banner", "ref": "banners\\textures\\Faction_banner_scotland.texture"}},
+                          {"rel": "models_strat/textures/princess_scottland.tga.dds", "path": "/x/pr", "label": "p",
+                           "link": ["model_strat", "texture:princess"]},
+                          {"rel": "ui/wales_x.tga", "path": "/x/own", "label": "x"}],
+                "england": [{"rel": "ui/captain banners/captain_card_england.tga", "label": "card"},
+                            {"rel": "banners/textures/faction_banner_england.texture", "label": "battle banner f",
+                             "extra": {"kind": "banner", "ref": "banners/textures/faction_banner_england.texture"}},
+                            {"rel": "models_strat/textures/princess_england.tga.dds", "label": "q",
+                             "link": ["model_strat", "texture:princess"]},
+                            {"rel": "ui/routing.tga", "label": "card2"}]}
+        places = {"wales": {"banners/textures/faction_banner_scotland.texture": frozenset({"spear", "cavalry"})},
+                  "england": {"banners/textures/faction_banner_england.texture": frozenset({"spear", "cavalry", "t"})}}
+        with mock.patch.object(FA, "faction_pictures", side_effect=lambda m, c, f: pics[f]), \
+                mock.patch.object(FB, "_banner_places", side_effect=lambda m, f: places[f]):
+            self.assertEqual(FB.art_picks(None, "c", "wales", "cymru", "/tmp"), {"ui/cymru_x.tga": "/x/own"})
+            self.assertEqual(FB.art_picks(None, "c", "wales", "cymru", "/tmp", frame=(None, "england")), {
+                "ui/cymru_x.tga": "/x/own", "ui/captain banners/captain_card_cymru.tga": "/x/card",
+                "banners/textures/faction_banner_cymru.texture": "/x/ban",
+                "models_strat/textures/princess_cymru.tga.dds": "/x/pr"})
 
     def test_unit_pack_paths_from_the_game_root(self):
         # Barbarian Invasion's lines name files from the game's root ('bi/data/...'): found under data and written

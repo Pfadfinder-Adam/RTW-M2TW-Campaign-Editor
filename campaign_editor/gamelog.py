@@ -22,9 +22,30 @@ KNOWN = [
     (r"unit\((.+?)\) does not match up to the ownership for faction\((.+?)\)",
      "A building lets {1} recruit '{0}', but the unit's ownership (export_descr_unit.txt) does not name {1} - the "
      "game drops that recruit line. Give {1} the unit (Roster tab: Give) or take {1} off the line (Buildings)."),
-    (r"invalid tile\((\d+), (\d+)\) for the settlement of (.+?)\.",
-     "The town {2} sits on tile {0}, {1}, which nothing can reach (water, a blocked tile or off the map) - the game "
-     "ignores it there for now, but armies cannot get to it. Move it on the Map (drag it) or check the map's size."),
+    # the engine's own words (world.cpp finalise_campaign_setup, world_map.cpp assign_region_frontiers): a town on a
+    # tile it puts no town on - the region is skipped: land with no town and no owner; Medieval II with M2EX then
+    # crashed as the campaign started, in the AI's look at the neighbours (R-20261023-D68B3A)
+    (r"invalid tile\((\d+), ?(\d+)\) for a settlement position in region\((\d+)\)\.?\s*PLACEMENT_(\w+)",
+     "The town of region number {2} stands at {0}, {1} on a tile the game puts no town on (its reason: {3}; it "
+     "takes no mountains, dense forest, river, ford, cliff or sea) - the game leaves that region with no town and no owner, and Medieval II "
+     "crashes as the campaign starts. Drag the town (Map) to flat open land."),
+    (r"invalid tile\((\d+), ?(\d+)\) for the settlement of ([^,.\s]+)",
+     "The town {2} stands at {0}, {1} on a tile the game puts no town on (mountains, dense forest, a river, ford or "
+     "cliff, the sea, off the map) - the game skips its region: no town, no owner, and Medieval II crashes as the "
+     "campaign starts. Drag the town (Map) to flat open land; Check names every such town."),
+    (r"land region '(.+?)' \(id (\d+)\) has no owning faction",
+     "Region {0} has land but no town and no owner (its town was skipped - see the 'invalid tile' line before, or no "
+     "descr_strat.txt settlement) - Medieval II crashes when the AI looks at its neighbours. Move its town to flat "
+     "open land (Map)."),
+    (r"we already have a port position in this region",
+     "Two port pixels count for one region: the game gives a port to the first land next to it, looking up, right, "
+     "down, left - one port meant for a neighbour went to this region, the neighbour has none. Check names the "
+     "region; drag the port (Map)."),
+    (r"Unknown settlement level : (\w+)",
+     "descr_campaign_db.xml names a settlement level '{0}' the game does not know (its castle levels: "
+     "moot_and_bailey - the game's own spelling -, wooden_castle, castle, fortress, citadel; the cities: village, "
+     "town, large_town, city, large_city, huge_city) - that rule is not set. The mod's own file; not a crash by "
+     "itself. Campaign rules fixes the word."),
     (r"Target building level not allowed: (.+?), (\w+) -> (\w+)",
      "When a {1} of {0} turns into a {2} (a city made a castle or back, Medieval II), its buildings change by their "
      "chains' convert_to lines - here into a level {0} may not build. Check the requires lines of those levels for "
@@ -188,6 +209,10 @@ RE_STOP = re.compile(r"ASSERT FAILED|encountered an unspecified error", re.I)
 RE_CLOSED = re.compile(r"sprites_close\(\)|libs called display_close", re.I)
 RE_CODE = re.compile(r"(?:ASSERT FAILED|ERROR|DATA):\s*src[\\/](\S+?)\((\d+)\)(?::\s*(.*))?", re.I)
 RE_PATH = re.compile(r"((?:data/)?[\w\-./\\]+\.(?:txt|tga|dds|texture|cas|mesh|xml|lnt|db|modeldb|spr))", re.I)
+# fatal lines the game goes on after but crashes from later (Medieval II with M2EX: a region skipped for its town's
+# tile, then the AI's look at its neighbours - R-20261023-D68B3A, an access violation and no stop in the log)
+RE_CRASH_LATER = re.compile(r"skipping region|for a settlement position in region|has no owning faction", re.I)
+RE_PORT_LATER = re.compile(r"we already have a port position", re.I)
 GENERIC = ("The game crashed.", "The game's own check failed", "The game met a name")
 
 
@@ -251,19 +276,26 @@ def verdict(text, game=None):
     # an ASSERT the game went on after is no stop (HLR writes ~28 at every load - a tester, 2026-10-22: 'The game
     # stopped' offered for a game that ran on): a stop ends the log - a call stack, a few lines, the game closing
     stops = [e for e in events if RE_STOP.search(e[1]) and not _went_on(lines, e[0])]
-    serious = []
+    serious, later, ports_ = [], [], []
     for i, line, detail in events:
         if stops and i == stops[-1][0]:
             continue
         w = _words(line, detail)
         if w and w not in serious:
             serious.append(w)
+            if RE_CRASH_LATER.search(line + " " + detail):
+                later.append(w)
+            elif RE_PORT_LATER.search(line + " " + detail):
+                ports_.append(w)
+    later += ports_                                                # what crashes the game later goes first
+    serious = later + [w for w in serious if w not in later]
     if not stops:
         if not events and not closed:
             return None
         head = "No crash in the game's log%s." % (": the game was closed in the usual way" if closed else "")
         if serious:
-            head += " %d serious error(s) it went on after - the first: %s" % (len(serious), serious[0])
+            head += " %d serious error(s) it went on after - the %s: %s" % (
+                len(serious), "one that crashes it later" if later else "first", serious[0])
         return {"headline": head, "lines": [], "serious": serious[:5], "file": None, "line": None, "now": None}
     at, first, detail = stops[-1]
     why = _words(first, detail)
