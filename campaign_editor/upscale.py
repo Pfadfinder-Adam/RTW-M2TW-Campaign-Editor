@@ -2751,7 +2751,11 @@ SCRIPT_TILES = {
     "reveal_radius": "xyr", "reveal_area": "area",
     "I_CharacterTypeNearTile": "dxy", "I_CharacterNameNearTile": "dxy", "I_FactionNearTile": "dxy",
     "IsPositionInRect": "rect",
+    # Medieval II: the camera / clickable box, min_x min_y max_x max_y - or nothing, which clears it
+    # (script_campaign.cpp RESTRICT_STRAT_CAMERA / RESTRICT_CLICKABLE_RECT; vanilla norman_prologue uses them)
+    "restrict_strat_camera": "area", "restrict_clickable_rect": "area",
 }
+NO_NUMBERS_OK = ("restrict_strat_camera", "restrict_clickable_rect")     # their bare form takes no tile
 NEEDS = {"xy": 2, "xyr": 3, "area": 4, "dxy": 3, "rect": 2}
 RE_SCRIPT_CMD = re.compile(r"(?<![\w.])(%s)(?![\w.])" % "|".join(sorted(SCRIPT_TILES, key=len, reverse=True)), re.I)
 RE_SCRIPT_STOP = re.compile(r"(?<![\w.])(?:and|or)(?![\w.])", re.I)
@@ -2902,6 +2906,8 @@ def move_script_line(text, values=None, xy=None):
         if stop:
             end = stop.start()
         ints = list(RE_INT.finditer(code, m.end(), end))[:4 if kind == "rect" else NEEDS[kind]]
+        if not ints and m.group(1).lower() in NO_NUMBERS_OK:
+            continue
         if len(ints) < NEEDS[kind]:
             missing += 1
             continue

@@ -1,4 +1,4 @@
-"""Check mod files' answer: the problems worst first, grouped by when the game would meet them (it would not start,
+"""Check mod files' answer: the problems worst first, grouped by when the game would meet them (it closes before its menu, the campaign does not load,
 the campaign loads with something lost, in battle, while playing), each with a button to the place that puts it
 right; the whole report one button away."""
 
@@ -30,7 +30,7 @@ def go(app, place):
 
 def open_problems(app, problems, report, title="Check mod files", extra=(), complete=None):
     """The problems window (App.check). problems: the problem lines; report: the whole text (Full report);
-    complete: (faction, rows, fine) of factioncheck.complete when a faction is picked."""
+    complete: (faction, rows, fine[, stops]) of factioncheck.complete / stops when a faction is picked."""
     w = tk.Toplevel(app)
     w.title(title)
     w.geometry("900x600")
@@ -66,10 +66,15 @@ def open_problems(app, problems, report, title="Check mod files", extra=(), comp
                                                              command=lambda pl=fix[1]: go(app, pl)))
                 t.insert("end", "\n", "item")
     if complete:
-        faction, rows, fine = complete
+        faction, rows, fine = complete[:3]
+        stopped = complete[3] if len(complete) > 3 else ()
         gaps = [r for r in rows if r[1] == "gap"]
         notes = [r for r in rows if r[1] != "gap"]
         t.insert("end", "\nIs %s complete?\n" % faction, "title")
+        if stopped:
+            t.insert("end", "What the game itself stops on for %s:\n" % faction, "item")
+            for rel, why in stopped:
+                t.insert("end", "\u2022  %s: %s\n" % (rel, why), "item")
         t.insert("end", "%d file(s) name it as the other factions do. %s\n" % (fine, (
             "Missing where EVERY other faction is named - the game or its screens will miss it:" if gaps else
             "Nothing missing that every other faction has.")), "item")

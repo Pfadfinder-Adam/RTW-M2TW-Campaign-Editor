@@ -14,7 +14,8 @@ goes.
 - **Undo** / **Redo** (Ctrl+Z, Ctrl+Y) step back through what you did in the window before Apply.
 - **Check mod files** reads every file the tool uses and reports what it cannot make sense of; the deep check
   rehearses an edit and a new faction for every faction in memory. Nothing is written. The problems come worst first,
-  grouped by when the game would meet them, each with a button to the place that puts it right. Medieval II: a
+  grouped by when the game would meet them (it closes before its menu, the campaign does not load, something is lost,
+  in battle, while playing), each with a button to the place that puts it right. Medieval II: a
   faction's `ai_label` (in `descr_strat.txt`) that `descr_campaign_ai_db.xml` lacks is named - the game stops at the
   campaign's start with "Could not link faction ... to AI label"; so are a governor's building that does not fit
   its town's size (a castle's must be its level, a city's one below) and a port with no sea on any of its four sides.
@@ -39,7 +40,9 @@ goes.
   note (the game shows its scroll empty). The rivers of the campaign map: a river piece joined to no sea, map edge,
   source or other river by a side is left out by the game; 2 x 2 river blocks and rivers rejoining themselves are
   notes.
-- **Check mod files** with a faction picked also says whether it is **complete**: every file where every other
+- **Check mod files** with a faction picked also says whether it is **complete**: first what the game itself stops
+  on for it (it is listed at the top of descr_strat.txt with no block, or has a block in no list; descr_character.txt
+  gives it no general), then every file where every other
   faction is named and this one is not (the game or its screens would miss it), with a faction of its culture to
   copy the lines from; files most (not all) factions are named in are only noted - real factions go without them.
 - **Check mod files** with a faction picked also lists everywhere that faction is named in the whole mod, and which files are the game's own,

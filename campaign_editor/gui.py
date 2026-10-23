@@ -5083,8 +5083,10 @@ class App(tk.Tk):
             "to change in any program (it takes the disk space of the base's files).\n"
             "Hard links (the tick above) are for a mod you keep to yourself: text files are still copied, models, "
             "textures and sounds become the same files on the disk as the base's under a second name - no extra "
-            "space, Explorer still shows their full size. Only a program that overwrites such a file in place (a "
-            "texture editor saving over a .dds, say) changes the base's file too - the tool itself never does. "
+            "space, Explorer still shows their full size. The game's own built files (map.rwm, the .db files) are "
+            "always copied - the game rewrites them in place. Only a program that overwrites such a file in place "
+            "(a texture editor saving over a .dds, say) changes the base's file too - the tool itself never does. "
+            "The base's saves and preferences stay with the base. "
             "Deleting the new mod folder never touches the game or the base mod.\n")
         start_words = ("It goes into the game's mods folder with %s.cfg and Start_%s.bat (Medieval II starts a mod "
                        "from its .cfg)." % ("<name>", "<name>") if m2 else
@@ -7565,11 +7567,12 @@ class App(tk.Tk):
                 result["text"] = check_mod(ModData(data), campaign, deep=deep,
                                            progress=lambda m: result.__setitem__("step", m), found=result["found"])
                 if faction:
-                    from .factioncheck import complete, words
+                    from .factioncheck import complete, stops, words
                     result["step"] = "is %s complete..." % faction
                     rows, fine = complete(ModData(data), faction, campaign)
-                    result["complete"] = (faction, rows, fine)
-                    result["text"] += "\n\n" + "\n".join(words(rows, fine, faction))
+                    stopped = stops(ModData(data), faction, campaign)
+                    result["complete"] = (faction, rows, fine, stopped)
+                    result["text"] += "\n\n" + "\n".join(words(rows, fine, faction, stopped))
                     result["step"] = "where %s is named..." % faction
                     result["text"] += "\n\n" + "=" * 70 + "\nWHERE %s IS NAMED (every text file of the mod)\n\n" \
                         % faction + scan_mod(ModData(data), faction, campaign).report()

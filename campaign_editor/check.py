@@ -17,30 +17,44 @@ from .units import read_units
 
 
 # when a problem bites, worst first (Check mod files groups its PROBLEMS by these): (key, heading, words that put a
-# problem there) - the first group whose words a problem holds takes it; the last takes the rest
+# problem there) - the first group whose words a problem holds takes it; the last takes the rest. The game's own
+# order (REX / M2EX source, 2026-10-23): the files read at start-up (game_init_once_only - a bad one closes the window
+# before the menu, no message), then the campaign's files when it loads (a bad one sends the player back to the
+# menu), then battles and play
 WHEN = [
-    ("start", "the game would not start or the campaign would not load",
-     ("is missing", "stops at the start", "reports at the start", "does not know", "no culture line", "no name list", "the game crashes", "two settlement blocks",
-      "rehearsal for", "town pixel", "no such region", "wasteland region")),
+    ("start", "the game closes before its menu (the files it reads at start-up)",
+     ("is missing", "stops at the start", "stops at start", "stops at its start", "closes at the start",
+      "reports at the start", "does not know", "no culture line", "no name list", "the game crashes",
+      "two settlement blocks", "rehearsal for", "town pixel", "no such region", "wasteland region")),
+    ("campaign", "the campaign does not load (the game goes back to its menu)", ()),
     ("load", "the campaign loads, but something is lost or the game stops on it",
      ("descr_strat", "the game stops", "core building", "governor's building", "without its towns", "temples",
       "off the map", "txt lacks", "children", "relative line", "byte for byte")),
     ("battle", "in battle", ("battle", "skeleton", "modeldb", "texture")),
     ("play", "while playing (later turns, events, winning)", ()),
 ]
+# a stop in a file the game reads when the campaign loads (world.cpp), not at start-up: the campaign group
+CAMPAIGN_FILES = ("descr_strat", "descr_regions", "map_regions", "town pixel", "wasteland", "settlement block",
+                  "family tree", "descr_events", "rises in")
+# read at start-up although their words say battle (battle_models.modeldb: game_gfx.cpp)
+STARTUP_FILES = ("battle_models.modeldb cannot be read",)
 
 
 # a crash that waits for a moment of play goes with the play group, whatever else it says
-LATER = ("faction is played", "rebels appear", "victory conditions", "descr_win_conditions")
+LATER = ("faction is played", "rebels appear", "victory conditions", "descr_win_conditions", "is destroyed")
 
 
 def when_of(msg):
-    """The WHEN key of a problem: 'start', 'load', 'battle' or 'play'."""
+    """The WHEN key of a problem: 'start', 'campaign', 'load', 'battle' or 'play'."""
     low = msg.lower()
     if any(w in low for w in LATER):
         return "play"
+    if any(w in low for w in STARTUP_FILES):
+        return "start"
     for key, _, words in WHEN:
         if any(w in low for w in words):
+            if key == "start" and any(w in low for w in CAMPAIGN_FILES):
+                return "campaign"
             return key
     return WHEN[-1][0]
 
@@ -150,7 +164,15 @@ def check_mod(mod, campaign, deep=False, progress=None, found=None):
     from .strat import event_lines, faction_option_words, unlisted_factions
     from .strat import settlement_order_problems
     from .limits import engine_of as _eng
-    if _eng(mod) != "REX.exe":
+    eng = _eng(mod)
+
+    def logged(head, then, engines=("REX.exe", "M2EX.exe")):
+        """A stop of the original exe that REX / M2EX only log and go on past (their source): a note, no problem."""
+        if eng in engines:
+            say("    note: %s - %s logs it and goes on (%s)" % (head, eng[:-4], then))
+            return True
+        return False
+    if eng not in ("REX.exe", "M2EX.exe"):          # both log 'Unexpected header' and skip the line (culture_db.cpp)
         for region, fac, word in settlement_order_problems(s)[:8]:
             bad("%s (%s): '%s' stands after the town's first building in descr_strat.txt - the game stops at the "
                 "start ('Unexpected header %s, only buildings and garrisoned armies allowed after first building'); "
@@ -197,11 +219,12 @@ def check_mod(mod, campaign, deep=False, progress=None, found=None):
             lines = [l.rstrip("\r\n") for l in strat_f.texts()[st.start:st.end]]
             why = pop_problem(population_of(lines), settlement_info(lines)[0], settlement_kind(lines) == "castle",
                               mod)
-            if why:
+            if why and not logged("%s (%s): %s" % (st.region, fb.name, why), "the population set to the level's own"):
                 bad("%s (%s): %s - the game stops reading descr_strat.txt there (towns, armies and diplomacy after "
                     "it are lost); set the population or the level on the Buildings tab or in the town's window" % (st.region, fb.name, why))
             why = core_problem(lines, core_known)
-            if why:
+            if why and not logged("%s (%s): %s" % (st.region, fb.name, why), "the town keeps its level",
+                                  ("M2EX.exe",)):
                 bad("%s (%s): %s - the game stops at the campaign's start ('The castle core building level should be "
                     "EQUAL the settlement level!' / 'The core building level should be one less than the settlement "
                     "level!'); set its level or its governor's building in the town's window" % (st.region, fb.name,
@@ -234,6 +257,9 @@ def check_mod(mod, campaign, deep=False, progress=None, found=None):
     from .limits import manhood_age
     manhood = manhood_age(mod)
     for name, age in records_too_old(strat_f.texts(), manhood):     # a living man off the map must be a boy
+        if logged("%s: a living man off the map (character_record) of %d, the age of manhood is %d"
+                  % (name, age, manhood), "he stays off the map"):
+            continue
         bad("%s: a living man off the map (character_record) of %d, the mod's age of manhood is %d - the game "
             "stops: 'is a live male of age > ... and so must be created as a named character'; make him %d or "
             "younger (Family tree), or raise the age of manhood (Campaign rules)" % (name, age, manhood, manhood - 1))
@@ -379,7 +405,8 @@ def check_mod(mod, campaign, deep=False, progress=None, found=None):
         for fb in s.factions:
             for st in fb.settlements:
                 gs = [c for c, _ in _info(s.lines[st.start:st.end])[1] if c.lower() in guilds]
-                if len(gs) > 1:
+                if len(gs) > 1 and not logged("%s (%s): %d guild buildings in one town (%s)" % (
+                        st.region, fb.name, len(gs), ", ".join(gs)), "the first one kept", ("M2EX.exe",)):
                     bad("%s (%s): its descr_strat.txt town has %d guild buildings (%s) - the game allows one and stops "
                         "at the campaign's start ('there is already a guild building here'); take all but one out "
                         "(Buildings)" % (st.region, fb.name, len(gs), ", ".join(gs)))
@@ -472,12 +499,14 @@ def check_mod(mod, campaign, deep=False, progress=None, found=None):
             for u in st.garrison:                   # the town's own garrison (garrisoned_army, no captain)
                 if u not in types:
                     unknown_units.add(u)
-            if st.garrison_at is not None and not st.garrison:
+            if st.garrison_at is not None and not st.garrison and not logged(
+                    "%s: 'garrisoned_army' with no unit under it" % st.region, "the line skipped"):
                 bad("%s: 'garrisoned_army' with no unit under it - the game stops ('must add at least one unit "
                     "to the garrison army'); give it units or take the line out" % st.region)
             _, bs = settlement_info(s.lines[st.start:st.end])
             temples = [c for c, _ in bs if is_temple(c)]
-            if len(temples) > 1:
+            if len(temples) > 1 and not logged("%s holds %d temples (%s)" % (st.region, len(temples), ", ".join(
+                    temples)), "the town keeps them", ("M2EX.exe",)):
                 bad("%s holds %d temples (%s) - the game stops: 'Settlement specified with multiple temple "
                     "buildings'; keep one" % (st.region, len(temples), ", ".join(temples)))
             lines = s.lines[st.start:st.end]
