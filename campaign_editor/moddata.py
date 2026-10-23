@@ -206,6 +206,12 @@ def thin_mod(path):
     return data, under
 
 
+def _parts(campaign):
+    """A campaign's name as folders: 'custom/foo' (either slash) -> ['custom', 'foo'] - joined with the system's own
+    separator, not a '/' left inside a Windows path."""
+    return [x for x in campaign.replace("\\", "/").split("/") if x] or [campaign]
+
+
 class ModData:
     under = None                 # the game's data under a mod (set in __init__; a ModData made otherwise has none)
 
@@ -293,9 +299,9 @@ class ModData:
         return []
 
     def campaign_dir(self, campaign):
-        mine = os.path.join(self.campaign_root, campaign)
+        mine = os.path.join(self.campaign_root, *_parts(campaign))
         if self.under and not os.path.isdir(mine):
-            game = os.path.join(self.under, "world", "maps", "campaign", campaign)
+            game = os.path.join(self.under, "world", "maps", "campaign", *_parts(campaign))
             if os.path.isdir(game):
                 return game
         return mine
@@ -303,20 +309,20 @@ class ModData:
     def in_campaign(self, campaign, name):
         """The campaign folder's own file (no base fallback) - the mod's, then the game's under it - or None."""
         for root in self.roots():
-            p = _ci(os.path.join(root, "world", "maps", "campaign", campaign), name)
+            p = _ci(os.path.join(root, "world", "maps", "campaign", *_parts(campaign)), name)
             if p:
                 return p
         return None
 
     def campaign_dirs(self, campaign):
         """The campaign's folders read, the mod's first (a mod that holds only its changes: the game's too)."""
-        return [d for d in (os.path.join(r, "world", "maps", "campaign", campaign) for r in self.roots())
+        return [d for d in (os.path.join(r, "world", "maps", "campaign", *_parts(campaign)) for r in self.roots())
                 if os.path.isdir(d)]
 
     def campaign_file(self, campaign, name):
         """A campaign file, falling back to world/maps/base like the game does (the mod's own first, then the
         game's, for a mod that holds only its changes)."""
-        for sub in (("campaign", campaign), ("base",)):
+        for sub in (("campaign", *_parts(campaign)), ("base",)):
             for root in self.roots():
                 p = _ci(os.path.join(root, "world", "maps", *sub), name)
                 if p:

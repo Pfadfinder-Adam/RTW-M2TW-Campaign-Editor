@@ -14375,6 +14375,41 @@ building smith
                  if not k.startswith(("faction_tool_backups", "CampaignEditor_backups"))}
         self.assertEqual(before, after)
 
+    def test_banner_sheet_copy_named_as_its_line_spells_it(self):
+        """The Windows run (2026-10-23): the sheet found in other capitals than its line says ('faction_banner_alpha'
+        on disk, 'Faction_banner_alpha' in descr_banners_new.xml) - the copy and the new line take the line's
+        spelling, the faction's name swapped in."""
+        try:
+            from PIL import Image
+        except ImportError:
+            self.skipTest("Pillow")
+        import io
+        from campaign_editor.edit import edit
+        from campaign_editor import factionart as FA
+        d = os.path.join(self.root, "data")
+        write(os.path.join(d, "descr_banners_new.xml"),
+              '<BannerDB>\n   <Textures>\n'
+              '      <Texture Faction="Alpha" DiffuseMap="banners\\textures\\Faction_banner_alpha.texture"/>\n'
+              '      <Texture Faction="Slave" DiffuseMap="banners\\textures\\Faction_banner_alpha.texture"/>\n'
+              '   </Textures>\n</BannerDB>\n')
+        buf = io.BytesIO()
+        Image.new("RGBA", (64, 32), (200, 30, 30, 255)).save(buf, format="DDS")
+        tex = os.path.join(d, "banners", "textures", "faction_banner_alpha.texture")       # other capitals on disk
+        os.makedirs(os.path.dirname(tex))
+        with open(tex, "wb") as fh:
+            fh.write(bytes(48) + buf.getvalue())
+        mod = ModData(self.root)
+        x = next(e for e in FA.extra_pictures(mod, "slave") if e["kind"] == "banner")
+        png = os.path.join(self.root, "new.png")
+        Image.new("RGBA", (32, 16), (20, 40, 220, 255)).save(png)
+        edit(mod, "test", "slave", {"art": {"banners/textures/Faction_banner_alpha.texture": {
+            "src": png, "extra": [x["kind"], x["ref"]]}}}).apply()
+        with open(os.path.join(d, "descr_banners_new.xml"), encoding="latin-1") as fh:
+            xml = fh.read()
+        self.assertIn('Faction="Slave" DiffuseMap="banners\\textures\\Faction_banner_slave.texture"', xml)
+        self.assertIn('Faction="Alpha" DiffuseMap="banners\\textures\\Faction_banner_alpha.texture"', xml)
+        self.assertTrue(os.path.isfile(os.path.join(d, "banners", "textures", "Faction_banner_slave.texture")))
+
     def test_a_factions_pictures_are_not_a_longer_named_factions(self):
         """A faction whose name another faction's name holds (empire_east / empire_east_rebels, the test mod's
         ce_test / ce_test_later): the other's pictures are not its own - its emblem wrote over ce_test_later's
@@ -17620,8 +17655,7 @@ building smith
             self.assertEqual(lab._ce_full, words)
             # cut, it still asks for its whole words' room: the layout gives it no less, so it never runs down to a
             # bare '...' (#300, #302 - a form's names showed only '...' until the window was made full screen)
-            import tkinter.font as tkfont
-            self.assertGreaterEqual(lab.winfo_reqwidth(), tkfont.Font(font=lab.cget("font")).measure(words))
+            self.assertGreaterEqual(lab.winfo_reqwidth(), GU.font_of(lab).measure(words))    # in the font it is drawn in
             self.assertEqual(GU.words_of(lab), words)
             self.assertEqual(wrap.cget("text"), words)
             lab.configure(text="Short\nand a second line")            # the code's new words: taken as they are,
