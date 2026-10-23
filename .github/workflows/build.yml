@@ -77,3 +77,42 @@ jobs:
         with:
           files: dist/RTW-M2TW-Campaign-Editor.exe
           body_path: CHANGELOG.md
+
+  # the Linux program only when asked (Actions -> build -> Run workflow); every release builds it too (release.yml)
+  linux:
+    needs: test
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      # Nuitka's one-file build on Linux needs patchelf; xvfb gives the self-check a screen
+      - run: sudo apt-get update -q && sudo apt-get install -y -q patchelf xvfb
+      - run: pip install nuitka==4.3.1 pillow certifi numpy moderngl zstandard
+      - uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/nuitka-cache
+          key: nuitka-${{ runner.os }}-${{ hashFiles('campaign_editor/**/*.py') }}
+          restore-keys: nuitka-${{ runner.os }}-
+      - name: build the Linux program (Nuitka)
+        env:
+          NUITKA_CACHE_DIR: ${{ runner.temp }}/nuitka-cache
+        run: python .github/build_exe.py
+      - name: no Python source in the program
+        run: |
+          if find dist -path '*.dist/*' \( -name '*.py' -o -name '*.pyc' -o -name '*.pyo' \) | grep .; then exit 1; fi
+          ls -l dist/RTW-M2TW-Campaign-Editor
+      - name: self-check of the program
+        timeout-minutes: 5
+        run: |
+          xvfb-run -a dist/RTW-M2TW-Campaign-Editor selfcheck selfcheck.txt; code=$?
+          cat selfcheck.txt 2>/dev/null || echo "no report: the program did not start"
+          exit $code
+      # a tar keeps the 'may run' mark a plain download loses
+      - run: tar -czf RTW-M2TW-Campaign-Editor-linux.tar.gz -C dist RTW-M2TW-Campaign-Editor
+      - uses: actions/upload-artifact@v4
+        with:
+          name: RTW-M2TW-Campaign-Editor-linux
+          path: RTW-M2TW-Campaign-Editor-linux.tar.gz
