@@ -18,6 +18,7 @@ class Part:
         self.name, self.positions, self.normals, self.faces = name, positions, normals, faces
         self.uvs, self.colours, self.material = uvs, colours, material
         self.texture = None                       # the material's first texture name, set once the file is read
+        self.image = None                         # its picture's TGA bytes when the file keeps it inside (wool)
 
 
 class CasError(ValueError):
@@ -80,7 +81,33 @@ def _rigid(d, p, end, ver):
     return parts
 
 
+def _tga_length(d, p):
+    """The length of a TGA picture starting at d[p] (a texture a .cas file keeps inside it, right after its name -
+    the engine reads it there, cas_material_data: 'TGA stored in CAS file'): the header, its id, colour map and the
+    pixels - plain (types 1-3) or run-length packed (9-11, walked packet by packet)."""
+    id_len, cmap_type, img_type = d[p], d[p + 1], d[p + 2]
+    cmap_len, cmap_bits = struct.unpack_from("<H", d, p + 5)[0], d[p + 7]
+    w, h = struct.unpack_from("<HH", d, p + 12)
+    step = (d[p + 16] + 7) // 8
+    q = p + 18 + id_len + (cmap_len * ((cmap_bits + 7) // 8) if cmap_type else 0)
+    if img_type in (1, 2, 3):
+        q += w * h * step
+    elif img_type in (9, 10, 11):
+        left = w * h
+        while left > 0:
+            head = d[q]
+            n = (head & 0x7F) + 1
+            q += 1 + (step if head & 0x80 else n * step)
+            left -= n
+    else:
+        raise CasError("a picture inside the file of a kind this reader does not know (TGA type %d)" % img_type)
+    if q > len(d):
+        raise CasError("a picture inside the file runs past its end")
+    return q - p
+
+
 def _materials(d, p):
+    """[[(texture name, TGA bytes kept inside the file or None)]] of each material."""
     count = struct.unpack_from("<i", d, p)[0]
     p += 4
     out = []
@@ -96,10 +123,13 @@ def _materials(d, p):
             embedded = d[p]
             p += 1
             e = d.index(b"\0", p)
-            names.append(d[p:e].decode("latin-1"))
+            name = d[p:e].decode("latin-1")
             p = e + 1
-            if embedded:
-                raise CasError("a texture kept inside the file")
+            image = None
+            if embedded:                          # vanilla Medieval II's resource_wool.cas (report #419: white)
+                n = _tga_length(d, p)
+                image, p = bytes(d[p:p + n]), p + n
+            names.append((name, image))
         p += 4 + 13 * 4 + 1
         out.append(names)
     return out
@@ -127,7 +157,8 @@ def read(data):
         raise CasError(str(e)) from e
     for part in parts:
         if 0 <= part.material < len(mats) and mats[part.material]:
-            part.texture = mats[part.material][0].replace("\\", "/").rsplit("/", 1)[-1]
+            name, part.image = mats[part.material][0]
+            part.texture = name.replace("\\", "/").rsplit("/", 1)[-1]
     if not parts:
         raise CasError("no parts in the file")
     return parts

@@ -144,8 +144,23 @@ class Loader:
             v = np.concatenate([P, N, U], 1)[F.ravel()]
             v[:, 2] *= -1                                 # the game's z runs north, ours south
             v[:, 5] *= -1
-            out.append((self._texture(model, p.texture), v))
+            out.append((self._kept_inside(model, p) or self._texture(model, p.texture), v))
         return out
+
+    def _kept_inside(self, model, part):
+        """The key of the picture a model keeps inside its .cas file (the engine draws that one, not a file of the
+        same name - offmap_model_display: 'embedded image if present'), or None."""
+        if not part.image:
+            return None
+        key = "%s#%s" % (model.lower(), (part.texture or "").lower())
+        if key not in self._pics:
+            try:
+                import io
+                from PIL import Image
+                self._pics[key] = np.asarray(Image.open(io.BytesIO(part.image)).convert("RGBA"), np.uint8)
+            except Exception:
+                return None
+        return key if self._pics[key] is not None else None
 
     def _stand(self, skeleton):
         """The first frame of the skeleton's standing move (read once per skeleton), or None."""

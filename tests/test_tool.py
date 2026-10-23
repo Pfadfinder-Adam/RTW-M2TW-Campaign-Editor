@@ -12048,6 +12048,14 @@ building smith
         got = SC.read(data)
         self.assertEqual([(p.name, p.texture, len(p.positions) // 3) for p in got], [("peak_underlay", "rock.tga", 3)])
         self.assertEqual(got[0].colours[:4], bytes([255, 0, 0, 255]))
+        # a picture kept inside the file (vanilla Medieval II's resource_wool.cas - report #419, a white sheep):
+        # read after its name as the engine does (a plain 2 x 1 TGA here), the material's end found after it
+        tga = bytes([0, 0, 2]) + b"\0" * 9 + struct.pack("<HH", 2, 1) + bytes([32, 8]) + bytes([1, 2, 3, 255] * 2)
+        mat = struct.pack("<ii", 1, 1) + b"\1" + b"wool.TGA\0" + tga + b"\0" * 57
+        data = struct.pack("<f", 3.2) + struct.pack("<Ii", 12, 9) + b"\0" * 4 + \
+            struct.pack("<Ii", 8 + len(rigid), 1) + rigid + struct.pack("<Ii", 8 + len(mat), 5) + mat
+        got = SC.read(data)
+        self.assertEqual((got[0].texture, got[0].image), ("wool.TGA", tga))
         with self.assertRaises(SC.CasError):
             SC.read(b"\0" * 40)
         sets, pages = TM.read_sets(
