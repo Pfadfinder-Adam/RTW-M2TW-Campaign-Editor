@@ -9968,6 +9968,17 @@ building smith
         os.makedirs(mod_target(data, "CE_Free_2"))
         self.assertEqual(free_name(data, "CE_Free"), "CE_Free_3")
 
+    def test_edit_with_an_empty_description_writes_no_empty_key(self):
+        """A tester (Medieval II, Art > flag Apply): the form's empty description wrote an empty {X_DESCR} into
+        expanded.txt where the files held none - an empty field where there is no key is no change."""
+        from campaign_editor.edit import edit, read_faction
+        write(os.path.join(self.root, "data", "text", "expanded_bi.txt"), "{ALPHA}\t\tAlphland\n", utf16=True)
+        mod = ModData(self.root)
+        now = read_faction(mod, "test", "alpha")
+        self.assertNotIn("description", now)
+        plan = edit(mod, "test", "alpha", {"description": "", "long_description": ""})
+        self.assertFalse(any("ALPHA_DESCR" in t for f in plan.files.values() for t in f.texts()))
+
     def test_new_regions_town_on_ground_the_game_refuses(self):
         """A report (#420, kgcm): a new region's town on a tile the engine will not take a settlement on (mountains,
         dense forest, impassable - culture_db / world.cpp is_settlement_placement_on_a_valid_tile) - the game skips

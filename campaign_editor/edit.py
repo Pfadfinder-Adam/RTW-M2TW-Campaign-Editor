@@ -226,7 +226,9 @@ def _texts(plan, now, campaign):
         set_to["ST_" + F] = o["short_name"]
     adj_old, adj_new = now.get("adjective"), o.get("adjective")
     adj = (adj_old, adj_new) if adj_old and adj_new and adj_old != adj_new else None
-    if o.get("description") is not None and o.get("description") != now.get("description"):
+    # an empty form field where the files hold no such key is no change (an Apply wrote an empty {X_DESCR} into
+    # Medieval II's expanded.txt, which has none for its factions - a tester)
+    if o.get("description") is not None and (o.get("description") or "") != (now.get("description") or ""):
         set_to[F + "_DESCR"] = o["description"]
     for suffix, k in EXTRA_TEXTS.items():
         if k in now and o.get(k) is not None and o[k] != now[k]:
@@ -242,7 +244,7 @@ def _texts(plan, now, campaign):
                             "it (Medieval II: text/expanded.txt - a mod with only expanded.txt.strings.bin needs the "
                             ".txt first)" % (words, o[k], plan.new.upper()))
     long_new = o.get("long_description")
-    if long_new is not None and long_new != now.get("long_description"):
+    if long_new is not None and (long_new or "") != (now.get("long_description") or ""):
         keys = {m.group(2).upper() for p in plan.mod.campaign_text_files(campaign)
                 for l in plan.mod.load(p).texts() for m in [RE_KEY.match(l)] if m}
         set_to[description_key(plan.new, campaign, keys) + "_DESCR"] = long_new
