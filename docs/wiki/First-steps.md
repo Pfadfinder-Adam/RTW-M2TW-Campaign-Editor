@@ -95,9 +95,10 @@ files on disk; the button names any change not written yet. Before it starts the
 that starts an exe the game folder lacks is refused in plain words, a Medieval II `.cfg` that does not name the
 mod's folder is asked about, and a 32-bit game exe that can use only 2 GB of memory is noted in the status line.
 
-A mod built on another mod (HLR) holds all of it - the game reads one mod folder, never a chain. Every file is
+A mod built on another mod (HLR) holds all of it - a mod beside HLR does not read HLR. Every file is
 copied, so the new mod stands on its own - to share, to zip, to change in any program. For a mod
 you keep to yourself, tick **Hard links instead of copies**: text files are still copied, everything else becomes
 a **hard link** (the same file on disk under a second name) - no extra disk space, Explorer still shows full
-sizes, and deleting the new mod folder never touches the game. Do not overwrite a linked texture in place from
-an image editor.
+sizes, and deleting the new mod folder never touches the game. The game's own built files (map.rwm, the .db
+files) are always copied - the game rewrites them in place. Do not overwrite a linked texture in place from
+an image editor. The base's saves and preferences stay with the base.
