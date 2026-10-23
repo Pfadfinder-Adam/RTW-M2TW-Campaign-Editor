@@ -15,6 +15,16 @@
 - Layout board: the board moves and zooms the same way as the Campaign HUD's - the wheel at the mouse (Shift in small steps), the middle button or Space + left drag it, Shift+1 everything, Shift+2 the picked piece, Shift+0 100 %; the arrows move the board when no free piece is picked.
 
 ### Fixed
+- A new region's town placed on mountains, dense forest or other ground where the game puts no town: the game skipped the region and Medieval II crashed as the campaign started -> the click and Apply say why it cannot stand there; Check mod files finds a town of the map on such ground.
+- Edit faction > By buildings: 'Lines of this building' did nothing -> it opens the Buildings work at that building.
+- Voice accents: New / Remove accent was refused while other changes waited for Apply -> it waits with them and Apply writes all together.
+- Maps > 3D: Medieval II's wool resource (the sheep) was white -> drawn with its texture (kept inside its model file).
+- Recolour: a part made a dark faction colour (Gaul's olive green) came out nearly black -> it is that colour, its folds kept.
+- Buildings by faction: 'Convert to Motte and Bailey' and the other convert_ buildings say what they are - building one turns the town into a castle (or back).
+- Recolour freely: no Save button looked missing -> the window says its changes are kept by themselves and Apply changes writes them.
+- New mod folder proposed a name a mod folder already had -> it proposes a free one.
+- Edit faction: an empty description wrote an empty text line into the game's texts -> nothing is written.
+- Art and Models tabs kept the faction of the mod loaded before -> read again when another mod is loaded.
 - New faction > From another mod: a faction of a mod (not the game's own) came with copies of every unit it shares with this mod ('Mailed Knights 2' and their models), left empty banners and figures whose files are not named after it, and its men wore the frame's colours in battle -> its shared units are its own, in the eras the other mod gives them; its banners, figures and pictures come by where they are shown, whatever the file is called; its men wear its own textures in battle (also when brought from the game's own data).
 - Interface: a new picture for the 'Exit program?' box (quit_box) or any other message box changed nothing in the game - the game never draws a picture of its own for a message box or a frame: it draws the menus' shared frame, data/menu/border_4pix_black_gold2.tga (both games) -> Replace picture on one now changes that frame, made from a picture of the whole box (corners, edges, inside), and says first that every message box, text box, list, drop-down and border of the menus shows the same frame; Back to the game's frame; the screen shows such a box as the game does, not with the picture it never draws; Check mod files names a message box that has such a picture. Preview, a backup, Restore gives it back.
 - Map size (both games): after the map grew or was cut, the sea kept the old coasts' light outline and dark deeps shifted off the land. That is water_surface.tga, the sea's colour picture the game stretches over the whole map; it is now moved and squeezed with the map (the new sea takes the deep sea's colour). A new tick makes the whole sea one even colour instead. Preview, a backup, Restore gives it back.
