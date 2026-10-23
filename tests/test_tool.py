@@ -5854,6 +5854,23 @@ building smith
             code = re.sub(r'"(?:[^"\\\n]|\\.)*"', '""', re.sub(r"//[^\n]*", "", text))     # strings and comments out
             self.assertEqual(code.count("{"), code.count("}"))
 
+    def test_addon_text_setting_ending_in_a_backslash(self):
+        """Review 2026-10-23: a text setting written with a backslash at its end ("C:\\") was read on past its own
+        quote to the line's end - its comment taken for the value, and the next write lost the comment. Escapes are
+        read as escapes: the value comes back as written, the comment stays."""
+        from campaign_editor import addons as A
+        s = A.Setting("MY_TEXT", "text", "Text", "")
+
+        class Fake:
+            settings = [s]
+        text = 'local MY_TEXT = "old"      // the text shown\nlocal OTHER = 1\n'
+        for v in ("C:\\", 'say "hi"', "a\\b"):
+            out = A.render(Fake, text, {"MY_TEXT": v})
+            self.assertEqual(A.read_settings(Fake, out), {"MY_TEXT": v})
+            self.assertIn("// the text shown", out)
+            again = A.render(Fake, out, {"MY_TEXT": "new"})
+            self.assertIn('local MY_TEXT = "new"      // the text shown', again)
+
     def test_game_fonts_read_and_picked_for_the_menus(self):
         """The Interface window writes the menus' words in the game's own letters: a .cuf font (CUF0: header, a char
         table, 4-byte glyph records, offsets, 8-bit alpha) read and drawn; the font a piece names found as the game
