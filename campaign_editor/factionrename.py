@@ -4,9 +4,12 @@ players read are changed on the Faction tab). Both games.
 What follows the new name, in one plan (Preview lists every line; one backup, Restore gives it all back):
 - every text file of the mod's data (descr_sm_factions, descr_strat of every campaign, descr_names, the unit and
   building files, descr_character, descr_model_*, banners, win conditions, regions, events, mercenaries, traits,
-  ancillaries, sounds, Medieval II's XML lists...): the faction's name as a word of its own (case as written; a
+  ancillaries, sounds, Medieval II's XML lists...): the faction's name as a word of its own (in any case, as the game
+  reads it - the new name written in the case found; a
   name glued to more by '_' or standing in a file path - egypt_chariot, symbol_egypt.tga, ui/units/egypt/ - is not
   the faction and is not touched);
+- every campaign folder's leader_pic_, description_, vc_ and vcs_ files of the faction (the game finds them by its
+  name) copied under the new name;
 - its pictures (ui, menu, loading_screen, the campaign folder: files and folders named after it) copied under the new
   name (clone.art_files) and every line naming such a file by path pointed at the copy; the old files stay - nothing
   reads them any more;
@@ -30,8 +33,64 @@ SKIP_DIRS = ("text",)                       # string tables: their keys are copi
 
 
 def _word(name):
-    """The faction as a word of its own: not glued by '_' and not part of a path or a file name."""
-    return re.compile(r"(?<![A-Za-z0-9_/\\.])%s(?![A-Za-z0-9_/\\.])" % re.escape(name))
+    """The faction as a word of its own: not glued by '_' and not part of a path or a file name - in any case, as the
+    game reads it (faction_type_from_string ignores case: a 'Venice' left in descr_strat stops the game)."""
+    return re.compile(r"(?<![A-Za-z0-9_/\\.])%s(?![A-Za-z0-9_/\\.])" % re.escape(name), re.I)
+
+
+def _cased(new, found, old=None):
+    """new written in the case the old name was found in (VENICE -> MILAN, Venice -> Milan, venice -> milan); the
+    name spelled as the faction is (old) takes the new name as given."""
+    if found == old:
+        return new
+    if found.isupper() and not found.islower():
+        return new.upper()
+    if found[:1].isupper():
+        return new.capitalize()
+    return new
+
+
+# pictures and texts of a campaign folder the game finds by the faction's name, no line naming them
+# (menu_components.cpp: the select screen's leader picture and description; faction_scrolls.cpp: the victory scrolls)
+RE_CAMPAIGN_OWN = r"^(leader_pic_|description_|vc_|vcs_)(%s)(\.(?:tga|dds|png|txt))$"
+
+
+def _campaign_files(plan, old, new):
+    """Every campaign's own pictures and texts of the faction (not only the campaign the rename was started from)
+    copied under the new name, unless the plan or the mod already has one there."""
+    mod = plan.mod
+    rx = re.compile(RE_CAMPAIGN_OWN % re.escape(old), re.I)
+    taken = {os.path.normcase(os.path.abspath(d)) for _, d in plan.copies}
+    for campaign in mod.campaigns():
+        for folder in (mod.campaign_dirs(campaign) if hasattr(mod, "campaign_dirs") else []):
+            mine = os.path.join(mod.campaign_root, campaign)
+            for n in sorted(os.listdir(folder)):
+                m = rx.match(n)
+                if not m:
+                    continue
+                dst = os.path.join(mine, m.group(1) + new + m.group(3))
+                key = os.path.normcase(os.path.abspath(dst))
+                if key in taken or os.path.exists(dst):
+                    continue
+                taken.add(key)
+                plan.copy(os.path.join(folder, n), dst)
+
+
+# words the games read in a faction's place with a meaning of their own (building_battle 'all' / 'any', descr_names
+# 'dummy', the modeldb's 'merc' / 'default', the movie tracks' 'none', the scripts' 'local' / 'target')
+RESERVED = ("slave", "all", "any", "none", "default", "merc", "dummy", "local", "target")
+# names the exes look for themselves: what a rename takes away (game_rtw / game sources, 2026-10-23 study)
+HARD_CODED = {
+    "romans_senate": "the Senate (its missions, its scroll) is found by this name",
+    "romans_julii": "the Senate scroll, its missions and the outlaw / civil war messages name the Roman houses",
+    "romans_brutii": "the Senate scroll, its missions and the outlaw / civil war messages name the Roman houses",
+    "romans_scipii": "the Senate scroll, its missions and the outlaw / civil war messages name the Roman houses",
+    "romano_british": "its revolt / comeback looks for this name - without it the game can crash then",
+    "slavs": "its emergence looks for this name - without it the game can crash then",
+    "empire_west": "the Roman empire's split looks for this name",
+    "empire_east": "the Roman empire's split looks for this name",
+    "huns": "the Huns' arrival message looks for this name",
+}
 
 
 def problems(mod, old, new):
@@ -43,8 +102,14 @@ def problems(mod, old, new):
         return "the rebels (slave) keep their name - the games look for it"
     if not RE_NAME.match(new or ""):
         return "a faction's code name is lower-case letters, digits and _, starting with a letter"
-    if new in names or new == old:
+    if new.lower() in [n.lower() for n in names] or new == old:
         return "%s is already a faction of this mod" % new
+    if new in RESERVED:
+        return "'%s' is a word the game reads with a meaning of its own where a faction stands - pick another" % new
+    cultures = {(mod.culture(n) or "").lower() for n in names}
+    if new in cultures:
+        return ("'%s' is a culture - a faction of that name hides the culture in the units, buildings and regions "
+                "files (the game tries a faction first)" % new)
     return None
 
 
@@ -96,8 +161,12 @@ def plan_rename(plan, campaign, old, new):
     if why:
         raise ValueError(why)
     plan.template, plan.new = old, new
+    if old.lower() in HARD_CODED:
+        plan.warn(None, "%s is a name the game itself looks for: %s - renamed, that is gone"
+                  % (old, HARD_CODED[old.lower()]))
     # 1. its pictures under the new name; the paths that name them follow
     C.art_files(plan, campaign)
+    _campaign_files(plan, old, new)
     moved = []
     for src, dst in plan.copies:
         a = os.path.relpath(src, mod.data).replace("\\", "/")
@@ -109,7 +178,9 @@ def plan_rename(plan, campaign, old, new):
     rx_xml = re.compile(r'(\bfaction\s*=\s*")(%s)(")' % re.escape(old), re.I)
     # the traits' effect against a faction glues its name on, in any case: Combat_V_Faction_Venice (a report: the
     # game closed at start - 'Unknown attribute type(Combat_V_Faction_Venice)' after venice was renamed)
-    rx_glued = re.compile(r"(\bCombat_V_Faction_)(%s)(?![A-Za-z0-9_])" % re.escape(old), re.I)
+    # REX also takes Combat_V_<faction> (game_rtw string_recognition.cpp: a name no faction has falls back to
+    # InfantryCommand, silently)
+    rx_glued = re.compile(r"(\bCombat_V_(?:Faction_)?)(%s)(?![A-Za-z0-9_])" % re.escape(old), re.I)
     files, scripts = _text_files(mod, campaign)
     total = 0
     for p in files:
@@ -125,7 +196,7 @@ def plan_rename(plan, campaign, old, new):
         n = 0
         for i in range(len(f.raw)):
             t = f.text(i)
-            new_t = rx.sub(new, t)
+            new_t = rx.sub(lambda m: _cased(new, m.group(), old), t)
             new_t = rx_glued.sub(lambda m: m.group(1) + (new.capitalize() if m.group(2)[:1].isupper() else new), new_t)
             if p.lower().endswith(".xml"):            # Medieval II's XML lists: Faction="Milan" - any case
                 new_t = rx_xml.sub(lambda m: m.group(1) + (new.capitalize() if m.group(2)[:1].isupper() else new)
@@ -170,7 +241,7 @@ def plan_rename(plan, campaign, old, new):
         if hits and not p.lower().endswith((".lua", ".nut")):
             f = plan.edit(p)
             for i in hits:
-                f.set(i - 1, rx.sub(new, f.text(i - 1)))
+                f.set(i - 1, rx.sub(lambda m: _cased(new, m.group(), old), f.text(i - 1)))
             plan.note(f, "%d line(s) of the campaign script: %s -> %s" % (len(hits), old, new))
             total += len(hits)
         elif hits:
