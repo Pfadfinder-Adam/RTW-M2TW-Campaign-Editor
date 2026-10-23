@@ -7,6 +7,9 @@ x3 upscale moves is moved the same way (upscale's shared movers, given this shif
 resources, forts / watchtowers / wonders in descr_strat.txt, events' positions, the campaign's scripts (tile
 commands; distances, radii and rectangle sizes stay), trait / ancillary conditions when the mod has this one
 campaign. descr_terrain.txt gets the new width / height, map_heights.hgt is moved with the picture, map.rwm goes.
+water_surface.tga (the sea's colour picture: shallow tint along the coasts, dark deeps) keeps its own size but is
+stretched by the game over the whole map, so its picture is moved and squeezed with the map (water_shifted) - left
+as it was, its painted coasts lay shifted off the land in the new sea; or, asked, made one even colour.
 
 A cut that would leave a town, a port, a character, a resource, a fort or an event's place off the map is refused
 with the file and line of each (nothing is written)."""
@@ -17,7 +20,7 @@ import struct
 from collections import deque
 
 from . import upscale as U
-from .tga import _decode, read_tga
+from .tga import _decode, read_tga, true_colour_head
 
 STEP = {"tiles": 1, "corners": 2, "double": 2}     # how many points a tile is in each kind of picture
 
@@ -638,10 +641,73 @@ def radar_frame(pic):
     return t, b, lft, r, edge
 
 
-def plan_resize(plan, campaign, left=0, bottom=0, right=0, top=0, clear=False, factions_out=()):
+def water_shifted(data, w, h, left, bottom, right, top, fill_tile=None, flat=False, path="water_surface.tga"):
+    """water_surface.tga's bytes for the map w x h tiles grown / cut by left .. top tiles, at the picture's own size.
+    The game stretches the picture over the whole map (sea_plane.cpp: uv = x / map width, -z / map height), so a
+    point of it stands for a fraction of the map, not a tile: the old picture is laid where the old map now lies
+    in the new one and squeezed to fit; the new sea takes its colour at fill_tile (the map's deep sea), else its
+    most common colour. flat: the whole picture that one colour (no old coasts in the sea at all). Pillow smooths
+    the squeeze (bilinear); without it each point takes the nearest old one."""
+    pw, ph, step, top_down, _, raw = _decode(data, path)
+    W, H = w + left + right, h + bottom + top
+
+    def at(x, y):                                   # the stored pixel at bottom-up x, y
+        r = (ph - 1 - y) if top_down else y
+        o = (r * pw + x) * step
+        return bytes(raw[o:o + step])
+    if fill_tile is not None and 0 <= fill_tile[0] < w and 0 <= fill_tile[1] < h:
+        fill = at(min(pw - 1, int((fill_tile[0] + 0.5) * pw / w)), min(ph - 1, int((fill_tile[1] + 0.5) * ph / h)))
+    else:
+        seen = {}
+        for i in range(0, pw * ph * step, step * 7):
+            px = bytes(raw[i:i + step])
+            seen[px] = seen.get(px, 0) + 1
+        fill = max(seen, key=seen.get)
+    head = true_colour_head(data, step)
+    if flat:
+        return bytes(head) + fill * (pw * ph)
+    # new picture point (X, Y), both from the bottom left -> old picture point: x' = X * W / w - left * pw / w
+    ax, cx, ay, cy = W / float(w), -left * pw / float(w), H / float(h), -bottom * ph / float(h)
+    try:
+        from PIL import Image
+    except ImportError:
+        Image = None
+    if Image is not None:
+        mode = "RGBA" if step == 4 else "RGB"
+        rows = [bytes(raw[r * pw * step:(r + 1) * pw * step]) for r in range(ph)]
+        if not top_down:
+            rows.reverse()                          # Pillow: top row first
+        bgr = Image.frombytes(mode, (pw, ph), b"".join(rows))
+        pic = Image.merge(mode, (bgr.split()[2], bgr.split()[1], bgr.split()[0]) + tuple(bgr.split()[3:]))
+        colour = tuple(fill[2::-1]) + tuple(fill[3:])
+        # top-down for Pillow: y' = Y * H / h - top * ph / h (Y counted from the top)
+        out = pic.transform((pw, ph), Image.AFFINE, (ax, 0, cx, 0, ay, -top * ph / float(h)), Image.BILINEAR,
+                            fillcolor=colour)
+        r_, g_, b_ = out.split()[:3]
+        body = Image.merge(mode, (b_, g_, r_) + tuple(out.split()[3:])).tobytes()
+        rows = [body[r * pw * step:(r + 1) * pw * step] for r in range(ph)]
+        if not top_down:
+            rows.reverse()
+        return bytes(head) + b"".join(rows)
+    out = bytearray(fill * (pw * ph))
+    for Y in range(ph):
+        y = int((Y + 0.5) * ay + cy)
+        if not 0 <= y < ph or (Y + 0.5) * ay + cy < 0:
+            continue
+        r = (ph - 1 - Y) if top_down else Y
+        for X in range(pw):
+            fx = (X + 0.5) * ax + cx
+            if 0 <= fx < pw:
+                o = (r * pw + X) * step
+                out[o:o + step] = at(int(fx), y)
+    return bytes(head) + bytes(out)
+
+
+def plan_resize(plan, campaign, left=0, bottom=0, right=0, top=0, clear=False, factions_out=(), flat_sea=False):
     """Every file of the map grown (positive) or cut (negative) by that many tiles at each edge, in the plan.
     Returns the warnings; ValueError (with every place named) when a cut would leave something off the map -
-    unless clear: then what stands on the part cut off is taken off first (clear_cut - the modder was asked)."""
+    unless clear: then what stands on the part cut off is taken off first (clear_cut - the modder was asked).
+    flat_sea: water_surface.tga made one even colour instead of moved with the map."""
     mod = plan.mod
     if not any((left, bottom, right, top)):
         raise ValueError("no tiles to add or cut")
@@ -708,6 +774,21 @@ def plan_resize(plan, campaign, left=0, bottom=0, right=0, top=0, clear=False, f
                 continue
             plan.binary(p, got)
             plan.note(None, "%s %s (new tiles: the map's deep sea)" % (name, words))
+    ws = layer("water_surface.tga")                 # the game reads the campaign's own first, then base (sea_plane.cpp)
+    if ws:
+        data = plan.binaries.get(ws)
+        if data is None:
+            with open(ws, "rb") as fh:
+                data = fh.read()
+        try:
+            plan.binary(ws, water_shifted(data, img.width, img.height, left, bottom, right, top,
+                                          fill if max(left, bottom, right, top) > 0 else None, flat_sea, ws))
+            plan.note(None, "water_surface.tga (the sea's colour, stretched over the whole map) %s" % (
+                "made one even colour - no old coasts in the sea" if flat_sea else
+                "moved with the map - its coasts stay under the land (new sea: the deep sea's colour)"))
+        except ValueError as e:
+            warn.append("water_surface.tga could not be read (%s) - its coasts no longer match the map: paint it "
+                        "again, or make it one colour" % e)
     hgt = layer("map_heights.hgt")                  # the game's exact heights too, under a thin mod (else the mod's
     hpath = layer("map_heights.tga")                # new map read with the game's old .hgt: skipped for its size)
     if hgt and hpath and U.hgt_usable(hgt, hpath):
