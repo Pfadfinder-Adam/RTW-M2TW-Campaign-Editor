@@ -42,15 +42,15 @@ whose it is):
 - **moderman1** - 5 reports
 - **Mekkermann** - 4 reports
 - **Melchon** - 4 reports
+- **Yuri** - 4 reports
 - **John** - 3 reports
 - **Diocletian Excubitor** - 3 reports
 - **doliwaq** - 2 reports
 - **HVS87** - 2 reports
+- **Keapon_Laffin** - 2 reports
 - **Tommy Speed** - 2 reports
-- **Yuri** - 2 reports
 - **Bartek K** - 1 report
 - **CrimsonScorpio** - 1 report
-- **Keapon_Laffin** - 1 report
 - **seki** - 1 report
 
 ## How to get in
