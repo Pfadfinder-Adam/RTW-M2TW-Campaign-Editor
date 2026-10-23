@@ -26,7 +26,7 @@ def _token(name):
 
 
 # a word right after these is a faction's name, never a place's (a town named like a faction: Jerusalem)
-FACTION_BEFORE = re.compile(r"(Faction\s*=\s*\"|FactionType\s+|FactionIsLocal\s+|\bfaction\s+|\bfactions\s*\{[^}]*|"
+FACTION_BEFORE = re.compile(r"(Faction\s*=\s*\"|FactionType\s+|FactionIsLocal\s+|\bfaction:?\s+|\bfactions\s*\{[^}]*|"
                             r"ownership\s+[^;]*|I_CompareCounter\s+)$", re.I)
 # a word on a character's line before its first comma is the person's name (descr_strat: 'character Kaeso of
 # Apollonia, named character, ...', 'character_record Apollonia, female, ...')

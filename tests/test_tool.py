@@ -23,6 +23,9 @@ from campaign_editor.textio import TextFile                 # noqa: E402
 from campaign_editor.minimod import (SM, NAMES, EDU, REGIONS, STRAT, write, write_tga,  # noqa: E402
                                      make as make_minimod)
 
+# the mini mod's region and town names, every one of them (the mini mod itself has only {Alpha})
+FULL_LABELS = "{Alpha}\t\tAlpha region\n{A_R}\t\tA\n{Atown}\t\tA town\n{B_R}\t\tB\n{Btown}\t\tB town\n"
+
 
 def tree_hash(root):
     out = {}
@@ -1977,6 +1980,101 @@ building smith
             self.assertEqual(fh.read(), "    Effect Combat_V_alpha_ce 1\n")
         for n in ("leader_pic_alpha_ce.tga", "description_alpha_ce.txt"):
             self.assertTrue(os.path.isfile(os.path.join(mcamp, n)), n)
+
+    def test_rename_faction_leaves_a_town_or_region_of_its_name(self):
+        """The tester, 2026-10-23 (PR #8, both games): venice renamed ce_venezia took the town Venice too (descr_regions,
+        the lookup file) - Medieval II went back to the menu ('Couldn't find settlement name 'Ce_venezia' in
+        stringtable'); pontus renamed ce_pontu took the region Pontus (descr_regions, descr_strat 'region',
+        descr_mercenaries, descr_names 'of Pontus'). The game finds a faction in any case but a region or town letter
+        for letter (RESOURCE_ID): a word spelled as a place is the place, unless the game reads a faction there.
+        And the rename emptied the faction's own texts (its description became 'ce_venezia', strengths / weaknesses /
+        famous unit blank): a rename copies every text as it is."""
+        from campaign_editor import factionrename as FR
+        from campaign_editor.strtables import strings
+        for kind in ("town", "region"):
+            with self.subTest(kind):
+                root = tempfile.mkdtemp()
+                self.addCleanup(shutil.rmtree, root)
+                data = make_minimod(root)
+                camp = os.path.join(data, "world", "maps", "campaign", "test")
+                regions = REGIONS.replace("\tAtown\n", "\tAlpha\n") if kind == "town" else \
+                    REGIONS.replace("B_R\n", "Alpha\n", 1)
+                write(os.path.join(camp, "descr_regions.txt"), regions)
+                place = "region Alpha" if kind == "region" else "region A_R"
+                write(os.path.join(camp, "descr_strat.txt"), STRAT.replace("region B_R", "region Alpha")
+                      if kind == "region" else STRAT)
+                write(os.path.join(camp, "descr_regions_and_settlement_name_lookup.txt"), "A_R\nAlpha\nB_R\n")
+                write(os.path.join(camp, "descr_mercenaries.txt"), "pool p1\n\tregions Alpha A_R\n")
+                write(os.path.join(camp, "campaign_script.txt"), "script\n\tif I_SettlementOwner Alpha = alpha\n"
+                      "\tend_if\nend_script\n")
+                write(os.path.join(data, "descr_names.txt"), NAMES.replace("\t\tAlphid\n", "\t\tAlphid\n\t\tof Alpha\n"))
+                mod = ModData(data)
+                plan = Plan(mod, "rename", "alpha_ce", {})
+                FR.plan_rename(plan, "test", "alpha", "alpha_ce")
+                self.assertTrue(any("also the name of a region / town (Alpha)" in w for _, w in plan.notes), plan.notes)
+                plan.apply()
+                got = open(os.path.join(camp, "descr_regions.txt")).read().replace("\r\n", "\n")
+                want = regions.replace("\talpha\n", "\talpha_ce\n")              # the creator line only
+                self.assertEqual(got, want)
+                self.assertEqual(open(os.path.join(camp, "descr_regions_and_settlement_name_lookup.txt")).read(),
+                                 "A_R\nAlpha\nB_R\n")
+                strat = open(os.path.join(camp, "descr_strat.txt")).read()
+                self.assertIn(place, strat)
+                self.assertIn("faction\talpha_ce, balanced smith", strat)
+                self.assertIn("\tregions Alpha A_R", open(os.path.join(camp, "descr_mercenaries.txt")).read())
+                self.assertIn("I_SettlementOwner Alpha = alpha_ce", open(os.path.join(camp, "campaign_script.txt")).read())
+                names = open(os.path.join(data, "descr_names.txt")).read()
+                self.assertIn("of Alpha", names)
+                self.assertIn("faction: alpha_ce", names)
+                self.assertTrue(open(os.path.join(camp, "descr_win_conditions.txt")).read().startswith("alpha_ce"))
+                # the faction's own texts under the new name, word for word
+                texts = strings(ModData(data), "expanded_bi.txt")
+                for key in ("ALPHA", "ALPHA_DESCR", "TEST_ALPHA_DESCR", "EMT_ALPHA_SPY"):
+                    self.assertEqual(texts.get(key.replace("ALPHA", "ALPHA_CE")), texts[key], key)
+
+    def test_check_mod_finds_a_region_or_town_with_no_name(self):
+        """The tester, 2026-10-23: after a rename took Venice / Pontus, Check mod files said nothing of a town or region
+        with no {key} in the campaign's region and town names - the game logs 'Couldn't find settlement name' and a
+        town with no name sends Medieval II back to the menu. The key is found letter for letter (the game's exact
+        map); a region's missing name REX / M2EX only log (a note), a town's stops the campaign everywhere."""
+        from campaign_editor.check import check_mod, region_label_problems
+        labels = os.path.join(self.root, "data", "text", "test_regions_and_settlement_names.txt")
+        write(labels, FULL_LABELS.replace("{Atown}", "{atown}").replace("{B_R}\t\tB\n", ""), utf16=True)
+        mod = ModData(self.root)
+        got = region_label_problems(mod, "test", mod.regions("test"))
+        self.assertEqual([town for town, _ in got], [True, False])
+        self.assertIn("its town 'Atown' has no {Atown}", got[0][1])
+        self.assertIn("only {atown}", got[0][1])
+        self.assertIn("region 'B_R' has no {B_R}", got[1][1])
+        text = check_mod(mod, "test")
+        problems = text.split("PROBLEMS", 1)[1]
+        self.assertIn("its town 'Atown'", problems)
+        self.assertIn("the campaign does not load", problems)
+        self.assertIn("region 'B_R' has no {B_R}", problems)              # the original exe: a stop too
+        game, hlr = self._game()
+        write(os.path.join(hlr, "data", "text", "test_regions_and_settlement_names.txt"),
+              FULL_LABELS.replace("{B_R}\t\tB\n", ""), utf16=True)
+        text = check_mod(ModData(hlr), "test")
+        self.assertIn("note: descr_regions.txt: region 'B_R' has no {B_R}", text)
+        self.assertNotIn("B_R' has no", text.split("PROBLEMS", 1)[-1] if "PROBLEMS" in text else "")
+
+    def test_check_mod_undiscovered_playable_is_a_note_with_m2ex(self):
+        """The tester, 2026-10-23: the game's own aztecs (opened to play, 'undiscovered' kept) shown as a stop under
+        'The campaign loads, but...'; M2EX logs 'Playable faction <aztecs> marked as undiscovred.' and goes on (world.cpp
+        parse_factions: the faction stays discovered; mongols, timurids and the rebels load) - a note there; a stop
+        with the original exe."""
+        from campaign_editor.check import check_mod
+        game, hlr = self._game()
+        os.rename(os.path.join(game, "REX.exe"), os.path.join(game, "M2EX.exe"))
+        strat = os.path.join(hlr, "data", "world", "maps", "campaign", "test", "descr_strat.txt")
+        write(strat, STRAT.replace("faction\talpha, balanced smith\n", "faction\talpha, balanced smith\nundiscovered\n"))
+        text = check_mod(ModData(hlr), "test")
+        self.assertIn("note: alpha: playable (or unlockable) but 'undiscovered'", text)
+        self.assertIn("M2EX logs it and goes on", text)
+        self.assertNotIn("Medieval II stops reading the factions there", text)
+        os.remove(os.path.join(game, "M2EX.exe"))
+        text = check_mod(ModData(hlr), "test")
+        self.assertIn("Medieval II stops reading the factions there", text.split("PROBLEMS", 1)[1])
 
     def test_recolour_faction_with_no_secondary_colour(self):
         """Report R-20261022-46D767 (Rome with REX): Recolour of a faction with no secondary colour stopped at
@@ -7934,6 +8032,7 @@ building smith
     def test_check_mod_reads_the_mini_mod(self):
         from campaign_editor.check import check_mod
         from campaign_editor.units import EDU_NEEDS
+        write(os.path.join(self.root, "data", "text", "test_regions_and_settlement_names.txt"), FULL_LABELS, utf16=True)
         edu = ModData(self.root).file("edu")            # the mini mod's units, with every line a game's unit needs
         with open(edu) as fh:
             text = fh.read()
@@ -7967,6 +8066,7 @@ building smith
         others have (Rome), Medieval II rebels with units slave may not own - all crash the game."""
         from campaign_editor.check import check_mod, rebel_problems
         from campaign_editor.units import read_units
+        write(os.path.join(self.root, "data", "text", "test_regions_and_settlement_names.txt"), FULL_LABELS, utf16=True)
         mod = ModData(self.root)
         camp = os.path.dirname(mod.campaign_file("test", "descr_strat.txt"))
         write(os.path.join(camp, "descr_win_conditions.txt"), "alpha\nhold_regions A_R Nowhere\noutlive ghost\n")
@@ -22658,6 +22758,19 @@ class UndiscoveredPlayableTest(unittest.TestCase):
         self.assertEqual(undiscovered_playable(s), [])
         self.assertNotIn("undiscovered", f.texts())
         self.assertTrue(any("undiscovered" in n for n in p.notes))
+
+
+    def test_opened_to_play_loses_undiscovered(self):
+        """The set-up fix that opens a campaign's locked factions to play (gamefix.open_factions) takes the
+        'undiscovered' line out too, as Edit faction does - the tester's aztecs (2026-10-23) were opened so and kept it."""
+        from campaign_editor.gamefix import open_factions
+        from campaign_editor.strat import undiscovered_playable
+        f = TextFile.from_bytes("descr_strat.txt", self.OLD.encode("latin-1"))
+        self.assertEqual(open_factions(f, ["aztecs"]), ["aztecs"])
+        s = Strat(f)
+        self.assertIn("aztecs", [n for _, n in s.playable["items"]])
+        self.assertEqual(undiscovered_playable(s), [])
+        self.assertNotIn("undiscovered", f.texts())
 
 
 class RexSoldiersLineTest(unittest.TestCase):
