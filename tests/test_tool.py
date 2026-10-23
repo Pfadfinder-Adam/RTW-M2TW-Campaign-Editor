@@ -1716,6 +1716,11 @@ building smith
 
     def test_new_mod_on_a_mod_leaves_the_base_untouched(self):
         game, hlr = self._game()
+        # the game rewrites its built map and .db caches in place (through a hard link into the base's file): always
+        # copied; the base's saves are the player's, not the new mod's
+        write(os.path.join(hlr, "data", "world", "maps", "base", "map.rwm"), "built")
+        write(os.path.join(hlr, "data", "descr_geography.db"), "cache")
+        write(os.path.join(hlr, "saves", "a.sav"), "save")
         before = tree_hash(hlr)
         data, st = create_mod(os.path.join(hlr, "data"), "HLR_Beta")
         target = os.path.join(game, "HLR_Beta")
@@ -1726,6 +1731,9 @@ building smith
         self.assertFalse(os.path.samefile(os.path.join(hlr, edu), os.path.join(target, edu)))
         card = os.path.join("data", "ui", "units", "alpha", "#alpha_general.tga")
         self.assertTrue(os.path.samefile(os.path.join(hlr, card), os.path.join(target, card)))
+        for rel in (("data", "world", "maps", "base", "map.rwm"), ("data", "descr_geography.db")):
+            self.assertFalse(os.path.samefile(os.path.join(hlr, *rel), os.path.join(target, *rel)))
+        self.assertFalse(os.path.exists(os.path.join(target, "saves")))
         self.assertTrue(os.path.exists(os.path.join(target, "data", "sounds", "HLR_Beta.idx")))
         with open(os.path.join(target, "Start_HLR_Beta.bat"), "rb") as f:
             self.assertIn(b"-mod:HLR_Beta -multirun", f.read())
@@ -1763,10 +1771,13 @@ building smith
         """New mod folder on the plain game makes a THIN mod (nothing copied - the game reads the rest from its own
         data): a faction added writes only what it changes and adds; slim finds nothing more to take away."""
         game, _ = self._game()
+        # but what the game reads only from the mod's own world/maps once that folder is there (Medieval II's music by
+        # region): the game's copy comes with the folder, and stays
+        write(os.path.join(game, "data", "world", "maps", "base", "descr_sounds_music_types.txt"), "music\n")
         data, st = create_mod(os.path.join(game, "data"), "Beta")
         self.assertEqual(st["base"], "(game)")
         self.assertTrue(st["thin"])
-        self.assertEqual([n for _, _, fs in os.walk(data) for n in fs], [])     # nothing copied
+        self.assertEqual([n for _, _, fs in os.walk(data) for n in fs], ["descr_sounds_music_types.txt"])
         self.assertTrue(os.path.isdir(os.path.join(data, "world", "maps", "base")))   # the game saves map.rwm there
         self.assertEqual(os.path.normcase(ModData(data).under), os.path.normcase(os.path.join(game, "data")))
         with open(os.path.join(game, "Beta", "Start_Beta.bat"), "rb") as f:
