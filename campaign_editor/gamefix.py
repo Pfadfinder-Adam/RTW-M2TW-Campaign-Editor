@@ -84,6 +84,13 @@ def open_factions(f, names):
     f.insert(where, [indent + n for n in got])
     for i in sorted(drop, reverse=True):
         f.delete(i if i < where else i + len(got), (i if i < where else i + len(got)) + 1)
+    # a playable faction keeps no 'undiscovered' line (as edit._move_list: Medieval II refuses it, M2EX ignores it)
+    from .strat import Strat, undiscovered_line
+    for n in got:
+        fb = Strat(f).faction(n)
+        i = undiscovered_line(f.texts(), fb) if fb else None
+        if i is not None:
+            f.delete(i, i + 1)
     return got
 
 

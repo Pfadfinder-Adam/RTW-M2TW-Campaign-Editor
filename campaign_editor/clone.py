@@ -509,7 +509,10 @@ def entry_end_in(f, i):
     return j
 
 
-def text_strings(plan):
+def text_strings(plan, keep=False):
+    """Every string-table key naming the template copied under the new faction's name, after the template's entry.
+    A clone gets the names swapped and the template's own story replaced by a plain line (is_story); keep=True (a
+    rename - the same faction under a new code name) copies every text as it is."""
     t, new = plan.template.upper(), plan.new.upper()
     tparts = t.split("_")
     repl = plan.display_replacements()
@@ -558,7 +561,9 @@ def text_strings(plan):
             more = [f.text(k) for k in range(i + 1, end)]           # the rest of a long text
             title = titles.copied(new_key, value, new, plan.opts.get("leader_title"), plan.opts.get("heir_title"),
                                   m2_titles)
-            if key.upper() == t and plan.opts.get("display_name"):
+            if keep:
+                pass                                # a rename: the same faction - every text copied as it is
+            elif key.upper() == t and plan.opts.get("display_name"):
                 value, more = gap + plan.opts["display_name"], []
             elif key.upper() == "ST_" + t and plan.opts.get("short_name"):
                 value, more = gap + plan.opts["short_name"], []       # not the full name ({ST_GAULS} and {GAULS} both 'Gaul')
