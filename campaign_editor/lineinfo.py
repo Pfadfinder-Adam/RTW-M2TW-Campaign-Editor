@@ -63,8 +63,9 @@ def _building(key):
     return what, edbfields.form(key)
 
 
-def words_for(kind, key, factions=()):
-    """[(word, what it means)] the line may hold, or []."""
+def words_for(kind, key, factions=(), accents=None):
+    """[(word, what it means)] the line may hold, or []; accents: the mod's voice accents (the unit's `accent` line
+    offers them in place of the original game's)."""
     if kind == "unit" and key in WORD_KEYS:
         out = {w: m for w, m in edufields.WORDS.items()}
         for word, line, effect in unitattrs.ATTRIBUTES:
@@ -73,6 +74,8 @@ def words_for(kind, key, factions=()):
         return sorted(out.items())
     if (kind == "unit" and (key == "ownership" or key.startswith("era"))) or key == "factions":
         return [(f, "") for f in factions]
+    if kind == "unit" and key == "accent" and accents:
+        return [(w, "") for w in accents]
     if kind == "unit" and key in edufields.CHOICES:
         return [(w, "") for w in edufields.CHOICES[key]]
     if kind == "building" and key in edbfields.WORDS:
@@ -82,12 +85,12 @@ def words_for(kind, key, factions=()):
     return []
 
 
-def about(kind, line, m2=False, factions=()):
+def about(kind, line, m2=False, factions=(), accents=None):
     """{'key', 'what', 'form', 'example', 'words': [(word, meaning)]} of the line."""
     _, key, value, _ = split(line)
     what, form = _unit(key, m2) if kind == "unit" else _building(key)
     return {"key": key, "value": value, "what": what, "form": (key + "  " + form) if form else "",
-            "example": "", "words": words_for(kind, key, factions),
+            "example": "", "words": words_for(kind, key, factions, accents),
             "one": kind == "building" and key in edbfields.WORDS or kind == "unit" and key in edufields.CHOICES}   # the word REPLACES the line's first value
 
 

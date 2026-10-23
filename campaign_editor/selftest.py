@@ -1123,6 +1123,23 @@ def s_voice(c, mod):
     return plan
 
 
+@step("Voice accent (Medieval II): a new accent 'CE_Test_Accent' speaking like another accent than {new}'s, and "
+      "{new} speaking it",
+      "{new}'s soldiers in battle and its agents on the map speak that other accent (English, Arabic...), not its "
+      "template's")
+def s_accent(c, mod):
+    from . import accents as AC
+    if not AC.has_accents(mod):
+        raise Skip("Rome has no accents - its voices follow the culture (the Culture step)")
+    now = AC.accent_of(mod, c.new) or AC.accent_of(mod, c.template)
+    other = [a for a in AC.names(mod) if a != now and a in AC.voiced(mod)]
+    if not other:
+        raise Skip("no other accent with voices to copy")
+    plan = Plan(mod, None, "accent")
+    AC.new_accent(plan, "CE_Test_Accent", other[0], [c.new])
+    return plan
+
+
 @step("Events: a historic message and an earthquake near {edited}'s capital",
       "the message scrolls on turn 2, the earthquake on turn 4")
 def s_events(c, mod):
@@ -2929,6 +2946,7 @@ LOOK = "only shows, writes nothing - tried in the window by check-scripts/smoke.
 COVERAGE = {
     "Draw from the map (faction-select map)": ["s_select_map_drawn"],
     "New faction": ["s_new_faction"],
+    "Voice accents (Medieval II): a faction's accent, a new accent": ["s_accent"],
     "New faction keeps nothing of the template's own (story texts, people, movies, leader's face, town flag, 3D "
     "symbol, select map)": ["s_new_faction"],
     "New mod folder": RUN + " (CE_Test is made with it)",

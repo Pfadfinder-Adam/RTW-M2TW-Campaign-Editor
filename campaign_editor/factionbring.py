@@ -757,6 +757,9 @@ def overlay(plan, campaign, bring):
                 art[rel] = pic                          # a cut-out or another format: made to fit (Art's way)
         blank_frame_pictures(plan, campaign, set(art) | set(picks), folder)
     bring_sm_files(plan, src, faction, new)
+    from .accents import accent_of, take_after          # its voice accent, when this mod has one of that name
+    if plan.opts.get("accent") in (None, "", accent_of(plan.mod, plan.template)):     # (not one picked by hand)
+        take_after(plan, src, faction, new)
     bring_horde(plan, src, faction, new, names)
     own_select_map(plan, campaign, new)
     if not plan.opts.get("names"):                      # a name list typed in the window wins (clone.names wrote it):
