@@ -157,7 +157,7 @@ class ArtEditor(ttk.Frame):
             return
         kinds = set()
         row = ttk.Frame(host)                  # the map and the leader's face side by side, as the screen shows them
-        row.pack(anchor="w")                   # (the user, 2026-10-10: 'the leader's portrait beside the map')
+        row.pack(anchor="w", fill="x")         # (the user, 2026-10-10: 'the leader's portrait beside the map')
         # a faction brought from another mod shows ITS pictures there, never the frame's (a tester, 2026-10-18: the
         # leader's face was still the template's); the frame's copies its mod has none of are emptied on Apply
         from .factionbring import select_screen_source
@@ -218,6 +218,8 @@ class ArtEditor(ttk.Frame):
                     wraplength=150).pack(anchor="w")
             ttk.Button(box, text="Replace...", command=lambda t=target: self.replace(
                 t, FA.leader_pic_size(a.mod, a.v_campaign.get()), "Leader's face")).pack(anchor="w", pady=(2, 0))
+        from .gui_util import flow
+        flow(row, top=True)        # the face under the map when the form is narrow (its Replace... was past the edge)
         for m in missing:
             ttk.Label(host, text=m, foreground="#666", wraplength=330, justify="left").pack(anchor="w")
         if FA.START_KINDS[0] not in kinds:
