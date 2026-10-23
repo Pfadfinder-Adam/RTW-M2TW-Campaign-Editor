@@ -7,14 +7,17 @@ What follows the new name, in one plan (Preview lists every line; one backup, Re
   ancillaries, sounds, Medieval II's XML lists...): the faction's name as a word of its own (in any case, as the game
   reads it - the new name written in the case found; a
   name glued to more by '_' or standing in a file path - egypt_chariot, symbol_egypt.tga, ui/units/egypt/ - is not
-  the faction and is not touched);
+  the faction and is not touched); a word spelled exactly as a region or town of descr_regions (Venice, Pontus - the
+  game finds those letter for letter, RESOURCE_ID) is that place, not the faction, unless it stands where the game
+  reads a faction (the region's creator line, 'faction ...', a win conditions head);
 - every campaign folder's leader_pic_, description_, vc_ and vcs_ files of the faction (the game finds them by its
   name) copied under the new name;
 - its pictures (ui, menu, loading_screen, the campaign folder: files and folders named after it) copied under the new
   name (clone.art_files) and every line naming such a file by path pointed at the copy; the old files stay - nothing
   reads them any more;
 - the string tables: every key holding the faction's name ({EGYPT}, {IMPERIAL_CAMPAIGN_EGYPT_TITLE}) copied under the
-  new name (clone.text_strings), the old keys stay;
+  new name with its text as it is (clone.text_strings keep=True - the same faction, its story too), the old keys
+  stay;
 - Medieval II's battle_models.modeldb: its texture entries for the faction renamed.
 - the campaign scripts (campaign_script.txt and the like - the game's own script words): the name as a word of its
   own, as in the data files (report #186: venice renamed, 'I_LocalFaction venice' left - the game logged
@@ -25,6 +28,9 @@ import os
 import re
 
 from . import clone as C
+from .moddata import region_entries
+from .regionrename import FACTION_BEFORE
+from .textio import strip_comment
 
 RE_NAME = re.compile(r"^[a-z][a-z0-9_]*$")
 TEXT_EXT = (".txt", ".xml", ".json")
@@ -48,6 +54,57 @@ def _cased(new, found, old=None):
     if found[:1].isupper():
         return new.capitalize()
     return new
+
+
+# a line naming regions / towns only (descr_strat 'region Pontus', descr_mercenaries 'regions ...', win conditions)
+RE_PLACE_LINE = re.compile(r"^\s*(?:region|regions|hold_regions)\s", re.I)
+LOOKUP = "descr_regions_and_settlement_name_lookup.txt"
+
+
+def place_names(mod):
+    """Every region and town name of descr_regions.txt of every campaign, as spelled (the game finds them letter for
+    letter: map_regions_db.cpp keeps them as RESOURCE_IDs, compared byte for byte - 'Pontus' the region is not
+    'pontus' the faction, which faction_type_from_string finds in any case)."""
+    out = set()
+    for c in mod.campaigns():
+        try:
+            regions = mod.regions(c)
+        except Exception:
+            continue
+        for r, v in regions.items():
+            out.add(r)
+            if v.get("settlement"):
+                out.add(v["settlement"])
+    return out
+
+
+def _region_slots(f):
+    """(lines holding a region or town name, lines holding the region's creator faction) of a loaded descr_regions.txt
+    (moddata.region_entries - the one place that knows its layout)."""
+    places, creators = set(), set()
+    for i, line in enumerate(f.texts()):
+        code = strip_comment(line)
+        if code.strip() and not code[0].isspace():
+            places.add(i)                               # the region's name, at the line's start
+    for e in region_entries(f).values():
+        if "settlement" in e:
+            places.add(e["settlement"][0])
+        if "creator" in e:
+            creators.add(e["creator"][0])
+    return places, creators
+
+
+def _is_faction(word, old, line, at, places, slot):
+    """Whether a word matching the faction (any case) stands for it: yes, unless it is spelled as a region or town and
+    stands where the game reads one. slot: 'place' (a region / town line of descr_regions, the lookup file), 'faction'
+    (a creator line, a win conditions head) or None."""
+    if slot == "faction":
+        return True
+    if word not in places:
+        return slot != "place"
+    if slot == "place" or RE_PLACE_LINE.match(line):
+        return False
+    return word == old or bool(FACTION_BEFORE.search(line[:at]))
 
 
 # pictures and texts of a campaign folder the game finds by the faction's name, no line naming them
@@ -182,6 +239,20 @@ def plan_rename(plan, campaign, old, new):
     # InfantryCommand, silently)
     rx_glued = re.compile(r"(\bCombat_V_(?:Faction_)?)(%s)(?![A-Za-z0-9_])" % re.escape(old), re.I)
     files, scripts = _text_files(mod, campaign)
+    places = place_names(mod)
+    clash = sorted(w for w in places if w.lower() == old.lower() and w != old)
+    if clash:
+        plan.note(None, "%s is also the name of a region / town (%s): there it is left as it is - only where the game "
+                        "reads a faction it is renamed" % (old, ", ".join(clash)))
+
+    def swap(t, i, slots):
+        """t with the faction's name renamed where it stands for the faction (line i; slots = a file's slot lines)."""
+        def one(m):
+            slot = "place" if i in slots[0] else "faction" if i in slots[1] else None
+            if not _is_faction(m.group(), old, t, m.start(), places, slot):
+                return m.group()
+            return _cased(new, m.group(), old)
+        return rx.sub(one, t)
     total = 0
     for p in files:
         with open(p, "rb") as fh:
@@ -193,10 +264,19 @@ def plan_rename(plan, campaign, old, new):
         if old.lower() not in low and not any(a.lower() in low for a, _ in moved):
             continue
         f = plan.edit(p)
+        base = os.path.basename(p).lower()
+        if base == "descr_regions.txt":
+            slots = _region_slots(f)
+        elif base == LOOKUP:
+            slots = (set(range(len(f.raw))), set())
+        elif base == "descr_win_conditions.txt":         # a faction's block starts with its name alone on a line
+            slots = (set(), {i for i in range(len(f.raw)) if rx.fullmatch(strip_comment(f.text(i)).strip())})
+        else:
+            slots = (set(), set())
         n = 0
         for i in range(len(f.raw)):
             t = f.text(i)
-            new_t = rx.sub(lambda m: _cased(new, m.group(), old), t)
+            new_t = swap(t, i, slots)
             new_t = rx_glued.sub(lambda m: m.group(1) + (new.capitalize() if m.group(2)[:1].isupper() else new), new_t)
             if p.lower().endswith(".xml"):            # Medieval II's XML lists: Faction="Milan" - any case
                 new_t = rx_xml.sub(lambda m: m.group(1) + (new.capitalize() if m.group(2)[:1].isupper() else new)
@@ -214,7 +294,7 @@ def plan_rename(plan, campaign, old, new):
             plan.note(f, "%d line(s): %s -> %s" % (n, old, new))
             total += n
     # 2. the string tables' keys
-    C.text_strings(plan)
+    C.text_strings(plan, keep=True)
     # 3. Medieval II's battle models
     from . import modeldb as MD
     src, dst = MD.find(mod)
@@ -240,10 +320,16 @@ def plan_rename(plan, campaign, old, new):
             continue
         if hits and not p.lower().endswith((".lua", ".nut")):
             f = plan.edit(p)
+            n = 0
             for i in hits:
-                f.set(i - 1, rx.sub(lambda m: _cased(new, m.group(), old), f.text(i - 1)))
-            plan.note(f, "%d line(s) of the campaign script: %s -> %s" % (len(hits), old, new))
-            total += len(hits)
+                t = f.text(i - 1)
+                new_t = swap(t, i - 1, (set(), set()))       # 'I_SettlementOwner Venice = venice': the town stays
+                if new_t != t:
+                    f.set(i - 1, new_t)
+                    n += 1
+            if n:
+                plan.note(f, "%d line(s) of the campaign script: %s -> %s" % (n, old, new))
+            total += n
         elif hits:
             left.append("%s: line(s) %s" % (mod.rel(p), ", ".join(str(h) for h in hits[:12]) +
                                              (" ..." if len(hits) > 12 else "")))

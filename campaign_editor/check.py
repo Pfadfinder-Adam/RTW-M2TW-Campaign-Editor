@@ -183,6 +183,11 @@ def check_mod(mod, campaign, deep=False, progress=None, found=None):
             "to one of the lists (Edit faction: tick Playable)" % (n, n))
     from .strat import undiscovered_playable
     for n in undiscovered_playable(s):
+        # M2EX (world.cpp parse_factions) logs it and leaves the faction discovered - the tester saw the plain game's
+        # aztecs so: the factions after it load
+        if logged("%s: playable (or unlockable) but 'undiscovered' in descr_strat.txt ('Playable faction <%s> marked "
+                  "as undiscovred.')" % (n, n), "the faction is played as discovered", engines=("M2EX.exe",)):
+            continue
         bad("%s: playable (or unlockable) but its block in descr_strat.txt says 'undiscovered' - Medieval II stops "
             "reading the factions there ('Playable faction <%s> marked as undiscovred.') and every faction after it "
             "is lost (no towns, no armies); untick Playable (Edit faction) or delete the 'undiscovered' line" % (n, n))
@@ -375,6 +380,9 @@ def check_mod(mod, campaign, deep=False, progress=None, found=None):
             bad("'%s' is a wasteland region (no town) but descr_strat.txt gives it a settlement" % r)
         elif r not in tiles:
             bad("region '%s' has no town pixel (black) in map_regions.tga" % r)
+    for town, msg in region_label_problems(mod, campaign, regions):
+        if town or not logged(msg, "the region shows no name"):
+            bad(msg if town or eng else msg + " - the game stops at the start of the campaign")
     waste = [r for r in regions if regions[r].get("wasteland")]
     if waste:
         from .limits import engine_of
@@ -1139,6 +1147,38 @@ def region_rebel_problems(mod, regions):
     return ["descr_regions.txt, %s: its rebels '%s' are no rebel type of descr_rebel_factions.txt - the game stops "
             "after the campaign loads; pick one in the region's window (Maps, right click > Edit region)" % (r, v["rebels"])
             for r, v in sorted(regions.items()) if v.get("rebels") and v["rebels"] not in known]
+
+
+def region_label_problems(mod, campaign, regions, most=8):
+    """[(town?, message)]: a region or town of descr_regions.txt with no {key} in the campaign's region and town names
+    table (strtables.region_label_keys - letter for letter, as the game finds it). The game (map_regions_db.cpp)
+    logs 'Couldn't find region / settlement name ... in stringtable'; a town left with no name stops the campaign's
+    loading ('Trying to create a settlement with no name', culture_db.cpp - the tester: Medieval II back to the menu
+    after a rename took Venice). Both games."""
+    from .strtables import region_label_keys
+    paths, keys = region_label_keys(mod, campaign)
+    if keys is None:
+        return []
+    where = os.path.basename(paths[0])
+    low = {k.lower(): k for k in keys}
+    out = []
+    for r, v in regions.items():
+        for town, name in ((False, r), (True, v.get("settlement") or "")):
+            if not name or name in keys:
+                continue
+            other = low.get(name.lower())
+            but = " (only {%s} - the game finds the key letter for letter)" % other if other else ""
+            if town:
+                out.append((True, "descr_regions.txt, %s: its town '%s' has no {%s} in %s%s - the game stops at the "
+                                  "start of the campaign ('Couldn't find settlement name', then 'Trying to create a "
+                                  "settlement with no name') and goes back to its menu; give the town its name (Maps, "
+                                  "right click > Edit region)" % (r, name, name, where, but)))
+            else:
+                out.append((False, "descr_regions.txt: region '%s' has no {%s} in %s%s ('Couldn't find region name "
+                                   "in stringtable')" % (r, r, where, but)))
+    towns = [m for m in out if m[0]]
+    names = [m for m in out if not m[0]]
+    return towns[:most] + names[:most]
 
 
 def town_ring_problems(mod, campaign):

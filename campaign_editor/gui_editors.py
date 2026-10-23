@@ -170,6 +170,13 @@ class RecordEditor(ttk.Frame):
         bar = ttk.Frame(top, padding=(6, 6, 6, 0))
         bar.pack(fill="x")
         ttk.Button(bar, text="Add line...", command=self.add_dialog).pack(side="left")
+        if self.kind == "building":
+            # a chain's lines for the faction / culture picked in Show only: the levels it may not build and the lines
+            # its factions lists keep out are left out of the fields (#374)
+            self.v_only = getattr(self, "v_only", None) or tk.BooleanVar(value=bool(settings.get("editor_only_shown")))
+            self.cb_only = ttk.Checkbutton(bar, variable=self.v_only, command=self._only_changed)
+            self.cb_only.pack(side="left", padx=(theme.BUTTON_GAP, 0))
+            self._only_label()
         # the block as fields, or as it is written in the file - the block alone or the whole file (the user,
         # 2026-10-21: 'the lines bind people; both, block and whole file, and Notepad++ too'); the last one kept
         self.v_view = getattr(self, "v_view", None) or tk.StringVar(value=settings.get("editor_view", "fields"))
@@ -218,6 +225,39 @@ class RecordEditor(ttk.Frame):
             self._make_lines_window()
         return self.form
 
+    def _only_for(self):
+        """(faction, culture) the Show list picks, else None."""
+        kind, _, what = self.v_show.get().partition(": ")
+        if kind == "faction":
+            what = what.split(" - ")[0]
+            return what, getattr(self, "_cultures", {}).get(what)
+        if kind == "culture":
+            return None, what
+        return None
+
+    def _only_label(self):
+        if getattr(self, "cb_only", None) is None or not self.cb_only.winfo_exists():
+            return
+        who = self._only_for()
+        self.cb_only.configure(text="Only the lines for %s" % (
+            (who[0] or who[1]) if who else "the faction / culture picked in Show"),
+            state="normal" if who else "disabled")
+
+    def _only_changed(self):
+        settings.put("editor_only_shown", bool(self.v_only.get()))
+        if self.current and self._lines_open:
+            self.show(self.current)
+
+    def _hidden_lines(self):
+        """The lines of the building on show left out of the fields: not for the faction / culture in Show."""
+        who = self._only_for() if self.kind == "building" and getattr(self, "v_only", None) is not None and \
+            self.v_only.get() else None
+        if not who or not self.current:
+            return set()
+        from .factionbuildings import lines_for_others
+        _, a, b = self.current
+        return lines_for_others(self._src(), a, b, *who)
+
     def where_window(self):
         """Where the picked unit is recruited / the picked building can be built (buildwhere.open_where)."""
         if not self.current:
@@ -245,7 +285,9 @@ class RecordEditor(ttk.Frame):
             " (%d)" % n if n else "", " - open" if self._lines_open else "..."))
         if self._lines_open and self._lines_win.winfo_exists():
             cur = self.current[0] if isinstance(self.current, tuple) else (self.current or "")
-            self._lines_win.title("Every line of %s %s" % (self.kind, cur))
+            who = self._only_for() if self.kind == "building" and self.v_only.get() else None
+            self._lines_win.title("Every line of %s %s%s" % (self.kind, cur, " - the lines for %s" % (
+                who[0] or who[1]) if who else ""))
 
     def toggle_lines(self):
         """Open the block's lines in their own window, or close it."""
@@ -612,11 +654,14 @@ class RecordEditor(ttk.Frame):
                                                                 "from %s" % src))
         self.lbl_count.configure(text="%d of %d" % (len(self.shown), len(self.blocks)))
 
-    def show(self):
-        sel = self.lb.curselection()
-        if not sel or sel[0] >= len(self.shown):
-            return
-        self.current = self.shown[sel[0]]
+    def show(self, blk=None):
+        """The block picked in the list (blk: this one, picked or not - the Show list may leave it out now)."""
+        if blk is None:
+            sel = self.lb.curselection()
+            if not sel or sel[0] >= len(self.shown):
+                return
+            blk = self.shown[sel[0]]
+        self.current = blk
         name, a, b = self.current
         f = self._src()
         self.fields = E.fields(f, a, b)
@@ -664,8 +709,11 @@ class RecordEditor(ttk.Frame):
         from . import edbfields as BF, edufields as EF
         from .limits import game_kind
         m2 = game_kind(self.mod) == "medieval2"
+        hidden = self._hidden_lines()
         for fd in self.fields:
             added_rows(fd.line)
+            if fd.line in hidden:
+                continue
             gone = fd.line in self.removes
             v = tk.StringVar(value=self.changes.get(fd.line, fd.value))
             head = ttk.Frame(self.form)
@@ -1055,6 +1103,10 @@ class RecordEditor(ttk.Frame):
         self.fill_list()
         if getattr(self, "current", None) and self.kind == "unit":
             self.show_pictures()
+        if self.kind == "building":
+            self._only_label()
+            if getattr(self, "current", None) and self._lines_open and self.v_only.get():
+                self.show(self.current)
 
     def _factions_of(self):
         """The faction folders a unit's card goes to: the factions its ownership names,
