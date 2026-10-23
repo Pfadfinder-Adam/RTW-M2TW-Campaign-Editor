@@ -1899,11 +1899,21 @@ class App(tk.Tk):
         if w in ("map", "new", "edit"):
             for ed in self.editors.values():
                 ed.pack_forget()
+            before = self.tab_name()
+            if w == "map" and before and before not in self.MAP_TABS:
+                self._faction_tab = before               # Factions comes back to it
             self._map_tab_only(w == "map")
             self.nb.pack(fill="both", expand=True, padx=6, pady=3, after=self.bottom_bar)
             if w in ("new", "edit"):
                 self._form_to(w)
-                if self.tab_name() in self.FACTION_TABS and self.tab_name() != self.SIDE_TABS[w]:
+                if before in self.MAP_TABS:
+                    # from Maps: the faction tab it was on, else the form (Tk showed the tab after the hidden map
+                    # tab - Buildings with no town picked)
+                    back = getattr(self, "_faction_tab", None)
+                    names = [self.nb.tab(t, "text").strip() for t in self.nb.tabs()]
+                    back = back if back in names and back not in self.FACTION_TABS else self.SIDE_TABS[w]
+                    self.nb.select(names.index(back))       # select_tab waits for the work to leave Maps
+                elif self.tab_name() in self.FACTION_TABS and self.tab_name() != self.SIDE_TABS[w]:
                     self.select_tab(self.SIDE_TABS[w])
             if self.v_mode.get() != w:
                 # nothing is dropped on a switch (the author: 'freedom first, one session'): New and Edit faction
