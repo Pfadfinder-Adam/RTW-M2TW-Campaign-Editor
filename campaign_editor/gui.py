@@ -1106,6 +1106,8 @@ class App(tk.Tk):
         menu.add_command(label=TEST_MOD_LABEL, command=self.once("test_mod", self.test_mod))
         head("Files and backups")
         menu.add_command(label="Restore a backup...", command=self.restore)
+        menu.add_command(label="Any game file, as it is written (the notepad)...",
+                         command=self.once("raw_files", self.raw_files_window))
         menu.add_command(label="Check and install a pack...", command=self.once("install_pack", self.install_pack))
         menu.add_command(label="Game manifest...", command=self.once("game_manifest", self.game_manifest))
         menu.add_command(label="Authors and sources of this mod...", command=self.once("sources", self.sources_window))
@@ -2638,6 +2640,11 @@ class App(tk.Tk):
         """Tools > Credits...: the author, who helped, the testers, the supporters (CREDITS.md - gui_credits)."""
         from .gui_credits import open_credits
         return open_credits(self)
+
+    def raw_files_window(self):
+        """Tools > Any game file, as it is written...: every text file the game reads in the notepad (gui_rawfiles)."""
+        from .gui_rawfiles import open_raw_files
+        return open_raw_files(self)
 
     def sources_window(self):
         """Tools > Authors and sources of this mod...: whose work the mod holds (gui_sources)."""
@@ -7620,6 +7627,9 @@ class App(tk.Tk):
                             "questions, where the editor keeps its files.")
         elif label == "Help":
             self.status.set("A short guide to the editor (also F1).")
+        elif label.startswith("Any game file"):
+            self.status.set("Every text file the game reads, the mod's and the game's: find one, change it as in "
+                            "Notepad - with Preview, a backup and Restore.")
         elif label.startswith("Authors and sources"):
             self.status.set("Whose work is in this mod: what was taken from other mods, the authors, links - kept in "
                             "Authors_and_sources.txt in the mod folder.")
