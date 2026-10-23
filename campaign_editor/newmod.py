@@ -268,6 +268,39 @@ def create_mod(data_dir, name, copy_all=False, progress=None):
     return os.path.join(target, "data"), stats
 
 
+CACHE_EXT = (".rwm", ".db")                       # the game's caches it rewrites in place (COPY_EXT)
+
+
+def unshare_caches(mod_dir):
+    """A mod made of hard links by an older version links the game's caches too (map.rwm, the *.db files): the game
+    rewrites them in place, so a run of this mod wrote into the base mod's own files. Each such file still shared is
+    made the mod's own copy (the same bytes; only the link goes). Only for a mod New mod folder made with links.
+    -> [paths made its own]. Never raises."""
+    m = marker(mod_dir)
+    if not m or not m.get("linked"):
+        return []
+    out = []
+    for dirpath, dirnames, filenames in os.walk(mod_dir):
+        dirnames[:] = [d for d in dirnames if d not in BACKUP_DIRS]
+        for n in filenames:
+            if not n.lower().endswith(CACHE_EXT):
+                continue
+            p = os.path.join(dirpath, n)
+            try:
+                if os.stat(p).st_nlink < 2:
+                    continue
+                tmp = p + ".CampaignEditor_tmp"
+                shutil.copy2(p, tmp)
+                os.replace(tmp, p)
+                out.append(p)
+            except OSError:
+                try:
+                    os.remove(p + ".CampaignEditor_tmp")
+                except OSError:
+                    pass
+    return out
+
+
 def _put(src, dst, link_ok, stats):
     if link_ok[0] and os.path.splitext(src)[1].lower() not in COPY_EXT:
         try:
