@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### Added
+- Buildings > Stats: **Only the lines for ...** - with a faction or a culture picked in Show, a chain's lines are those for it: the levels it may not build and the recruit or other lines its factions lists keep out are left out (a line for its culture or for all stays). The tick is kept for every start.
 - View in 3D: **Report a problem with this model...** - a report of its own kind (marked '3D model' for the author) that takes the 3D window's picture and the files the model was drawn with - its skeletons (their records and descr_skeleton.txt lines), the animation on show and each skeleton's default, the meshes, and a note of which animation set the game loads and how each skeleton was read (a tick to leave them out). A mod's model that looks wrong can be drawn again the same way and fixed. The ordinary report takes none of it.
 - Recolour freely: any colour of any picture made another, not only the faction's colours - click a colour on a battle texture, campaign-map figure, card or button, pick the new colour or turn it with the sliders; its light and shade kept, faces left alone, several changes in a row, a brush to add or keep. On every texture card (Unit editor, Models tab) and every picture opened big; a texture of the game is copied, never written over; a unit's texture can change for that unit only. Both games, a backup, Restore gives it back.
 
