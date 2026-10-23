@@ -103,6 +103,8 @@ def read_faction(mod, campaign, faction):
     from .accents import accent_of, has_accents
     if has_accents(mod):
         out["accent"] = accent_of(mod, faction) or ""             # Medieval II; Rome speaks by its culture
+    from .succession import read as read_succession
+    out.update(read_succession(mod, faction))                    # Medieval II: how a new leader is chosen
     out["regions"] = [st.region for st in fb.settlements]
     for c in fb.characters:
         if c.role in ("leader", "heir") and c.role not in out:
@@ -137,6 +139,10 @@ def edit(mod, campaign, faction, opts):
     if opts.get("accent") and opts["accent"] != now.get("accent"):         # Medieval II: the voices it speaks
         from .accents import set_accent
         set_accent(plan, faction, opts["accent"])
+    if (opts.get("succession") and opts["succession"] != now.get("succession")) or \
+            (opts.get("princesses") is not None and "princesses" in now and opts["princesses"] != now["princesses"]):
+        from .succession import apply as apply_succession             # Medieval II: by birth / election / no tree
+        apply_succession(plan, faction, opts.get("succession"), opts.get("princesses"), campaign)
     if opts.get("culture") and opts["culture"] != now.get("culture"):      # its towns, pictures, units follow
         from .culture import set_faction_culture
         set_faction_culture(plan, faction, opts["culture"])
