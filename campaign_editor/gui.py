@@ -1393,7 +1393,7 @@ class App(tk.Tk):
         side = ttk.Frame(panes, padding=(0, 0, 6, 0))
         panes.add(side, weight=0)
         ttk.Label(side, text="Your towns", font=("", 10, "bold")).pack(anchor="w")
-        ttk.Label(side, text="give it towns on the Map (a click on a town)", foreground="#666").pack(side="bottom", anchor="w")
+        ttk.Label(side, text="give it towns: Towns on the map... (its tab)", foreground="#666").pack(side="bottom", anchor="w")
         from .gui_util import tip
         tip(ttk.Button(side, text="Many towns at once...", command=lambda: self.mass_towns()),
             "Add a building to many towns of any owner at once (or take one out), or give them garrisons - "
@@ -5852,8 +5852,8 @@ class App(tk.Tk):
             self.v["capital"].set(self.chosen[0] if self.chosen else "")
         n = len(self.chosen)
         self.lbl_towns.configure(text=("%d town(s): %s%s" % (n, ", ".join(self.chosen[:4]), " ..." if n > 4 else "")
-                                       if n else "no town yet") + " - a click on a town on the Map gives or "
-                                                                   "takes it")
+                                       if n else "no town yet") + " - Towns on the map...: a click on a town "
+                                                                   "gives or takes it")
 
     # ---- field armies, agents, fleets ----
     @property
