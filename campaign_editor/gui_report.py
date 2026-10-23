@@ -73,6 +73,14 @@ def open_report(app, message="", kind="bug", tab=None):
     shot = os.path.join(log.logs_dir() or os.path.expanduser("~"), "editor_window.png")
     if kind == "bug" and snap_window(app, shot):
         pictures.append(shot)
+    # a 3D window open: its picture and the files it drew the model with go too (a mod's crushed knights could not
+    # be drawn again without them - the user, 2026-10-23)
+    from .gui_meshview import ModelViewer
+    view3d = ModelViewer.last_open() if kind == "bug" else None
+    if view3d is not None:
+        shot3d = os.path.join(log.logs_dir() or os.path.expanduser("~"), "view_3d_window.png")
+        if snap_window(view3d, shot3d):
+            pictures.append(shot3d)
 
     w = tk.Toplevel(app)
     w.title("Report a bug or suggest an idea")
@@ -165,6 +173,10 @@ def open_report(app, message="", kind="bug", tab=None):
                  "date, new / other size than the game's (no contents)%s" % (
                      report.MOD_FILES, " - already sent with %s, the mod not changed since" % files_sent
                      if files_sent else ""), extra=28, anchor="w")
+    v_3d = tk.BooleanVar(value=view3d is not None)
+    if view3d is not None:
+        one_line(ttk.Checkbutton(box, variable=v_3d, width=1), "3d_view/ - the open 3D window's skeletons, animation "
+                 "and model files (%s), as the editor read them" % view3d.info.name, extra=28, anchor="w")
     if not any(n.endswith("system.log.txt") for _, n, _ in files):
         row = ttk.Frame(box)
         row.pack(anchor="w", fill="x")
@@ -260,8 +272,14 @@ def open_report(app, message="", kind="bug", tab=None):
 
     def read_window():
         """What the window holds (read on Tk's own thread)."""
+        blobs = []
+        if view3d is not None and v_3d.get():
+            try:
+                blobs = view3d.report_files()
+            except Exception as e:                  # the report goes all the same
+                blobs = [("3d_view/error.txt", ("the 3D files could not be read: %r" % e).encode("utf-8"))]
         return dict(picked=[f for v, f in ticks if v.get()], words=words(), files=v_files.get(), kind=v_kind.get(),
-                    msg=txt.get("1.0", "end").strip(), contact=v_contact.get())
+                    msg=txt.get("1.0", "end").strip(), contact=v_contact.get(), blobs=blobs)
 
     def pack(ui):
         """The logs cut, the mod's file list and the zip - the slow part (a big mod's 30 000 files: seconds), so Send
@@ -272,7 +290,10 @@ def open_report(app, message="", kind="bug", tab=None):
         if listing:
             texts.append((report.MOD_FILES, listing))
         info = dict(kind=ui["kind"], **report.about(app.mod, _version()))
-        data = report.build_zip(texts, ui["msg"], ui["contact"], info, pictures, hide, doctor=said)
+        data = report.build_zip(texts, ui["msg"], ui["contact"], info, pictures, hide, doctor=said,
+                                blobs=ui.get("blobs", ()))
+        texts = texts + [(n, report.scrub(d.decode("utf-8", "replace"), hide)) for n, d in ui.get("blobs", ())
+                         if n.endswith(".txt")]
         return texts, info, ui["msg"], hide, data
 
     def gather():

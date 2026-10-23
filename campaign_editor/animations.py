@@ -493,5 +493,130 @@ def skeleton(mod, name):
     return got
 
 
+DEBUG_CAP = 2 * 1024 * 1024        # the files a report takes along from the 3D view, at most (the zip's cap is 4 MB)
+
+
+def _head(path):
+    """'tag, version, count, size' of a pack / skeleton file's first 20 bytes."""
+    try:
+        with open(path, "rb") as fh:
+            d = fh.read(20)
+        tag = d[:9].decode("latin-1", "replace")
+        ver, count = struct.unpack_from("<II", d, 12) if len(d) >= 20 else (None, None)
+        return "%s version %s (0x%x) count %s, %d bytes" % (tag, ver, ver or 0, count, os.path.getsize(path))
+    except (OSError, struct.error) as e:
+        return "unreadable: %s" % e
+
+
+def _block(mod, skeleton, name="descr_skeleton.txt"):
+    """The lines of a skeleton's 'type' block in descr_skeleton.txt as written (its parent's too), or ''."""
+    path = mod.find(name)
+    if not path:
+        return ""
+    with open(path, "rb") as fh:
+        lines = fh.read().decode("latin-1").splitlines()
+    out, keep, want = [], False, [(skeleton or "").lower()]
+    for line in lines:
+        m = re.match(r"\s*type\s+(\S+)", line, re.I)
+        if m:
+            keep = m.group(1).lower() in want
+        elif keep:
+            pm = re.match(r"\s*parent\s+(\S+)", line, re.I)
+            if pm and pm.group(1).lower() not in want:
+                want.append(pm.group(1).lower())
+        if keep:
+            out.append(line)
+    return "\n".join(out)
+
+
+def debug_files(mod, skeletons, anims, meshes):
+    """[(name in a report's zip, bytes)] of what View in 3D drew a model with - so a model that looks wrong in a
+    mod can be drawn again the same way by the author (the user, 2026-10-23: a mod's knights crushed, its files out
+    of reach): view.txt (the animation folders' four files' heads - which set the game loads -, each skeleton as read
+    and where from, each animation's pack record, its descr_skeleton.txt lines), each skeleton's own record, each
+    animation's bytes (pack record or loose .cas) and the meshes. skeletons: names; anims: animation files; meshes:
+    paths on disk."""
+    lines, out, size = ["View in 3D: what the model was drawn with", ""], [], 0
+
+    def take(name, data):
+        nonlocal size
+        if size + len(data) > DEBUG_CAP:
+            lines.append("  (%s left out: %d KB over the report's room)" % (name, len(data) // 1024))
+            return
+        size += len(data)
+        out.append(("3d_view/" + name, data))
+
+    def safe(n):
+        return re.sub(r"[^\w.-]+", "_", n)[:80]
+    loaded = _anim_set(mod)
+    for folder in mod.dirs("animations"):
+        lines.append("folder %s%s" % (folder, " - the set loaded" if loaded is not None and
+                                      os.path.normcase(loaded.folder) == os.path.normcase(folder) else ""))
+        for n in ("pack.idx", "pack.dat", "skeletons.idx", "skeletons.dat"):
+            p = _ci(folder, n)
+            lines.append("  %s: %s" % (n, _head(p) if p else "none"))
+    lines.append("")
+    for sk in dict.fromkeys(k for k in skeletons if k):
+        rec = None
+        if loaded is not None:
+            try:
+                rec = loaded.record(sk)
+            except (ValueError, KeyError):
+                rec = None
+        got = Skeleton.from_record(sk, rec) if rec else None
+        lines.append("skeleton %s: record %s%s" % (sk, "%d bytes" % len(rec) if rec else "none",
+                                                    "" if not rec else " - read" if got else " - NOT read"))
+        if rec:
+            take("skeleton_%s.rec" % safe(sk), rec)
+        use = got or skeleton(mod, sk)
+        if use is not None:
+            lines.append("  used: %s, %d bones, scale %g" % ("its record" if got else "its first .cas", len(use),
+                                                            use.scale))
+            for b in range(len(use)):
+                lines.append("    %2d %-24s parent %2d rest %s" % (b, use.names[b], use.parents[b],
+                                                                    ", ".join("%.4f" % v for v in use.rest[b])))
+        else:
+            lines.append("  used: none (no record, no first .cas)")
+        block = _block(mod, sk)
+        if block:
+            take("descr_skeleton_%s.txt" % safe(sk), block.encode("latin-1", "replace"))
+    lines.append("")
+    for f in dict.fromkeys(a for a in anims if a):
+        lines.append("animation %s" % f)
+        for p in packs(mod):
+            try:
+                es = p.entries.get(key(f)) or []
+            except (OSError, ValueError):
+                es = []
+            for e in es:
+                lines.append("  in %s (version %s): scale %g frames %d bones %d kind %d, %d bytes" % (
+                    p.folder, p.version, e.scale, e.frames, e.bones, e.kind, e.size))
+                try:
+                    with open(p.dat, "rb") as fh:
+                        fh.seek(e.offset)
+                        data = fh.read(e.size)
+                    lines.append("    moved bones: %s" % (moved_bones(data, e.frames, e.bones, e.kind, p.version),))
+                    take("anim_%s_%g_%d.bin" % (safe(os.path.basename(e.name)), e.scale, len(out)), data)
+                except (OSError, ValueError, struct.error) as err:
+                    lines.append("    unreadable: %s" % err)
+        try:
+            lp = mod.find(_rel(f))
+        except (OSError, ValueError, AttributeError):
+            lp = None
+        if lp:
+            lines.append("  loose: %s" % lp)
+            with open(lp, "rb") as fh:
+                take("loose_" + safe(os.path.basename(lp)), fh.read())
+    lines.append("")
+    for m in dict.fromkeys(x for x in meshes if x):
+        lines.append("mesh %s" % m)
+        try:
+            with open(m, "rb") as fh:
+                take(safe(os.path.basename(m)), fh.read())
+        except OSError as e:
+            lines.append("  unreadable: %s" % e)
+    return [("3d_view/view.txt", "\n".join(lines).encode("utf-8"))] + out
+
+
 __all__ = ["FPS", "Anim", "Pack", "read_index", "key", "packs", "find", "skeletons", "skeleton_anims", "of_skeleton",
-           "why_none", "Skeleton", "skeleton", "world", "moved_bones"]
+           "why_none", "debug_files", "Skeleton", "skeleton", "world", "moved_bones"]

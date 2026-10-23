@@ -15769,6 +15769,35 @@ building smith
         self.assertIn("data/animations/gone.cas", AN.why_none(mod, "fs_x"))
         self.assertIn("neither in descr_skeleton.txt", AN.why_none(mod, "fs_nobody"))
 
+    def test_a_report_takes_the_3d_views_files(self):
+        """A report from an open View in 3D takes what the model was drawn with (the user, 2026-10-23: a mod's
+        knights crushed, the mod's files out of reach): its descr_skeleton.txt lines, the animation's file, the mesh,
+        and view.txt saying where each came from - the user's name cut out of the paths like the logs'."""
+        import io
+        import zipfile
+        from campaign_editor import animations as AN, report
+        d = os.path.join(self.root, "data")
+        os.makedirs(os.path.join(d, "animations"), exist_ok=True)
+        write(os.path.join(d, "descr_skeleton.txt"),
+              "type\t\tfs_other\nanim\t\tstand\tdata/animations/o.cas\n"
+              "type\t\tfs_x\nanim\t\tstand\tdata/animations/x.cas\n")
+        with open(os.path.join(d, "animations", "x.cas"), "wb") as fh:
+            fh.write(b"cas bytes")
+        mesh = os.path.join(d, "man_lod0.mesh")
+        with open(mesh, "wb") as fh:
+            fh.write(b"mesh bytes")
+        got = dict(AN.debug_files(ModData(self.root), ["fs_x"], ["data/animations/x.cas"], [mesh]))
+        self.assertIn("anim\t\tstand\tdata/animations/x.cas", got["3d_view/descr_skeleton_fs_x.txt"].decode())
+        self.assertNotIn("fs_other", got["3d_view/descr_skeleton_fs_x.txt"].decode())
+        self.assertEqual(got["3d_view/loose_x.cas"], b"cas bytes")
+        self.assertEqual(got["3d_view/man_lod0.mesh"], b"mesh bytes")
+        self.assertIn("skeleton fs_x: record none", got["3d_view/view.txt"].decode())
+        data = report.build_zip([], "crushed", blobs=[("3d_view/view.txt", b"folder C:\\Users\\Anna\\mod"),
+                                                      ("3d_view/a.mesh", b"\x00\x01")])
+        z = zipfile.ZipFile(io.BytesIO(data))
+        self.assertEqual(z.read("3d_view/view.txt").decode(), "folder C:\\Users\\<hidden>\\mod")
+        self.assertEqual(z.read("3d_view/a.mesh"), b"\x00\x01")
+
     def test_tile_models_read_from_the_games_packs(self):
         """A tester's photo (ROCSS, Medieval II): the 3D map's rivers were blue squares - the mod has no
         descr_aerial_map_tile_models.txt of its own, the game keeps it in its packs, and the editor looked for it
