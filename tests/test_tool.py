@@ -16749,6 +16749,10 @@ building smith
         m = MV.read(data)
         self.assertEqual([(g.name, g.material, len(g.tris) // 3) for g in m.groups],
                          [("Head", "head_01", 8), ("Attachments3", "teeth", 4)])
+        # a name holding a Latin-1 letter (Europa Barbarorum II's 'antenaeArc\xf3briga_01'): read on, not cut there
+        latin = MV.read(data.replace(text("head_01"), struct.pack("<I", 7) + b"he\xf3d_01"))
+        self.assertEqual([(g.material, len(g.tris) // 3) for g in latin.groups], [("he\xf3d_01", 8), ("teeth", 4)])
+        self.assertEqual(latin.positions, m.positions)
         self.assertEqual(m.count, 8)
         self.assertEqual(m.positions[7], (1.0, 1.0, 1.0))
         self.assertAlmostEqual(m.uvs[2][0], 0.2, places=5)
@@ -16966,6 +16970,13 @@ building smith
         mod = ModData(os.path.join(self.root, "data"))
         self.assertEqual([(e.name, e.frames, e.bones, e.kind) for e in AN.read_index(bytes(idx))][1],
                          ("data/animations/MTW2_Bowman/stand.cas", 3, 20, 20))
+        # a pack the game built running a mod names its animations with the mod's folder in front (Europa Barbarorum
+        # II: 'mods/EBII/data/animations/...'); descr_skeleton.txt says 'data/animations/...' - the same animation
+        self.assertEqual({AN.key(n) for n in ("mods/EBII/data/animations/A/b.cas", "data\\mods\\x y\\data\\animations\\a\\B.cas",
+                                              "/data/animations/a/b.cas", "animations/a/b.cas")},
+                         {"data/animations/a/b.cas"})
+        self.assertEqual(AN.key("data/animations/mods/x/b.cas"), "data/animations/mods/x/b.cas")
+        self.assertEqual(AN._rel("mods/EBII/data/animations/a.cas"), "animations/a.cas")
         a = AN.find(mod, "DATA/animations/mtw2_bowman/STAND.cas")
         self.assertEqual((a.frames, len(a.rotations(2)), a.offsets(1)[19]), (3, 20, (0, 0.5, 0)))
         self.assertEqual([w for w, _ in AN.of_skeleton(mod, "mtw2_bowman")], ["default", "stand_a_idle"])
