@@ -57,11 +57,12 @@ def place_problem(mod, campaign, what, region, xy, moved=None, painted=None):
         return "another town or port stands there"
     if px != info["colour"] and freed.get((x, y)) != region and (x, y) != here:
         return "not %s's land" % region
-    if what == "city":
-        why = mod.land_problem(campaign, (x, y))
-        if why:
-            return why
-    else:
+    # a port too: the game's own map editor refuses a port on mountains, dense forest, a river, ford or cliff
+    # (STRATEGY_MAP::is_port_placement_on_a_valid_tile) - no vanilla map or HLR has one there
+    why = mod.land_problem(campaign, (x, y))
+    if why:
+        return why
+    if what != "city":
         if not any(mod.is_sea(campaign, (x + dx, y + dy)) for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1))):
             return "a port needs the sea next to it"
         by_colour = {v["colour"]: k for k, v in mod.regions(campaign).items()}

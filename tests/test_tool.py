@@ -2537,6 +2537,12 @@ building smith
         mod = ModData(self.root)
         why = place_problem(mod, "test", "port", "A_R", (4, 4))
         self.assertIn("the port would be B_R's, not A_R's", why)
+        # a port on mountains: refused (the game's own map editor refuses it, is_port_placement_on_a_valid_tile)
+        ground[9][9] = mountains
+        write_tga(os.path.join(camp, "map_ground_types.tga"), 15, 11, ground)
+        self.assertEqual(place_problem(ModData(self.root), "test", "port", "A_R", (4, 4)), "mountains")
+        ground[9][9] = flat
+        write_tga(os.path.join(camp, "map_ground_types.tga"), 15, 11, ground)
         # a new region's town on mountains: refused
         new = [{"name": "N_R", "settlement": "Ntown", "city": (0, 3), "port": None}]
         errors, _ = region_problems(mod, "test", {(0, 3): "N_R", (0, 4): "N_R", (1, 4): "N_R"}, new)
