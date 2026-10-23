@@ -10,6 +10,7 @@
 - Recolour freely: any colour of any picture made another, not only the faction's colours - click a colour on a battle texture, campaign-map figure, card or button, pick the new colour or turn it with the sliders; its light and shade kept, faces left alone, several changes in a row, a brush to add or keep. On every texture card (Unit editor, Models tab) and every picture opened big; a texture of the game is copied, never written over; a unit's texture can change for that unit only. Both games, a backup, Restore gives it back.
 
 ### Changed
+- The exe is built with Nuitka instead of PyInstaller: the editor's Python code is compiled to machine code, so the exe carries no source or bytecode to unpack; it works and checks itself as before (settings, logs and Move to the game's folder beside the exe it was started as).
 - Layout board: the board moves and zooms the same way as the Campaign HUD's - the wheel at the mouse (Shift in small steps), the middle button or Space + left drag it, Shift+1 everything, Shift+2 the picked piece, Shift+0 100 %; the arrows move the board when no free piece is picked.
 
 ### Fixed
