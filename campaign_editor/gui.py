@@ -105,7 +105,8 @@ START
 
 THE TABS
   New faction / Edit faction
-               names, texts, colours, AI, money, playable, religion and voice accent (Medieval II),
+               names, texts, colours, AI, money, playable, religion, voice accent and leader
+               succession - by birth, by election as the Teutonic Order, or no family tree (Medieval II),
                capital, leader,
                heir; beside them the faction's family tree and characters (Edit). Its towns:
                Towns on the map... / Capital on the map... (Maps opens for the pick;
@@ -642,6 +643,38 @@ class App(tk.Tk):
         tip(self.b_accents, "Every accent of the mod with its factions and the sound files that speak it; New accent "
                             "(the voices of another copied, so nothing is silent) and Remove accent - each with "
                             "Preview and a backup.")
+        # Medieval II: who leads after the leader dies - by birth, by election as the Teutonic Order, or no family
+        # tree (descr_sm_factions.txt has_family_tree yes / teutonic / no, can_have_princess; succession.py)
+        from .succession import LABELS as SUCCESSION
+        self.v["succession"] = tk.StringVar()
+        self.v["princesses"] = tk.StringVar()
+        suc_cell = ttk.Frame(lf)
+        self.cb_succession = ttk.Combobox(suc_cell, textvariable=self.v["succession"], state="readonly",
+                                          values=list(SUCCESSION.values()), width=FIELD_W - 14)
+        self.cb_succession.pack(side="left")
+        self.chk_princesses = ttk.Checkbutton(suc_cell, text="princesses", variable=self.v["princesses"],
+                                              onvalue="yes", offvalue="no")
+        self.chk_princesses.pack(side="left", padx=(theme.BUTTON_GAP, 0))
+
+        def elected(_e=None):
+            if self.v["succession"].get() == SUCCESSION["teutonic"]:
+                self.v["princesses"].set("no")         # the engine refuses princesses in an elected faction
+        self.cb_succession.bind("<<ComboboxSelected>>", elected)
+        field("Leader succession", suc_cell)
+        self.m2_rows.append(lf.grid_slaves(row=row - 1, column=0)[0])
+        tip(self.cb_succession, "Who leads after the leader dies (descr_sm_factions.txt, has_family_tree).\n"
+                                "By birth (yes): the heir, then the leader's eldest son; children are born and "
+                                "marriages offered.\n"
+                                "By election (teutonic), as the Teutonic Order: the family's grown man with the most "
+                                "authority + command becomes leader, the next one heir; the family tree is shown, but "
+                                "no child is born and no marriage is offered - new members come by adoption. No "
+                                "princesses (the game refuses them here).\n"
+                                "No family tree (no), as the Pope: no tree, births or marriages; the heir or the "
+                                "family member with the most authority takes over - and the faction never dies, even "
+                                "with no town and no leader.\n"
+                                "Medieval II only: Rome's leaders always follow the family tree.")
+        tip(self.chk_princesses, "Whether its daughters can be princesses - agents for marriages and diplomacy "
+                                 "(can_have_princess). Off for a faction that elects its leader.")
         # its culture (descr_sm_factions.txt, both games): towns' models, portraits, buildings and units follow it
         # (culture.py; the user, 2026-10-17)
         self.v["culture"] = tk.StringVar()
@@ -2246,6 +2279,7 @@ class App(tk.Tk):
         for k in ("display_name", "short_name", "adjective", "ai", "religion", "accent", "culture", "leader_title",
                   "heir_title"):
             self.v[k].set(now.get(k) or "")
+        self._show_succession(now)
         for k, ws in self.extra_rows.items():
             self.v[k].set(now.get(k) or "")
             for w in ws:
@@ -4920,6 +4954,25 @@ class App(tk.Tk):
         self.cb_accent.configure(state="readonly" if speaks else "disabled")
         if not speaks:
             self.v["accent"].set("")
+        for w in (self.cb_succession, self.chk_princesses):
+            w.configure(state=("readonly" if w is self.cb_succession else "normal") if m2 else "disabled")
+        if not m2:
+            self.v["succession"].set("")
+            self.v["princesses"].set("")
+
+    def _show_succession(self, now):
+        """The Leader succession row from read_faction's succession / princesses (empty on Rome)."""
+        from .succession import LABELS
+        self.v["succession"].set(LABELS.get(now.get("succession"), ""))
+        self.v["princesses"].set({True: "yes", False: "no"}.get(now.get("princesses"), ""))
+
+    def _succession_opts(self, v):
+        """{'succession': 'yes' | 'teutonic' | 'no' | None, 'princesses': True / False / None} of the form."""
+        from .succession import LABELS
+        if not self._m2():
+            return {"succession": None, "princesses": None}
+        return {"succession": {t: k for k, t in LABELS.items()}.get(v.get("succession")),
+                "princesses": {"yes": True, "no": False}.get(v.get("princesses"))}
 
     def _rebind(self, ed):
         lost = ed.rebind(self.mod)
@@ -5545,6 +5598,10 @@ class App(tk.Tk):
         if now.get("accent") and (not a or a == getattr(self, "_auto_accent", None)):
             self._auto_accent = now["accent"]
             self.v["accent"].set(now["accent"])
+        # and how its leader is chosen (Medieval II), the same way
+        if now.get("succession") and self.v["succession"].get() in ("", getattr(self, "_auto_succession", None)):
+            self._show_succession(now)
+            self._auto_succession = self.v["succession"].get()
         # the titles and colours stay EMPTY (the user, 2026-10-22: the form shows nothing of the template but what
         # the game needs - AI, culture, money, religion); left empty, Apply keeps the template's in the files
         for key, b in (("primary", self.b_primary), ("secondary", self.b_secondary)):
@@ -5590,6 +5647,7 @@ class App(tk.Tk):
             else:
                 setattr(self, k, [] if isinstance(getattr(self, k, None), list) else {})
         self._auto_titles, self._auto_denari, self._auto_religion, self._auto_accent = {}, None, None, None
+        self._auto_succession = None
         self.v_playable.set(True)
         self.v_art.set(True)
         self.v_super.set(False)
@@ -6891,6 +6949,7 @@ class App(tk.Tk):
             "long_description": self.t_long.get("1.0", "end").strip(),
             "religion": (v.get("religion") or None) if self._m2() else None,
             "accent": v.get("accent") or None,                  # emptied where the game has no accents
+            **self._succession_opts(v),                         # Medieval II: leader by birth / election
             "culture": v.get("culture") or None,
             "leader_title": v["leader_title"] or None, "heir_title": v["heir_title"] or None,
             "primary_colour": self.colours["primary"], "secondary_colour": self.colours["secondary"],
@@ -6944,6 +7003,7 @@ class App(tk.Tk):
             "long_description": self.t_long.get("1.0", "end").strip(),
             "religion": (v.get("religion") or None) if self._m2() else None,
             "accent": v.get("accent") or None,                  # emptied where the game has no accents
+            **self._succession_opts(v),                         # Medieval II: leader by birth / election
             "culture": v.get("culture") or None,
             "primary_colour": self.colours["primary"], "secondary_colour": self.colours["secondary"],
             "ai": v["ai"], "denari": int(v["denari"]) if v["denari"].isdigit() else None,
