@@ -7567,11 +7567,12 @@ class App(tk.Tk):
                 result["text"] = check_mod(ModData(data), campaign, deep=deep,
                                            progress=lambda m: result.__setitem__("step", m), found=result["found"])
                 if faction:
-                    from .factioncheck import complete, words
+                    from .factioncheck import complete, stops, words
                     result["step"] = "is %s complete..." % faction
                     rows, fine = complete(ModData(data), faction, campaign)
-                    result["complete"] = (faction, rows, fine)
-                    result["text"] += "\n\n" + "\n".join(words(rows, fine, faction))
+                    stopped = stops(ModData(data), faction, campaign)
+                    result["complete"] = (faction, rows, fine, stopped)
+                    result["text"] += "\n\n" + "\n".join(words(rows, fine, faction, stopped))
                     result["step"] = "where %s is named..." % faction
                     result["text"] += "\n\n" + "=" * 70 + "\nWHERE %s IS NAMED (every text file of the mod)\n\n" \
                         % faction + scan_mod(ModData(data), faction, campaign).report()
