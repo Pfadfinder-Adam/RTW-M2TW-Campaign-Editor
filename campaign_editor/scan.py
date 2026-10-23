@@ -542,6 +542,20 @@ MANIFEST_NAME = "rtw_manifest.json.gz"
 EXPANSIONS = {"bi", "alexander"}
 
 
+KINGDOMS = {"americas", "british_isles", "crusades", "teutonic"}     # Medieval II: Kingdoms, in mods/
+OWN_DIR = "CampaignEditor"
+
+
+def _is_mod_folder(folder):
+    """A mod's folder: its data/ holds the factions list, or text/ or world/ (a mod holding only its changes), or the
+    folder carries New mod folder's mark."""
+    from .newmod import MARKER, OLD_MARKERS
+    data = os.path.join(folder, "data")
+    return os.path.isfile(os.path.join(data, "descr_sm_factions.txt")) or \
+        any(os.path.isdir(os.path.join(data, x)) for x in ("text", "world", "Text", "World")) or \
+        any(os.path.isfile(os.path.join(folder, m)) for m in (MARKER,) + OLD_MARKERS)
+
+
 def make_manifest(game_root, out_path=None, progress=None):
     """Walk the game folder - not the mod folders in it (a folder holding
     data/descr_sm_factions.txt of its own) and not our backups - and write
@@ -557,9 +571,15 @@ def make_manifest(game_root, out_path=None, progress=None):
             full = os.path.join(dirpath, d)
             if d in BACKUP_DIRS:
                 continue
-            if dirpath == game_root and d.lower() not in EXPANSIONS and \
-                    os.path.isfile(os.path.join(full, "data", "descr_sm_factions.txt")):
-                skipped.append(d)
+            if d in (OWN_DIR,) and dirpath == game_root:
+                continue                            # the editor's own folder (settings, logs)
+            # a mod: beside the game's exe (Rome: -mod:<name>), or in mods/ (Medieval II; Rome's mods/<name> too) -
+            # Medieval II's own expansions there (Kingdoms) are the game's. A thin mod holds no descr_sm_factions
+            # of its own (only text/, world/...) - it was taken as the game's own before, every file of it
+            parent = os.path.relpath(dirpath, game_root).replace("\\", "/").lower()
+            if (dirpath == game_root and d.lower() not in EXPANSIONS or parent == "mods" and
+                    d.lower() not in KINGDOMS) and _is_mod_folder(full):
+                skipped.append(d if dirpath == game_root else "mods/" + d)
                 continue
             keep.append(d)
         dirnames[:] = keep
