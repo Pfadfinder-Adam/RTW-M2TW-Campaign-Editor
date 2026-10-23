@@ -11,6 +11,12 @@ The rebels are never playable and have no capital, leader or heir.
 ## Edit faction tab (the faction itself)
 
 - Names, tooltip and campaign-screen text, colours, AI, money (denari), playable, religion (Medieval II).
+- **Voice accent** (Medieval II): the voices the faction speaks with - its soldiers in battle, its general's speech
+  before battle, its agents and diplomats on the map (`descr_sounds_accents.txt`). **Accents...** beside it shows
+  every accent, its factions and the sound files speaking it; **New accent...** makes one that speaks like another
+  until you give it sounds of its own (every sound file's block of that accent is copied, so nothing is silent);
+  **Remove accent...** gives its factions another. A faction no accent names has no voice - Check mod files says so.
+  Rome has no accents: a faction speaks the voices of its culture, so change the culture to change its voices.
 - **Culture**: the faction's culture (`descr_sm_factions.txt`). The game takes from it the look of its towns, forts and ports on the map, its portraits and agents' pictures, the buildings and units open to that culture and the event pictures (Rome: the voices too). Preview says which units it gains or loses and which buildings in its towns the new culture cannot build (they stay). A new faction keeps its template's culture unless another is picked.
 - **Rename...** beside the internal name changes the faction's code name (`egypt` -> `kemet`) in every file of the
   mod at once: the campaign, units, buildings, names, banners, models, texts' keys; its pictures are copied under

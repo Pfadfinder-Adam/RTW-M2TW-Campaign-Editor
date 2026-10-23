@@ -32,6 +32,7 @@ added to a building level reaches every level above). Check mod files lists anyt
 1. **Factions** at the top, its **New faction** tab; load the mod, pick the campaign.
 2. **Template**: the faction to copy. The new one gets its culture, units, buildings, character models, name
    lists and pictures - a clean clone: none of the template's trait or ancillary triggers.
+   Medieval II: it speaks the template's **voice accent** unless you pick another (Voice accent on the form).
    **From another mod...** (under it): take a faction of another mod of the same game instead - pick the mod
    (it is only read) and the faction. The window fills with its names, colours and descriptions. It is made
    **from zero**: the Template row and the template's options are put away - a faction of your mod of the same

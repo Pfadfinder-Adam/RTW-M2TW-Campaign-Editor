@@ -447,6 +447,9 @@ def check_mod(mod, campaign, deep=False, progress=None, found=None):
         bad(msg)
     for msg in misplaced_attribute_words(mod):
         say(msg)
+    from .accents import problems as accent_problems         # Medieval II's voice accents
+    for msg, fault in accent_problems(mod):
+        (bad if fault else say)(msg)
     for msg in region_rebel_problems(mod, regions):
         bad(msg)
     for msg in slaves_problems(mod, regions):
