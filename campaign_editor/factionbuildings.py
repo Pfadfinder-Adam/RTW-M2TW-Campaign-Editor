@@ -99,6 +99,21 @@ def chains(f, faction, culture, unit_types=None):
     return out
 
 
+def lines_for_others(f, start, end, faction, culture):
+    """The lines of a chain's block [start, end) that are not for a faction (or, faction None, a culture): every line
+    of a level its factions list keeps out, and in the levels it may build each line (a recruit line, a capability
+    'requires factions { }') whose factions list keeps it out (#374: Stats shown for one faction / culture)."""
+    out = set()
+    for lv in E.chain_tree(f, start, end)["levels"]:
+        if not covers(factions_in(f.text(lv["head"])), faction, culture):
+            out.update(range(lv["head"], lv["close"] + 1))
+            continue
+        for i in range(lv["open"] + 1, lv["close"]):
+            if not covers(factions_in(f.text(i)), faction, culture):
+                out.add(i)
+    return out
+
+
 def faction_chains(mod, faction, f=None):
     """chains() for a faction of the loaded mod (f: the buildings file as the editor shows it, typed lines and all;
     else the mod's own). [] without export_descr_buildings.txt."""
