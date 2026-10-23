@@ -293,7 +293,8 @@ class LayoutBoard(tk.Toplevel):
                           ("Load a look...", self.load_from), ("Save my look...", self.save_as),
                           ("Back to how it was...", self.back_all)):
             ttk.Button(bar, text=text, command=cmd).pack(side="right", padx=(4, 0))
-        from .gui_util import ShortHint
+        from .gui_util import ShortHint, flow
+        flow(bar)          # wraps onto a second row: in a 1200 px window 'Edit i...' and three buttons were cut or hidden
         ShortHint(self, text=HELP).pack(fill="x", padx=8)
         body = ttk.Frame(self)
         body.pack(fill="both", expand=True)
