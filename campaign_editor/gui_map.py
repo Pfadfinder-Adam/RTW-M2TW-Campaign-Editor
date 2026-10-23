@@ -320,7 +320,11 @@ class MapView(ttk.Frame):
         self.on_resize = None                            # () -> the Map size window (tiles added / cut at the edges)
         self.b_resize = ttk.Button(row, text="Change size...", command=self._resize)
         self.b_resize.pack(side="left", padx=(0, 4))
-        ttk.Button(row, text="Save picture...", command=self.save_picture).pack(side="left", padx=(0, 12))
+        ttk.Button(row, text="Save picture...", command=self.save_picture).pack(side="left", padx=(0, 4))
+        # a picture of the modder's own over the map, to trace by (refpicture; the keys are PureRef's)
+        from .refpicture import RefPicture
+        self.ref, self._refdrag, self._ref_keep = RefPicture(), None, None
+        ttk.Button(row, text="Reference picture...", command=self.ref_window).pack(side="left", padx=(0, 12))
         self.merge_bar = ttk.Frame(row)                  # shown while Merge regions is on
         self.lbl_merge = ttk.Label(self.merge_bar, text="")
         self.lbl_merge.pack(side="left", padx=(0, 6))
@@ -381,6 +385,7 @@ class MapView(ttk.Frame):
         c.bind("<ButtonRelease-3>", self._release)
         c.bind("<Motion>", self._hover)
         c.bind("<Double-Button-1>", self._double)          # a wonder opens its window, as in the game
+        c.bind("<KeyPress>", self._ref_key)                # the reference picture's keys (PureRef's), once clicked
         self.on_wonder = None                            # (type) -> the wonder's window
         self.special = []                                # special places [{'id', 'xy', 'title', 'new'}] (specialplaces)
         self.on_special = None                           # (id) -> the special place's window
@@ -883,7 +888,10 @@ class MapView(ttk.Frame):
     def _gl(self):
         """The card drawing this map straight into the window, made once; None where it cannot or is not wanted
         (the map is then drawn as before - a picture on the canvas)."""
-        if not self.gl_wanted:
+        if not self.gl_wanted or self.ref.visible():   # the reference picture is drawn the canvas way
+            st = getattr(self, "_glstate", None)
+            if st:
+                st["frame"].place_forget()
             return None
         st = getattr(self, "_glstate", None)
         if st is None:
@@ -1242,6 +1250,7 @@ class MapView(ttk.Frame):
         self.forts = list(forts or [])       # [strat.Fort] of descr_strat: drawn, and no one may start on them
         self.plain = plain                  # the Terrain editor: the ground alone, no political or region colours
         if first:
+            self._ref_restore()
             self.fit()
         else:
             self.render()
@@ -1401,6 +1410,8 @@ class MapView(ttk.Frame):
         else:
             pic = view_of(base, box, (cw, ch), Image.NEAREST, self._field(), self._per_tile(base))
             self._shore_into(pic)
+            if self.ref.visible() and not self.ref.front:
+                pic = self.ref.onto(pic, self.ox, self.oy, self.z)
             self._photo = ImageTk.PhotoImage(pic)
             c.create_image(0, 0, anchor="nw", image=self._photo, tags=("bg",))
         self._drawn_at = (self.ox, self.oy)
@@ -1414,6 +1425,8 @@ class MapView(ttk.Frame):
             self._draw_edges()
         if self.v_pick.get() and (self.sel_chars or self.sel_res):
             self._sel_marks()
+        if self.ref.visible() and self.ref.front:
+            self._ref_front(cw, ch)
         if gl:
             self._gl_soon()
         key = (tuple(sorted({r["kind"] for r in self.resources})), self.v_res.get(), self.v_forts.get(),
@@ -1438,6 +1451,8 @@ class MapView(ttk.Frame):
             base = self._base()
             pic = view_of(base, box, (cw, ch), Image.NEAREST, self._field(), self._per_tile(base))
             self._shore_into(pic)
+            if self.ref.visible() and not self.ref.front:
+                pic = self.ref.onto(pic, self.ox, self.oy, self.z)
             self._put_bg(pic)
         ox, oy = self._drawn_at
         dx, dy = (ox - self.ox) * self.z, (oy - self.oy) * self.z
@@ -2669,6 +2684,12 @@ class MapView(ttk.Frame):
 
     def _press(self, e, icons=False):
         right = getattr(e, "num", None) == 3
+        try:
+            self.canvas.focus_set()                       # the map's keys (the reference picture's) work once clicked
+        except tk.TclError:
+            pass
+        if not right and self._ref_press(e):
+            return
         self._nopan = False
         # a right click that does not move opens the menu of what can be done there (see _release)
         self._menu_press = (e.x, e.y) if right and not self.region_mode else None
@@ -2778,6 +2799,8 @@ class MapView(ttk.Frame):
         self._put_bg(pic)
 
     def _move(self, e):
+        if self._refdrag:
+            return self._ref_drag(e)
         if self._edrag:
             self._edge_drag(self._edrag, e.x, e.y)
             return
@@ -2893,6 +2916,138 @@ class MapView(ttk.Frame):
         if fn:
             fn(view=self)                                # its edges are dragged on this very map
 
+    # ---- the reference picture (refpicture.RefPicture: the modder's own picture over the map) ----
+    def ref_window(self):
+        if not self.cmap:
+            return None
+        from .gui_refpicture import open_window
+        return open_window(self)
+
+    def _ref_restore(self):
+        """A new map: its own picture as it was left (kept per mod and campaign), or none."""
+        from . import refpicture
+        self.ref.clear()
+        self.ref.restore(refpicture.kept(self.cmap))
+        self._ref_sync()
+
+    def _ref_sync(self):
+        w = getattr(self, "_ref_win", None)
+        if w is not None and w.winfo_exists():
+            w.sync()
+
+    def ref_changed(self, sync=True):
+        """The picture changed (a key, a drag, the window): drawn again, the window told, kept a moment later (a
+        slider dragged writes the settings once, not at every step)."""
+        if sync:
+            self._ref_sync()
+        self.render()
+        if self._ref_keep is not None:
+            self.after_cancel(self._ref_keep)
+        self._ref_keep = self.after(500, self._ref_kept)
+
+    def _ref_kept(self):
+        from . import refpicture
+        self._ref_keep = None
+        if self.cmap:
+            refpicture.keep(self.cmap, self.ref)
+
+    def _ref_said(self):
+        r = self.ref
+        self.readout.configure(text="reference picture: left %.1f, top %.1f, %.1f x %.1f tiles, %d %% shown%s" % (
+            r.x, r.y, r.w, r.h, round(r.opacity * 100), "" if r.locked else " - unlocked (Alt+L locks it)"))
+
+    @staticmethod
+    def _mods(e):
+        from .gui_board import alt_held
+        state = getattr(e, "state", 0) or 0
+        return bool(state & 0x4), bool(state & 0x1), alt_held(e)
+
+    def ref_action(self, action):
+        """What a key or a window button does to the picture (refpicture.action_of names it)."""
+        r = self.ref
+        if action == "open":
+            from .gui_refpicture import pick_picture
+            pick_picture(self)
+            return
+        if not r.loaded() or not self.cmap:
+            return
+        if action == "show":
+            r.shown = not r.shown
+        elif action in ("more", "less"):
+            r.shown = True
+            r.nudge_opacity(1 if action == "more" else -1)
+        elif action == "fit":
+            r.fit(self.cmap.w, self.cmap.h)
+        elif action == "own_shape":
+            r.own_shape()
+        elif action == "lock":
+            r.locked = not r.locked
+        elif action in ("flip_h", "flip_v", "grey", "smooth"):
+            setattr(r, action, not getattr(r, action))
+        elif action in ("front", "back"):
+            r.front = action == "front"
+        self._ref_said()
+        self.ref_changed()
+
+    def _ref_key(self, e):
+        from .refpicture import action_of
+        ctrl, shift, alt = self._mods(e)
+        action = action_of(e, ctrl, shift, alt)
+        if action is None or (action != "open" and not self.ref.loaded()) or not self.cmap:
+            return None
+        self.ref_action(action)
+        return "break"
+
+    def _ref_press(self, e):
+        """A left press that is the picture's (PureRef's mouse keys): Ctrl+Alt+Shift = its opacity (any time it shows);
+        unlocked - Ctrl+Alt = its size, a plain or Shift drag = its place. True when the press is taken."""
+        r = self.ref
+        if not r.visible() or not self.cmap:
+            return False
+        ctrl, shift, alt = self._mods(e)
+        if ctrl and alt and shift:
+            kind = "opacity"
+        elif r.locked:
+            return False
+        elif ctrl and alt:
+            kind = "scale"
+        elif not ctrl and not alt:
+            kind = "move"
+        else:
+            return False
+        tx, ty = self.ox + e.x / self.z, self.oy + e.y / self.z
+        self._refdrag = {"kind": kind, "x": e.x, "y": e.y, "at": (tx, ty), "axis": shift and kind == "move",
+                         "was": (r.x, r.y, r.w, r.h, r.opacity)}
+        return True
+
+    def _ref_drag(self, e):
+        d, r = self._refdrag, self.ref
+        x0, y0, w0, h0, op0 = d["was"]
+        dx, dy = e.x - d["x"], e.y - d["y"]
+        if d["kind"] == "opacity":
+            r.set_opacity(op0 + dx / 300.0)               # a 300-pixel drag right: from nothing to all of it
+        elif d["kind"] == "scale":
+            r.x, r.y, r.w, r.h = x0, y0, w0, h0
+            r.scale(math.exp((dx - dy) / 250.0), d["at"])
+        else:
+            if d["axis"]:
+                if abs(dx) >= abs(dy):
+                    dy = 0
+                else:
+                    dx = 0
+            r.x, r.y = x0 + dx / self.z, y0 + dy / self.z
+        self._ref_said()
+        self._ref_sync()
+        self.render()
+
+    def _ref_front(self, cw, ch):
+        """Over the towns and armies: the picture as a see-through picture on top of everything on the canvas."""
+        layer = self.ref.view(self.ox, self.oy, self.z, (cw, ch))
+        if layer is None:
+            return
+        self._ref_photo = ImageTk.PhotoImage(layer)
+        self.canvas.create_image(0, 0, anchor="nw", image=self._ref_photo, tags=("refpic",))
+
     def _escape(self, e=None):
         """Esc drops what waits for its click; only then it goes no further (else Esc closes the window)."""
         if (getattr(self, "on_place", None) or self.waiting) and self.on_place_stop:
@@ -2900,6 +3055,9 @@ class MapView(ttk.Frame):
             return "break"
 
     def _release(self, e):
+        if self._refdrag:
+            self._refdrag = None
+            return self.ref_changed()
         if getattr(self, "_marked_click", False) and getattr(e, "num", None) != 3:
             self._marked_click = False
             return
