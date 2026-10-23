@@ -9915,6 +9915,19 @@ building smith
         restore(m2, bdir)
         self.assertNotIn("N_R", ModData(self.root).regions("test"))
 
+    def test_lines_of_this_building_from_edit_faction_opens_the_buildings_work(self):
+        """Report #422: Edit faction > By buildings has no Buildings work behind it - 'Lines of this building' did
+        nothing; it opens the Buildings work's Lines tab at the chain."""
+        from types import SimpleNamespace
+        try:
+            from campaign_editor.gui_factionbuildings import FactionBuildings
+        except ImportError:
+            self.skipTest("no tkinter")
+        got = []
+        fake = SimpleNamespace(editor=None, app=SimpleNamespace(open_building=got.append))
+        FactionBuildings.open_lines(fake, "core_building")
+        self.assertEqual(got, ["core_building"])
+
     def test_new_regions_town_on_ground_the_game_refuses(self):
         """A report (#420, kgcm): a new region's town on a tile the engine will not take a settlement on (mountains,
         dense forest, impassable - culture_db / world.cpp is_settlement_placement_on_a_valid_tile) - the game skips

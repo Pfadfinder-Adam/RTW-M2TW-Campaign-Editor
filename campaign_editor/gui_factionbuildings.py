@@ -376,6 +376,8 @@ class FactionBuildings(ttk.Frame):
         if self.editor is not None:
             self.editor.show_lines_tab()
             self.editor.pick(chain)
+        elif hasattr(self.app, "open_building"):    # Edit faction > By buildings: the Buildings work opens (#422)
+            self.app.open_building(chain)
 
     def open_unit(self):
         if self.unit and hasattr(self.app, "open_unit"):

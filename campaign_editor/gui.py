@@ -2110,6 +2110,22 @@ class App(tk.Tk):
             return None
         return ed.view_unit_3d() if view3d else ed
 
+    def open_building(self, chain):
+        """The chain shown on the Buildings work's Lines tab (Edit faction > By buildings' 'Lines of this building':
+        it has no Buildings work of its own behind it, so the button did nothing - report #422)."""
+        if not self.mod:
+            return None
+        self.v_bar.set("buildings")
+        self._bar_pressed()
+        ed = self.editors.get("buildings")
+        if ed is None:
+            return None
+        ed.show_lines_tab()
+        if not ed.pick(chain):
+            messagebox.showinfo(APP, "No building '%s' in this mod's export_descr_buildings.txt." % chain)
+            return None
+        return ed
+
     def page_closed(self, page):
         """A work's Close: it goes, the map shows."""
         for k, ed in list(self.editors.items()):
