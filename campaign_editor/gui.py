@@ -3227,6 +3227,10 @@ class App(tk.Tk):
             return "not %s's land - paint it first" % name
         if what == "port" and not any(cm.is_sea(xy[0] + dx, xy[1] + dy) for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1))):
             return "a port needs the sea next to it"
+        if what == "city":                  # the ground the game takes a town on - Apply refuses it too (#420)
+            why = self.mod.land_problem(self.v_campaign.get(), tuple(xy))
+            if why:
+                return "a town cannot stand there: " + why
         r = self._new_region(name)
         other = "port" if what == "city" else "city"
         if tuple(r.get(other) or ()) == tuple(xy):

@@ -460,6 +460,8 @@ def check_mod(mod, campaign, deep=False, progress=None, found=None):
         bad(msg)
     for msg in notes:
         say("    note: " + msg)
+    for m in town_ground_problems(mod, campaign)[:8]:
+        bad(m)
     ring = town_ring_problems(mod, campaign)
     serious = [m for s_, m in ring if s_]
     for m in serious[:8]:
@@ -1179,6 +1181,17 @@ def region_label_problems(mod, campaign, regions, most=8):
     towns = [m for m in out if m[0]]
     names = [m for m in out if not m[0]]
     return towns[:most] + names[:most]
+
+
+def town_ground_problems(mod, campaign):
+    """[message] for towns on a tile the engine takes no settlement on (moddata.land_problem: a river / ford /
+    cliff, sea, mountains, dense forest, impassable ground - is_settlement_placement_on_a_valid_tile): it skips
+    the region ('You have chosen an invalid tile ... skipping region'), the region has no town and no owner, and
+    Medieval II crashes as the campaign starts (report #420). Vanilla and HLR: none."""
+    return ["the town of %s stands at %d, %d on %s - the game will not put a settlement there, skips the region "
+            "and Medieval II crashes on it; move the town onto open land" % (r, xy[0], xy[1], why)
+            for r, xy in sorted(mod.city_tiles(campaign).items())
+            for why in (mod.land_problem(campaign, tuple(xy)),) if why]
 
 
 def town_ring_problems(mod, campaign):

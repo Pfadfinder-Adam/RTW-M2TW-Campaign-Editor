@@ -132,9 +132,13 @@ def region_problems(mod, campaign, painted, new_regions):
         elif owner_get(tuple(c)) != r["name"]:
             errors.append("%s: the town must stand on its own land" % r["name"])
         else:
-            feat = mod._optional_map(campaign, "map_features.tga")
-            if feat and (feat.width, feat.height) == (img.width, img.height) and feat.get(*c) != (0, 0, 0):
-                errors.append("%s: a river, ford or cliff runs where the town is" % r["name"])
+            # the ground the engine takes a settlement on (moddata.land_problem: river / ford / cliff, sea,
+            # mountains, dense forest, impassable): on any other tile it skips the region, which is left with no
+            # town and no owner - Medieval II crashes as the campaign starts (report #420)
+            why = mod.land_problem(campaign, tuple(c))
+            if why:
+                errors.append("%s: the town cannot stand there (%s) - the game would skip the region and Medieval II "
+                              "crashes on it; place it on open land" % (r["name"], why))
         p = r.get("port")
         if p:
             if owner_get(tuple(p)) != r["name"]:

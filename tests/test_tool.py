@@ -9915,6 +9915,37 @@ building smith
         restore(m2, bdir)
         self.assertNotIn("N_R", ModData(self.root).regions("test"))
 
+    def test_new_regions_town_on_ground_the_game_refuses(self):
+        """A report (#420, kgcm): a new region's town on a tile the engine will not take a settlement on (mountains,
+        dense forest, impassable - culture_db / world.cpp is_settlement_placement_on_a_valid_tile) - the game skips
+        the region, it is left with no settlement and no owner, and Medieval II crashes as the campaign starts.
+        Refused at Apply as any town placing is (moddata.land_problem), not written."""
+        from campaign_editor.edit import edit
+        from campaign_editor.regionedit import region_problems
+        mod = ModData(self.root)
+        img = mod.region_map("test")
+        w, h = img.width, img.height
+        camp = os.path.dirname(mod.campaign_file("test", "map_regions.tga"))
+        grass, mountains = (0, 128, 128), (98, 65, 65)
+        px = [[mountains if (x, y) == (1, 7) else grass for x in range(2 * w + 1)] for y in range(2 * h + 1)]
+        write_tga(os.path.join(camp, "map_ground_types.tga"), 2 * w + 1, 2 * h + 1, px)
+        new = {"name": "N_R", "settlement": "Ntown", "creator": "alpha", "rebels": "Rebels", "resources": [],
+               "city": (0, 3), "owner": None}
+        painted = {(0, 3): "N_R", (1, 3): "N_R", (0, 2): "N_R"}
+        errors, _ = region_problems(ModData(self.root), "test", painted, [new])
+        self.assertTrue(any("N_R" in e and "mountains" in e for e in errors), errors)
+        with self.assertRaises(ValueError):
+            edit(ModData(self.root), "test", "alpha", {"regions": {"painted": painted, "new": [new]}})
+        from campaign_editor.check import town_ground_problems
+        self.assertEqual(town_ground_problems(ModData(self.root), "test"), [])
+        r, (tx, ty) = sorted(mod.city_tiles("test").items())[0]          # Check: a town of the map on mountains
+        px = [[mountains if (x, y) == (2 * tx + 1, 2 * ty + 1) else grass for x in range(2 * w + 1)]
+              for y in range(2 * h + 1)]
+        write_tga(os.path.join(camp, "map_ground_types.tga"), 2 * w + 1, 2 * h + 1, px)
+        got = town_ground_problems(ModData(self.root), "test")
+        self.assertEqual(len(got), 1)
+        self.assertIn(r, got[0])
+
     def test_new_region_in_a_medieval2_map_with_legion_lines(self):
         """Discord 2026-10-20 (Mekkermann, a Medieval II map whose regions carry 'legion:' lines): a new region got a
         Barbarian Invasion beliefs line ('pagan 100') before its religions { } line - Medieval II read it as the next
