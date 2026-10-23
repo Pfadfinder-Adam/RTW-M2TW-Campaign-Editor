@@ -470,6 +470,8 @@ def check_mod(mod, campaign, deep=False, progress=None, found=None):
         bad(m)
     for m in town_tile_problems(mod, campaign) + double_port_problems(mod, campaign):
         bad(m)
+    for m in port_tile_notes(mod, campaign):
+        say("    note: " + m)
     light = [m for s_, m in ring if not s_]
     if light:
         say("    note: %d town(s) touch another region's land (vanilla never does; the game may still run - "
@@ -1218,6 +1220,20 @@ def town_tile_problems(mod, campaign):
             out.append("the town of %s at %d, %d stands on %s - the game puts no town there and leaves %s empty, with "
                        "no owner (Medieval II crashes as the campaign starts); drag the town (Map) to flat open land"
                        % (r, xy[0], xy[1], "a river, ford or cliff" if why.startswith("a river") else why, r))
+    return out
+
+
+def port_tile_notes(mod, campaign):
+    """Ports on a tile the game's own map editor refuses a port on (mountains, dense forest, a river, ford or cliff -
+    STRATEGY_MAP::is_port_placement_on_a_valid_tile). The campaign's load does not refuse it (that check is left
+    out there), so a note; no vanilla map or HLR has one."""
+    from .mapedit import ports
+    out = []
+    for r, xy in sorted(ports(mod, campaign).items()):
+        why = mod.land_problem(campaign, tuple(xy))
+        if why:
+            out.append("the port of %s at %d, %d stands on %s - the game's own map editor puts no port there; "
+                       "better on open coast (drag it on the Map)" % (r, xy[0], xy[1], why.replace(" runs there", "")))
     return out
 
 

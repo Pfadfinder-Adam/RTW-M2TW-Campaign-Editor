@@ -3057,7 +3057,8 @@ class App(tk.Tk):
                     "new_land": land}
         paint, pick, cols = self.region_brush()
         from .regionedit import SEA
-        names = sorted(c for c in cols if c != SEA)
+        fresh = {r["name"] for r in self.new_regions}            # listed once, as '(new)' (a tester: 'Alpina_Province'
+        names = sorted(c for c in cols if c != SEA and c not in fresh)     # beside 'Alpina_Province  (new)')
         self.cb_paint["values"] = [r["name"] + "  (new)" for r in self.new_regions] + names + [SEA]
         overlay = {t: cols[r] for t, r in self.region_paint.items() if r in cols}
         on_place, ghost = None, None
@@ -3261,9 +3262,9 @@ class App(tk.Tk):
             return "not %s's land - paint it first" % name
         if what == "port" and not any(cm.is_sea(xy[0] + dx, xy[1] + dy) for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1))):
             return "a port needs the sea next to it"
-        if what == "city":                              # the game skips a region whose town it cannot place
-            why = self.mod.land_problem(self.v_campaign.get(), tuple(xy))     # (R-20261023-D68B3A: on mountains)
-            if why:
+        if what in ("city", "port"):                    # the game skips a region whose town it cannot place
+            why = self.mod.land_problem(self.v_campaign.get(), tuple(xy))     # (R-20261023-D68B3A: on mountains);
+            if why:                                     # a port there: the game's own map editor refuses it
                 return why
         r = self._new_region(name)
         other = "port" if what == "city" else "city"

@@ -150,6 +150,9 @@ def region_problems(mod, campaign, painted, new_regions):
                 errors.append("%s: a port needs the sea next to it" % r["name"])
             elif c and tuple(p) == tuple(c):
                 errors.append("%s: the port and the town need different tiles" % r["name"])
+            elif mod.land_problem(campaign, tuple(p)):
+                errors.append("%s: the port stands on %s - the game puts no port there; pick open coast"
+                              % (r["name"], mod.land_problem(campaign, tuple(p)).replace(" runs there", "")))
             else:
                 got = port_land(tuple(p), owner_get, lambda t: t in marks)
                 if got != r["name"]:
