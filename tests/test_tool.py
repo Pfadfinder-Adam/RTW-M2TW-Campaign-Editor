@@ -9961,12 +9961,20 @@ building smith
 
     def test_new_mod_folder_proposes_a_free_name(self):
         """A tester: New mod folder proposed M2_New though it was there, said so only after Create."""
+        import shutil
+        import uuid
         from campaign_editor.newmod import free_name, mod_target
         data = os.path.join(self.root, "data")
-        self.assertEqual(free_name(data, "CE_Free"), "CE_Free")
-        os.makedirs(mod_target(data, "CE_Free"))
-        os.makedirs(mod_target(data, "CE_Free_2"))
-        self.assertEqual(free_name(data, "CE_Free"), "CE_Free_3")
+        name = "CE_Free_" + uuid.uuid4().hex[:8]                  # the game folder may be shared by the tests
+        self.assertEqual(free_name(data, name), name)
+        made = [mod_target(data, name), mod_target(data, name + "_2")]
+        try:
+            for d in made:
+                os.makedirs(d)
+            self.assertEqual(free_name(data, name), name + "_3")
+        finally:
+            for d in made:
+                shutil.rmtree(d, ignore_errors=True)
 
     def test_edit_with_an_empty_description_writes_no_empty_key(self):
         """A tester (Medieval II, Art > flag Apply): the form's empty description wrote an empty {X_DESCR} into
