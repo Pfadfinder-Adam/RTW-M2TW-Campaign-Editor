@@ -679,6 +679,13 @@ class App(tk.Tk):
         self.chk_art = ttk.Checkbutton(lf, text="Copy art named after the template", variable=self.v_art)
         self.chk_art.grid(row=row, column=1, sticky="w")
         row += 1
+        # Rome: a Roman house's 'superfaction romans_senate' (shared sight, wars together, the Senate) - not taken by
+        # a new faction unless ticked (report #414); shown only for a template that has one
+        self.v_super = tk.BooleanVar(value=False)
+        self.chk_super = ttk.Checkbutton(lf, text="", variable=self.v_super)
+        self.chk_super.grid(row=row, column=1, sticky="w")
+        self.chk_super.grid_remove()
+        row += 1
         df = ttk.Frame(lf)
         self.dip_buttons = [ttk.Radiobutton(df, text="neutral to all", value="neutral", variable=self.v_dip),
                             ttk.Radiobutton(df, text="template's relations", value="template", variable=self.v_dip)]
@@ -1851,7 +1858,7 @@ class App(tk.Tk):
                  "dip_set", "name_list", "art_replace", "sel_map", "figures", "figures_like", "roster_set",
                  "family_set")
     SIDE_VARS = ("v_give", "v_playable", "v_art", "v_dip", "v_way", "v_way_of", "v_way_date",
-                 "v_way_region", "v_way_back", "v_army", "v_garrison")
+                 "v_way_region", "v_way_back", "v_army", "v_garrison", "v_super")
 
     def _side_state(self):
         """New / Edit faction's own work (the form, its towns, garrisons, buildings, armies, diplomacy, art...),
@@ -5448,6 +5455,14 @@ class App(tk.Tk):
         if fb:
             parts = fb.header.split(";")[0].split(",", 1)
             self.v["ai"].set(" ".join(parts[1].split()) if len(parts) > 1 else "")
+        master = self.strat.superfaction(t) if fb and not self.editing() else None
+        if master:
+            self.chk_super.configure(text="one of %s's houses, as %s is (superfaction: they share what they see and "
+                                          "go to war together)" % (master, t))
+            self.chk_super.grid()
+        else:
+            self.v_super.set(False)
+            self.chk_super.grid_remove()
         # the list offers every economy x military pair, plus what this campaign already uses
         # (variants like 'balanced smith random' or REX's 'opportunist')
         seen = {" ".join(x.header.split(";")[0].split(",", 1)[1].split())
@@ -5531,6 +5546,7 @@ class App(tk.Tk):
         self._auto_titles, self._auto_denari, self._auto_religion = {}, None, None
         self.v_playable.set(True)
         self.v_art.set(True)
+        self.v_super.set(False)
         self.v_dip.set("neutral")
         for ed in (getattr(self, "roster_editor", None), getattr(self, "family_editor", None)):
             if ed is not None:
@@ -6697,6 +6713,7 @@ class App(tk.Tk):
                       "date": self.v_way_date.get().strip(), "region": self.v_way_region.get() or None,
                       "heir": who("heir"), "denari": int(v["denari"] or 0), "ai": v["ai"] or None,
                       "playable": self.v_playable.get(), "diplomacy": self.v_dip.get(),
+                      "superfaction": self.v_super.get(),
                       "army_mode": self.v_army.get(), "garrison": self.v_garrison.get(),
                       "garrisons": {r: g for r, g in self.garrisons.items() if r in self.chosen},
                       "characters": [dict(c) for c in self.field],

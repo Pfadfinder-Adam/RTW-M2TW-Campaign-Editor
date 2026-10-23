@@ -158,6 +158,17 @@ class FactionBlock:
 class Strat:
     """An index over a loaded descr_strat.txt TextFile. Rebuild it after editing."""
 
+    def superfaction(self, name):
+        """The faction name's block names as its superfaction (Rome: the Roman houses' romans_senate), or None."""
+        fb = self.faction(name)
+        for i in range(fb.start + 1, fb.end) if fb else ():
+            t = tokens(strip_comment(self.lines[i]))
+            if t and t[0] in ("settlement", "character", "character_record", "relative", "army", "navy", "fleet"):
+                break
+            if len(t) > 1 and t[0] == "superfaction":
+                return t[1]
+        return None
+
     def __init__(self, f):
         self.f = f
         lines = f.texts()
