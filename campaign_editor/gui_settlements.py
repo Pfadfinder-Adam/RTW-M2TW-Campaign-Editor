@@ -67,6 +67,8 @@ class SettlementsPanel(ttk.Frame):
             v.trace_add("write", lambda *a: self.fill())
         self.lbl_n = ttk.Label(top, foreground="#666")
         self.lbl_n.pack(side="left", padx=6)
+        from .gui_util import flow
+        flow(top)        # wraps onto a second row: at 1280 px the Owner filter stood past the window's edge
         self.hint = ShortHint(self, foreground="#666", wraplength=1100, justify="left", text="")
         self.hint.pack(anchor="w", pady=(4, 4))
         body = ttk.Frame(self)
