@@ -334,6 +334,146 @@ def recruit_owned(plan, new, shared):
             new, len(gone), plan.template, ", ".join(sorted(gone)[:8]) + (" ..." if len(gone) > 8 else "")))
 
 
+def _edb_levels(f):
+    """{(chain, level): {'head': line, 'lines': [lines inside the level], 'close': its closing line}}."""
+    from .editors import building_blocks, chain_tree
+    out = {}
+    for chain, a, b in building_blocks(f):
+        for lv in chain_tree(f, a, b)["levels"]:
+            out[(chain.lower(), lv["name"].lower())] = {"head": lv["head"], "close": lv["close"],
+                                                       "lines": list(range(lv["open"] + 1, lv["close"]))}
+    return out
+
+
+def _edb_key(text, units=None):
+    """What a buildings line is, its factions lists aside: (its words, ('recruit', key, unit) or None) - the unit as
+    this mod calls it (units: the other mod's name -> this one's)."""
+    from .roster import RE_FACTIONS, recruit_of
+    r = recruit_of(text)
+    code = RE_FACTIONS.sub("", strip_comment(text))
+    if r:
+        u = (units or {}).get(r[1], r[1])
+        code = code.replace('"%s"' % r[1], '"%s"' % u.lower(), 1)
+        return tuple(code.replace(",", " ").split()), ("recruit", r[0], u.lower())
+    return tuple(code.replace(",", " ").split()), None
+
+
+def bring_buildings(plan, src, faction, new, names):
+    """The new faction builds and recruits as the other mod lets the brought one - never as its frame (the frame
+    only gave its lines a place): in each building level both mods have, the level and every line of it (recruit
+    lines too) let it in where the other mod lets the faction in, and not where it does not; a level this mod has
+    and the other mod does not keeps none of the frame's rights; the other mod's chains that name the faction and
+    this mod lacks come with their levels, texts and pictures (Bring buildings' way); its own units are recruited
+    where the other mod recruits them. -> (levels changed, chains brought)."""
+    from . import packs
+    from .roster import add_faction, covers, culture_of, drop_faction, factions_in, new_recruit_line, recruit_of
+    from .editors import building_blocks
+    sp, tp = src.file("edb"), plan.mod.file("edb")
+    if not sp or not tp:
+        return 0, []
+    theirs, f = src.load(sp), plan.edit(tp)
+    t_cult = src.culture(faction) if hasattr(src, "culture") else None
+    n_cult = culture_of(plan, new)
+    frame = plan.template
+    s_levels, levels = _edb_levels(theirs), _edb_levels(f)
+    owned = {u.lower() for u, _ in unit_pool(plan, new)}
+    edu = plan.edit(plan.mod.file("edu"))
+    from .packs import type_blocks
+    owned |= {u.lower() for u, span in type_blocks(edu).items()
+              if new in [o for v in packs._values(packs._block_lines(edu, span), "ownership") for x in v
+                         for o in re.split(r"[\s,]+", x) if o]}
+
+    def grants(text):
+        return covers(factions_in(text), faction, t_cult) is not None
+
+    changed, left, inserts = set(), 0, []
+    for (chain, level), lv in levels.items():
+        here = [lv["head"]] + lv["lines"]
+        if (chain, level) not in s_levels:
+            for i in here:                              # the frame's rights only: let go
+                names_ = factions_in(f.text(i)) or []
+                if new in names_ and frame in names_:
+                    out = drop_faction(f.text(i), new)
+                    if out is not None:
+                        f.set(i, out)
+                        left += 1
+            continue
+        sl = s_levels[(chain, level)]
+        src_keys = {}                                   # the very line, and the unit's lines of the level
+        for i in [sl["head"]] + sl["lines"]:
+            keys = [("head",)] if i == sl["head"] else [k for k in _edb_key(theirs.text(i), names) if k]
+            for key in keys:
+                src_keys[key] = src_keys.get(key, False) or grants(theirs.text(i))
+        done = set()
+        for i in here:
+            text = f.text(i)
+            names_ = factions_in(text)
+            if names_ is None:
+                continue
+            if i == lv["head"]:
+                key = ("head",)
+            else:                                       # the very line first, else a line of the same unit
+                exact, unit = _edb_key(text)
+                key = exact if exact in src_keys or unit is None else unit
+            want = src_keys.get(key)
+            if want is None:                            # the other mod has no such line: no frame's right kept
+                if new in names_ and frame in names_:
+                    out = drop_faction(text, new)
+                    if out is not None:
+                        f.set(i, out)
+                        changed.add((chain, level))
+                continue
+            if want and key not in done and not covers(names_, new, n_cult):
+                f.set(i, add_faction(text, new))
+                changed.add((chain, level))
+            elif not want and new in names_:
+                out = drop_faction(text, new)
+                if out is not None:
+                    f.set(i, out)
+                    changed.add((chain, level))
+            if want:
+                done.add(key)
+        # its units the other mod recruits here, this mod's level has no line for
+        have = {_edb_key(f.text(i))[1][2] for i in lv["lines"] if recruit_of(f.text(i))}
+        for i in sl["lines"]:
+            r = recruit_of(theirs.text(i))
+            if not r or not grants(theirs.text(i)):
+                continue
+            unit = names.get(r[1], r[1])
+            if unit.lower() not in owned or unit.lower() in have:
+                continue
+            real = next((u for u in type_blocks(edu) if u.lower() == unit.lower()), unit)
+            line = new_recruit_line(f, new, real, chain, level)
+            indent = re.match(r"\s*", f.text(lv["lines"][0]) if lv["lines"] else "")
+            inserts.append((lv["close"], (indent.group(0) if indent else "") + line.strip()))
+            have.add(unit.lower())
+            changed.add((chain, level))
+    for at, line in sorted(inserts, key=lambda x: -x[0]):
+        f.insert(at, [line])
+    # the other mod's chains the faction builds by name and this mod lacks: brought
+    mine = {c.lower() for c, _, _ in building_blocks(f)}
+    want_chains = []
+    for chain, a, b in building_blocks(theirs):
+        if chain.lower() in mine:
+            continue
+        if any(faction in (factions_in(theirs.text(i)) or []) for i in range(a, b)):
+            want_chains.append(chain)
+    brought = []
+    if want_chains:
+        try:
+            bman, bfiles = packs.collect_buildings(src, want_chains)
+            cn, ln = packs.building_names(plan.mod, bman)
+            packs.import_buildings(plan, bman, bfiles, [new], cn, ln, dict(names))
+            brought = want_chains
+        except (ValueError, OSError) as err:
+            plan.warn(f, "%s's own buildings of the other mod not brought: %s" % (faction, err))
+    if changed or left:
+        plan.note(f, "%s builds and recruits as %s does in the other mod: %d level(s) set by it%s" % (
+            new, faction, len(changed), "; %d right(s) of the frame %s in levels the other mod lacks let go" % (
+                left, frame) if left else ""))
+    return len(changed), brought
+
+
 def unit_pool(plan, new):
     """[(unit type, upkeep)] of the land units new owns in plan's export_descr_unit (the brought and the shared ones),
     generals' bodyguards, siege engines, animal handlers and ships left out - what its garrisons are drawn from."""
@@ -449,10 +589,114 @@ def bring_names(plan, src, faction, new):
     plan.note(f, "%s's name lists: %s's own (%d name(s), %d new text(s))" % (new, faction, len(names), len(add)))
 
 
+def bring_cards(plan, src, faction, new, shared):
+    """The cards and description pictures of the units new shares with this mod: the brought faction's own of the
+    other mod (ui/units/<faction>/, ui/unit_info/<faction>/), not its frame's - in place of a copy queued before.
+    -> how many."""
+    from .clone import CARD_KINDS
+    from .packs import type_blocks, _block_lines, _values
+    edu = plan.edit(plan.mod.file("edu"))
+    blocks = type_blocks(edu)
+    dicts = []
+    for u in shared:
+        span = blocks.get(u)
+        got = _values(_block_lines(edu, span), "dictionary") if span else []
+        if got and got[0]:
+            dicts.append(got[0][0].strip())
+    n = 0
+    for folder, pattern, _ in CARD_KINDS:
+        # the frame's whole card folder copied under the new name (clone.art_files) would be written first and keep
+        # its cards (a copy never replaces a file): let it go - every unit new owns gets its card one by one
+        # (its own here, the rest by clone.unit_cards), and none of the frame's units it does not own
+        whole = os.path.normcase(os.path.join(plan.mod.own(os.path.join(plan.mod.data, "ui", folder, new))
+                                              if hasattr(plan.mod, "own") else os.path.join(plan.mod.data, "ui",
+                                                                                              folder, new)))
+        _drop_copies(plan, lambda c: os.path.isdir(c[0]) and os.path.normcase(c[1]) == whole)
+        for d in dicts:
+            rel = "ui/%s/%s/%s" % (folder, faction, pattern % d)
+            pic = src.find(rel)
+            if not pic:
+                continue
+            dst = os.path.join(plan.mod.data, "ui", folder, new, pattern % d)
+            if plan.mod.find("ui/%s/%s/%s" % (folder, new, pattern % d)):
+                continue                                # a card of its own here already (an earlier bring)
+            _put_over(plan, pic, dst)
+            n += 1
+    if n:
+        plan.note(None, "%d card(s) and description picture(s) of %s's own for the units %s shares with this mod"
+                  % (n, faction, new))
+    return n
+
+
+def _window_key(key, new):
+    """A string the New faction window writes (the names players read, its descriptions, its leader's and heir's
+    titles): the window's text stays - it was filled from the brought faction and may have been changed there."""
+    from . import titles
+    up, n = key.upper(), new.upper()
+    if up in (n, "ST_" + n, n + "_DESCR") or up.endswith("_%s_DESCR" % n):
+        return True
+    return any(titles.copied(key, "x", new, "x", "x", m2) is not None for m2 in (True, False))
+
+
+def bring_texts(plan, src, faction, new):
+    """Every string of the brought faction (a key naming it: its strengths, weaknesses, famous unit, victory and
+    defeat lines, advice, titles of its people...) under the new faction's key, from the other mod's tables - not
+    the frame's text swapped nor a plain line in its place; the keys the window writes stay as the window has them.
+    -> how many."""
+    from .clone import NOT_COPIED_TEXTS
+    from .strtables import strings, write_texts
+    fparts = faction.upper().split("_")
+    n, done = 0, set()
+    for path in plan.mod.text_files():
+        name = os.path.basename(path)
+        low = name.lower()
+        if "regions_and_settlement_names" in low or low in NOT_COPIED_TEXTS or low == "names.txt":
+            continue
+        theirs = strings(src, name)
+        values = {}
+        for key, text in theirs.items():
+            parts = key.split("_")
+            hit = next((p for p in range(len(parts) - len(fparts) + 1) if parts[p:p + len(fparts)] == fparts), None)
+            if hit is None:
+                continue
+            new_key = "_".join(parts[:hit] + [new.upper()] + parts[hit + len(fparts):])
+            if _window_key(new_key, new):
+                continue
+            values[new_key] = text
+        if values:
+            write_texts(plan, name, values)
+            n += len(values)
+            done.update(values)
+    if n:
+        plan.note(None, "%d text(s) of %s's own from the other mod (its strengths, weaknesses, victory, advice...)"
+                  % (n, faction))
+        # the frame's story keys the copy left as plain lines: those the other mod gave are no longer said
+        for k, (where, msg) in reversed(list(enumerate(plan.notes))):
+            if "own story not copied" not in msg:
+                continue
+            head, _, keys = msg.rpartition(": ")
+            left = [x.strip() for x in keys.split(",") if x.strip().upper() not in done]
+            if left:
+                plan.notes[k] = (where, re.sub(r"^\d+", str(len(left)), head) + ": " + ", ".join(left))
+            else:
+                del plan.notes[k]
+    return n
+
+
 def _kind(path):
     """A picture's file kind by its whole ending: 'x.tga.dds' -> '.tga.dds', 'x.texture' -> '.texture'."""
     name = os.path.basename(path).lower()
     return name[name.find("."):] if "." in name else ""
+
+
+def _drop_copies(plan, gone):
+    """The copies queued before that gone((src, dst)) says go, and their 'copy' lines in Preview with them."""
+    out = [c for c in plan.copies if gone(c)]
+    if not out:
+        return
+    plan.copies[:] = [c for c in plan.copies if not gone(c)]
+    said = {"copy %s -> %s" % (plan.mod.rel(a), plan.mod.rel(b)) for a, b in out}
+    plan.notes[:] = [x for x in plan.notes if not (x[0] == "" and x[1] in said)]
 
 
 def _put_over(plan, src, dst):
@@ -460,7 +704,7 @@ def _put_over(plan, src, dst):
     after the new faction): a copy onto a file already there is skipped at the write, so the first one queued would
     win (the user's game test: the brought Celts showed Gaul's boar on the faction-select button)."""
     own = plan.mod.own(dst) if hasattr(plan.mod, "own") else dst
-    plan.copies[:] = [(a, b) for a, b in plan.copies if os.path.normcase(b) != os.path.normcase(own)]
+    _drop_copies(plan, lambda c: os.path.normcase(c[1]) == os.path.normcase(own))
     if os.path.exists(own):
         # a file there already (an earlier try left the frame's picture under the new name): written over, with a
         # backup - a copy never replaces a file
@@ -496,6 +740,55 @@ def bring_sm_files(plan, src, faction, new):
                 plan.copy(path, dst)
         _set_value(sm, mine[0], got[1])
         plan.note(sm, "%s's %s now %s (%s's own)" % (new, key, got[1], faction))
+
+
+# a faction's ways in descr_sm_factions (not its files, names or colours - those come by their own steps): the brought
+# faction's value in place of the frame's; special_faction_type (the papacy's) only when it has one itself
+SM_WAYS = ("triumph_value", "custom_battle_availability", "can_sap", "prefers_naval_invasions", "can_have_princess",
+           "has_family_tree", "special_faction_type", "can_horde")
+
+
+def bring_sm_ways(plan, src, faction, new):
+    """new's ways in descr_sm_factions.txt (SM_WAYS: can it sap walls, prefer invading by sea, have princesses and
+    a family tree, appear in custom battles...) as the brought faction has them, not its frame's; a special faction
+    type of the frame's (the papacy's) goes when the brought faction has none. A way the frame's block does not
+    write is left out (the order of the words counts for the engines - rules.md). -> how many changed."""
+    theirs = src.load(src.file("sm_factions"))
+    span = _block_span(theirs, faction)
+    sm = plan.edit(plan.mod.file("sm_factions"))
+    mine = _block_span(sm, new)
+    if not span or not mine:
+        return 0
+    got = {}
+    for i in range(*span):
+        t = tokens(strip_comment(theirs.text(i)))
+        if t[:1] and t[0] in SM_WAYS:
+            got[t[0]] = strip_comment(theirs.text(i)).split(None, 1)[1].strip() if len(t) > 1 else ""
+    n, gone = 0, []
+    for i in reversed(range(*mine)):
+        code = strip_comment(sm.text(i))
+        t = tokens(code)
+        if not t or t[0] not in SM_WAYS:
+            continue
+        if t[0] not in got:
+            if t[0] == "special_faction_type":
+                sm.delete(i, i + 1)
+                gone.append(t[0])
+            continue
+        value = code.split(None, 1)[1].strip() if len(t) > 1 else ""
+        if value != got[t[0]]:
+            sm.set(i, sm.text(i).replace(value, got[t[0]], 1))
+            n += 1
+    have = {tokens(strip_comment(sm.text(i)))[0] for i in range(*_block_span(sm, new))
+            if tokens(strip_comment(sm.text(i)))}
+    lacking = sorted(k for k in got if k not in have)
+    if n or gone:
+        plan.note(sm, "%s's ways as %s's (%d changed%s)" % (new, faction, n, "; the frame's %s left out" %
+                                                              ", ".join(gone) if gone else ""))
+    if lacking:
+        plan.warn(sm, "%s has %s in the other mod - not written for %s (its place in the block is the engine's "
+                      "to say; add it by hand if it is wanted)" % (faction, ", ".join(lacking), new))
+    return n
 
 
 # a faction block's words the horde lines stand before (BI's order; M2EX / REX stop reading the file at a word out of
@@ -969,6 +1262,9 @@ def overlay(plan, campaign, bring):
     shared, brought, names = bring_units(plan, src, faction, new)
     recruit_owned(plan, new, shared)
     bring_battle_textures(plan, src, faction, new)
+    bring_buildings(plan, src, faction, new, names)
+    bring_texts(plan, src, faction, new)
+    bring_cards(plan, src, faction, new, shared)
     plan.bring_start = start_of(plan, src, bring.get("campaign") or campaign, faction, new, names)
     if plan.opts.get("copy_art", True):                 # its pictures where the frame's copies went (yours win)
         from . import log
@@ -986,6 +1282,7 @@ def overlay(plan, campaign, bring):
                 art[rel] = pic                          # a cut-out or another format: made to fit (Art's way)
         blank_frame_pictures(plan, campaign, set(art) | set(picks), folder)
     bring_sm_files(plan, src, faction, new)
+    bring_sm_ways(plan, src, faction, new)
     from .accents import accent_of, take_after          # its voice accent, when this mod has one of that name
     if plan.opts.get("accent") in (None, "", accent_of(plan.mod, plan.template)):     # (not one picked by hand)
         take_after(plan, src, faction, new)

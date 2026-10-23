@@ -2016,6 +2016,9 @@ def import_buildings(plan, manifest, files, factions, chain_names=None, level_na
         raise ValueError("pick at least one faction (or culture) that may build them")
     facs = [n for n, _ in mod.factions()]
     known = set(facs) | {mod.culture(n) for n in facs if mod.culture(n)} | {"all"}
+    sm = plan.files.get(mod.file("sm_factions"))
+    if sm is not None:                            # a faction made in this same plan (New faction > From another mod)
+        known |= {t[1].rstrip(",") for t in (tokens(x) for x in sm.texts()) if t[:1] == ["faction"] and len(t) > 1}
     bad = [o for o in factions if o not in known]
     if bad:
         raise ValueError("no faction or culture %s in this mod" % ", ".join(bad))

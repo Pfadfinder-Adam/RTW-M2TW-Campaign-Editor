@@ -218,6 +218,23 @@ def _find_unit(f, unit):
     return blk
 
 
+def culture_of(plan, faction):
+    """The faction's culture - also of a faction this same plan makes (New faction: its block is only in the plan's
+    descr_sm_factions.txt so far), or None."""
+    got = dict(plan.mod.factions()).get(faction)
+    if got:
+        return got
+    sm = plan.files.get(plan.mod.file("sm_factions"))
+    inside = False
+    for text in (sm.texts() if sm is not None else []):
+        t = tokens(text)
+        if t[:1] == ["faction"]:
+            inside = len(t) > 1 and t[1].rstrip(",") == faction
+        elif inside and t[:1] == ["culture"] and len(t) > 1:
+            return t[1]
+    return None
+
+
 def own_unit(plan, faction, unit, give=True):
     """EDU ownership: the faction written in (give) or out (take; a culture or 'all'
     it came through is written out as the other factions). True when changed."""
@@ -225,7 +242,7 @@ def own_unit(plan, faction, unit, give=True):
     f = plan.edit(mod.file("edu"))
     blk = _find_unit(f, unit)
     cultures = mod.factions()
-    culture = dict(cultures).get(faction)
+    culture = culture_of(plan, faction)
     names = ownership(f, blk)
     now = covers(names, faction, culture)
     i = unit_line(f, blk, "ownership")
@@ -287,7 +304,7 @@ def give_unit(plan, faction, unit):
     (the faction added where it is not let in yet), its cards."""
     mod = plan.mod
     own_unit(plan, faction, unit, True)
-    culture = mod.culture(faction)
+    culture = culture_of(plan, faction)
     edb_p = mod.file("edb")
     if edb_p:
         e = plan.edit(edb_p)

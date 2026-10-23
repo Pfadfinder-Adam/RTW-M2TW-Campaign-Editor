@@ -10629,7 +10629,8 @@ building smith
                                edit=lambda p: None)
         src = SimpleNamespace(culture=lambda f: None)
         stubs = dict(bring_units=lambda *a: ([], [], {}), start_of=lambda *a: None, bring_sm_files=lambda *a: None, bring_horde=lambda *a: None,
-                     bring_battle_textures=lambda *a: 0,
+                     bring_battle_textures=lambda *a: 0, bring_buildings=lambda *a: (0, []), bring_texts=lambda *a: 0,
+                     bring_cards=lambda *a: 0, bring_sm_ways=lambda *a: 0,
                      own_select_map=lambda *a: None, bring_characters=lambda *a: None, bring_figures=lambda *a: None,
                      bring_names=lambda *a: called.append(a))
         with mock.patch.multiple(FB, **stubs), mock.patch("campaign_editor.moddata.ModData", lambda p: src), \
@@ -11016,6 +11017,110 @@ building smith
                 "ui/cymru_x.tga": "/x/own", "ui/captain banners/captain_card_cymru.tga": "/x/card",
                 "banners/textures/faction_banner_cymru.texture": "/x/ban",
                 "models_strat/textures/princess_cymru.tga.dds": "/x/pr"})
+
+    BRING_EDB = """building barracks
+{
+    levels muster hall
+    {
+        muster city requires factions { %s }
+        {
+            capability
+            {
+                recruit_pool "rebel spear"  1   0.5   4  0  requires factions { %s }
+                recruit_pool "rebel spear"  1   0.9   6  1  requires factions { %s }
+            }
+            construction  1
+        }
+        hall city requires factions { %s }
+        {
+            construction  1
+        }
+    }
+}
+"""
+
+    def _bring_plan(self, edb_here, edb_there, more_there=""):
+        """(plan making beta on alpha, the other mod with zz) for the bring steps: beta's block in the plan's
+        descr_sm_factions, each mod's buildings."""
+        mod = ModData(self.root)
+        write(os.path.join(mod.data, "export_descr_buildings.txt"), edb_here)
+        src = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, src)
+        shutil.copytree(self.root, src, dirs_exist_ok=True)
+        write(os.path.join(src, "data", "export_descr_buildings.txt"), edb_there + more_there)
+        write(os.path.join(src, "data", "descr_sm_factions.txt"),
+              "faction\t\tzz\nculture\t\teastern\ncan_sap\t\tno\nprefers_naval_invasions\tyes\n;;;;\n\n"
+              "faction\t\tslave\nculture\t\tbarbarian\n;;;;\n")
+        plan = Plan(mod, "alpha", "beta", {})
+        sm = plan.edit(mod.file("sm_factions"))
+        sm.insert(0, ["faction\t\tbeta", "culture\t\teastern", "can_sap\t\tyes", "special_faction_type papal_faction",
+                      ";;;;", ""])
+        return plan, ModData(src)
+
+    def test_brought_faction_builds_as_in_its_own_mod(self):
+        """Adam, 2026-10-23 ('the templates only get in the way now'): a brought faction could build and recruit
+        all its frame could (the frame's requirements extended to it). Now it builds as the other mod lets the
+        brought faction: in the levels both mods have, line by line (the very recruit line, not only its unit); a
+        level the other mod lacks keeps none of the frame's rights; its own chains come along."""
+        from campaign_editor import factionbring as FB
+        here = self.BRING_EDB % ("alpha, beta,", "alpha, beta,", "alpha, beta,", "alpha, beta,") + \
+            "building alpha_court\n{\n    levels hall\n    {\n        hall city requires factions { alpha, beta, }\n" \
+            "        {\n            construction  1\n        }\n    }\n}\n"
+        there = self.BRING_EDB % ("zz,", "zz,", "gamma,", "gamma,")
+        court = "building zz_court\n{\n    levels llys\n    {\n        llys city requires factions { zz, }\n" \
+                "        {\n            construction  1\n        }\n    }\n}\n"
+        plan, src = self._bring_plan(here, there, court)
+        changed, brought = FB.bring_buildings(plan, src, "zz", "beta", {})
+        got = [x.strip() for x in plan.edit(plan.mod.file("edb")).texts()]
+        self.assertIn("muster city requires factions { alpha, beta, }", got)
+        self.assertIn('recruit_pool "rebel spear"  1   0.5   4  0  requires factions { alpha, beta, }', got)
+        self.assertIn('recruit_pool "rebel spear"  1   0.9   6  1  requires factions { alpha, }', got)    # not its line
+        self.assertEqual(got.count("hall city requires factions { alpha, }"), 2)   # its mod's hall: not; the court: no
+        self.assertEqual(brought, ["zz_court"])
+        self.assertIn("llys city requires factions { beta, }", got)
+
+    def test_brought_faction_takes_its_own_texts_and_ways(self):
+        """The brought faction's strings (strengths, weaknesses, victory...) come from its mod, not the frame's text
+        or a plain line - the names the window writes stay the window's; its ways in descr_sm_factions (can_sap,
+        a special faction type) are its own."""
+        from campaign_editor import factionbring as FB
+        plan, src = self._bring_plan("", "")
+        tdir = os.path.join(src.data, "text")
+        os.makedirs(tdir, exist_ok=True)
+        write(os.path.join(tdir, "expanded.txt"), "{ZZ_STRENGTH}\tStrong archers\n{ZZ}\tTheirs\n{EMT_ZZ_SPY}\tA spy\n")
+        here = os.path.join(plan.mod.data, "text")
+        os.makedirs(here, exist_ok=True)
+        write(os.path.join(here, "expanded.txt"), "{BETA_STRENGTH}\t\n{BETA}\tMine\n")
+        plan.notes.append(("", "2 text(s) of alpha's own story not copied - a plain line of beta in their place "
+                               "(change them in the text files): BETA_STRENGTH, BETA_WEAKNESS"))
+        self.assertEqual(FB.bring_texts(plan, src, "zz", "beta"), 2)
+        got = plan.edit(os.path.join(here, "expanded.txt")).texts()
+        self.assertIn("{BETA_STRENGTH}\tStrong archers", got)
+        self.assertIn("{BETA}\tMine", got)                         # the window's name stays
+        self.assertIn("{EMT_BETA_SPY}\tA spy", got)
+        self.assertTrue(any(m.startswith("1 text(s)") and m.endswith(": BETA_WEAKNESS") for _, m in plan.notes))
+        self.assertEqual(FB.bring_sm_ways(plan, src, "zz", "beta"), 1)
+        block = plan.edit(plan.mod.file("sm_factions")).texts()[:5]
+        self.assertIn("can_sap\t\tno", block)
+        self.assertFalse(any("special_faction_type" in x for x in block))
+        self.assertTrue(any("prefers_naval_invasions" in m for _, m in plan.warnings))
+
+    def test_brought_faction_shared_units_wear_its_own_cards(self):
+        """The cards of the units a brought faction shares with this mod were its frame's (and the frame's whole
+        card folder came along, its own units' cards too): now each is the brought faction's own card."""
+        from campaign_editor import factionbring as FB
+        plan, src = self._bring_plan("", "")
+        mine = os.path.join(src.data, "ui", "units", "zz")
+        os.makedirs(mine)
+        write(os.path.join(mine, "#rebel_spear.tga"), "zz card")
+        frame = os.path.join(self.root, "data", "ui", "units", "alpha")
+        os.makedirs(frame, exist_ok=True)
+        dst = os.path.join(plan.mod.data, "ui", "units", "beta")
+        plan.copy(frame, dst)                                       # clone.art_files: the frame's folder
+        plan.copy(os.path.join(frame, "#rebel_spear.tga"), os.path.join(dst, "#rebel_spear.tga"))
+        self.assertEqual(FB.bring_cards(plan, src, "zz", "beta", ["rebel spear"]), 1)
+        self.assertEqual(plan.copies, [(os.path.join(mine, "#rebel_spear.tga"), os.path.join(dst, "#rebel_spear.tga"))])
+        self.assertFalse(any("ui/units/alpha" in m for _, m in plan.notes))
 
     def test_unit_pack_paths_from_the_game_root(self):
         # Barbarian Invasion's lines name files from the game's root ('bi/data/...'): found under data and written
