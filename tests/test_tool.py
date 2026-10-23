@@ -4316,6 +4316,12 @@ building smith
                     ed.hud.pick_shot()                           # a screenshot over it, the HUD stretched to it
                 self.assertEqual(ed.hud._img.size, (1600, 900))
                 self.assertTrue(ed.hud.v_shot.get())
+                # a part cut out of a screen (the HUD alone, report #413) keeps the Screen: laid over the HUD's bottom
+                Image.new("RGB", (693, 236), (0, 0, 255)).save(shot)
+                with mock.patch("tkinter.filedialog.askopenfilename", return_value=shot):
+                    ed.hud.pick_shot()
+                self.assertEqual(ed.hud._img.size, (1600, 900))
+                self.assertEqual(ed.hud._shot_xy, ((1600 - 693) // 2, 900 - 236))
         finally:
             app.destroy()
 
