@@ -4326,6 +4326,37 @@ building smith
         finally:
             app.destroy()
 
+    def test_factions_after_maps_opens_the_faction_tab(self):
+        """Maps (on Terrain) -> Factions showed the tab after the hidden map tabs - Buildings with no town picked;
+        now the form the first time, the faction tab it was on after that."""
+        try:
+            from unittest import mock
+            from campaign_editor import gui
+            app = gui.App()
+        except Exception as e:                        # no tkinter / no display
+            self.skipTest("no tkinter window: %s" % e)
+        try:
+            with mock.patch("tkinter.messagebox.showinfo"), mock.patch("tkinter.messagebox.showerror"), \
+                    mock.patch("tkinter.messagebox.askyesno", return_value=False):
+                app.v_path.set(os.path.join(self.root, "data"))
+                app.load()
+                app.update()
+
+                def go(bar):
+                    app.v_bar.set(bar)
+                    app._bar_pressed()
+                    app.update()
+                go("map")
+                app.select_tab("Terrain")
+                go("faction")
+                self.assertEqual(app.tab_name(), "Edit faction")
+                app.select_tab("Diplomacy")
+                go("map")
+                go("faction")
+                self.assertEqual(app.tab_name(), "Diplomacy")
+        finally:
+            app.destroy()
+
     def test_faction_form_starts_empty(self):
         """The user, 2026-10-21: 'I made a faction, picked another - the fields were still full; remove it all by
         hand?'. New faction opened after Edit faction, another template, another faction in Edit: nothing of the one
