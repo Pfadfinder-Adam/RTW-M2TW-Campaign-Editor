@@ -8,7 +8,11 @@ opens, its words, tooltip) stays, as the engine keeps behaviour and pictures apa
 piece drawn with this picture' changes the shared object instead. Back to the game's picture is the opposite.
 
 The Picture library: every picture region of the layout file's sheets (the game's own pieces) and the modder's own
-pictures, kept in the editor's own folder (CampaignEditor_interface) for every mod."""
+pictures, kept in the editor's own folder (CampaignEditor_interface) for every mod.
+
+A message box (the 'Exit program?' box: UIP_ERROR_DIALOG) or a frame (UIP_BORDER) never shows a picture of its own:
+the game draws the menus' shared frame data/menu/border_4pix_black_gold2.tga there (menudraw.FRAME_ONLY), so Replace
+picture on one changes that frame - for every message box, text box, list, drop-down and border of the menus."""
 
 import os
 import shutil
@@ -116,11 +120,88 @@ def make_own(panel, x, sources, size, shared=False):
     return obj
 
 
+def frame_only(x):
+    """Whether the game draws the menus' shared frame for this piece, never a picture of its own."""
+    from . import menudraw as MD
+    return bool(x) and (x["identifier"] or "").upper() in MD.FRAME_ONLY
+
+
+def frame_box(panel, x):
+    """(w, h) the game draws the frame at for this piece: a message box from 8 px outside it, a frame on it."""
+    w, h = piece_size(panel, x)
+    return (w + 16, h + 16) if (x["identifier"] or "").upper() != "UIP_BORDER" else (w, h)
+
+
+def frame_users(panel):
+    """How many pieces of the layout the game draws with the shared frame (message boxes, frames, text boxes,
+    lists, drop-downs)."""
+    from . import menudraw as MD
+    doc = panel.doc
+    return sum(1 for page in doc.pages() for x in doc.pieces(page)
+               if MD.kind(x["identifier"], x["object"], doc.art(x) is not None) in
+               ("border", "dialog", "textbox", "list", "dropdown"))
+
+
+def take_frame(panel, x, im):
+    """The shared frame made from a picture of this piece's whole box; waits for Apply changes. False without
+    Pillow or a picture."""
+    from . import menudraw as MD
+    if im is None:
+        return False
+    old = panel._part(MD.FRAME)
+    sheet = MD.frame_sheet(im, frame_box(panel, x), old=old)
+    panel.set_frame(L.own_picture_file([sheet], sheet.size))
+    after_change(panel, "The menus' frame is the new picture now (%s and every message box, text box, list, "
+                        "drop-down and border). Preview, then Apply changes." % x["name"])
+    return True
+
+
+def ask_frame(panel):
+    """Replace picture on a message box / frame: the game draws the menus' shared frame there, so the frame changes
+    (said first, with how many pieces show it)."""
+    x = panel.current()
+    if not x:
+        return None
+    try:
+        import PIL  # noqa: F401
+    except ImportError:
+        messagebox.showinfo(TITLE, "Own pictures need Pillow (the editor's exe has it).", parent=panel)
+        return None
+    from . import menudraw as MD
+    w, h = frame_box(panel, x)
+    if not messagebox.askokcancel(TITLE, (
+            "%s is %s. The game never draws a picture of its own for it: it draws the menus' shared frame, "
+            "data/menu/%s, around it (that is why a new picture of the piece changed nothing in the game).\n\n"
+            "Pick a picture of the whole box as it should look (%d x %d pixels here; any size is fitted): its "
+            "corners and edges become the frame's, its middle the inside. The same frame is drawn for every "
+            "message box, text box, list, drop-down and border of the menus (%d pieces in this layout file).\n\n"
+            "Go on?") % (x["name"], kind_words(x), MD.FRAME, w, h, frame_users(panel)), parent=panel):
+        return None
+    p = filedialog.askopenfilename(parent=panel, title="A picture of the whole box", filetypes=PICTURES)
+    if not p:
+        return None
+    if not take_frame(panel, x, source_picture(panel, ("file", p))):
+        messagebox.showerror(TITLE, "That picture could not be read.", parent=panel)
+        return None
+    return p
+
+
+def frame_back(panel):
+    """The game's own frame again: a new one waiting is dropped; one the mod has already goes back to the game's at
+    Apply changes."""
+    x = panel.current()
+    panel.set_frame(b"" if panel.frame is None or (panel.frame and panel.own_frame()) else None)
+    after_change(panel, "The menus' frame is the game's again%s. Preview, then Apply changes." % (
+        " (%s and the rest)" % x["name"] if x else ""))
+
+
 def ask_picture(panel):
     """Replace picture...: each state its picture (a file or the library), the size, this piece or every one."""
     x = panel.current()
     if not x:
         return None
+    if frame_only(x):
+        return ask_frame(panel)
     try:
         import PIL  # noqa: F401
     except ImportError:
@@ -396,6 +477,11 @@ class Library(tk.Toplevel):
         if not x:
             messagebox.showinfo(TITLE, "Pick a piece on the screen first.", parent=self)
             return
+        if frame_only(x):                            # a message box / frame: the menus' shared frame
+            self.destroy()
+            if not take_frame(panel, x, source_picture(panel, src)):
+                messagebox.showerror(TITLE, "That picture could not be read.", parent=panel)
+            return
         states = panel.doc.states_of(x)
         panel._remember()
         try:
@@ -408,4 +494,4 @@ class Library(tk.Toplevel):
                             "changes." % (x["name"], obj))
 
 
-__all__ = ["ask_picture", "back_to_game", "Library", "make_own", "library_dir", "add_to_library", "own_library"]
+__all__ = ["ask_picture", "ask_frame", "frame_back", "frame_only", "frame_box", "take_frame", "back_to_game", "Library", "make_own", "library_dir", "add_to_library", "own_library"]
