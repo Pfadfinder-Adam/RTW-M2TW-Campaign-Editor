@@ -10157,6 +10157,27 @@ building smith
         fb = Strat(plan.files[mod.campaign_file("test", "descr_strat.txt")]).faction("beta")
         self.assertTrue(any(c.name == "Brude" for c in fb.characters))
 
+    def test_brought_faction_recruits_what_it_owns(self):
+        """Review 2026-10-23 (a dry run on Medieval II: Scotland brought on England): the brought faction got every
+        recruit line of its frame's own units it does not own (Medieval II stops at such a town: settlement.cpp), and
+        the units it shares with this mod were owned but recruited nowhere. Now the lines follow what it owns."""
+        from campaign_editor import factionbring as FB
+        d = os.path.join(self.root, "data")
+        write(os.path.join(d, "export_descr_buildings.txt"), self.POOL_EDB.replace(
+            'requires factions { slave, }', 'requires factions { slave, zz, }').replace(
+            'retrain_pool "alpha general"  0   0.2   1  0  requires factions { alpha, }',
+            'recruit_pool "alpha general"  0   0.2   1  0  requires factions { alpha, }'))
+        p = os.path.join(d, "export_descr_unit.txt")
+        with open(p, encoding="latin-1") as fh:
+            text = fh.read()
+        write(p, text.replace("ownership\talpha", "ownership\talpha, zz", 1))
+        mod = ModData(self.root)
+        plan = Plan(mod, "alpha", "zz", {})
+        FB.recruit_owned(plan, "zz", ["alpha general"])
+        edb = plan.files[mod.file("edb")].dump().decode("latin-1")
+        self.assertIn('"rebel spear"  1   0.5   4  0  requires factions { slave, }', edb)      # not its unit: out
+        self.assertIn('"alpha general"  0   0.2   1  0  requires factions { alpha, zz, }', edb)  # its unit: in
+
     def test_brought_faction_window_fields_are_its_own(self):
         """The tester (2026-10-17): a faction brought from another mod kept the frame's AI, money and victory in the
         window - the window takes the brought faction's own."""
