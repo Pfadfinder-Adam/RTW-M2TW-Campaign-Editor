@@ -1323,6 +1323,11 @@ def squeeze(w):
         full, cut = getattr(w, "_ce_full", None), getattr(w, "_ce_cut", None)
         if full is None or (cut is not None and text != cut) or (cut is None and text != full):
             full, cut = text, None                     # new words from the code
+            if hasattr(w, "_ce_width0"):               # the width asked for the old cut words goes with them (it
+                w.configure(width=w._ce_width0)        # cut 'Religion\n(Medieval II only)' to 7 letters)
+                del w._ce_width0
+            w._ce_cut = None
+            _SQUEEZED.pop(str(w), None)
         if "\n" in full or not full.strip():
             return
         top = w.winfo_toplevel()

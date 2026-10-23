@@ -17022,7 +17022,11 @@ building smith
             self.assertGreaterEqual(lab.winfo_reqwidth(), tkfont.Font(font=lab.cget("font")).measure(words))
             self.assertEqual(GU.words_of(lab), words)
             self.assertEqual(wrap.cget("text"), words)
-            lab.configure(text="Short")                               # the code's new words: taken as they are
+            lab.configure(text="Short\nand a second line")            # the code's new words: taken as they are,
+            root.update()                                             # the width asked for the cut ones gone
+            self.assertEqual(lab.cget("text"), "Short\nand a second line")
+            self.assertEqual(str(lab.cget("width")), "")              # it cut 'Religion\n(Medieval II only)'
+            lab.configure(text="Short")
             root.update()
             self.assertEqual(lab.cget("text"), "Short")
             root.geometry("900x200")
