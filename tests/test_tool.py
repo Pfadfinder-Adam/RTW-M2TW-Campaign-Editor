@@ -15769,6 +15769,52 @@ building smith
         self.assertIn("data/animations/gone.cas", AN.why_none(mod, "fs_x"))
         self.assertIn("neither in descr_skeleton.txt", AN.why_none(mod, "fs_nobody"))
 
+    def test_the_animation_set_the_game_loads(self):
+        """Medieval II loads a pack and skeletons only of the versions it takes (anim_db load_anims, pack_file
+        load_pack_file): the pack 9, the skeletons (24 << 16) | descr_skeleton.txt's Version - the mod's own, else
+        the game's, each on its own; either missing, it builds the skeletons from descr_skeleton.txt and the loose
+        .cas files and reads no pack (a mod's knights were drawn crushed from a set the game did not load)."""
+        import struct
+        from campaign_editor import animations as AN
+
+        def pair(folder, base, tag, version):
+            os.makedirs(folder, exist_ok=True)
+            for ext in (".idx", ".dat"):
+                with open(os.path.join(folder, base + ext), "wb") as fh:
+                    fh.write(tag + b"\x00\x00\x00" + struct.pack("<II", version, 0))
+        game = os.path.join(self.root, "game", "data")
+        mod_data = os.path.join(self.root, "mods", "m", "data")
+        pair(os.path.join(game, "animations"), "pack", b"ANIM.PACK", 9)
+        pair(os.path.join(game, "animations"), "skeletons", b"SKEL.PACK", (24 << 16) | 14)
+        write(os.path.join(game, "descr_skeleton.txt"), "; the game's\nVersion 14\ntype a\n")
+        os.makedirs(mod_data, exist_ok=True)
+
+        class Two:                               # the mod's data over the game's
+            def __init__(self):
+                self.roots_ = [mod_data, game]
+
+            def dirs(self, rel):
+                return [p for p in (os.path.join(r, rel) for r in self.roots_) if os.path.isdir(p)]
+
+            def find(self, rel):
+                return next((p for p in (os.path.join(r, rel) for r in self.roots_) if os.path.exists(p)), None)
+            find_any = find
+        mod = Two()
+        g = os.path.join(game, "animations")
+        self.assertEqual(AN._m2_folders(mod), (g, g))
+        self.assertEqual([p.folder for p in AN.packs(mod)], [g])
+        # the mod's own descr_skeleton.txt of another Version: the game's skeletons are not let in - no set, no pack
+        write(os.path.join(mod_data, "descr_skeleton.txt"), "Version 15\ntype a\n")
+        self.assertEqual((AN._m2_folders(mod), AN.packs(mod), AN._anim_set(mod)), ((None, None), [], None))
+        # its own skeletons of that Version: they with the game's pack
+        m = os.path.join(mod_data, "animations")
+        pair(m, "skeletons", b"SKEL.PACK", (24 << 16) | 15)
+        self.assertEqual(AN._m2_folders(mod), (g, m))
+        # its own pack of another version is passed over for the game's
+        pair(m, "pack", b"ANIM.PACK", 10)
+        self.assertEqual(AN._m2_folders(mod), (g, m))
+        self.assertEqual(AN.descr_version(mod), 15)
+
     def test_a_report_takes_the_3d_views_files(self):
         """A report from an open View in 3D takes what the model was drawn with (the user, 2026-10-23: a mod's
         knights crushed, the mod's files out of reach): its descr_skeleton.txt lines, the animation's file, the mesh,
@@ -16631,7 +16677,8 @@ building smith
             dat += rec
         folder = os.path.join(self.root, "data", "animations")
         os.makedirs(folder)
-        for n, b in (("pack.idx", idx), ("pack.dat", dat)):
+        skel = b"SKEL.PACK\x00\x00\x00" + struct.pack("<II", 24 << 16, 0)     # the game loads a pack with its skeletons
+        for n, b in (("pack.idx", idx), ("pack.dat", dat), ("skeletons.idx", skel), ("skeletons.dat", skel)):
             with open(os.path.join(folder, n), "wb") as fh:
                 fh.write(bytes(b))
         write(os.path.join(self.root, "data", "descr_skeleton.txt"),

@@ -148,15 +148,87 @@ _PACKS = {}
 
 
 def packs(mod):
-    """The animation packs the game reads for this mod, its own first (data/animations, any case)."""
+    """The animation packs the game reads for this mod. Medieval II loads ONE pack (anim_db load_anims: the mod's
+    own, else the game's - never both) and only with skeletons it lets in beside it (_m2_folders); none loaded, it
+    reads the loose .cas files descr_skeleton.txt names - so do these: [the pack] or []. Rome: every pack there is,
+    the mod's own first."""
+    m2 = _m2_folders(mod)
+    folders = ([m2[0]] if m2[0] else []) if m2 is not None else \
+        [f for f in mod.dirs("animations") if _ci(f, "pack.idx") and _ci(f, "pack.dat")]
     out = []
-    for folder in mod.dirs("animations"):
-        if _ci(folder, "pack.idx") and _ci(folder, "pack.dat"):
-            k = (os.path.normcase(os.path.abspath(folder)), os.path.getmtime(_ci(folder, "pack.idx")))
-            if k not in _PACKS:
-                _PACKS[k] = Pack(folder)
-            out.append(_PACKS[k])
+    for folder in folders:
+        k = (os.path.normcase(os.path.abspath(folder)), os.path.getmtime(_ci(folder, "pack.idx")))
+        if k not in _PACKS:
+            _PACKS[k] = Pack(folder)
+        out.append(_PACKS[k])
     return out
+
+
+SKEL_PACK_VERSION = 24          # Medieval II's skeletons.idx / .dat version: (24 << 16) | descr_skeleton.txt's Version
+
+
+def _pair(folder, base, tag):
+    """The version of a pack's .idx + .dat pair as the game takes it (pack_file load_pack_file: both there, the
+    same tag, version and count), else None."""
+    heads = []
+    for ext in (".idx", ".dat"):
+        p = _ci(folder, base + ext)
+        if not p:
+            return None
+        try:
+            with open(p, "rb") as fh:
+                d = fh.read(20)
+        except OSError:
+            return None
+        if len(d) < 20 or not d.startswith(tag):
+            return None
+        heads.append(struct.unpack_from("<II", d, 12))
+    return heads[0][0] if heads[0] == heads[1] else None
+
+
+def descr_version(mod):
+    """descr_skeleton.txt's 'Version' number (anim_db read_version: its first Version line), 0 without one."""
+    try:
+        path = mod.find("descr_skeleton.txt") or mod.find_any("descr_skeleton.txt")
+    except (OSError, ValueError, AttributeError):
+        path = None
+    if not path:
+        return 0
+    with open(path, "rb") as fh:
+        for line in fh.read().decode("latin-1").splitlines():
+            m = re.match(r"\s*version\s+(-?\d+)", line.split(";", 1)[0], re.I)
+            if m:
+                return int(m.group(1))
+    return 0
+
+
+_M2 = {}
+
+
+def _m2_folders(mod):
+    """Medieval II: (pack folder, skeletons folder) the game loads - each the mod's own, else the game's, that its
+    version lets in (the pack 9; the skeletons (24 << 16) | descr_skeleton.txt's Version: with a descr_skeleton.txt
+    of another Version the set is not loaded), (None, None) when either is missing: the game then builds every
+    skeleton from descr_skeleton.txt and the loose .cas files (anim_db load_anims). None for Rome (packs of version
+    4, read as they are)."""
+    dirs = mod.dirs("animations")
+    try:
+        descr = mod.find("descr_skeleton.txt")
+    except (OSError, ValueError, AttributeError):
+        descr = None
+    stamp = tuple((f, tuple(os.path.getmtime(p) if p else 0 for p in (_ci(f, n) for n in (
+        "pack.idx", "pack.dat", "skeletons.idx", "skeletons.dat")))) for f in dirs)
+    k = (stamp, descr, os.path.getmtime(descr) if descr else 0)
+    if k not in _M2:
+        versions = [(f, _pair(f, "pack", HEADER)) for f in dirs]
+        if any(v == 4 for _, v in versions):
+            _M2[k] = None
+        else:
+            pack = next((f for f, v in versions if v == 9), None)
+            want = (SKEL_PACK_VERSION << 16) | (descr_version(mod) & 0xFFFF)
+            skel = next((f for f in dirs if _pair(f, "skeletons", b"SKEL.PACK") == want), None)
+            _M2[k] = (pack, skel) if pack and skel else (None, None)
+    return _M2[k]
 
 
 class LooseAnim:
@@ -456,16 +528,35 @@ def _binds(parents, rotations, offsets):
     return out
 
 
+class _SkelSet:
+    """skeletons.idx + .dat of one folder (animpacks.AnimSet's skeletons and record without the 50 MB pack)."""
+
+    def __init__(self, folder):
+        from . import animpacks
+        self.folder, self.data = folder, {}
+        for n in ("skeletons.idx", "skeletons.dat"):
+            with open(_ci(folder, n), "rb") as fh:
+                self.data[n] = fh.read()
+        self.skeletons = lambda: animpacks.AnimSet.skeletons(self)
+        self.record = lambda name: animpacks.AnimSet.record(self, name)
+
+
 def _anim_set(mod):
-    """The animation set the game loads for this mod (its own four files, else the game's), read once - or None."""
+    """The skeletons the game loads for this mod - Medieval II: the skeletons.dat its version lets in, with a pack
+    (_m2_folders); Rome: its own four files, else the game's - read once, or None (the game builds them from
+    descr_skeleton.txt and the .cas files)."""
     from . import animpacks
-    for folder in mod.dirs("animations"):
+    m2 = _m2_folders(mod)
+    for folder in ([m2[1]] if m2[1] else []) if m2 is not None else mod.dirs("animations"):
         idx = _ci(folder, "skeletons.idx")
         if not idx:
             continue
-        k = (os.path.normcase(os.path.abspath(folder)), os.path.getmtime(idx))
+        k = (os.path.normcase(os.path.abspath(folder)), os.path.getmtime(idx), m2 is not None)
         if k not in _SETS:
-            _SETS[k] = animpacks.AnimSet.at(folder)
+            try:
+                _SETS[k] = _SkelSet(folder) if m2 is not None else animpacks.AnimSet.at(folder)
+            except (OSError, ValueError):
+                _SETS[k] = None
         if _SETS[k] is not None:
             return _SETS[k]
     return None
@@ -548,9 +639,13 @@ def debug_files(mod, skeletons, anims, meshes):
 
     def safe(n):
         return re.sub(r"[^\w.-]+", "_", n)[:80]
-    loaded = _anim_set(mod)
+    loaded, m2 = _anim_set(mod), _m2_folders(mod)
+    if m2 is not None:
+        lines.append("Medieval II: descr_skeleton.txt Version %d - the game loads the pack of %s and the skeletons of "
+                     "%s%s" % (descr_version(mod), m2[0], m2[1], "" if m2[0] else
+                               " (none: it builds them from descr_skeleton.txt and the loose .cas files)"))
     for folder in mod.dirs("animations"):
-        lines.append("folder %s%s" % (folder, " - the set loaded" if loaded is not None and
+        lines.append("folder %s%s" % (folder, " - its skeletons read" if loaded is not None and
                                       os.path.normcase(loaded.folder) == os.path.normcase(folder) else ""))
         for n in ("pack.idx", "pack.dat", "skeletons.idx", "skeletons.dat"):
             p = _ci(folder, n)
