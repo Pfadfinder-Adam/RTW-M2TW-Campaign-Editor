@@ -340,6 +340,30 @@ The map's real size is shown under the map, bottom left.
 **Save picture...** under the map saves the whole map as it is drawn now - the layers, colours and borders that
 are on, 8 pixels a tile, not the signs - as a PNG or TGA picture (for a forum post or a plan).
 
+**Reference picture...** under the map lays a picture of your own over the map - a real map of the land, a sketch,
+another mod's map - to trace the coasts, rivers and borders by, or to look at while you work. It opens stretched over
+the whole map; the window sets how much of it shows, whether it lies under the towns and armies or over them, its
+place and size in tiles (the left edge from the map's left, the top edge from its top row), mirrored, grey, smooth or
+sharp. With **Move and size it with the left button** (Alt+L) on, the left button drags it on the map (Shift: straight
+across or down) and Ctrl+Alt + drag sizes it; take the tick off to work on the map again. It is only shown in the
+editor - nothing of it goes into the mod - and is kept for each mod and campaign, there again next time.
+
+The keys are PureRef's, so they work as your hands expect (click the map first; any keyboard layout):
+
+| Keys | What they do |
+|---|---|
+| Ctrl+I | open a picture |
+| Ctrl+Shift+Y | show / hide it (PureRef's Ctrl+Y is Redo here) |
+| Ctrl+Shift+= / Ctrl+Shift+- | more / less of it, by 10 % |
+| Ctrl+Alt+Shift + left drag | how much of it shows: right = more |
+| Alt+L | lock / unlock it for the left button |
+| Ctrl+Alt + left drag | size it, keeping its shape (unlocked) |
+| Ctrl+Shift+T | back over the whole map |
+| Ctrl+Alt+Down | its own shape again |
+| Alt+Shift+H / Alt+Shift+V | mirror left-right / upside down |
+| Alt+G / Alt+T | grey / smooth pixels |
+| Up / Down | over the towns and armies / under them |
+
 ## Mercenaries by region
 
 **Mercenaries:** **Mercenaries** (top row), or a right click on the map > **Mercenaries for hire in <region>...**, shows who is for hire where (`descr_mercenaries.txt`), in two tabs. **For hire in a region** (the right click opens it on that region) makes the region's list the way a garrison is made: the mercenaries' cards on the left - a click adds one - and the units for hire there on the right - a click picks one for its numbers, a right click takes it out. A region shares its list with the other regions of its pool; the tab says which, and **A list of its own** takes the region out of the pool with a copy of the list (a region in no pool gets its own list with the first card). **Pools** - a pool is a group of regions that share one hire list. Pick a pool: its regions are selected on the map (Select switches on, they show yellow), so they are changed the map's own way - a box adds, Shift + box takes away - and **Take the map's selection** gives the pool exactly that (**Add the map's selection** only adds). **New pool from the map's selection** (also the map's right click with Select: **New mercenary pool from the selected regions...**) makes a pool of them; a region stands in one pool only, so it leaves its old one (a pool left without a region goes). Each unit for hire shows its numbers in plain words - how many at the start, at most, how fast they come back (one every N turns), the price, the experience, and in Medieval II the years, religions, crusading and events it needs; pick one to change them, **Add** another mercenary of the mod (units with `mercenary_unit`), take one out, rename or delete a pool. A mistake the game would stumble on is said in red; every change waits for **Apply changes** by itself (the changes go into the session's list; **Apply changes** in the main window writes them with everything else waiting - one backup set, **Undo this write** puts them back); lines not changed stay as they were.

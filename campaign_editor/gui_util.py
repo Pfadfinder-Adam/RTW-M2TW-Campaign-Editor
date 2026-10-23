@@ -1350,7 +1350,6 @@ def squeeze(w):
     and the hover tip shows them whole (the user, 2026-10-16, again: 'everywhere'). Words changed by the code since
     are taken as its new words. A wrapping label, one with a text variable or a picture, and one_line's are left as
     they are."""
-    import tkinter.font as tkfont
     try:
         if not w.winfo_exists() or hasattr(w, "set_text"):
             return
@@ -1379,10 +1378,7 @@ def squeeze(w):
         room = w.winfo_width()
         if room <= 1 or not w.winfo_toplevel().winfo_ismapped():    # not laid out yet: its first sizes mean nothing
             return
-        try:
-            f = tkfont.Font(font=w.cget("font"))
-        except (tk.TclError, ValueError):
-            f = tkfont.nametofont("TkDefaultFont")
+        f = font_of(w)
         if hasattr(w, "_ce_width0"):                   # asking for its whole words' room: its padding as it was
             extra = getattr(w, "_ce_extra", 0)
         else:
@@ -1403,6 +1399,20 @@ def squeeze(w):
             _SQUEEZED.pop(str(w), None)
     except tk.TclError:
         pass
+
+
+def font_of(w):
+    """The font a widget's words are drawn in. A ttk widget left with its style's font says '' - and Font(font='') is
+    Tk's plain default, not the style's (Linux: 12 pt for 10; Windows: wider still): measured with it, the words were
+    cut with '...' too early and asked for the wrong room (a Windows test run, 2026-10-23)."""
+    import tkinter.font as tkfont
+    try:
+        name = str(w.cget("font")) if "font" in w.keys() else ""
+        if not name:
+            name = str(ttk.Style(w).lookup(w.winfo_class(), "font") or "") or "TkDefaultFont"
+        return tkfont.Font(root=w, font=name)
+    except (tk.TclError, ValueError):
+        return tkfont.nametofont("TkDefaultFont")
 
 
 def words_of(w):
@@ -1457,14 +1467,10 @@ def one_line(label, text="", extra=0, **pack):
     hides behind three dots and the hover tip shows it whole'; a wrapping label beside buttons became a tall narrow
     column, R-20261014-3E1F2A). A Checkbutton too (extra = its box's pixels). label.set_text(text) changes it.
     Packed with **pack (fill x)."""
-    import tkinter.font as tkfont
     label._full = text
 
     def fit(e=None):
-        try:
-            f = tkfont.Font(font=label.cget("font"))
-        except tk.TclError:
-            f = tkfont.nametofont("TkDefaultFont")
+        f = font_of(label)
         room = max(20, label.winfo_width() - 4 - extra)     # extra: a tick's box beside the words
         # a Checkbutton made with width=1 (so its long text does not widen the window) draws only ONE letter in a
         # ttk theme (R-20261014-E0784E: 'C', 'r', 'n' beside the report's ticks) - once cut to fit, its own width
