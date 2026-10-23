@@ -20646,7 +20646,8 @@ building smith
         said = []
         app = SimpleNamespace(new_regions=[{"name": "New_Land", "city": (5, 5), "port": (6, 7)}], place_moves={},
                               remember=lambda: None, editing=lambda: True, map_only=lambda: False,
-                              show_map=lambda: None, status=SimpleNamespace(set=said.append), _cmap=None)
+                              show_map=lambda: None, status=SimpleNamespace(set=said.append), _cmap=None,
+                              apply_words=lambda: "Apply changes")
         app._new_region = lambda n: App._new_region(app, n)
         app._old_region = lambda n: App._old_region(app, n)
         App.place_moved(app, "city", "New_Land", (8, 9))
@@ -20778,6 +20779,7 @@ building smith
             v.cmap = SimpleNamespace(w=16, h=16)
             v.z, v.ox, v.oy, v._spray = 20, 0.0, 0.0, False
             v.shore = (img, lambda px, py: 5.0 if (px, py) in land else -10.0)
+            v.pct = lambda: 1000.0                    # zoomed in past the settings' 'shore line from' (300 %)
             worked = []
             real = v._shore_block
             v._shore_block = lambda *a: worked.append(a[2:4]) or real(*a)
