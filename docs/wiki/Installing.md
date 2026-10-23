@@ -54,7 +54,8 @@ browser and Windows SmartScreen may warn about it:
 - the browser: **Keep**;
 - SmartScreen: **More info -> Run anyway**;
 - an antivirus (Avast, AVG and others have done it) may hold a new version back for a while or call it suspicious:
-  a program packed into one exe the way this one is (PyInstaller) is often taken for one at first. Download it only
+  a program packed into one exe the way this one is (compiled with Nuitka, unpacking itself at start) is often taken
+  for one at first. Download it only
   from Releases; you can let the antivirus finish its check, or mark the exe as safe in it.
 
 The tool sends nothing over the network unless you press **Send** in *Report a bug / Suggest*; it only asks GitHub

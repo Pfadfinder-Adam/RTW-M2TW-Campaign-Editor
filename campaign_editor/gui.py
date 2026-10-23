@@ -15,7 +15,7 @@ from .gui_util import right_click
 from .gui_util import ask, ask_choice
 from .gui_util import scroll_body
 from .gui_util import ManyPick, ShortHint
-from . import emergence as EM, log, settings, theme
+from . import bundle, emergence as EM, log, settings, theme
 from .build import build, template_display
 from .buildings import (POP_MIN, SETTLEMENT_LEVELS, BuildingPictures, core_need, core_settlement, population_of, rank,
                         castles_allowed, convert, kind_problem, read_buildings, settlement_info, settlement_kind)
@@ -331,7 +331,7 @@ FIELD_W = 44                     # characters: the Faction tab's short fields (n
 
 def assets_dir():
     """The tool's own pictures (assets/ in the source, 'assets' inside the exe)."""
-    base = getattr(sys, "_MEIPASS", None)
+    base = bundle.files_dir()
     if base:
         return os.path.join(base, "assets")
     return os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "assets")
