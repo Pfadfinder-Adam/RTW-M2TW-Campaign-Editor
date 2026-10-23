@@ -108,9 +108,15 @@ def _read_index(data):
 
 
 def key(name):
-    """An animation's name as packs and descr_skeleton meet: data/animations/x.cas, any case, either slash."""
-    n = name.strip().strip('"').replace("\\", "/").lower()
-    return n if n.startswith("data/") else "data/" + n.lstrip("/")
+    """An animation's name as packs and descr_skeleton meet: data/animations/x.cas, any case, either slash. A pack the
+    game built while running a mod names each animation by the path it opened it at, the mod's folder in front
+    (Europa Barbarorum II: 'mods/EBII/data/animations/eb_hoplite/...cas') - its descr_skeleton.txt and skeletons.dat
+    say 'data/animations/...': the mod's folder is left out."""
+    n = _MOD_DIR.sub("", name.strip().strip('"').replace("\\", "/").lower().lstrip("/"))
+    return n if n.startswith("data/") else "data/" + n
+
+
+_MOD_DIR = re.compile(r"^(?:data/)?mods/[^/]+/(?=data/)", re.I)
 
 
 class Pack:
@@ -256,7 +262,7 @@ class LooseAnim:
 
 
 def _rel(name):
-    n = name.replace("\\", "/")
+    n = _MOD_DIR.sub("", name.replace("\\", "/").lstrip("/"))
     return n[5:] if n.lower().startswith("data/") else n
 
 
