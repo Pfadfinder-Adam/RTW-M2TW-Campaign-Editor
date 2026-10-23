@@ -10,6 +10,15 @@
 - Layout board: the board moves and zooms the same way as the Campaign HUD's - the wheel at the mouse (Shift in small steps), the middle button or Space + left drag it, Shift+1 everything, Shift+2 the picked piece, Shift+0 100 %; the arrows move the board when no free piece is picked.
 
 ### Fixed
+- Interface: dragging a menu piece whose x / y line the mod left unclosed stopped with an error -> it moves.
+- Putting the editor into the game's folder: the first copy warned 'Failed to remove temporary directory' when it closed -> the new copy starts on its own.
+- Campaign HUD and the Layout board: zooming with the wheel and moving the mouse over the HUD lagged -> drawn once per turn of the wheel; a hover only moves the frame.
+- Campaign HUD: a screenshot cut out of a screen (the HUD alone) turned the HUD into a screen of its size -> the Screen picked stays; a whole screenshot still sets it.
+- Recolour: opening it took seconds on a big mod -> it reads the units file once.
+- Opening a page with many pictures (Recolour's colours) took seconds -> quick.
+- Tables (Settlements and the others): a quick turn of the wheel lagged behind -> scrolled at once.
+- Campaign rules (Medieval II): a settlement level the game does not know could be typed (motte_and_bailey - the game spells it moot_and_bailey there and stops at the start) -> refused; Check mod files names one already in the file.
+- New faction (Rome): a new faction made from the Julii, Brutii or Scipii became a Roman house too (it saw what the other houses see and went to war with them) -> it stands alone; 'one of romans_senate's houses' makes it one.
 - View in 3D (Medieval II): the editor read a mod's animation set even when the game does not load it - the game takes data/animations' pack and skeletons only of the versions it knows (the skeletons' tied to descr_skeleton.txt's 'Version' line), the mod's own else its own, and without them builds every skeleton from descr_skeleton.txt and the loose .cas files; the editor now chooses the same way, so such a mod's men and horses are drawn from what the game plays.
 - Maps: Change size, Bigger map (x3), Map from zero, Save picture and Merge regions are in one Map tools menu - the map's bar fits a 1280 px window with Signs and tools and Find.
 - Characters: the character panel and the family tree are dark in the Dark look (they stayed a light parchment page).
