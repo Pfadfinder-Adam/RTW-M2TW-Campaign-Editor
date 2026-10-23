@@ -6,6 +6,10 @@
 - Recolour freely: any colour of any picture made another, not only the faction's colours - click a colour on a battle texture, campaign-map figure, card or button, pick the new colour or turn it with the sliders; its light and shade kept, faces left alone, several changes in a row, a brush to add or keep. On every texture card (Unit editor, Models tab) and every picture opened big; a texture of the game is copied, never written over; a unit's texture can change for that unit only. Both games, a backup, Restore gives it back.
 
 ### Fixed
+- Factions after Maps opens on the faction's form (or the tab it was on), not on an empty Buildings tab.
+- A label whose words change after it was cut with '...' shows them whole again ('Religion (Medieva' in the faction form).
+- Terrain's Undo all and the Settlements' Owner filter are no longer past the edge of a 1280 px window.
+- Ctrl+1 .. Ctrl+9 pick the tabs on show (Ctrl+3 in Factions brought up the hidden Map tab); Help (F1) names what the editor has now.
 - Rebels: more than 20 unit types in one rebel type is said with REX / M2EX too - the game keeps only 20 there as well.
 - Family tree: children with no father are found by the mod's own ages (Medieval II girls up to 16, as its files say), not fixed ones.
 - Opening locked factions: a mod's Pope under another name stays locked, like papal_states.
