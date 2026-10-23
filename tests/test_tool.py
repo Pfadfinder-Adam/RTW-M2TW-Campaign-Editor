@@ -9928,6 +9928,27 @@ building smith
         FactionBuildings.open_lines(fake, "core_building")
         self.assertEqual(got, ["core_building"])
 
+    def test_recolour_to_a_dark_faction_colour_keeps_it_that_colour(self):
+        """Report #417: a card's yellow part (shaded, darker than the faction's yellow) made Gaul's olive green
+        77 95 45 came out black - its light was scaled against the yellow; now the part's average is the green."""
+        try:
+            from PIL import Image
+        except ImportError:
+            self.skipTest("Pillow is not installed")
+        from campaign_editor import recolour as R
+        im = Image.new("RGB", (20, 10), (40, 40, 200))
+        for x in range(10):                                   # yellow drawn shaded: 60 % .. 100 % of its light
+            for y in range(10):
+                k = 0.6 + 0.04 * x
+                im.putpixel((x, y), (int(255 * k), int(207 * k), int(15 * k)))
+        out, share = R.recolour(im, ((255, 207, 15), None), ((77, 95, 45), None))
+        part = [out.getpixel((x, y)) for x in range(10) for y in range(10)]
+        mean_v = sum(max(p) for p in part) / len(part)
+        self.assertGreater(share, 0.3)
+        self.assertGreater(mean_v, 0.85 * 95)                # about the green's own light (95), not black
+        self.assertLess(mean_v, 1.15 * 95)
+        self.assertTrue(all(p[1] >= p[0] and p[1] >= p[2] for p in part))     # green
+
     def test_new_regions_town_on_ground_the_game_refuses(self):
         """A report (#420, kgcm): a new region's town on a tile the engine will not take a settlement on (mountains,
         dense forest, impassable - culture_db / world.cpp is_settlement_placement_on_a_valid_tile) - the game skips

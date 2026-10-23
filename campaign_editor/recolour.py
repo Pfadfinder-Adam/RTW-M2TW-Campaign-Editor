@@ -289,13 +289,18 @@ def _grow(m, H, S, V, dist, gap, closer=None, rounds=2):
     return m
 
 
-def _shift(im, src, dst):
-    """The whole picture moved from colour src to colour dst (hue set, saturation and brightness scaled)."""
-    from PIL import Image
+def _shift(im, src, dst, mask=None):
+    """The whole picture moved from colour src to colour dst (hue set, saturation and brightness scaled). mask: the
+    part moved - its brightness scaled so the part's AVERAGE is dst's, the folds kept round it (as _shift_plain).
+    Scaled against src's own brightness, a part drawn darker than its faction colour (shaded yellow on a card) went
+    darker still: a dark target - Gaul's olive green 77 95 45 - came out black (report #417)."""
+    from PIL import Image, ImageStat
     H, S, V = im.convert("RGB").convert("HSV").split()
     sh, ss, sv = hsv(src)
     th, ts, tv = hsv(dst)
     ks = ts / max(ss, 0.05)
+    if mask is not None and mask.getbbox():
+        sv = min(sv, ImageStat.Stat(V, mask).mean[0] / 255.0)     # never lighter than src scaled (a lit part)
     kv = tv / max(sv, 0.05)
     H = Image.new("L", im.size, int(round(th * 255)) % 256)
     S = S.point(lambda s: min(255, int(s * ks)))
@@ -373,7 +378,7 @@ def recolour(im, source, target, others=(), edits=None, plain=True):
         elif _plain(src):
             part = _shift_plain(rgb, m, dst)
         else:
-            part = _shift(rgb, src or dst, dst)
+            part = _shift(rgb, src or dst, dst, m)
         out.paste(part, (0, 0), m)
         n += m.histogram()[255]
     if im.mode in ("RGBA", "LA", "P"):
