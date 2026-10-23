@@ -132,17 +132,31 @@ def region_problems(mod, campaign, painted, new_regions):
         elif owner_get(tuple(c)) != r["name"]:
             errors.append("%s: the town must stand on its own land" % r["name"])
         else:
-            feat = mod._optional_map(campaign, "map_features.tga")
-            if feat and (feat.width, feat.height) == (img.width, img.height) and feat.get(*c) != (0, 0, 0):
-                errors.append("%s: a river, ford or cliff runs where the town is" % r["name"])
+            # the game's own rule (STRATEGY_MAP::is_settlement_placement_on_a_valid_tile): no town on mountains, dense
+            # forest, a river, ford or cliff - else it skips the region ('invalid tile ... skipping region'): land with
+            # no town and no owner, and Medieval II with M2EX crashed as the campaign started (R-20261023-D68B3A)
+            why = mod.land_problem(campaign, tuple(c))
+            if why:
+                errors.append("%s: the town stands on %s - the game puts no town there and leaves the region empty "
+                              "(Medieval II crashes); pick flat open land" % (
+                                  r["name"], "a river, ford or cliff" if why.startswith("a river") else why))
         p = r.get("port")
         if p:
+            from .mapedit import port_land, port_land_words
+            marks = {tuple(n[k]) for n in new_regions for k in ("city", "port") if n.get(k)}
             if owner_get(tuple(p)) != r["name"]:
                 errors.append("%s: the port must stand on its own land" % r["name"])
             elif not any(mod.is_sea(campaign, (p[0] + dx, p[1] + dy)) for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1))):
                 errors.append("%s: a port needs the sea next to it" % r["name"])
             elif c and tuple(p) == tuple(c):
                 errors.append("%s: the port and the town need different tiles" % r["name"])
+            elif mod.land_problem(campaign, tuple(p)):
+                errors.append("%s: the port stands on %s - the game puts no port there; pick open coast"
+                              % (r["name"], mod.land_problem(campaign, tuple(p)).replace(" runs there", "")))
+            else:
+                got = port_land(tuple(p), owner_get, lambda t: t in marks)
+                if got != r["name"]:
+                    errors.append("%s: %s" % (r["name"], port_land_words(got, r["name"])))
     # the ring round each town (mapedit.ring_problems): only what this painting and these new regions make
     from .mapedit import owner_of, ports as port_map, ring_problems
     new_towns = {r["name"]: tuple(r["city"]) for r in new_regions if r.get("city")}

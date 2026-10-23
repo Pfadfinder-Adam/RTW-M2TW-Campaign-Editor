@@ -97,12 +97,42 @@ def own_units(src, faction):
     return out
 
 
+# the export_descr_unit lines that list factions (the engine reads 'ownership' and every 'era N' line as faction /
+# culture lists: unit_db.cpp) - a unit of another mod is the same unit when it differs only there, whoever owns it
+FACTION_LISTS = ("ownership", "era")
+
+
 def _same_unit(a, b):
-    """Two EDU blocks alike but for their ownership (and comments, spacing)."""
+    """Two EDU blocks alike but for the factions they list (ownership, era - a mod's own faction is in no other
+    mod's lists; comments, spacing)."""
     def norm(lines):
         return [strip_comment(x).split() for x in lines if strip_comment(x).strip() and
-                tokens(x)[:1] != ["ownership"]]
+                tokens(x)[:1] not in [[k] for k in FACTION_LISTS]]
     return norm(a) == norm(b)
+
+
+def _with_faction(line, new):
+    """A faction-list line ('ownership a, b' / 'era 0 a, b,') with new at its end - its trailing comma, its comment
+    kept."""
+    code = strip_comment(line)
+    rest = line[len(code):]
+    body = code.rstrip()
+    tail = code[len(body):]
+    if body.endswith(","):
+        body = body + " " + new + ","
+    else:
+        body = body + ", " + new
+    return body + (tail if rest else "") + rest
+
+
+def _era_numbers(lines, faction):
+    """The era numbers of a unit block whose 'era N' line names the faction."""
+    out = []
+    for x in lines:
+        t = tokens(x)
+        if len(t) > 2 and t[0] == "era" and faction in t[2:]:
+            out.append(t[1])
+    return out
 
 
 def bring_units(plan, src, faction, new):
@@ -126,12 +156,13 @@ def bring_units(plan, src, faction, new):
             bring.append(u)
     for u in shared:                                    # the same unit: the new faction owns it too
         a, b = tblocks[u]
+        eras = set(_era_numbers(_block_lines(sf, sblocks[u]), faction))   # and in the eras the other mod gave it
         for i in range(a, b):
-            if tokens(edu.text(i))[:1] == ["ownership"] and new not in tokens(edu.text(i)):
-                code = strip_comment(edu.text(i))
-                rest = edu.text(i)[len(code):]
-                edu.set(i, code.rstrip() + ", " + new + (" " + rest if rest else ""))
-                break
+            t = tokens(edu.text(i))
+            if new in t:
+                continue
+            if t[:1] == ["ownership"] or (t[:1] == ["era"] and len(t) > 1 and t[1] in eras):
+                edu.set(i, _with_faction(edu.text(i), new))
     if shared:
         plan.note(edu, "%s owns %d unit(s) this mod has just as %s has them: %s" % (
             new, len(shared), faction, ", ".join(shared)))
@@ -144,6 +175,131 @@ def bring_units(plan, src, faction, new):
         plan.note(None, "%d unit(s) of %s brought with their models, cards and recruit lines: %s" % (
             len(bring), faction, ", ".join(bring)))
     return shared, bring, names
+
+
+# the descr_model_battle lines a faction names (its men's own textures, weapons and far-away sprite)
+BATTLE_FACTION_KEYS = ("texture", "texture_attachments", "model_sprite")
+
+
+def _bring_file(plan, src, ref):
+    """The file a line of the other mod names, copied into this mod when this mod has none there (its own or its
+    game's). One the other mod does not have on disk either stays named as it is (its game reads it from its packs,
+    or goes without it, as the other mod does)."""
+    from .packs import _on_disk
+    got = _on_disk(src, ref)
+    if not got or _on_disk(plan.mod, got[0]):
+        return
+    rel, path = got
+    dst = os.path.join(plan.mod.data, *rel.split("/"))
+    if not _queued(plan, path, dst):
+        plan.copy(path, dst)
+
+
+def bring_battle_textures(plan, src, faction, new):
+    """The new faction's men in battle in the brought faction's own textures, not its frame's: every battle model
+    this mod and the other one both have (the same meshes) gets new's texture entries as the other mod gives the
+    faction (Medieval II's battle_models.modeldb; descr_model_battle.txt in both games) - the files this mod lacks
+    come along. Before, its shared units wore the frame's colours (Scots in English surcoats). -> models changed."""
+    return _modeldb_textures(plan, src, faction, new) + _text_battle_textures(plan, src, faction, new)
+
+
+def _modeldb_textures(plan, src, faction, new):
+    from . import modeldb as MD
+    if MD.text_source(plan.mod):
+        return 0                                        # M2EX reads descr_model_battle.txt (done below)
+    sp, _ = MD.find(src)
+    tp, dst = MD.find(plan.mod)
+    if not sp or not tp:
+        return 0
+    try:
+        theirs = MD.load(sp)
+        db = MD._db_in_plan(plan, tp, dst)
+    except (OSError, ValueError):
+        return 0
+    low, n = faction.lower(), 0
+    for m in db.models:
+        o = theirs.model(m.name)
+        if o is None or [x[0].lower() for x in o.lods] != [x[0].lower() for x in m.lods]:
+            continue                                    # another model of that name: not the same men
+        done = False
+        for key in ("textures", "attach"):
+            rows = [r for r in getattr(o, key) if r[0].lower() == low]
+            if not rows:
+                continue
+            for x in {x for r in rows for x in r[1:] if x and "/" in x}:
+                _bring_file(plan, src, x)
+            mine = getattr(m, key)
+            want = [[new] + list(r[1:]) for r in rows]
+            if [r for r in mine if r[0] == new] != want:
+                setattr(m, key, [r for r in mine if r[0] != new] + want)
+                done = True
+        n += done
+    if n:
+        plan.binary(dst, db.dump().encode("latin-1"))
+        plan.notes.append((plan.mod.rel(dst), "%d battle model(s): %s's men in %s's own textures" % (n, new, faction)))
+    return n
+
+
+def _battle_blocks(f):
+    """{model type (lower): (first line, end)} of descr_model_battle.txt."""
+    out, cur = {}, None
+    for i in range(len(f)):
+        t = tokens(f.text(i))
+        if t[:1] == ["type"] and len(t) > 1:
+            if cur:
+                out[cur[0]] = (cur[1], i)
+            cur = (" ".join(t[1:]).lower(), i)
+    if cur:
+        out[cur[0]] = (cur[1], len(f))
+    return out
+
+
+def _text_battle_textures(plan, src, faction, new):
+    from .packs import _rebase_line, game_kind
+    tp, sp = plan.mod.file("model_battle"), src.file("model_battle")
+    if not tp or not sp:
+        return 0
+    f, theirs = plan.edit(tp), src.load(sp)
+    game = game_kind(plan.mod)
+    tb, sb = _battle_blocks(f), _battle_blocks(theirs)
+
+    def own(lines, who):
+        return [x for x in lines if tokens(x)[:1] and tokens(x)[0] in BATTLE_FACTION_KEYS and tokens(x)[1:2] == [who]]
+
+    def body(lines):                                    # the model without the lines naming factions
+        return [strip_comment(x).split() for x in lines if strip_comment(x).strip() and not (
+            tokens(x)[0] in BATTLE_FACTION_KEYS and len(tokens(x)) > 2)]
+    n = 0
+    for name in sorted(tb, key=lambda k: -tb[k][0]):    # from the end: line numbers above stay
+        if name not in sb:
+            continue
+        a, b = tb[name]
+        mine = [f.text(i) for i in range(a, b)]
+        got = [theirs.text(i) for i in range(*sb[name])]
+        rows = own(got, faction)
+        if not rows or body(mine) != body([x for x in got]):
+            continue
+        for ref in {r for x in rows for r in re.findall(r"[^,\s]+", strip_comment(x)) if "/" in r}:
+            _bring_file(plan, src, ref)
+        want = [_rebase_line(re.sub(r"^(\s*\S+\s+)%s(?![\w])" % re.escape(faction), lambda m: m.group(1) + new, x,
+                                    count=1), game) for x in rows]
+        old = [i for i in range(a, b) if f.text(i) in own(mine, new)]
+        if [f.text(i) for i in old] == want:
+            continue
+        if old:
+            at = old[0]                                 # in place of the frame's copies
+        else:                                           # after the block's last faction line
+            at = next((i + 1 for i in range(b - 1, a - 1, -1) if tokens(f.text(i))[:1] and
+                       tokens(f.text(i))[0] in BATTLE_FACTION_KEYS), None)
+            if at is None:
+                continue
+        for i in reversed(old):
+            f.delete(i, i + 1)
+        f.insert(at, want)
+        n += 1
+    if n:
+        plan.note(f, "%d battle model(s): %s's men in %s's own textures" % (n, new, faction))
+    return n
 
 
 def recruit_owned(plan, new, shared):
@@ -556,7 +712,7 @@ def bring_figures(plan, src, faction, new):
         elif len(t) >= 3 and t[0] == "texture" and t[1] == new and cur in theirs:
             rel = _data_rel(theirs[cur])                  # 'bi/data/x' (from the game's root) -> under data
             ref = ("data/" + rel) if game == "rome" else rel  # how this game writes its own lines
-            if not plan.mod.find(rel):
+            if not plan.mod.find(rel) and not plan.mod.find(rel + ".dds"):     # Medieval II keeps x.tga as x.tga.dds
                 got = src.find(rel) or src.find(rel + ".dds")
                 if not got:
                     continue
@@ -583,16 +739,63 @@ def _texture_lines(texts, faction):
     return out
 
 
-def art_picks(src, campaign, faction, new, folder):
+def _banner_places(mod, faction):
+    """{banner texture (as its line names it, lower case, '/'): the banner blocks of descr_banners_new.xml in which
+    the faction's line names it} - where a battle banner of the faction is shown, whatever its file is called."""
+    out = {}
+    xml = mod.find("descr_banners_new.xml") if mod else None
+    if not xml:
+        return out
+    with open(xml, encoding="latin-1") as fh:
+        text = fh.read()
+    block = ""
+    for m in re.finditer(r'<(\w+)\s+Name="([^"]*)"|Faction="([^"]+)"[^>]*?DiffuseMap="([^"]+)"', text):
+        if m.group(1) is not None:                     # <Banner Name=...>, <RoyalBanner Name=...>
+            block = ("%s %s" % (m.group(1), m.group(2))).lower()
+        elif m.group(3).lower() == faction.lower():
+            out.setdefault(m.group(4).replace("\\", "/").lower(), set()).add(block)
+    return {k: frozenset(v) for k, v in out.items()}
+
+
+def _place(e, banners):
+    """Where a picture of a faction is shown, the same for every faction whatever the file is called: the line
+    naming it ([file key, field]), the banner blocks it is in, the kind of picture."""
+    rel = e.get("rel") or ""
+    if rel.startswith("symbol:"):
+        return rel
+    if e.get("link"):
+        return ("link",) + tuple(e["link"])
+    x = e.get("extra")
+    if x and x.get("kind") == "banner":
+        return ("banner", banners.get((x.get("ref") or "").replace("\\", "/").lower()))
+    if x:
+        return ("extra", x.get("kind"))
+    return ("label", e.get("label"))
+
+
+def _by_place(pics, banners):
+    """{place: picture} of the places that hold one picture only."""
+    seen = {}
+    for e in pics:
+        seen.setdefault(_place(e, banners), []).append(e)
+    return {k: v[0] for k, v in seen.items() if len(v) == 1}
+
+
+def art_picks(src, campaign, faction, new, folder, frame=None):
     """{picture path under data: source picture} - the brought faction's pictures (Art) for the places the new
     faction's copies take (its name for the other's in each path); the pictures on sprite sheets cut out into
-    folder first."""
+    folder first. frame = (this mod, the frame faction): a picture of the brought faction whose file does not carry
+    its name (a mod's Wales flying 'faction_banner_scotland', a 'princess_scottland') goes where the frame's
+    picture of the same place was copied - found by what names it (its line, its banner blocks, its kind), never
+    by the file's name alone."""
     from . import factionart as FA
     out = {}
     try:
         pics = FA.faction_pictures(src, campaign, faction)
     except Exception:
         return out
+    own = re.compile(r"(?<![a-z0-9])%s(?![a-z0-9])" % re.escape(faction), re.I)
+    unplaced = []
     for e in pics:
         rel = e.get("rel") or ""
         if e.get("crop") and e.get("path"):
@@ -610,9 +813,33 @@ def art_picks(src, campaign, faction, new, folder):
             continue
         if rel.startswith("symbol:") or not e.get("path"):
             continue
-        own = re.compile(r"(?<![a-z0-9])%s(?![a-z0-9])" % re.escape(faction), re.I)
         if own.search(rel):                             # its own picture (shared ones - routing, rebels - stay)
             out[own.sub(new, rel)] = e["path"]
+        else:
+            unplaced.append(e)
+    if frame and unplaced:
+        mod, template = frame
+        try:
+            theirs = _by_place(pics, _banner_places(src, faction))
+            mine = _by_place(FA.faction_pictures(mod, campaign, template), _banner_places(mod, template))
+        except Exception:
+            return out
+        t_own = re.compile(r"(?<![a-z0-9])%s(?![a-z0-9])" % re.escape(template), re.I)
+        for e in unplaced:
+            key = _place(e, _banner_places(src, faction))
+            if theirs.get(key) is not e:
+                continue
+            if key[0] == "banner" and key not in mine:  # the frame's banner shown in the most of the same blocks
+                near = sorted(((len(k[1] & key[1]), k) for k in mine if k[0] == "banner" and k[1] and key[1]),
+                              key=lambda x: -x[0])
+                if not near or not near[0][0] or (len(near) > 1 and near[1][0] == near[0][0]):
+                    continue
+                key = near[0][1]
+            if key not in mine:
+                continue
+            rel = mine[key].get("rel") or ""
+            if t_own.search(rel):                       # the frame's own picture, copied under the new name
+                out.setdefault(t_own.sub(new, rel), e["path"])
     return out
 
 
@@ -741,12 +968,14 @@ def overlay(plan, campaign, bring):
         plan.warn(sm, "%s's culture %s is not in this mod - %s keeps its frame's culture" % (faction, culture, new))
     shared, brought, names = bring_units(plan, src, faction, new)
     recruit_owned(plan, new, shared)
+    bring_battle_textures(plan, src, faction, new)
     plan.bring_start = start_of(plan, src, bring.get("campaign") or campaign, faction, new, names)
     if plan.opts.get("copy_art", True):                 # its pictures where the frame's copies went (yours win)
         from . import log
         folder = os.path.join(log.logs_dir() or os.path.expanduser("~"), "brought_pictures")
         art = plan.opts.setdefault("art", {})
-        picks = art_picks(src, bring.get("campaign") or campaign, faction, new, folder)
+        picks = art_picks(src, bring.get("campaign") or campaign, faction, new, folder,
+                          frame=(plan.mod, plan.template))
         for rel, pic in picks.items():
             if rel in art:
                 continue

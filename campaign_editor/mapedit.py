@@ -57,27 +57,27 @@ def place_problem(mod, campaign, what, region, xy, moved=None, painted=None):
         return "another town or port stands there"
     if px != info["colour"] and freed.get((x, y)) != region and (x, y) != here:
         return "not %s's land" % region
-    if what == "city":
-        why = mod.land_problem(campaign, (x, y))
-        if why:
-            return why
-    else:
+    # a port too: the game's own map editor refuses a port on mountains, dense forest, a river, ford or cliff
+    # (STRATEGY_MAP::is_port_placement_on_a_valid_tile) - no vanilla map or HLR has one there
+    why = mod.land_problem(campaign, (x, y))
+    if why:
+        return why
+    if what != "city":
         if not any(mod.is_sea(campaign, (x + dx, y + dy)) for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1))):
             return "a port needs the sea next to it"
-        # a port belongs to the region most of the land round it is (as ports() reads it): there must be more
-        # of this region's tiles round it than of any other's, or the port would count as the neighbour's
         by_colour = {v["colour"]: k for k, v in mod.regions(campaign).items()}
-        votes = {}
-        for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1), (1, 1), (-1, -1), (1, -1), (-1, 1)):
-            nx, ny = x + dx, y + dy
-            if 0 <= nx < img.width and 0 <= ny < img.height:
-                r = by_colour.get(colour_at(nx, ny))
-                if (nx, ny) == here:
-                    r = region
-                if r:
-                    votes[r] = votes.get(r, 0) + 1
-        if votes.get(region, 0) <= max([n for r, n in votes.items() if r != region] or [0]):
-            return "most of the land round it is another region's - the port would count as theirs"
+        towns_to = {tuple(to) for (w, r), to in moved.items() if (w, r) != (what, region)}
+
+        def owner(t):
+            tx, ty = t
+            if not (0 <= tx < img.width and 0 <= ty < img.height):
+                return None
+            if t == here or freed.get(t) == region:
+                return region
+            return freed.get(t) or by_colour.get(colour_at(tx, ty))
+        got = port_land((x, y), owner, lambda t: t in towns_to)
+        if got != region:
+            return port_land_words(got, region)
     serious = [m for s, m in _move_ring(mod, campaign, what, region, xy, moved, painted) if s]
     return serious[0] if serious else None
 
@@ -105,26 +105,83 @@ def current(mod, campaign, what, region, moved=None):
     return (moved or {}).get((what, region)) or orig(mod, campaign, what, region)
 
 
-def ports(mod, campaign):
-    """{region: (x, y)} of the white port pixels (by the region around them)."""
-    key = ("ports", campaign)
+# The game gives a port pixel to the first land next to it, looking down, right, up, left (the engine's
+# WORLD_MAP::create_regions: z + 1, x + 1, z - 1, x - 1; a town pixel is looked past). A second port in one region:
+# 'we already have a port position in this region' and the other region has none (report R-20261023-D68B3A).
+# The vanilla maps (Rome, BI, Medieval II, HLR) give every port the same region by this rule as by the land
+# round it.
+PORT_LOOK = ((0, -1), (1, 0), (0, 1), (-1, 0))
+PORT_LOOK_WORDS = "down, right, up, left"
+
+
+def port_land(xy, owner, marker=None):
+    """The region the game gives a port at xy: owner(tile) is the region a tile is (None: sea, off the map, no
+    region's colour); marker(tile) is True for a town or port pixel there - looked past."""
+    x, y = xy
+    for dx, dy in PORT_LOOK:
+        t = (x + dx, y + dy)
+        if marker and marker(t):
+            continue
+        r = owner(t)
+        if r:
+            return r
+    return None
+
+
+def port_land_words(got, region):
+    """Why a port is refused where the game would give it to `got` (another region, or None) and not `region`."""
+    if got:
+        return ("the game gives a port to the first land next to it, looking %s - here that is %s's land: the port "
+                "would be %s's, not %s's" % (PORT_LOOK_WORDS, got, got, region))
+    return "no land next to it - the game gives a port to the first land next to it, looking %s" % PORT_LOOK_WORDS
+
+
+def port_pixels(mod, campaign):
+    """[((x, y), region)] of every white port pixel and the region the game gives it (None: no land next to it)."""
+    key = ("port_pixels", campaign)
     if key in mod._cache:
         return mod._cache[key]
     img = mod.region_map(campaign)
     by_colour = {v["colour"]: k for k, v in mod.regions(campaign).items()}
-    out = {}
+
+    def owner(t):
+        x, y = t
+        return by_colour.get(img.get(x, y)) if 0 <= x < img.width and 0 <= y < img.height else None
+    out = []
     for x, y in img.find(PORT):
-        votes = {}
-        for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1), (1, 1), (-1, -1), (1, -1), (-1, 1)):
-            nx, ny = x + dx, y + dy
-            if 0 <= nx < img.width and 0 <= ny < img.height:
-                r = by_colour.get(img.get(nx, ny))
-                if r:
-                    votes[r] = votes.get(r, 0) + 1
-        if votes:
-            out[max(votes, key=votes.get)] = (x, y)
+        r = port_land((x, y), owner)
+        if r is None:                                   # no region's land on a side: the land round it, as before
+            votes = {}
+            for dx, dy in ((1, 1), (-1, -1), (1, -1), (-1, 1)):
+                v = owner((x + dx, y + dy))
+                if v:
+                    votes[v] = votes.get(v, 0) + 1
+            r = max(votes, key=votes.get) if votes else None
+        out.append(((x, y), r))
     mod._cache[key] = out
     return out
+
+
+def ports(mod, campaign):
+    """{region: (x, y)} of the white port pixels (by the region the game gives each, port_land)."""
+    key = ("ports", campaign)
+    if key in mod._cache:
+        return mod._cache[key]
+    out = {}
+    for xy, r in port_pixels(mod, campaign):
+        if r and r not in out:                          # a region's second port: the game keeps one (Check says)
+            out[r] = xy
+    mod._cache[key] = out
+    return out
+
+
+def double_ports(mod, campaign):
+    """{region: [(x, y), ...]} of the regions the game gives more than one port pixel."""
+    got = {}
+    for xy, r in port_pixels(mod, campaign):
+        if r:
+            got.setdefault(r, []).append(xy)
+    return {r: xs for r, xs in got.items() if len(xs) > 1}
 
 
 # ---------------------------------------------------------------------------

@@ -468,6 +468,10 @@ def check_mod(mod, campaign, deep=False, progress=None, found=None):
         bad("... and %d more town / port placement problem(s) of the same kind" % (len(serious) - 8))
     for m in port_sea_problems(mod, campaign):
         bad(m)
+    for m in town_tile_problems(mod, campaign) + double_port_problems(mod, campaign):
+        bad(m)
+    for m in port_tile_notes(mod, campaign):
+        say("    note: " + m)
     light = [m for s_, m in ring if not s_]
     if light:
         say("    note: %d town(s) touch another region's land (vanilla never does; the game may still run - "
@@ -715,8 +719,9 @@ def level_rule_problems(rules):
     for r in rules:
         why = level_problem(r, r.value)
         if why:
-            out.append("descr_campaign_db.xml: %s '%s' is %s - the game stops at its start ('Unknown settlement "
-                       "level'); pick one in Campaign rules" % (r.key, r.value, why))
+            out.append("descr_campaign_db.xml: %s '%s' is %s - the game says 'Unknown settlement level' at its start "
+                       "and leaves that rule unset (a mod's moat_and_bailey: it went on, R-20261023-D68B3A); pick one "
+                       "in Campaign rules" % (r.key, r.value, why))
     return out
 
 
@@ -1201,6 +1206,45 @@ def port_sea_problems(mod, campaign):
                        "sea-adjacent dock') and the town's harbour stands without a port (a crash seen at the "
                        "campaign's start); drag the port onto the coast on the Map" % (r, xy[0], xy[1]))
     return out
+
+
+def town_tile_problems(mod, campaign):
+    """Towns on a tile the game puts no town on (mountains, dense forest, a river, ford or cliff - its
+    is_settlement_placement_on_a_valid_tile): it skips the region ('invalid tile ... skipping region'), the land has
+    no town and no owner, and Medieval II with M2EX crashed as the campaign started, in the AI's look at the
+    neighbours (report R-20261023-D68B3A, two new regions' towns on mountains). The vanilla maps and HLR: none."""
+    out = []
+    for r, xy in sorted(mod.city_tiles(campaign).items()):
+        why = mod.land_problem(campaign, tuple(xy))
+        if why:
+            out.append("the town of %s at %d, %d stands on %s - the game puts no town there and leaves %s empty, with "
+                       "no owner (Medieval II crashes as the campaign starts); drag the town (Map) to flat open land"
+                       % (r, xy[0], xy[1], "a river, ford or cliff" if why.startswith("a river") else why, r))
+    return out
+
+
+def port_tile_notes(mod, campaign):
+    """Ports on a tile the game's own map editor refuses a port on (mountains, dense forest, a river, ford or cliff -
+    STRATEGY_MAP::is_port_placement_on_a_valid_tile). The campaign's load does not refuse it (that check is left
+    out there), so a note; no vanilla map or HLR has one."""
+    from .mapedit import ports
+    out = []
+    for r, xy in sorted(ports(mod, campaign).items()):
+        why = mod.land_problem(campaign, tuple(xy))
+        if why:
+            out.append("the port of %s at %d, %d stands on %s - the game's own map editor puts no port there; "
+                       "better on open coast (drag it on the Map)" % (r, xy[0], xy[1], why.replace(" runs there", "")))
+    return out
+
+
+def double_port_problems(mod, campaign):
+    """Regions the game gives two port pixels (the first land next to a port, looking down, right, up, left -
+    mapedit.port_land): 'we already have a port position in this region', and the other region has no port."""
+    from .mapedit import PORT_LOOK_WORDS, double_ports
+    return ["%s gets %d ports from the game (at %s): it gives a port to the first land next to it, looking %s - "
+            "one of them is meant for a neighbour; drag it (Map) so that the neighbour's land is the first one"
+            % (r, len(xs), "; ".join("%d, %d" % xy for xy in xs), PORT_LOOK_WORDS)
+            for r, xs in sorted(double_ports(mod, campaign).items())]
 
 
 def slaves_problems(mod, regions):

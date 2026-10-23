@@ -105,7 +105,8 @@ START
 
 THE TABS
   New faction / Edit faction
-               names, texts, colours, AI, money, playable, religion and voice accent (Medieval II),
+               names, texts, colours, AI, money, playable, religion, voice accent and leader
+               succession - by birth, by election as the Teutonic Order, or no family tree (Medieval II),
                capital, leader,
                heir; beside them the faction's family tree and characters (Edit). Its towns:
                Towns on the map... / Capital on the map... (Maps opens for the pick;
@@ -642,6 +643,38 @@ class App(tk.Tk):
         tip(self.b_accents, "Every accent of the mod with its factions and the sound files that speak it; New accent "
                             "(the voices of another copied, so nothing is silent) and Remove accent - each with "
                             "Preview and a backup.")
+        # Medieval II: who leads after the leader dies - by birth, by election as the Teutonic Order, or no family
+        # tree (descr_sm_factions.txt has_family_tree yes / teutonic / no, can_have_princess; succession.py)
+        from .succession import LABELS as SUCCESSION
+        self.v["succession"] = tk.StringVar()
+        self.v["princesses"] = tk.StringVar()
+        suc_cell = ttk.Frame(lf)
+        self.cb_succession = ttk.Combobox(suc_cell, textvariable=self.v["succession"], state="readonly",
+                                          values=list(SUCCESSION.values()), width=FIELD_W - 14)
+        self.cb_succession.pack(side="left")
+        self.chk_princesses = ttk.Checkbutton(suc_cell, text="princesses", variable=self.v["princesses"],
+                                              onvalue="yes", offvalue="no")
+        self.chk_princesses.pack(side="left", padx=(theme.BUTTON_GAP, 0))
+
+        def elected(_e=None):
+            if self.v["succession"].get() == SUCCESSION["teutonic"]:
+                self.v["princesses"].set("no")         # the engine refuses princesses in an elected faction
+        self.cb_succession.bind("<<ComboboxSelected>>", elected)
+        field("Leader succession", suc_cell)
+        self.m2_rows.append(lf.grid_slaves(row=row - 1, column=0)[0])
+        tip(self.cb_succession, "Who leads after the leader dies (descr_sm_factions.txt, has_family_tree).\n"
+                                "By birth (yes): the heir, then the leader's eldest son; children are born and "
+                                "marriages offered.\n"
+                                "By election (teutonic), as the Teutonic Order: the family's grown man with the most "
+                                "authority + command becomes leader, the next one heir; the family tree is shown, but "
+                                "no child is born and no marriage is offered - new members come by adoption. No "
+                                "princesses (the game refuses them here).\n"
+                                "No family tree (no), as the Pope: no tree, births or marriages; the heir or the "
+                                "family member with the most authority takes over - and the faction never dies, even "
+                                "with no town and no leader.\n"
+                                "Medieval II only: Rome's leaders always follow the family tree.")
+        tip(self.chk_princesses, "Whether its daughters can be princesses - agents for marriages and diplomacy "
+                                 "(can_have_princess). Off for a faction that elects its leader.")
         # its culture (descr_sm_factions.txt, both games): towns' models, portraits, buildings and units follow it
         # (culture.py; the user, 2026-10-17)
         self.v["culture"] = tk.StringVar()
@@ -1106,6 +1139,8 @@ class App(tk.Tk):
         menu.add_command(label=TEST_MOD_LABEL, command=self.once("test_mod", self.test_mod))
         head("Files and backups")
         menu.add_command(label="Restore a backup...", command=self.restore)
+        menu.add_command(label="Any game file, as it is written (the notepad)...",
+                         command=self.once("raw_files", self.raw_files_window))
         menu.add_command(label="Check and install a pack...", command=self.once("install_pack", self.install_pack))
         menu.add_command(label="Game manifest...", command=self.once("game_manifest", self.game_manifest))
         menu.add_command(label="Authors and sources of this mod...", command=self.once("sources", self.sources_window))
@@ -2244,6 +2279,7 @@ class App(tk.Tk):
         for k in ("display_name", "short_name", "adjective", "ai", "religion", "accent", "culture", "leader_title",
                   "heir_title"):
             self.v[k].set(now.get(k) or "")
+        self._show_succession(now)
         for k, ws in self.extra_rows.items():
             self.v[k].set(now.get(k) or "")
             for w in ws:
@@ -2639,6 +2675,11 @@ class App(tk.Tk):
         from .gui_credits import open_credits
         return open_credits(self)
 
+    def raw_files_window(self):
+        """Tools > Any game file, as it is written...: every text file the game reads in the notepad (gui_rawfiles)."""
+        from .gui_rawfiles import open_raw_files
+        return open_raw_files(self)
+
     def sources_window(self):
         """Tools > Authors and sources of this mod...: whose work the mod holds (gui_sources)."""
         from .gui_sources import open_sources
@@ -3016,7 +3057,8 @@ class App(tk.Tk):
                     "new_land": land}
         paint, pick, cols = self.region_brush()
         from .regionedit import SEA
-        names = sorted(c for c in cols if c != SEA)
+        fresh = {r["name"] for r in self.new_regions}            # listed once, as '(new)' (a tester: 'Alpina_Province'
+        names = sorted(c for c in cols if c != SEA and c not in fresh)     # beside 'Alpina_Province  (new)')
         self.cb_paint["values"] = [r["name"] + "  (new)" for r in self.new_regions] + names + [SEA]
         overlay = {t: cols[r] for t, r in self.region_paint.items() if r in cols}
         on_place, ghost = None, None
@@ -3220,10 +3262,28 @@ class App(tk.Tk):
             return "not %s's land - paint it first" % name
         if what == "port" and not any(cm.is_sea(xy[0] + dx, xy[1] + dy) for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1))):
             return "a port needs the sea next to it"
+        if what in ("city", "port"):                    # the game skips a region whose town it cannot place
+            why = self.mod.land_problem(self.v_campaign.get(), tuple(xy))     # (R-20261023-D68B3A: on mountains);
+            if why:                                     # a port there: the game's own map editor refuses it
+                return why
         r = self._new_region(name)
         other = "port" if what == "city" else "city"
         if tuple(r.get(other) or ()) == tuple(xy):
             return "the town and the port need different tiles"
+        if what == "port":
+            from .mapedit import port_land, port_land_words
+            from .regionedit import SEA
+            marks = {tuple(n.get(k)) for n in self.new_regions for k in ("city", "port")
+                     if n.get(k) and (n["name"], k) != (name, "port")}
+
+            def owner(t):
+                if not (0 <= t[0] < cm.w and 0 <= t[1] < cm.h) or cm.regions_img.get(*t) in ((0, 0, 0), (255, 255, 255)):
+                    return None
+                got = self.region_paint.get(t) or cm.region_at(*t)
+                return None if got == SEA else got
+            got = port_land(tuple(xy), owner, lambda t: t in marks)
+            if got != name:
+                return port_land_words(got, name)
         return None
 
     def _town_land(self, xy, name):
@@ -4760,6 +4820,11 @@ class App(tk.Tk):
                 log.write("Backups already put back taken away: %d *_restored folder(s)" % n)
         except Exception:
             pass
+        from .newmod import unshare_caches
+        own = unshare_caches(os.path.dirname(os.path.abspath(self.mod.data)))
+        if own:                                     # the game wrote through these into the base mod's files
+            log.write("The game's caches made this mod's own (they were hard links to the base mod's): %s"
+                      % ", ".join(self.mod.rel(p) for p in own[:10]))
         self.roster_editor.forget()
         self.family_editor.forget()
         # remembered for the next start: this mod, its game folder, the campaign picked in it
@@ -4908,6 +4973,25 @@ class App(tk.Tk):
         self.cb_accent.configure(state="readonly" if speaks else "disabled")
         if not speaks:
             self.v["accent"].set("")
+        for w in (self.cb_succession, self.chk_princesses):
+            w.configure(state=("readonly" if w is self.cb_succession else "normal") if m2 else "disabled")
+        if not m2:
+            self.v["succession"].set("")
+            self.v["princesses"].set("")
+
+    def _show_succession(self, now):
+        """The Leader succession row from read_faction's succession / princesses (empty on Rome)."""
+        from .succession import LABELS
+        self.v["succession"].set(LABELS.get(now.get("succession"), ""))
+        self.v["princesses"].set({True: "yes", False: "no"}.get(now.get("princesses"), ""))
+
+    def _succession_opts(self, v):
+        """{'succession': 'yes' | 'teutonic' | 'no' | None, 'princesses': True / False / None} of the form."""
+        from .succession import LABELS
+        if not self._m2():
+            return {"succession": None, "princesses": None}
+        return {"succession": {t: k for k, t in LABELS.items()}.get(v.get("succession")),
+                "princesses": {"yes": True, "no": False}.get(v.get("princesses"))}
 
     def _rebind(self, ed):
         lost = ed.rebind(self.mod)
@@ -5533,6 +5617,10 @@ class App(tk.Tk):
         if now.get("accent") and (not a or a == getattr(self, "_auto_accent", None)):
             self._auto_accent = now["accent"]
             self.v["accent"].set(now["accent"])
+        # and how its leader is chosen (Medieval II), the same way
+        if now.get("succession") and self.v["succession"].get() in ("", getattr(self, "_auto_succession", None)):
+            self._show_succession(now)
+            self._auto_succession = self.v["succession"].get()
         # the titles and colours stay EMPTY (the user, 2026-10-22: the form shows nothing of the template but what
         # the game needs - AI, culture, money, religion); left empty, Apply keeps the template's in the files
         for key, b in (("primary", self.b_primary), ("secondary", self.b_secondary)):
@@ -5578,6 +5666,7 @@ class App(tk.Tk):
             else:
                 setattr(self, k, [] if isinstance(getattr(self, k, None), list) else {})
         self._auto_titles, self._auto_denari, self._auto_religion, self._auto_accent = {}, None, None, None
+        self._auto_succession = None
         self.v_playable.set(True)
         self.v_art.set(True)
         self.v_super.set(False)
@@ -6879,6 +6968,7 @@ class App(tk.Tk):
             "long_description": self.t_long.get("1.0", "end").strip(),
             "religion": (v.get("religion") or None) if self._m2() else None,
             "accent": v.get("accent") or None,                  # emptied where the game has no accents
+            **self._succession_opts(v),                         # Medieval II: leader by birth / election
             "culture": v.get("culture") or None,
             "leader_title": v["leader_title"] or None, "heir_title": v["heir_title"] or None,
             "primary_colour": self.colours["primary"], "secondary_colour": self.colours["secondary"],
@@ -6932,6 +7022,7 @@ class App(tk.Tk):
             "long_description": self.t_long.get("1.0", "end").strip(),
             "religion": (v.get("religion") or None) if self._m2() else None,
             "accent": v.get("accent") or None,                  # emptied where the game has no accents
+            **self._succession_opts(v),                         # Medieval II: leader by birth / election
             "culture": v.get("culture") or None,
             "primary_colour": self.colours["primary"], "secondary_colour": self.colours["secondary"],
             "ai": v["ai"], "denari": int(v["denari"]) if v["denari"].isdigit() else None,
@@ -7615,6 +7706,9 @@ class App(tk.Tk):
                             "questions, where the editor keeps its files.")
         elif label == "Help":
             self.status.set("A short guide to the editor (also F1).")
+        elif label.startswith("Any game file"):
+            self.status.set("Every text file the game reads, the mod's and the game's: find one, change it as in "
+                            "Notepad - with Preview, a backup and Restore.")
         elif label.startswith("Authors and sources"):
             self.status.set("Whose work is in this mod: what was taken from other mods, the authors, links - kept in "
                             "Authors_and_sources.txt in the mod folder.")
@@ -7751,7 +7845,10 @@ class App(tk.Tk):
                     result["text"] += "\n\n" + "=" * 70 + "\nWHERE %s IS NAMED (every text file of the mod)\n\n" \
                         % faction + scan_mod(ModData(data), faction, campaign).report()
             except Exception as e:
-                result["text"] = "The check stopped: %s\n\n%s" % (e, traceback.format_exc())
+                # what was found before it stopped stays (the faction's part failing threw the whole report away)
+                result["text"] = (result["text"] + "\n\n" if result.get("text") else "") + \
+                    "The check stopped%s: %s\n\n%s" % (" at '%s'" % result["step"] if result.get("step") else "", e,
+                                                     traceback.format_exc())
         th = threading.Thread(target=work, daemon=True)
         th.start()
         self.busy(True)
