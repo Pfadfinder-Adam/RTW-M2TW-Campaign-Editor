@@ -5906,6 +5906,15 @@ class App(tk.Tk):
             self.status.set("%s - written; Undo this write puts it back." % what)
             return True
 
+        def keep(plan, what):
+            """Other changes wait for Apply: this one joins them (Apply changes writes all, one backup) instead of
+            a refusal - report #421: 'why can't I do this and then that?'."""
+            self.session_add("accent:%s" % what, what, plan)
+            messagebox.showinfo(APP, "%s - kept with the other changes waiting for Apply. Apply changes (bottom "
+                                     "left) writes them all, with one backup; this list shows it after that."
+                                % what, parent=w)
+            return True
+
         def ask_accent(title, text, choices):
             """A small window: a word typed (choices None) or an accent picked; returns it or None."""
             d = tk.Toplevel(w)
@@ -5931,9 +5940,6 @@ class App(tk.Tk):
             return got.get("v") or None
 
         def new():
-            if self.unwritten():
-                messagebox.showinfo(APP, "Other changes wait for Apply. Apply (or undo) them first.", parent=w)
-                return
             have = AC.names(self.mod)
             name = ask_accent("New accent", "The new accent's name (one word: letters, digits and _ - e.g. "
                                             "Venetian):", None)
@@ -5949,7 +5955,7 @@ class App(tk.Tk):
             except (ValueError, OSError) as e:
                 messagebox.showerror(APP, "Not made: %s." % e, parent=w)
                 return
-            if write(plan, "New accent %s, speaking like %s" % (name, like)):
+            if (keep if self.unwritten() else write)(plan, "New accent %s, speaking like %s" % (name, like)):
                 tv.selection_set(name)
                 self.v["accent"].set(name)        # the faction on the tab speaks it once Apply writes the form
 
@@ -5957,9 +5963,6 @@ class App(tk.Tk):
             name = picked()
             if not name:
                 messagebox.showinfo(APP, "Pick the accent to remove in the list.", parent=w)
-                return
-            if self.unwritten():
-                messagebox.showinfo(APP, "Other changes wait for Apply. Apply (or undo) them first.", parent=w)
                 return
             others = [a for a in AC.names(self.mod) if a != name]
             if not others:
@@ -5974,7 +5977,8 @@ class App(tk.Tk):
             except (ValueError, OSError) as e:
                 messagebox.showerror(APP, "Not removed: %s." % e, parent=w)
                 return
-            if write(plan, "Accent %s removed, its factions speak %s" % (name, to)) and self.v["accent"].get() == name:
+            if (keep if self.unwritten() else write)(plan, "Accent %s removed, its factions speak %s" % (name, to)) \
+                    and self.v["accent"].get() == name:
                 self.v["accent"].set(to)
         bar = ttk.Frame(w)
         bar.pack(fill="x", padx=8, pady=8)
