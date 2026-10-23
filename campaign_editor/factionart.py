@@ -388,6 +388,10 @@ def _copy_for(plan, x, who, keep):
     owner = x.get("owner") or ""
     folder, name = os.path.split(x["path"])
     stem, ext = name.split(".", 1)
+    said = re.split(r"[\\/]", x.get("ref") or "")[-1].split(".", 1)[0]
+    if said.lower() == stem.lower():
+        stem = said             # the name as its line spells it (the file found in other capitals: Windows gave
+        #                         'faction_banner_slave' to a line saying 'Faction_banner_alpha')
     if x["kind"] == "symbol":
         tex_stem = x["tex"].rsplit(".", 1)[0]
         new_stem = _same_length_name(tex_stem, owner, who)
