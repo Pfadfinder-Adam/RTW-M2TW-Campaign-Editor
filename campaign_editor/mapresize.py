@@ -654,7 +654,13 @@ def plan_resize(plan, campaign, left=0, bottom=0, right=0, top=0, clear=False, f
             raise ValueError("the cut would leave %d place(s) off the map - move them first:\n%s" % (
                 len(gone), "\n".join(gone[:30]) + ("\n... and %d more" % (len(gone) - 30) if len(gone) > 30
                                                     else "")))
-    regions_path = mod.campaign_file(campaign, "map_regions.tga")
+    def layer(name):
+        # each map file found the way the game finds it (world_map.cpp validate_file_path): the campaign's folder
+        # first, then base - the mod's own, then the game's under a mod holding only its changes (written then as
+        # the mod's own copy); never "every layer beside map_regions.tga"
+        return mod.campaign_file(campaign, name)
+
+    regions_path = layer("map_regions.tga")
     img = read_tga(regions_path)
     W, H = img.width + left + right, img.height + bottom + top
     fill = deepest_sea(mod, campaign) if max(left, bottom, right, top) > 0 else (0, 0)   # a cut adds no point
@@ -665,7 +671,9 @@ def plan_resize(plan, campaign, left=0, bottom=0, right=0, top=0, clear=False, f
     warn = list(first)
     for folder, pictures in ((base, U.BASE_PICTURES), (camp, U.CAMPAIGN_PICTURES)):
         for name, kind in pictures.items():
-            p = os.path.join(folder, name)
+            p = layer(name) if pictures is U.BASE_PICTURES else None
+            if p is None:
+                p = os.path.join(folder, name)
             src = p
             if not os.path.isfile(p):               # a mod keeping only what it changes: the game's picture, written
                 rel = os.path.relpath(p, mod.data)  # as the mod's own (report #186: the minimap kept its old size)
@@ -700,26 +708,33 @@ def plan_resize(plan, campaign, left=0, bottom=0, right=0, top=0, clear=False, f
                 continue
             plan.binary(p, got)
             plan.note(None, "%s %s (new tiles: the map's deep sea)" % (name, words))
-    hgt = os.path.join(base, "map_heights.hgt")
-    hpath = os.path.join(base, "map_heights.tga")
-    if os.path.isfile(hgt) and os.path.isfile(hpath) and U.hgt_usable(hgt, hpath):
+    hgt = layer("map_heights.hgt")                  # the game's exact heights too, under a thin mod (else the mod's
+    hpath = layer("map_heights.tga")                # new map read with the game's old .hgt: skipped for its size)
+    if hgt and hpath and U.hgt_usable(hgt, hpath):
         with open(hgt, "rb") as fh:
             plan.binary(hgt, hgt_shifted(fh.read(), left, bottom, right, top, fill))
         plan.note(None, "map_heights.hgt %s" % words)
-    elif os.path.isfile(hgt):
+    elif hgt:
         warn.append("map_heights.hgt was empty or did not fit map_heights.tga - left as it is")
-    t = os.path.join(base, "descr_terrain.txt")
-    if os.path.isfile(t):
+    t = layer("descr_terrain.txt")                  # the map's size as the game takes it (world_map.cpp: every layer
+    if t:                                           # is checked against its width / height), the game's one too
         f = plan.edit(t)
         n = 0
+        was = {}
         for i in range(len(f.raw)):
             m = re.match(r"^(\s*)(width|height)(\s+)(\d+)(.*)$", f.text(i))
             if m:
+                was[m.group(2)] = int(m.group(4))
                 f.raw[i] = f.make(m.group(1) + m.group(2) + m.group(3) + str(W if m.group(2) == "width" else H)
                                   + m.group(5))
                 n += 1
         if n:
             plan.note(f, "the map's size: %d x %d tiles" % (W, H))
+            old = (was.get("width", img.width), was.get("height", img.height))
+            if old != (img.width, img.height):
+                warn.append("descr_terrain.txt said %d x %d tiles, map_regions.tga is %d x %d - the game sizes every "
+                            "layer by descr_terrain.txt; it now says %d x %d, from map_regions.tga"
+                            % (old + (img.width, img.height, W, H)))
         else:
             warn.append("descr_terrain.txt: no width / height line found - check its dimensions by hand")
     shift = (left, bottom) != (0, 0)
@@ -764,9 +779,10 @@ def plan_resize(plan, campaign, left=0, bottom=0, right=0, top=0, clear=False, f
             warn.append("Lua / Squirrel scripts: %s - their map places moved by %d, %d too; look them over (a place "
                         "computed in code, not written as numbers, cannot be seen)"
                         % (", ".join("%s (%d)" % x for x in moved_code[:8]), left, bottom))
-    p = os.path.join(base, "map.rwm")
-    if os.path.isfile(p):
-        plan.delete(p, "the game builds it again from the new pictures")
+    for folder in {base, camp, os.path.join(mod.data, "world", "maps", "base")}:
+        p = os.path.join(folder, "map.rwm")         # the game keeps it in the campaign's folder when a layer is there
+        if os.path.isfile(p):
+            plan.delete(p, "the game builds it again from the new pictures")
     from .limits import HARD_LIMITS, game_kind, lifted
     most = HARD_LIMITS[game_kind(mod)]["map_size"]
     if max(W, H) > most and not lifted(mod, "map_size"):

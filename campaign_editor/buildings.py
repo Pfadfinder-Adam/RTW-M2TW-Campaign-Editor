@@ -154,8 +154,8 @@ def reader_problems(blds, lines, factions, unit_types, engine=None):
         depth = max(depth + code.count("{") - code.count("}"), 0)
         if up and depth <= 3 and "}" in code:
             up = False
-    if engine == "REX.exe":
-        return out
+    if engine in ("REX.exe", "M2EX.exe"):           # both drop an unknown recruit's line (BuildingRegistry.cpp) and
+        return out                                  # have no gap check left (building_db.cpp)
     known = {u.lower() for u in unit_types}
     chain = level = None
     depth, names = 0, []

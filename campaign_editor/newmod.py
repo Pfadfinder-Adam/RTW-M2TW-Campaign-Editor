@@ -2,9 +2,10 @@
 are never touched. Rome: <game>/<name>, started with -mod:<name>; Medieval II:
 <game>/mods/<name>, started with mods/<name>/<name>.cfg ([features] mod = ...).
 
-The game takes one -mod:<folder> and falls back to the game's own data for
-every file that folder lacks - there is no chain "my mod -> HLR -> game". So a
-mod built on HLR must hold all of HLR: every file is copied (the window's
+Medieval II takes one mod folder and falls back to the game's own data for
+every file that folder lacks. REX chains by path (-mod:HLR/x reads x, then HLR,
+then the game - game_rtw/romans.cpp), but a mod beside HLR (-mod:x) does not
+read HLR. So a mod built on HLR holds all of HLR: every file is copied (the window's
 default), or, asked for, everything but the text files (what the tool edits)
 is a hard link - the same file on disk under a second name, no extra space.
 A mod built on the plain game holds only what changes (a THIN mod): nothing is
@@ -25,8 +26,14 @@ from .plan import BACKUP_DIRS
 
 MARKER = "CampaignEditor_mod.json"
 OLD_MARKERS = ("faction_tool_mod.json",)          # written by older versions: still read
-# written by the tool, so real copies; the rest is linked
-COPY_EXT = {".txt", ".json", ".xml", ".nut", ".lua", ".ini", ".cfg", ".csv", ".yml", ".yaml", ".bat", ".cmd"}
+# written by the tool, so real copies; the rest is linked - but the game's own caches: it rewrites map.rwm and its
+# *.db files in place (OUTPUT_BUFFER opens them "wb", world_map.cpp / geography.cpp / cliffs_db.cpp), which writes
+# THROUGH a hard link into the base mod's file
+COPY_EXT = {".txt", ".json", ".xml", ".nut", ".lua", ".ini", ".cfg", ".csv", ".yml", ".yaml", ".bat", ".cmd",
+            ".rwm", ".db"}
+# the player's own state the game keeps in a mod's folder (its saves, preferences, replays - romans_file.cpp): a new
+# mod starts without the base's
+PLAYER_DIRS = {"saves", "preferences", "replays"}
 GAME_EXES = ("REX.exe", "RomeTW-ALX.exe", "RomeTW-BI.exe", "RomeTW.exe", "M2EX.exe", "medieval2.exe", "kingdoms.exe")
 RE_NAME = re.compile(r"^[A-Za-z0-9_\-]+$")
 
@@ -167,6 +174,11 @@ def _bats(base_dir, base_name, name, game):
 
 
 RWM_DIR = "world/maps/base"      # where the game saves a thin mod's built map
+# with a mod's own world/maps folder the game looks for these on the mod's disk only, never in its own data
+# (romans_cmd_line.cpp: the maps path is the mod's once the folder is there; world_map.cpp reads them only when
+# validate_file_path finds them): Medieval II's music by region, the custom tiles, the exact heights - a thin mod gets
+# the game's copies with that folder
+ON_DISK_ONLY = ("descr_sounds_music_types.txt", "custom_tiles_db.txt", "map_heights.hgt")
 
 
 def create_mod(data_dir, name, copy_all=False, progress=None):
@@ -195,11 +207,18 @@ def create_mod(data_dir, name, copy_all=False, progress=None):
         # its sources; with no such folder it cannot save it ('WORLD_MAP failed to open save file' in its log, the
         # map built again at every start - the tester's thin mod, 2026-10-22)
         os.makedirs(os.path.join(target, "data", RWM_DIR))
+        from .moddata import _ci
+        for n in ON_DISK_ONLY:
+            src = _ci(os.path.join(game, "data", *RWM_DIR.split("/")), n)
+            if src:
+                shutil.copy2(src, os.path.join(target, "data", *RWM_DIR.split("/"), os.path.basename(src)))
+                stats["copied"] += 1
     try:
         starts = _m2_start(game, base_dir, base_name, name) if m2 else _bats(base_dir, base_name, name, game)
         for src_root, dst_root in sources:
             for dirpath, dirnames, filenames in os.walk(src_root):
-                dirnames[:] = [d for d in dirnames if d not in BACKUP_DIRS]
+                dirnames[:] = [d for d in dirnames if d not in BACKUP_DIRS
+                               and not (dirpath == src_root and d.lower() in PLAYER_DIRS)]
                 rel = os.path.relpath(dirpath, src_root)
                 out_dir = os.path.normpath(os.path.join(dst_root, rel))
                 os.makedirs(out_dir, exist_ok=True)
@@ -304,7 +323,9 @@ def untouched_copies(data_dir):
                 same.append(n)
             elif layer(n):
                 changed_map = True
-        out += [os.path.join(dirpath, n) for n in same if not (changed_map and layer(n))]
+        rwm = os.path.relpath(dirpath, data_dir).replace(os.sep, "/").lower() == RWM_DIR
+        out += [os.path.join(dirpath, n) for n in same if not (changed_map and layer(n))
+                and not (rwm and n.lower() in ON_DISK_ONLY)]
     return out
 
 

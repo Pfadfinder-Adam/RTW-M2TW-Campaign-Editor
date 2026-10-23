@@ -1716,6 +1716,11 @@ building smith
 
     def test_new_mod_on_a_mod_leaves_the_base_untouched(self):
         game, hlr = self._game()
+        # the game rewrites its built map and .db caches in place (through a hard link into the base's file): always
+        # copied; the base's saves are the player's, not the new mod's
+        write(os.path.join(hlr, "data", "world", "maps", "base", "map.rwm"), "built")
+        write(os.path.join(hlr, "data", "descr_geography.db"), "cache")
+        write(os.path.join(hlr, "saves", "a.sav"), "save")
         before = tree_hash(hlr)
         data, st = create_mod(os.path.join(hlr, "data"), "HLR_Beta")
         target = os.path.join(game, "HLR_Beta")
@@ -1726,6 +1731,9 @@ building smith
         self.assertFalse(os.path.samefile(os.path.join(hlr, edu), os.path.join(target, edu)))
         card = os.path.join("data", "ui", "units", "alpha", "#alpha_general.tga")
         self.assertTrue(os.path.samefile(os.path.join(hlr, card), os.path.join(target, card)))
+        for rel in (("data", "world", "maps", "base", "map.rwm"), ("data", "descr_geography.db")):
+            self.assertFalse(os.path.samefile(os.path.join(hlr, *rel), os.path.join(target, *rel)))
+        self.assertFalse(os.path.exists(os.path.join(target, "saves")))
         self.assertTrue(os.path.exists(os.path.join(target, "data", "sounds", "HLR_Beta.idx")))
         with open(os.path.join(target, "Start_HLR_Beta.bat"), "rb") as f:
             self.assertIn(b"-mod:HLR_Beta -multirun", f.read())
@@ -1763,10 +1771,13 @@ building smith
         """New mod folder on the plain game makes a THIN mod (nothing copied - the game reads the rest from its own
         data): a faction added writes only what it changes and adds; slim finds nothing more to take away."""
         game, _ = self._game()
+        # but what the game reads only from the mod's own world/maps once that folder is there (Medieval II's music by
+        # region): the game's copy comes with the folder, and stays
+        write(os.path.join(game, "data", "world", "maps", "base", "descr_sounds_music_types.txt"), "music\n")
         data, st = create_mod(os.path.join(game, "data"), "Beta")
         self.assertEqual(st["base"], "(game)")
         self.assertTrue(st["thin"])
-        self.assertEqual([n for _, _, fs in os.walk(data) for n in fs], [])     # nothing copied
+        self.assertEqual([n for _, _, fs in os.walk(data) for n in fs], ["descr_sounds_music_types.txt"])
         self.assertTrue(os.path.isdir(os.path.join(data, "world", "maps", "base")))   # the game saves map.rwm there
         self.assertEqual(os.path.normcase(ModData(data).under), os.path.normcase(os.path.join(game, "data")))
         with open(os.path.join(game, "Beta", "Start_Beta.bat"), "rb") as f:
@@ -1907,6 +1918,17 @@ building smith
         self.assertRegex(text, r"(?m)^faction\s+delta\b")
         self.assertNotRegex(text, r"(?<![A-Za-z0-9_])Alpha(?![A-Za-z0-9_])")
 
+    def test_rename_faction_refuses_words_the_game_reads_otherwise(self):
+        """A faction named 'all', 'none', 'merc'... or like a culture means something else to the game (building_battle,
+        the modeldb, the movie tracks; a culture is hidden by the faction of its name) - refused; a name the exes look
+        for themselves (romans_senate, slavs...) renamed with a warning of what goes."""
+        from campaign_editor import factionrename as FR
+        mod = ModData(self.root)
+        for bad in ("all", "merc", "none", (mod.culture("alpha") or "x").lower()):
+            self.assertIsNotNone(FR.problems(mod, "alpha", bad), bad)
+        self.assertIsNone(FR.problems(mod, "alpha", "delta"))
+        self.assertIn("slavs", FR.HARD_CODED)
+
     def test_rename_faction_reaches_glued_names_and_the_games_files(self):
         """Report R-20261009-CDDAF0 (the test mod on Medieval II with M2EX): venice renamed venice_ce, then the game
         closed at start - 'Unknown attribute type(Combat_V_Faction_Venice)': the trait effect glues the faction's
@@ -1925,6 +1947,12 @@ building smith
         write(os.path.join(camp, "campaign_script.txt"), "script\n\tif I_LocalFaction alpha\n\t\tset_counter "
               "alpha_intro 1\n\tend_if\nend_script\n")
         write(os.path.join(game, "data", "scripts_alpha.nut"), "local f = \"alpha\";\n")
+        # the game reads faction names in any case: a capital 'Alpha' left in a file stopped the game after a rename;
+        # REX's Combat_V_<faction> too; the campaign folder's leader picture and description (found by the name)
+        write(os.path.join(camp, "descr_win_conditions.txt"), "Alpha\nhold_regions B_R\n")
+        write(os.path.join(game, "data", "export_descr_ancillaries.txt"), "    Effect Combat_V_alpha 1\n")
+        write(os.path.join(camp, "leader_pic_alpha.tga"), "pic")
+        write(os.path.join(camp, "description_alpha.txt"), "words")
         data, _ = create_mod(os.path.join(game, "data"), "Beta")
         mod = ModData(data)
         plan = Plan(mod, "rename", "alpha_ce", {})
@@ -1942,6 +1970,13 @@ building smith
         self.assertIn("Combat_V_Faction_alphabet 1", mine)                 # another name, left
         self.assertIn("Condition FactionType alpha_ce", mine)
         self.assertIn("Trait Fearsalpha", mine)                            # a trait's own name stays
+        mcamp = os.path.join(data, "world", "maps", "campaign", "test")
+        with open(os.path.join(mcamp, "descr_win_conditions.txt")) as fh:
+            self.assertEqual(fh.read(), "Alpha_ce\nhold_regions B_R\n")
+        with open(os.path.join(data, "export_descr_ancillaries.txt")) as fh:
+            self.assertEqual(fh.read(), "    Effect Combat_V_alpha_ce 1\n")
+        for n in ("leader_pic_alpha_ce.tga", "description_alpha_ce.txt"):
+            self.assertTrue(os.path.isfile(os.path.join(mcamp, n)), n)
 
     def test_recolour_faction_with_no_secondary_colour(self):
         """Report R-20261022-46D767 (Rome with REX): Recolour of a faction with no secondary colour stopped at
@@ -8772,6 +8807,31 @@ building smith
         self.assertNotIn("data/text/dump.txt", [r[0] for r in rows])
         self.assertEqual(FC.complete(mod, "slave", "test"), ([], 0))
         self.assertNotIn("data/descr_banners.txt", [r[0] for r in FC.complete(mod, "alpha", "test")[0]])
+        # '_' joins: a unit egypt_chariot is not the faction egypt (it looked present)
+        with open(os.path.join(self.root, "data", "descr_banners.txt"), "w") as fh:
+            fh.write("faction alpha\nfaction beta\nbanner gamma_spears\n")
+        self.assertIn("data/descr_banners.txt", [r[0] for r in FC.complete(ModData(self.root), "gamma", "test")[0]])
+
+    def test_is_this_faction_complete_says_what_the_game_stops_on(self):
+        """What the engine itself stops on for a faction comes first: no 'type general' for it in descr_character
+        (create_floating_general - a crash when it gets a captain), a faction listed at the top of descr_strat with no
+        block, or a block in no list (the campaign does not load)."""
+        from campaign_editor import factioncheck as FC
+        ch = os.path.join(self.root, "data", "descr_character.txt")
+        with open(ch, encoding="latin-1") as fh:
+            text = fh.read()
+        mod = ModData(self.root)
+        self.assertEqual([r[0] for r in FC.stops(mod, "alpha", "test")], ["data/descr_character.txt"])
+        write(ch, text + "\ntype\t\tgeneral\nfaction\t\tslave, Alpha\ndictionary\t2\n")
+        self.assertEqual(FC.stops(ModData(self.root), "alpha", "test"), [])
+        strat = os.path.join(self.root, "data", "world", "maps", "campaign", "test", "descr_strat.txt")
+        with open(strat, encoding="latin-1") as fh:
+            st = fh.read()
+        write(strat, st.replace("playable\n\talpha\nend", "playable\nend"))
+        why = FC.stops(ModData(self.root), "alpha", "test")
+        self.assertEqual(len(why), 1)
+        self.assertIn("in none of the playable", why[0][1])
+        self.assertIn("STOPS", "\n".join(FC.words([], 0, "alpha", why)))
 
     def test_map_size_moves_pictures_and_places(self):
         """Map size: a picture grows by the tiles asked (deep sea's value in the new points) and back again pixel for
@@ -8797,6 +8857,10 @@ building smith
         self.assertEqual(values("rect", [5, 6, 4, 4]), [7, 7, 4, 4])
         from campaign_editor import upscale as U
         self.assertEqual(U.move_script_line("  reveal_tile 10, 20", values, xy)[0], "  reveal_tile 12, 21")
+        # Medieval II's camera / clickable box: two corners; its bare form (clear) takes no tile and is no 'check by hand'
+        self.assertEqual(U.move_script_line("restrict_strat_camera 10 15 80 100", values, xy),
+                         ("restrict_strat_camera 12 16 82 101", 1, 0))
+        self.assertEqual(U.move_script_line("restrict_clickable_rect", values, xy), ("restrict_clickable_rect", 0, 0))
 
     def test_map_size_moves_the_fog_frame_to_the_new_edge(self):
         """Medieval II's map_fog.tga: clear inside, a dark ragged frame at the edges. A report (grown 17 tiles at the
@@ -8939,6 +9003,36 @@ building smith
         with open(os.path.join(gcamp, "radar_map1.tga"), "rb") as fh:
             self.assertEqual(fh.read(), old)
 
+    def test_map_size_writes_the_games_descr_terrain_into_a_thin_mod(self):
+        """The game sizes every map layer by descr_terrain.txt (world_map.cpp). A mod keeping only what it changes,
+        with its own map_regions.tga but the game's descr_terrain.txt: the size was never written (the file was looked
+        for beside map_regions.tga only), the new layers did not fit it. Now each file is found as the game finds it
+        (the campaign's folder, then base; the mod's, then the game's) and the game's one written as the mod's own."""
+        from campaign_editor import mapresize as MR
+        from campaign_editor.tga import read_tga
+        game, _ = self._game()
+        gcamp = os.path.join(game, "data", "world", "maps", "campaign", "test")
+        img = read_tga(os.path.join(gcamp, "map_regions.tga"))
+        gbase = os.path.join(game, "data", "world", "maps", "base")
+        os.makedirs(gbase, exist_ok=True)
+        gterrain = os.path.join(gbase, "descr_terrain.txt")
+        old = "dimensions\n{\n\twidth  %d\n\theight  %d\n}\n" % (img.width, img.height)
+        write(gterrain, old)
+        data, _ = create_mod(os.path.join(game, "data"), "Beta")
+        mcamp = os.path.join(data, "world", "maps", "campaign", "test")
+        os.makedirs(mcamp, exist_ok=True)
+        for n in ("descr_strat.txt", "map_regions.tga"):
+            shutil.copy(os.path.join(gcamp, n), os.path.join(mcamp, n))
+        plan = Plan(ModData(data), "map", "map_size", {})
+        warn = MR.plan_resize(plan, "test", top=-1, clear=True)
+        f = plan.files[gterrain]
+        self.assertEqual(os.path.normcase(f.path),
+                         os.path.normcase(os.path.join(data, "world", "maps", "base", "descr_terrain.txt")))
+        self.assertIn("height  %d" % (img.height - 1), "".join(f.texts()))
+        self.assertFalse([w for w in warn if "descr_terrain" in w])
+        with open(gterrain) as fh:
+            self.assertEqual(fh.read(), old)                       # the game's file untouched
+
     def test_map_size_names_what_stands_on_the_part_cut_off(self):
         """Map size: the places are read once and any cut checked against them at once (the window checks each
         dragged edge and rings them red on the map) - a town and the character in it on the columns cut off are
@@ -9052,15 +9146,21 @@ building smith
         """Check mod files groups its problems by when the game meets them - would not start, campaign loads with
         something lost, battle, play - and names the place each is put right in."""
         from campaign_editor import check as CK
-        probs = ["descr_strat.txt has a block for 'x', which descr_sm_factions.txt does not know",
+        probs = ["export_descr_unit.txt, x (line 3): the game stops at the start - no such soldier",
+                 "descr_strat.txt has a block for 'x', which descr_sm_factions.txt does not know",
                  "win condition of 'y' names a region the map lacks z",
                  "A (b): a town without its governor's building (core 1) - the game stops: 'has not been given a "
                  "core building'",
                  "3 battle model(s) give a faction its texture but no weapons texture"]
-        self.assertEqual([CK.when_of(p) for p in probs], ["start", "play", "load", "battle"])
+        # the game's own order: start-up files (closes before the menu), the campaign's (back to the menu), ...
+        self.assertEqual([CK.when_of(p) for p in probs], ["start", "campaign", "play", "load", "battle"])
+        self.assertEqual(CK.when_of("export_descr_buildings.txt names unit(s) - the game stops at start: a"), "start")
+        self.assertEqual(CK.when_of("battle_models.modeldb cannot be read (x) - a new faction ..."), "start")
+        self.assertEqual(CK.when_of("descr_event_images.txt: the message 'faction destroyed' has 3 pictures - the "
+                                    "game crashes when faction 4 or a later one is destroyed"), "play")
         self.assertEqual([h for h, _ in CK.grouped(probs)], [h for _, h, _ in CK.WHEN])
-        self.assertEqual(CK.fix_of(probs[2])[1], "edit")
-        self.assertEqual(CK.fix_of(probs[3])[1], "units")
+        self.assertEqual(CK.fix_of(probs[3])[1], "edit")
+        self.assertEqual(CK.fix_of(probs[4])[1], "units")
         self.assertIsNone(CK.fix_of("something nobody knows"))
 
     def test_credits_page_and_window_text(self):
@@ -9105,6 +9205,11 @@ building smith
         self.assertEqual([s for s, _ in launch.problems(how, data)], [True, False])
         put(os.path.join(m2, "mods", "x", "x.cfg"), b"[features]\r\nmod = mods/x\r\n")
         self.assertEqual(launch.problems(how, data), [])
+        # the game reads mod = under [features] only, up to a '#' (M2EX Options.cpp): elsewhere it starts no mod
+        put(os.path.join(m2, "mods", "x", "x.cfg"), b"[io]\r\nmod = mods/x\r\n[features]\r\n")
+        self.assertEqual([s for s, _ in launch.problems(how, data)], [False])
+        put(os.path.join(m2, "mods", "x", "x.cfg"), b"[features]\r\nmod = \"mods\\x\" # mine\r\n")
+        self.assertEqual(launch.problems(how, data), [])
         put(os.path.join(m2, "mods", "x", "Start_x.bat"), b"kingdoms.exe @mods/x/x.cfg\r\n")
         bat = launch.start_line(data)
         self.assertEqual([s for s, _ in launch.problems(bat, data)], [True])       # kingdoms.exe is not there
@@ -9114,6 +9219,13 @@ building smith
         put(os.path.join(m2, "mods", "x", "x.cfg"), b"[features]\r\nmod = mods/kirsi\r\n")
         self.assertEqual(launch.named_folder(data), "kirsi")
         self.assertTrue(any(st and "rename the folder to kirsi" in w for st, w in launch.problems(bat, data)))
+        # Rome: REX reads -mod: only up to a space - a mod folder with a space starts the plain game: refused
+        rome = os.path.join(self.root, "romesp")
+        put(os.path.join(rome, "REX.exe"))
+        put(os.path.join(rome, "data", "descr_sm_factions.txt"))
+        put(os.path.join(rome, "My Mod", "data", "descr_sm_factions.txt"))
+        d = os.path.join(rome, "My Mod", "data")
+        self.assertTrue(any(st and "space" in w for st, w in launch.problems(launch.start_line(d), d)))
 
     def test_start_the_game_with_the_loaded_mod(self):
         """Start the game: the mod's own start script (Start_<name>.bat first; not an unpacker's .bat), else the
