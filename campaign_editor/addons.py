@@ -467,11 +467,15 @@ def _span(text, var):
         quoted = False
         while end < len(text) and text[end] != "\n":
             c = text[end]
-            if c == '"' and text[end - 1] != "\\":
+            if quoted and c == "\\":
+                end += 2                        # an escaped letter: a quote, or the backslash a text may end in
+                continue
+            if c == '"':
                 quoted = not quoted
             if not quoted and text[end:end + 2] in ("//", "--"):
                 break
             end += 1
+        end = min(end, len(text))
         while end > start and text[end - 1] in " \t\r":
             end -= 1
     return start, end
