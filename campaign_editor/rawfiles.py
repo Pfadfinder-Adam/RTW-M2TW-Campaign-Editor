@@ -108,6 +108,24 @@ def listing(mod):
     return [got[k] for k in sorted(got)]
 
 
+# the editor's window named in ABOUT -> the main window's work that holds it (App.WORK_TITLES' keys), for the
+# button that opens it ('a raw file always leads to its own window' - the user, 2026-10-23)
+WORKS = {"Unit editor": "units", "Building editor": "buildings", "Traits": "traits", "Map": "map",
+         "Faction editor": "faction", "Art": "faction", "Models": "faction", "Victory conditions": "faction",
+         "Settlements": "settlements", "Rebels": "rebels", "Mercenaries": "mercs", "Events": "events",
+         "Campaign rules": "rules", "Religions": "religions", "Wonders": "map", "Terrain": "terrain"}
+
+
+def work_of(window):
+    """The main window's work for a window ABOUT names ('Unit editor > Voice' -> 'units'; the first of 'Map,
+    Faction editor'), or None."""
+    if not window:
+        return None
+    first = window.split(",")[0].split(">")[0].strip()
+    hits = [k for k in WORKS if first.startswith(k)]
+    return WORKS[max(hits, key=len)] if hits else None
+
+
 def about(rel):
     """(what the file is, the editor's window for it or None) - plain words for any file."""
     low = rel.lower().replace("\\", "/")
@@ -197,4 +215,4 @@ def plan_lines(plan, path, lines):
     return n
 
 
-__all__ = ["TEXT_EXT", "listing", "about", "comment_mark", "check", "plan_lines"]
+__all__ = ["TEXT_EXT", "WORKS", "work_of", "listing", "about", "comment_mark", "check", "plan_lines"]
