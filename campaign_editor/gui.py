@@ -5266,9 +5266,10 @@ class App(tk.Tk):
         if self.editing() and t and self.strat.faction(t):
             self.load_existing()
             self._baseline = self._faction_state()
-        # an open Map (or Diplomacy) tab shows the files as they are now - after Apply,
-        # Restore or a campaign change - not the picture read before
-        if self.tab_name() in ("Map", "Diplomacy"):
+        # an open Map (Diplomacy, Art, Models) tab shows the files as they are now - after Apply, Restore, a campaign
+        # change or another mod loaded - not the picture read before (a tester: Art kept Medieval II's venice cards
+        # after a Rome mod was loaded)
+        if self.tab_name() in ("Map", "Diplomacy", "Art", "Models"):
             self.tab_opened()
 
     def villages(self):
