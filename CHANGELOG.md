@@ -9,6 +9,7 @@
 - Layout board: the board moves and zooms the same way as the Campaign HUD's - the wheel at the mouse (Shift in small steps), the middle button or Space + left drag it, Shift+1 everything, Shift+2 the picked piece, Shift+0 100 %; the arrows move the board when no free piece is picked.
 
 ### Fixed
+- Add-ons: a text setting ending in a backslash was read past its end (the line's comment taken for it, lost at the next change) -> it reads back as written.
 - Roster: a building level open to everyone, taken from one faction, could be written with a broken requirement -> written right.
 - Rebels (Medieval II): a unit the rebels may not own could be added to a rebel type (the game crashes when they appear) -> the window says so.
 - New faction > From another mod: the new faction could recruit its frame's own units it does not own (Medieval II stops at such a town) and could not recruit the units it shares with this mod -> its recruit lines follow the units it owns.
