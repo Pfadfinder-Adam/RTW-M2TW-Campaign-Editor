@@ -238,6 +238,8 @@ class Lnt:
         body = raw.rstrip("\r\n")
         end = raw[len(body):]
         m = re.match(r"^(\s*<%s>)(.*?)(</%s>\s*)$" % (re.escape(node.tag), re.escape(node.tag)), body)
+        if not m:       # a leaf the game reads past a slip (report #405): never closed ('<y>10'), closed in other
+            m = re.match(r"^(\s*<%s>)([^<]*?)(\s*(?:<.*)?)$" % re.escape(node.tag), body)  # letters ('</Y>')
         if not m:
             raise LntError("line %d is not a <%s> line" % (node.start + 1, node.tag))
         self.lines[node.start] = m.group(1) + str(value) + m.group(3) + end
