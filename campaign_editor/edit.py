@@ -317,18 +317,31 @@ def set_faction_colours(plan, faction, primary=None, secondary=None):
     if not (primary or secondary):
         return
     f = plan.edit(plan.mod.file("sm_factions"))
-    cur, n = None, 0
+    cur, n, seen, after = None, 0, set(), None
     for i in range(len(f)):
         t = tokens(f.text(i))
         if t[:1] == ["faction"] and len(t) > 1:
             cur = t[1].rstrip(",")
         elif cur == faction and t[:1] in (["primary_colour"], ["secondary_colour"]):
+            seen.add(t[0])
+            after = i
             rgb = want.get(t[0])
             if rgb:
                 new = RE_RGB.sub("red %d, green %d, blue %d" % tuple(rgb), f.text(i), 1)
                 if new != f.text(i):
                     f.set(i, new)
                     n += 1
+    # a faction with no line for a colour picked (a mod's faction with no secondary colour - report R-20261022-46D767's
+    # goths): the line is added after its other colour, as the game's own blocks hold it; it was not written at all
+    for key in ("primary_colour", "secondary_colour"):
+        if want.get(key) and key not in seen and after is not None:
+            other = f.text(after)
+            line = re.sub(r"^(\s*)\S+", lambda m: m.group(1) + key, other, count=1)
+            line = RE_RGB.sub("red %d, green %d, blue %d" % tuple(want[key]), line, 1)
+            at = after + 1 if key == "secondary_colour" else after
+            f.insert(at, [line.split(";")[0].rstrip()])
+            after += 1 if key == "primary_colour" else 0
+            n += 1
     if n:
         plan.note(f, "colours of %s set" % faction)
     path = plan.mod.file("sm_factions_json")
