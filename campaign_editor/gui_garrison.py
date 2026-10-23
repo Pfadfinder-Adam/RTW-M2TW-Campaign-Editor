@@ -107,8 +107,6 @@ class GarrisonEditor(ttk.Frame):
         cb.bind("<<ComboboxSelected>>", lambda e: self.fill_roster())
         self.v_gen = tk.BooleanVar(value=False)
         ttk.Checkbutton(top, text="general's units", variable=self.v_gen, command=self.fill_roster).pack(side="left")
-        from .gui_util import first
-
         self.info = ttk.Label(self, text="", anchor="w", foreground="#444")
         self.info.pack(fill="x")
         body = ttk.Panedwindow(self, orient="horizontal")
@@ -120,10 +118,11 @@ class GarrisonEditor(ttk.Frame):
         self.roster = self._scroll(left)
         self.chosen = self._scroll(right)
 
-        bar = ttk.Frame(self, padding=(0, 4, 0, 0))
+        # the total on a line of its own: beside Suggest's numbers it had some 70 px and showed 'as it stand: (unchange'
+        self.total = ttk.Label(self, text="", font=("", 10, "bold"), justify="left")
+        self.total.pack(fill="x", pady=(4, 0))
+        bar = ttk.Frame(self, padding=(0, 2, 0, 0))
         bar.pack(fill="x")
-        self.total = ttk.Label(bar, text="", font=("", 10, "bold"), justify="left")
-        self.total.pack(side="left", fill="x", expand=True)
         self.total.bind("<Configure>", lambda e: self.total.configure(wraplength=max(120, e.width - 4)), add="+")
         # Suggest draws a garrison / an army by the numbers beside it - how many units, their upkeep together at
         # most (a tester, 2026-10-09: 'Suggest does nothing, and we cannot say how much upkeep'); kept for next time.
@@ -152,7 +151,7 @@ class GarrisonEditor(ttk.Frame):
         tip(b, "A garrison drawn at random from the units this faction trains: that many units, their upkeep "
                "together at most this much (0: no limit). Press again for another.")
         tip(self.b_auto, "Back to the garrison as it stands in the game's files now (your changes to it dropped).")
-        first(self.b_auto, self.sugg)             # As it was, Suggest before the total
+
 
     def cap(self):
         """Units a stack holds here: 20, 40 with REX / M2EX (start.army_cap)."""
