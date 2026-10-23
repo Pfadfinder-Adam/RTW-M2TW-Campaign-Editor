@@ -14,6 +14,7 @@
 - Layout board: the board moves and zooms the same way as the Campaign HUD's - the wheel at the mouse (Shift in small steps), the middle button or Space + left drag it, Shift+1 everything, Shift+2 the picked piece, Shift+0 100 %; the arrows move the board when no free piece is picked.
 
 ### Fixed
+- Map size (both games): after the map grew or was cut, the sea kept the old coasts' light outline and dark deeps shifted off the land. That is water_surface.tga, the sea's colour picture the game stretches over the whole map; it is now moved and squeezed with the map (the new sea takes the deep sea's colour). A new tick makes the whole sea one even colour instead. Preview, a backup, Restore gives it back.
 - Words cut with '...' in a narrow window were measured in Tk's plain default font, not the one they are drawn in (bigger: 12 pt for 10, more on Windows), so they were cut too early -> measured in their own font.
 - Medieval II: a banner sheet shared by two factions, its file in other capitals than descr_banners_new.xml says (as Windows finds it), was made the faction's own under a lower-case name -> the copy takes the line's spelling.
 - View in 3D (Medieval II): a mod whose animation pack the game built itself (Europa Barbarorum II) named its animations with the mod's folder in front, so the editor found none of them for the skeletons -> the folder is left out, as descr_skeleton.txt names them; a model whose material name has a letter like 'ó' was cut there -> read whole.

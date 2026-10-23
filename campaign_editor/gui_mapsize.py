@@ -80,6 +80,14 @@ def open_map_size(app, view=None):
         ttk.Spinbox(grid, textvariable=v, from_=-999, to=999, increment=1, width=6).grid(
             row=i // 2, column=(i % 2) * 2 + 1, sticky="w")
         vars_[key] = v
+    v_flat = tk.BooleanVar(value=False)
+    ttk.Checkbutton(frm, text="Make the sea one even colour (water_surface.tga: no old coast shapes in the water)",
+                    variable=v_flat).pack(anchor="w", pady=(8, 0))
+    ShortHint(frm, text=(
+        "water_surface.tga is the sea's colour picture - a light band along the coasts, dark deeps. The game "
+        "stretches it over the whole map, so it is always moved and squeezed with the map here: its coasts stay "
+        "under the land and the new sea gets the deep sea's colour. Tick this to make the whole sea one colour "
+        "instead (e.g. when you will repaint the coasts).")).pack(anchor="w", fill="x", pady=(2, 0))
     v_after = tk.StringVar()
     ttk.Label(frm, textvariable=v_after, font=("", 10, "bold")).pack(anchor="w", pady=(8, 0))
     lbl_block = ttk.Label(frm, text="", justify="left", wraplength=480, foreground="#c0392b")
@@ -178,7 +186,8 @@ def open_map_size(app, view=None):
         """The cut's plan on the files as they are at this moment (at the write: as every other part left them)."""
         p = Plan(ModData(app.mod.data), "map", "map_size", {})
         p.wasteland_resources_out = done.get("res_out")    # the one answer about resources left on the wasteland
-        done["warn"] = plan_resize(p, camp, clear=any(v < 0 for v in n.values()), factions_out=out, **n)
+        done["warn"] = plan_resize(p, camp, clear=any(v < 0 for v in n.values()), factions_out=out,
+                                   flat_sea=done.get("flat", False), **n)
         return p
 
     def make_plan(keep=False):
@@ -186,6 +195,7 @@ def open_map_size(app, view=None):
         if n is None:
             messagebox.showerror(APP, "Only whole numbers, please.", parent=w)
             return None
+        done["flat"] = bool(v_flat.get())          # read now: the cut is built again at Apply, the window maybe closed
         hit = in_the_way(n)
         gone = lost(n)
         try:                                         # checked now on the files as they are (a refusal said at once)

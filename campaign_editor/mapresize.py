@@ -673,7 +673,6 @@ def water_shifted(data, w, h, left, bottom, right, top, fill_tile=None, flat=Fal
     except ImportError:
         Image = None
     if Image is not None:
-        import io
         mode = "RGBA" if step == 4 else "RGB"
         rows = [bytes(raw[r * pw * step:(r + 1) * pw * step]) for r in range(ph)]
         if not top_down:
