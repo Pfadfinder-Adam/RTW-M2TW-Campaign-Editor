@@ -385,10 +385,52 @@ def scrolling_without_bars(root):
             root.bind_all(seq, lambda e: auto_stop(), add="+")
         for cls in ("Listbox", "Text", "Entry", "TEntry"):     # their middle drag 'scan' would scroll twice
             root.bind_class(cls, "<B2-Motion>", "break")
+    for seq in WHEEL_KEYS:                                # a table's quick wheel turn: scrolled once, not once a notch
+        _first(root, "Treeview", seq, _tree_wheel)
     for cls in PLAIN + LISTS:
         _first(root, cls, "<Button-1>", _press1)
         _first(root, cls, "<B1-Motion>", _motion1)
         _first(root, cls, "<ButtonRelease-1>", _release1)
+
+
+def _tree_units(w, e):
+    """The rows the table's own wheel binding scrolls for event e (Tk's: -delta / 120 rows, a Mac's -delta, X11's
+    buttons 5 rows)."""
+    if getattr(e, "num", None) in (4, 5):
+        return -5 if e.num == 4 else 5
+    d = getattr(e, "delta", 0) or 0
+    return -d if w.tk.call("tk", "windowingsystem") == "aqua" else (-d) // 120
+
+
+def _tree_wheel(e):
+    """The wheel over a table: the turn's steps added up and scrolled once the waiting events are read - a big table
+    (Settlements: 750 rows, 17 columns) drew itself again at every notch and lagged behind the wheel (report #410).
+    A table with nothing more to see lets the wheel go on to the page round it."""
+    w = e.widget
+    try:
+        if isinstance(w, str) or tuple(w.yview()) == (0.0, 1.0):
+            return None
+        n = _tree_units(w, e)
+    except (tk.TclError, AttributeError):
+        return None
+    hide = getattr(w._root(), "_ce_hide_card", None)   # the hover card hides on the wheel (its binding comes later)
+    if hide:
+        hide()
+    if not n:
+        return "break"
+    waiting = getattr(w, "_wheel_rows", 0)
+    w._wheel_rows = waiting + n
+
+    def scroll():
+        rows, w._wheel_rows = getattr(w, "_wheel_rows", 0), 0
+        try:
+            if rows and w.winfo_exists():
+                w.yview_scroll(rows, "units")
+        except tk.TclError:
+            pass
+    if not waiting:
+        w.after_idle(scroll)
+    return "break"
 
 
 def _auto_bar(e):

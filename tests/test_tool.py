@@ -4753,6 +4753,43 @@ building smith
         finally:
             root.destroy()
 
+    def test_a_quick_wheel_turn_over_a_table_scrolls_it_once(self):
+        """A big table (Settlements: 750 rows, 17 columns) drew itself again at every notch of the wheel and lagged
+        behind it (report #410): the notches waiting are added up and scrolled once; a table with nothing more to
+        see lets the wheel go on."""
+        try:
+            import tkinter as tk
+            from tkinter import ttk
+            from campaign_editor.gui_util import scrolling_without_bars
+            root = tk.Tk()
+        except Exception as e:                        # no tkinter / no display
+            self.skipTest("no tkinter window: %s" % e)
+        try:
+            scrolling_without_bars(root)
+            tv = ttk.Treeview(root, height=10)
+            for i in range(200):
+                tv.insert("", "end", iid=str(i), text=str(i))
+            tv.pack()
+            root.update()
+            scrolled = []
+            real = tv.yview_scroll
+            tv.yview_scroll = lambda n, what: (scrolled.append(n), real(n, what))
+            for _ in range(5):
+                tv.event_generate("<MouseWheel>", delta=-120, x=10, y=10)
+            self.assertEqual(scrolled, [])
+            root.update()
+            self.assertEqual(scrolled, [5])                                 # five notches, one scroll
+            self.assertEqual(round(tv.yview()[0] * 200), 5)                 # the first row shown: 5
+            few = ttk.Treeview(root, height=10)
+            few.insert("", "end", text="one")
+            few.pack()
+            root.update()
+            from types import SimpleNamespace as NS
+            from campaign_editor.gui_util import _tree_wheel
+            self.assertIsNone(_tree_wheel(NS(widget=few, num=None, delta=-120)))   # the page round it scrolls
+        finally:
+            root.destroy()
+
     def test_the_wheel_turns_a_drop_down_where_nothing_scrolls(self):
         """The wheel over a closed drop-down turns it to the next / last choice (the user: 'it was very handy, bring
         it back') - a pick the window hears; at the ends and when disabled nothing changes."""

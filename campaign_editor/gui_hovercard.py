@@ -217,6 +217,7 @@ def install(root, mod_of, pictures, culture=None):
         x, y = e.x_root, e.y_root
         state["job"] = root.after(DELAY, lambda: show(w, x, y, hit))
 
+    root._ce_hide_card = hide                             # a table's wheel scrolls without the class's own binding
     for cls in ("Treeview", "Listbox"):
         root.bind_class(cls, "<Motion>", motion, add="+")
         root.bind_class(cls, "<Leave>", hide, add="+")
