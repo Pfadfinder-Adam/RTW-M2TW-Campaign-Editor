@@ -244,7 +244,10 @@ def check_mod(mod, campaign, deep=False, progress=None, found=None):
         from . import family as FM
         gd = game_data(mod)
         cdb = mod.find("descr_campaign_db.xml") or (_ci(gd, "descr_campaign_db.xml") if gd else None)
-        rule = next((r for r in read_rules(cdb) if r.key == "max_number_of_children"), None) if cdb else None
+        cdb_rules = read_rules(cdb) if cdb else []
+        rule = next((r for r in cdb_rules if r.key == "max_number_of_children"), None)
+        for why in level_rule_problems(cdb_rules):
+            bad(why)
         most_allowed = int(rule.value) if rule is not None and str(rule.value).isdigit() else None
         if most_allowed is not None:
             for fb in s.factions:
@@ -661,6 +664,20 @@ def guild_buildings(mod):
         return out
     except Exception:
         return set()
+
+
+def level_rule_problems(rules):
+    """Medieval II's descr_campaign_db.xml rules naming a settlement level (siege_gear_required_for_castle_level...)
+    with a word the game does not know - it stops at its start (report #412: 'Unknown settlement level :
+    motte_and_bailey'; the game spells it moot_and_bailey there)."""
+    from .campaignrules import level_problem
+    out = []
+    for r in rules:
+        why = level_problem(r, r.value)
+        if why:
+            out.append("descr_campaign_db.xml: %s '%s' is %s - the game stops at its start ('Unknown settlement "
+                       "level'); pick one in Campaign rules" % (r.key, r.value, why))
+    return out
 
 
 def ai_label_problems(mod, strat_f):
