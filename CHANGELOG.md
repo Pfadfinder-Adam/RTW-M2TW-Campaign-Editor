@@ -12,6 +12,8 @@
 - Factions after Maps opens on the faction's form (or the tab it was on), not on an empty Buildings tab.
 - A label whose words change after it was cut with '...' shows them whole again ('Religion (Medieva' in the faction form).
 - Terrain's Undo all and the Settlements' Owner filter are no longer past the edge of a 1280 px window.
+- Undo / Redo (Ctrl+Z / Ctrl+Y) on Events, Traits, Mercenaries, Rebels, Recolour and Campaign rules take back that work's own steps.
+- The Layout board's buttons wrap onto a second row instead of hiding past a narrow window's edge; the garrison's total in Units & armies is on a line of its own; New faction's leader face goes under the select map when the form is narrow.
 - Ctrl+1 .. Ctrl+9 pick the tabs on show (Ctrl+3 in Factions brought up the hidden Map tab); Help (F1) names what the editor has now.
 - Rebels: more than 20 unit types in one rebel type is said with REX / M2EX too - the game keeps only 20 there as well.
 - Family tree: children with no father are found by the mod's own ages (Medieval II girls up to 16, as its files say), not fixed ones.
