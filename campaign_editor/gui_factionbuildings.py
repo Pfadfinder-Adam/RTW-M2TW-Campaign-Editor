@@ -266,8 +266,10 @@ class FactionBuildings(ttk.Frame):
     def _chain_words(self, c):
         lv = [x["name"] for x in c["levels"]]
         units = sorted({u["unit"] for x in c["levels"] if x["has"] for u in x["units"]})
-        return "%s - %s level(s): %s%s%s" % (
+        conv = FB.conversion_words(c)
+        return "%s - %s level(s): %s%s%s%s" % (
             c["chain"], len(lv), ", ".join(lv[:8]) + (" ..." if len(lv) > 8 else ""),
+            ("\n" + conv) if conv else "",
             ("\nrecruits: %s" % ", ".join(units[:10]) + (" ..." if len(units) > 10 else "")) if units else "",
             "" if c["builds"] else "\n%s cannot build any level of it" % self._faction())
 
@@ -288,6 +290,10 @@ class FactionBuildings(ttk.Frame):
         b = ttk.Button(head, text="Lines of this building", command=lambda: self.open_lines(c["chain"]))
         b.pack(side="left", padx=8)
         tip(b, "The Lines tab with this chain picked: every line of it, its pictures and texts.")
+        conv = FB.conversion_words(c)
+        if conv:                                       # Medieval II's convert_to_castle / _city (#423)
+            ttk.Label(self.mid.inner, text=conv, wraplength=520, justify="left", foreground="#777").pack(
+                anchor="w", pady=(4, 0))
         lv = next((x for x in c["levels"] if x["name"] == level), None) or \
             next((x for x in c["levels"] if x["has"]), c["levels"][0] if c["levels"] else None)
         self.level = lv

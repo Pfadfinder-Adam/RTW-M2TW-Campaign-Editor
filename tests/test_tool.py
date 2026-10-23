@@ -9949,6 +9949,16 @@ building smith
         self.assertLess(mean_v, 1.15 * 95)
         self.assertTrue(all(p[1] >= p[0] and p[1] >= p[2] for p in part))     # green
 
+    def test_conversion_chains_said_as_the_engine_counts_them(self):
+        """Report #423: 'what is Convert to Motte and Bailey?' - a chain whose name begins convert_ is Medieval II's
+        conversion (building_db's classification by the name): said in plain words; any other chain: nothing."""
+        from campaign_editor.factionbuildings import conversion_words
+        city = {"chain": "convert_to_castle", "levels": [{"kind": "city"}, {"kind": "city"}]}
+        castle = {"chain": "convert_to_city", "levels": [{"kind": "castle"}]}
+        self.assertIn("turns a city into a castle", conversion_words(city))
+        self.assertIn("back into a city", conversion_words(castle))
+        self.assertEqual(conversion_words({"chain": "core_building", "levels": [{"kind": "city"}]}), "")
+
     def test_new_regions_town_on_ground_the_game_refuses(self):
         """A report (#420, kgcm): a new region's town on a tile the engine will not take a settlement on (mountains,
         dense forest, impassable - culture_db / world.cpp is_settlement_placement_on_a_valid_tile) - the game skips

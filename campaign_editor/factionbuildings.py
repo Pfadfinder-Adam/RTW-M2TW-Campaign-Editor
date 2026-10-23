@@ -32,6 +32,21 @@ def conditions(text):
     return "" if rest in ("", "()", "( )") else rest
 
 
+def conversion_words(c):
+    """What a chain of chains() is when Medieval II's engine counts it a conversion - its name begins 'convert_'
+    (building_db: the classification by the name's first letters, as temple_ / guild_ / hinterland_), or ''. Built,
+    it turns the settlement itself into a castle or back into a city, keeping its men; it is no building that
+    stands (report #423: 'what is this Convert to Motte and Bailey?')."""
+    if not c["chain"].startswith("convert_"):
+        return ""
+    kinds = {x["kind"] for x in c["levels"]} - {None}
+    what = ("turns a city into a castle" if kinds == {"city"} else "turns a castle back into a city"
+            if kinds == {"castle"} else "turns the settlement into a castle or a city")
+    return ("Not a building that stands: a conversion. Built, it %s - the same size (each level says from what "
+            "town), its men kept, the buildings the new kind cannot have lost. The game knows it by its name "
+            "beginning 'convert_'." % what)
+
+
 def recruit_numbers(text):
     """What the numbers of a recruit line say: Rome 'recruit "x" 1' = {'experience': 1}; Medieval II 'recruit_pool
     "x" 1 0.5 4 0' = {'start': 1, 'per_turn': 0.5, 'most': 4, 'experience': 0} (the pool the town starts with, what
