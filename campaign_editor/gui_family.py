@@ -212,7 +212,9 @@ class FamilyEditor(ttk.Frame):
         else:
             tree_box = right
         # the tree
-        self.cv = tk.Canvas(tree_box, bg="#efe6d2", highlightthickness=0)
+        from .gui_charpanel import look
+        self.cv = tk.Canvas(tree_box, bg=look()["parchment"], highlightthickness=0)
+        self.cv.bind("<<ThemeChanged>>", lambda e: self.draw_tree() if self.cv.winfo_ismapped() else None, add="+")
         xs = ttk.Scrollbar(tree_box, orient="horizontal", command=self.cv.xview)
         ys = ttk.Scrollbar(tree_box, orient="vertical", command=self.cv.yview)
         self.cv.configure(xscrollcommand=xs.set, yscrollcommand=ys.set)
@@ -629,10 +631,12 @@ class FamilyEditor(ttk.Frame):
 
     # ---------------------------------------------------------------- the tree
     def draw_tree(self):
-        cv = self.cv
+        from .gui_charpanel import look
+        cv, L = self.cv, look()
+        cv.configure(bg=L["parchment"])
         cv.delete("all")
         if not self.fam:
-            cv.create_text(20, 20, anchor="nw", fill="#555", text="Load a mod and pick the faction above." if
+            cv.create_text(20, 20, anchor="nw", fill=L["muted"], text="Load a mod and pick the faction above." if
                            self.standalone else "Pick the faction on the Faction tab (Edit faction).")
             return
         people = {p["name"]: p for p in self.people() if p["source"] == "record" or
@@ -666,15 +670,15 @@ class FamilyEditor(ttk.Frame):
                 kx = x + (w - (sum(width(k, seen + (name,)) for k in c[2]) + GAP * (len(c[2]) - 1))) / 2
                 mid = cx + own / 2
                 bar = y + CARD_H + (ROW - CARD_H) / 2
-                cv.create_line(mid, y + CARD_H / 2, mid, bar, fill="#6b5a3a", width=2)
+                cv.create_line(mid, y + CARD_H / 2, mid, bar, fill=L["line"], width=2)
                 ends = []
                 for k in c[2]:
                     kw = width(k, seen + (name,))
                     kxm = place(k, kx, y + ROW, seen + (name,))
                     ends.append(kxm)
-                    cv.create_line(kxm, bar, kxm, y + ROW, fill="#6b5a3a", width=2)
+                    cv.create_line(kxm, bar, kxm, y + ROW, fill=L["line"], width=2)
                     kx += kw + GAP
-                cv.create_line(min(ends + [mid]), bar, max(ends + [mid]), bar, fill="#6b5a3a", width=2)
+                cv.create_line(min(ends + [mid]), bar, max(ends + [mid]), bar, fill=L["line"], width=2)
             return cx + CARD_W / 2
 
         x = 20
@@ -684,7 +688,7 @@ class FamilyEditor(ttk.Frame):
         bottom = max([y for _, y in placed.values()] + [20]) + ROW + 10
         loose = [n for n, p in people.items() if n not in placed]
         if loose:
-            cv.create_text(20, bottom, anchor="nw", text="Not on the tree:", fill="#5a4a2a", font=("", 9, "bold"))
+            cv.create_text(20, bottom, anchor="nw", text="Not on the tree:", fill=L["muted"], font=("", 9, "bold"))
             lx, ly = 20, bottom + 20
             for n in loose:
                 placed[n] = (lx, ly)
@@ -695,20 +699,21 @@ class FamilyEditor(ttk.Frame):
             if a in placed and b in placed and b:
                 (x1, y1), (x2, y2) = placed[a], placed[b]
                 if y1 == y2 and abs(x2 - x1 - CARD_W - COUPLE_GAP) < 1:
-                    cv.create_line(x1 + CARD_W, y1 + CARD_H / 2, x2, y2 + CARD_H / 2, fill="#a0364b", width=3)
+                    cv.create_line(x1 + CARD_W, y1 + CARD_H / 2, x2, y2 + CARD_H / 2, fill=L["couple"], width=3)
         for n, (x, y) in placed.items():
             self._card(n, people.get(n), x, y)
         cv.configure(scrollregion=cv.bbox("all") or (0, 0, 100, 100))
 
     def _card(self, name, p, x, y):
-        cv = self.cv
+        from .gui_charpanel import look
+        cv, L = self.cv, look()
         female = p and p["sex"] == "female"
-        fill = "#f6dfe3" if female else "#dfe7f3"
+        fill = L["female"] if female else L["male"]
         if p is None:
-            fill = "#e0e0e0"
+            fill = L["nobody"]
         sel = p is not None and p["key"] == self.sel
         tag = "card:%s" % (p["key"] if p else name)
-        cv.create_rectangle(x, y, x + CARD_W, y + CARD_H, fill=fill, outline="#1c5bd6" if sel else "#6b5a3a",
+        cv.create_rectangle(x, y, x + CARD_W, y + CARD_H, fill=fill, outline=L["pick"] if sel else L["line"],
                             width=3 if sel else 1, tags=(tag,))
         crown = ""
         if p and p.get("role") == "leader":
@@ -721,7 +726,7 @@ class FamilyEditor(ttk.Frame):
             cv.create_image(x + 4, y + (CARD_H - PIC_H) / 2, anchor="nw", image=img, tags=(tag,))
             tx = x + PIC_W + 8
         cv.create_text(tx, y + 5, anchor="nw", text=crown + name, width=x + CARD_W - tx - 4,
-                       font=("", 9, "bold"), fill="#222", tags=(tag,))
+                       font=("", 9, "bold"), fill=L["ink"], tags=(tag,))
         if p is None:
             sub = "nobody of the faction!"
         else:
@@ -730,7 +735,7 @@ class FamilyEditor(ttk.Frame):
             if p.get("role"):
                 sub = "%s, %s" % (p["role"], sub)
         cv.create_text(tx, y + CARD_H - 5, anchor="sw", text=sub, width=x + CARD_W - tx - 4, font=("", 8),
-                       fill="#444", tags=(tag,))
+                       fill=L["muted"], tags=(tag,))
         if p and (p["changed"] or p["new"]):
             cv.create_oval(x + CARD_W - 12, y + 4, x + CARD_W - 4, y + 12, fill="#2a9d3a" if p["new"] else "#1c5bd6",
                            outline="", tags=(tag,))
