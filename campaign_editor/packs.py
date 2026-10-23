@@ -63,7 +63,12 @@ def _weapon_projectiles(lines):
 def type_blocks(f, key="type"):
     """{name: (start, end)} of a file made of 'type <name>' blocks (EDU, descr_model_battle,
     descr_mount, descr_engines, descr_animals) - or of 'projectile <name>' blocks with key='projectile'.
-    Names may hold spaces (descr_mount)."""
+    Names may hold spaces (descr_mount). Read once while the file's text stays the same (Recolour asked it once a
+    unit - the whole EDU read 40 times, a mod's big EDU took seconds to open the work: report #411)."""
+    sig = hash("\n".join(f.raw))
+    kept = f.__dict__.setdefault("_type_blocks", {}) if hasattr(f, "__dict__") else {}
+    if key in kept and kept[key][0] == sig:
+        return dict(kept[key][1])
     out, cur = {}, None
     for i in range(len(f.raw)):
         t = tokens(f.text(i))
@@ -73,6 +78,7 @@ def type_blocks(f, key="type"):
             cur = (" ".join(strip_comment(f.text(i)).split()[1:]), i)
     if cur:
         out[cur[0]] = (cur[1], len(f.raw))
+    kept[key] = (sig, dict(out))
     return out
 
 

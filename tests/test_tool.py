@@ -10597,6 +10597,14 @@ building smith
         edu = m2.load(m2.file("edu"))
         blocks = packs.type_blocks(edu)
         self.assertIn("alpha general 2", blocks)
+        # read once while the text stays the same (#411: Recolour read the EDU once a unit), again when it changes
+        from unittest import mock
+        with mock.patch.object(packs, "tokens", side_effect=AssertionError("read again")):
+            self.assertEqual(packs.type_blocks(edu), blocks)
+        at = blocks["alpha general 2"][0]
+        edu.set(at, edu.text(at).replace("alpha general 2", "alpha general 3"))
+        self.assertIn("alpha general 3", packs.type_blocks(edu))
+        edu.set(at, edu.text(at).replace("alpha general 3", "alpha general 2"))
         unit = "\n".join(edu.text(i) for i in range(*blocks["alpha general 2"]))
         self.assertIn("alpha_model_2", unit)                       # its model, renamed with it
         self.assertIn("alpha_general_2", unit)
