@@ -105,6 +105,18 @@ class RawFilesTest(unittest.TestCase):
         self.assertIn("campaign", RF.about("world/maps/campaign/imperial_campaign/descr_strat.txt")[0])
         self.assertEqual(RF.about("world/maps/campaign/x/descr_harvests.txt"), ("a campaign's file", None))
         self.assertEqual(RF.about("whatever.cfg"), ("a file the game reads", None))
+        self.assertEqual(RF.work_of("Unit editor > Voice"), "units")
+        self.assertEqual(RF.work_of("Map, Faction editor"), "map")
+        self.assertEqual(RF.work_of("Traits (Characters)"), "traits")
+        self.assertIsNone(RF.work_of(None))
+        for words, window in RF.ABOUT.values():         # every window named leads to a work of the main window
+            self.assertTrue(window is None or RF.work_of(window), window)
+        import re
+        with open(os.path.join(os.path.dirname(RF.__file__), "gui.py"), encoding="utf-8") as fh:
+            src = fh.read()                             # read as text: the test job has no tkinter
+        titles = src[src.index("WORK_TITLES = {"):]
+        keys = set(re.findall(r'"(\w+)":', titles[:titles.index("}")]))
+        self.assertEqual(set(RF.WORKS.values()) - keys, set())
         self.assertIsNone(RF.comment_mark("a.xml"))
         self.assertEqual(RF.comment_mark("script/main.nut"), "//")
 

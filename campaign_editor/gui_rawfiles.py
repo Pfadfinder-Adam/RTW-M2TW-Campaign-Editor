@@ -57,6 +57,8 @@ class RawFilesWindow(AutoKeep, tk.Toplevel):
         self.lbl_about = ttk.Label(right, text="Pick a file on the left.", foreground="#333", wraplength=760,
                                    justify="left")
         self.lbl_about.pack(side="top", fill="x", pady=(0, 4))
+        self.b_own = ttk.Button(right, text="", command=self.open_own)    # shown when the file has a window
+        self._own = None
         self.block = BlockText(right, on_change=self.typed)
         self.block.pack(fill="both", expand=True)
         bar = ttk.Frame(top)
@@ -101,9 +103,15 @@ class RawFilesWindow(AutoKeep, tk.Toplevel):
         self.path = sel[0]
         f = self.by_path[self.path]
         what, window = RF.about(f["rel"])
-        self.lbl_about.configure(text="%s - %s.%s%s" % (
-            self.mod.rel(self.path), what, ("  Its own window: %s." % window) if window else "",
+        self.lbl_about.configure(text="%s - %s.%s" % (
+            self.mod.rel(self.path), what,
             "  The game's own file: a change is written as the mod's copy." if f["game"] else ""))
+        self._own = RF.work_of(window)
+        if self._own:
+            self.b_own.configure(text="Open its own window: %s" % window)
+            self.b_own.pack(side="top", anchor="w", pady=(0, 4), after=self.lbl_about)
+        else:
+            self.b_own.pack_forget()
         lines = self.edits.get(self.path)
         if lines is None:
             lines = self.mod.load(self.path).texts()
@@ -111,6 +119,20 @@ class RawFilesWindow(AutoKeep, tk.Toplevel):
         self.block.set_lines(lines)
         self.block.mark_errors(RF.check(f["rel"], lines))
         self.say()
+
+    def open_own(self):
+        """The file's own window: the main window's work that holds it, brought to the front (what is typed here
+        stays waiting for Apply changes)."""
+        key, app = self._own, self.app
+        if not key or not hasattr(app, "v_work"):
+            return
+        self.block.flush()
+        app.v_work.set(getattr(app, "_faction_side", "edit") if key == "faction" else key)
+        if hasattr(app, "v_bar"):
+            app.v_bar.set(key)
+        app.work_changed()
+        app.lift()
+        app.focus_force()
 
     def typed(self, lines):
         if not self.path:
