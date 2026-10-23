@@ -899,17 +899,29 @@ def piece_key(look, w):
 
 
 def _words_before(w):
+    """The words of the nearest piece before w in its box that has words, kept on w: a piece without words before it
+    has the same words before it, so the walk back stops there (a box of a thousand pictures - Recolour's - walked
+    every one before each one: a tab took seconds to open, report #411)."""
+    out, passed = "", [w]
     try:
-        kids = w.master.winfo_children()
+        kids = list(w.master.children.values())          # tkinter's own list, in the order they were made
         for k in reversed(kids[:kids.index(w)]):
+            got = getattr(k, "_look_before", None)
+            if got is not None and not getattr(k, "_look_text", None):
+                out = got
+                break
             t = getattr(k, "_look_text", None)
             if t is None and k.winfo_class() in WITH_TEXT:
                 t = str(k.cget("text"))
             if t:
-                return t
-    except (tk.TclError, ValueError):
+                out = t
+                break
+            passed.append(k)                             # no words: the same words before it
+    except (tk.TclError, ValueError, AttributeError):
         pass
-    return ""
+    for k in passed:
+        k._look_before = out
+    return out
 
 
 def container(t):
