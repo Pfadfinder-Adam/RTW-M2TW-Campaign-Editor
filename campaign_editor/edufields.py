@@ -88,7 +88,9 @@ ONE = {
              "use",
     "voice_type": "the voice it speaks with: Light, Medium, Heavy, General or Female (Rome writes them Light_1...; "
                   "both spellings work)",
-    "accent": "Medieval II: the accent of its voice",
+    "accent": "Medieval II: the accent it speaks in battle whatever its owner's (an accent of "
+              "descr_sounds_accents.txt, letter case and all - another name leaves it silent); on the campaign map "
+              "only with descr_campaign_db's enable_unit_accent_overrides. Right after voice_type",
     "banner": "Medieval II: a banner it carries - two words: the kind (faction, holy or unit) and the banner's name "
               "(main_infantry, crusade, templars...); the line may repeat",
     "officer": "an officer's model (up to three officer lines)",
