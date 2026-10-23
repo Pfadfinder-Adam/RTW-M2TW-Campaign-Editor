@@ -11,9 +11,10 @@ from . import theme
 
 
 class BlockText(ttk.Frame):
-    def __init__(self, master, on_change=None, on_menu=None):
+    def __init__(self, master, on_change=None, on_menu=None, comment=";"):
         super().__init__(master)
         self.on_change, self.on_menu = on_change, on_menu
+        self.comment = comment                          # the line comment of the file's kind (None: xml has none)
         self.first = 0                                  # the file's line number of the first line shown
         self._after, self._loading, self._errors = None, False, {}
         bar = ttk.Frame(self)
@@ -105,7 +106,7 @@ class BlockText(ttk.Frame):
             for tag in ("key", "comment", "brace"):
                 t.tag_remove(tag, "%d.0" % r, "%d.end" % r)
             s = t.get("%d.0" % r, "%d.end" % r)
-            c = s.find(";")
+            c = s.find(self.comment) if self.comment else -1
             code = s if c < 0 else s[:c]
             if c >= 0:
                 t.tag_add("comment", "%d.%d" % (r, c), "%d.end" % r)
