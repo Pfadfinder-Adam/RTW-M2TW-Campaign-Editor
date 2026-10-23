@@ -2500,6 +2500,73 @@ building smith
         after = {k: v for k, v in tree_hash(self.root).items() if not k.startswith(("faction_tool_backups", "CampaignEditor_backups"))}
         self.assertEqual(before, after)
 
+    def test_town_tile_and_port_land_as_the_game_reads_them(self):
+        """Report R-20261023-D68B3A (Medieval II with M2EX, kgcm, two new regions): their towns stood on mountains -
+        the game skips such a region ('invalid tile ... skipping region': no town, no owner) and crashed as the
+        campaign started. A new region's town there is refused, Check names a town there. A port belongs to the
+        first land next to it looking down, right, up, left (WORLD_MAP::create_regions), not to most of the land
+        round it: two ports in one region ('we already have a port position') are named, a move refused."""
+        from campaign_editor.check import double_port_problems, town_tile_problems
+        from campaign_editor.mapedit import double_ports, place_problem, ports
+        from campaign_editor.regionedit import region_problems
+        camp = os.path.join(self.root, "data", "world", "maps", "campaign", "test")
+        R, B, K, S, W = (255, 0, 0), (0, 0, 255), (0, 0, 0), (41, 140, 233), (255, 255, 255)
+        px = [[R, R, R, B, B, B, S],                     # y = 0, the bottom row
+              [R, K, R, B, K, B, S],
+              [R, R, R, B, B, W, S],
+              [R, R, R, R, B, S, S],
+              [R, R, R, R, W, S, S]]
+        write_tga(os.path.join(camp, "map_regions.tga"), 7, 5, px)
+        flat, mountains = (0, 128, 128), (98, 65, 65)
+        ground = [[mountains if (x, y) in ((3, 3), (1, 7)) else flat for x in range(15)] for y in range(11)]
+        write_tga(os.path.join(camp, "map_ground_types.tga"), 15, 11, ground)
+        mod = ModData(self.root)
+        # the port at 4, 4: A_R's land on two sides, B_R's below it - the game gives it to B_R, which has one at 5, 2
+        self.assertEqual(ports(mod, "test"), {"B_R": (5, 2)})
+        self.assertEqual(double_ports(mod, "test"), {"B_R": [(5, 2), (4, 4)]})
+        got = double_port_problems(mod, "test")
+        self.assertEqual(len(got), 1)
+        self.assertIn("B_R gets 2 ports", got[0])
+        # A_R's town at 1, 1 stands on mountains (map_ground_types' 2x + 1, 2y + 1)
+        got = town_tile_problems(mod, "test")
+        self.assertEqual(len(got), 1)
+        self.assertIn("the town of A_R at 1, 1 stands on mountains", got[0])
+        # a port moved where the land below it is another region's: refused
+        px[4][4] = R
+        write_tga(os.path.join(camp, "map_regions.tga"), 7, 5, px)
+        mod = ModData(self.root)
+        why = place_problem(mod, "test", "port", "A_R", (4, 4))
+        self.assertIn("the port would be B_R's, not A_R's", why)
+        # a new region's town on mountains: refused
+        new = [{"name": "N_R", "settlement": "Ntown", "city": (0, 3), "port": None}]
+        errors, _ = region_problems(mod, "test", {(0, 3): "N_R", (0, 4): "N_R", (1, 4): "N_R"}, new)
+        self.assertTrue(any("N_R: the town stands on mountains" in e for e in errors), errors)
+        new[0]["city"] = (0, 4)
+        errors, _ = region_problems(mod, "test", {(0, 3): "N_R", (0, 4): "N_R", (1, 4): "N_R"}, new)
+        self.assertFalse(any("the town stands on" in e for e in errors), errors)
+
+    def test_crash_doctor_puts_the_skipped_region_first(self):
+        """R-20261023-D68B3A: the editor's report named 'Unknown settlement level : moat_and_bailey' (the mod's own
+        descr_campaign_db.xml, the game went on) first; the town the game skipped - the crash's cause - comes first."""
+        from campaign_editor import gamelog
+        log = "\n".join([
+            "18:47:17.412 [data.campaign_db] [error] Unknown settlement level : moat_and_bailey",
+            "18:47:17.412 [core.assert] [fatal] ERROR: src\\game\\campaign_db.cpp(670)",
+            "Unknown settlement level : moat_and_bailey",
+            "  at   src/core/system/assert.cpp (431): Core::RetailAssertLog+194",
+            "18:47:23.320 [core.assert] [fatal] ERROR: src\\game\\world_map.cpp(8763)",
+            "You have chosen an invalid tile(438,208) for a settlement position in region(130).",
+            "PLACEMENT_TOO_MOUNTAINOUS",
+            "  at   src/core/system/assert.cpp (431): Core::RetailAssertLog+194",
+            "18:47:28.520 [core.assert] [fatal] ERROR: src\\game\\world.cpp(4404)",
+            "You have chosen an invalid tile(438, 208) for the settlement of Soukhumi, skipping region",
+            "  at   src/core/system/assert.cpp (431): Core::RetailAssertLog+194"] + ["18:47:44.356 [ai.prod] [info] x"] * 200)
+        v = gamelog.verdict(log)
+        self.assertIn("the one that crashes it later: The town of region number 130 stands at 438, 208", v["headline"])
+        self.assertIn("TOO_MOUNTAINOUS", v["headline"])
+        self.assertTrue(any("The town Soukhumi stands at 438, 208" in w for w in v["serious"]))
+        self.assertTrue(any("moot_and_bailey - the game's own spelling" in w for w in v["serious"]))
+
     def test_town_ring_rule(self):
         """The 8 tiles round a town are its own region or sea (0 exceptions in vanilla Rome and Medieval II), and
         on Medieval II no port stands in a town's 3 x 3: a move, a painted tile or a new region that breaks it is

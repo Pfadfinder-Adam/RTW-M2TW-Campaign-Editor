@@ -3227,10 +3227,28 @@ class App(tk.Tk):
             return "not %s's land - paint it first" % name
         if what == "port" and not any(cm.is_sea(xy[0] + dx, xy[1] + dy) for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1))):
             return "a port needs the sea next to it"
+        if what == "city":                              # the game skips a region whose town it cannot place
+            why = self.mod.land_problem(self.v_campaign.get(), tuple(xy))     # (R-20261023-D68B3A: on mountains)
+            if why:
+                return why
         r = self._new_region(name)
         other = "port" if what == "city" else "city"
         if tuple(r.get(other) or ()) == tuple(xy):
             return "the town and the port need different tiles"
+        if what == "port":
+            from .mapedit import port_land, port_land_words
+            from .regionedit import SEA
+            marks = {tuple(n.get(k)) for n in self.new_regions for k in ("city", "port")
+                     if n.get(k) and (n["name"], k) != (name, "port")}
+
+            def owner(t):
+                if not (0 <= t[0] < cm.w and 0 <= t[1] < cm.h) or cm.regions_img.get(*t) in ((0, 0, 0), (255, 255, 255)):
+                    return None
+                got = self.region_paint.get(t) or cm.region_at(*t)
+                return None if got == SEA else got
+            got = port_land(tuple(xy), owner, lambda t: t in marks)
+            if got != name:
+                return port_land_words(got, name)
         return None
 
     def _town_land(self, xy, name):
