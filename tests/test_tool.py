@@ -1908,6 +1908,25 @@ building smith
         self.assertEqual(R.colour_pair([[1, 2, 3], [4, 5, 6]]), ((1, 2, 3), (4, 5, 6)))
         self.assertNotEqual(R.colour_pair([(1, 2, 3), None]), R.colour_pair([(1, 2, 3), (4, 5, 6)]))
 
+    def test_edit_faction_colour_line_missing(self):
+        """Review 2026-10-23: a faction with no secondary_colour line (a mod's goths, report R-20261022-46D767) got
+        none when Edit faction picked one - nothing was written, nothing said. The line is added after its primary."""
+        from campaign_editor.edit import edit
+        p = ModData(self.root).file("sm_factions")
+        with open(p, encoding="latin-1") as fh:
+            text = fh.read()
+        write(p, text.replace("secondary_colour\t\tred 4, green 5, blue 6\n", "", 1))
+        mod = ModData(self.root)
+        plan = edit(mod, "test", "alpha", {"secondary_colour": (7, 8, 9)})
+        out = plan.files[p].dump().decode("latin-1")
+        self.assertIn("primary_colour\t\tred 1, green 2, blue 3\r\nsecondary_colour\t\tred 7, green 8, blue 9", out)
+        # New faction from such a template with a secondary colour picked: the clone gets the line too
+        plan = build(ModData(self.root), "test", "alpha", "beta", {"primary_colour": (20, 30, 40),
+                                                                   "secondary_colour": (50, 60, 70),
+                                                                   "start": {"regions": ["B_R"], "leader": {"name": "Boris"}}})
+        out = plan.files[p].dump().decode("latin-1")
+        self.assertIn("red 20, green 30, blue 40\r\nsecondary_colour\t\tred 50, green 60, blue 70", out)
+
     def test_recolour_finds_the_templates_cards_under_a_thin_mod(self):
         """Report R-20261009-4D53CB (the test mod on Rome with REX): a clone's cards stayed its template's red after
         Recolour - in a thin mod the template's cards lie in the game's data only, so none was found to compare with
@@ -3398,6 +3417,23 @@ building smith
         App._kept_on_map(fake, owners, waiting)
         self.assertEqual(owners["B_R"], "alpha")
         self.assertIn("B_R", waiting)
+
+    def test_rebel_unit_without_slave_said_on_medieval2(self):
+        """Review: the Rebels window let a unit the rebels may not own into a rebel type - Medieval II crashes when
+        those rebels appear (Check mod files said it only later). Said in the window for a unit added (Medieval II);
+        Rome takes it (vanilla has five)."""
+        from campaign_editor import rebels as RB
+        data = os.path.join(self.root, "data")
+        write(os.path.join(data, "descr_rebel_factions.txt"), "rebel_type\tRebels\ncategory\tpeasant_revolt\n"
+              "chance\t3\ndescription\tRebels\nunit\trebel spear\n")
+        _, types = RB.read(ModData(data))
+        types[0].units.append("alpha general")
+        self.assertEqual(RB.problems(ModData(data), types), [])                           # Rome
+        write(os.path.join(data, "descr_religions.txt"), "religions\n{\n\tcatholic\n}\n")
+        self.assertTrue(any("no 'slave'" in w for w in RB.problems(ModData(data), types)))
+        _, types = RB.read(ModData(data))
+        types[0].chance = "4"                                     # a type changed, its old units as they were
+        self.assertEqual(RB.problems(ModData(data), types), [])
 
     def test_rebel_types_edited_and_their_regions_follow(self):
         """Report #252 (a 'Rebels' window like Mercenaries): rebel types read from descr_rebel_factions.txt; a unit
@@ -10173,6 +10209,43 @@ building smith
                                                         "start": {"regions": ["B_R"], "leader": {"name": "Boris"}}})
         fb = Strat(plan.files[mod.campaign_file("test", "descr_strat.txt")]).faction("beta")
         self.assertTrue(any(c.name == "Brude" for c in fb.characters))
+
+    def test_level_taken_from_everyone_line(self):
+        """Review: a level with no factions list taken from one faction - its 'requires' with nothing after it got
+        'requires factions { ... } and ' (a dangling 'and' the game cannot read); a condition after it stays."""
+        from campaign_editor import roster as R
+        d = os.path.join(self.root, "data")
+        for head, want in (("muster city requires", "muster city requires factions { slave, }"),
+                           ("muster city requires building_present_min_level x y",
+                            "muster city requires factions { slave, } and building_present_min_level x y")):
+            write(os.path.join(d, "export_descr_buildings.txt"), self.POOL_EDB.replace(
+                "muster city requires factions { barbarian, alpha, }", head))
+            mod = ModData(self.root)
+            plan = Plan(mod, None, "roster")
+            R.set_level(plan, "alpha", "barracks", "muster", give=False)
+            edb = plan.files[mod.file("edb")].dump().decode("latin-1")
+            self.assertIn(want + "\r\n", edb)
+
+    def test_brought_faction_recruits_what_it_owns(self):
+        """Review 2026-10-23 (a dry run on Medieval II: Scotland brought on England): the brought faction got every
+        recruit line of its frame's own units it does not own (Medieval II stops at such a town: settlement.cpp), and
+        the units it shares with this mod were owned but recruited nowhere. Now the lines follow what it owns."""
+        from campaign_editor import factionbring as FB
+        d = os.path.join(self.root, "data")
+        write(os.path.join(d, "export_descr_buildings.txt"), self.POOL_EDB.replace(
+            'requires factions { slave, }', 'requires factions { slave, zz, }').replace(
+            'retrain_pool "alpha general"  0   0.2   1  0  requires factions { alpha, }',
+            'recruit_pool "alpha general"  0   0.2   1  0  requires factions { alpha, }'))
+        p = os.path.join(d, "export_descr_unit.txt")
+        with open(p, encoding="latin-1") as fh:
+            text = fh.read()
+        write(p, text.replace("ownership\talpha", "ownership\talpha, zz", 1))
+        mod = ModData(self.root)
+        plan = Plan(mod, "alpha", "zz", {})
+        FB.recruit_owned(plan, "zz", ["alpha general"])
+        edb = plan.files[mod.file("edb")].dump().decode("latin-1")
+        self.assertIn('"rebel spear"  1   0.5   4  0  requires factions { slave, }', edb)      # not its unit: out
+        self.assertIn('"alpha general"  0   0.2   1  0  requires factions { alpha, zz, }', edb)  # its unit: in
 
     def test_brought_faction_window_fields_are_its_own(self):
         """The tester (2026-10-17): a faction brought from another mod kept the frame's AI, money and victory in the

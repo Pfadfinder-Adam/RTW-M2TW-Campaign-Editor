@@ -146,6 +146,38 @@ def bring_units(plan, src, faction, new):
     return shared, bring, names
 
 
+def recruit_owned(plan, new, shared):
+    """The recruit lines as the units new owns: the units it shares with this mod are recruited where this mod
+    recruits them (they were owned, never trained), and the lines it got from its frame for the frame's own units
+    (clone.edb_factions; their ownership was not given - a brought faction owns its own) let it go - Medieval II stops
+    at a town whose building recruits a unit the faction's ownership does not allow (settlement.cpp 'Settlement
+    recruitment availability included unit'), Rome lists them as warnings."""
+    from . import roster as R
+    for u in shared:
+        R.give_unit(plan, new, u)
+    edu_p, edb_p = plan.mod.file("edu"), plan.mod.file("edb")
+    if not edu_p or not edb_p:
+        return
+    edu, e = plan.edit(edu_p), plan.edit(edb_p)
+    owned = {b[0].lower() for b in R._edu_blocks(edu) if new in R.ownership(edu, b)}
+    gone = set()
+    for i, unit, _, _ in reversed(R.recruit_lines(e, R.RECRUIT_KEYS)):
+        names = R.factions_in(e.text(i))
+        if not names or new not in names or unit.lower() in owned:
+            continue
+        if len(names) == 1:
+            e.delete(i, i + 1)
+        else:
+            text = R.drop_faction(e.text(i), new)
+            if text is None:
+                continue
+            e.set(i, text)
+        gone.add(unit)
+    if gone:
+        plan.note(e, "%s left out of the recruit lines of %d unit(s) of its frame %s it does not own: %s" % (
+            new, len(gone), plan.template, ", ".join(sorted(gone)[:8]) + (" ..." if len(gone) > 8 else "")))
+
+
 def unit_pool(plan, new):
     """[(unit type, upkeep)] of the land units new owns in plan's export_descr_unit (the brought and the shared ones),
     generals' bodyguards, siege engines, animal handlers and ships left out - what its garrisons are drawn from."""
@@ -708,6 +740,7 @@ def overlay(plan, campaign, bring):
     elif culture:
         plan.warn(sm, "%s's culture %s is not in this mod - %s keeps its frame's culture" % (faction, culture, new))
     shared, brought, names = bring_units(plan, src, faction, new)
+    recruit_owned(plan, new, shared)
     plan.bring_start = start_of(plan, src, bring.get("campaign") or campaign, faction, new, names)
     if plan.opts.get("copy_art", True):                 # its pictures where the frame's copies went (yours win)
         from . import log

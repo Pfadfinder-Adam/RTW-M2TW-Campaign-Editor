@@ -625,7 +625,7 @@ class _Recolour(AutoKeep):
         new, template, camp = self.pending, self.faction, self.camp
         # its copy (named after it) - or the same file, where the new faction wears the template's own picture (a
         # battle texture: the recolour makes it a copy of its own then)
-        want = set().union(*(R.renamed_rels(it["rel"], template, new) for it in items))
+        want = {w.lower() for w in set().union(*(R.renamed_rels(it["rel"], template, new) for it in items))}
         n = len(items)
         source, target, frm = list(self.source), list(self.target), self._from_of()
         if any(self.edits.values()):
@@ -641,7 +641,9 @@ class _Recolour(AutoKeep):
             if new not in [n for n, _ in mod.factions()]:
                 plan.note(None, "%d picture(s) of %s recoloured once it is created (it is written first)" % (n, new))
                 return plan
-            got = [it for it in R.targets(mod, camp, new) if R.plain_rel(it["rel"]).replace("\\", "/") in want]
+            # any case: the copies are written under the editor's own folder names (ui/units/<new>/), a game's folder
+            # may be spelled UI/Units/ - Windows sees one file (as From zero's recolour compares them)
+            got = [it for it in R.targets(mod, camp, new) if R.plain_rel(it["rel"]).replace("\\", "/").lower() in want]
             done = R.plan_recolour(plan, got, source, target, frm)
             for it, how in done:
                 if not isinstance(how, float):
