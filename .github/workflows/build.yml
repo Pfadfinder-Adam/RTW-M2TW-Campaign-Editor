@@ -5,6 +5,7 @@ on:
     branches: [main]
     tags: ["v*"]
   pull_request:
+  workflow_dispatch:
 
 # the token may only read, unless a job asks for more (the release upload asks for contents: write)
 permissions:
@@ -23,8 +24,11 @@ jobs:
       - run: ruff check --output-format github
       - run: python -m unittest discover -s tests -v
 
+  # the exe on every push in the public repository (its Actions are free); in the private one, where every minute counts
+  # (Windows minutes twice) and a Nuitka build takes half an hour, only when asked (Actions -> build -> Run workflow)
   windows-exe:
     needs: test
+    if: github.repository == 'Pfadfinder-Adam/RTW-M2TW-Campaign-Editor' || github.event_name == 'workflow_dispatch'
     runs-on: windows-latest
     permissions:
       contents: write
