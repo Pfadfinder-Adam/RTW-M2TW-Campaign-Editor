@@ -3074,6 +3074,8 @@ COVERAGE = {
     "Report a bug / Suggest, Answers to my reports": "sends to the internet - tried by hand",
     "Start the game (the bottom bar)": "starts the game - tried by hand: start CE_Test with it",
     "Credits": LOOK,
+    "Any game file, as it is written (the notepad)": "unit test RawFilesTest - only the typed lines change, a game's "
+                                                      "file becomes the mod's copy, Restore brings it back",
     "Authors and sources of this mod": "unit test SourcesTest - it writes only its own list and text file into the "
                                        "mod folder, never a game file",
     "A mod from zero, step by step": "unit test test_mod_from_zero_steps (it only opens the editor's own works)",
@@ -3085,6 +3087,7 @@ COVERAGE = {
 # the window's work buttons, tabs and Tools entries (the start of their text) -> the feature above
 UI = {
     "Campaign script": "Campaign script: pieces taken out (one, picked, all)",
+    "Any game file": "Any game file, as it is written (the notepad)",
     "New faction": "New faction", "Edit faction": "Edit faction (names, colours, money, towns, garrisons)",
     "Faction editor": "Edit faction (names, colours, money, towns, garrisons)",
     "Factions": "Edit faction (names, colours, money, towns, garrisons)",
