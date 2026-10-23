@@ -10629,6 +10629,7 @@ building smith
                                edit=lambda p: None)
         src = SimpleNamespace(culture=lambda f: None)
         stubs = dict(bring_units=lambda *a: ([], [], {}), start_of=lambda *a: None, bring_sm_files=lambda *a: None, bring_horde=lambda *a: None,
+                     bring_battle_textures=lambda *a: 0,
                      own_select_map=lambda *a: None, bring_characters=lambda *a: None, bring_figures=lambda *a: None,
                      bring_names=lambda *a: called.append(a))
         with mock.patch.multiple(FB, **stubs), mock.patch("campaign_editor.moddata.ModData", lambda p: src), \
@@ -10929,6 +10930,92 @@ building smith
                                      "texture\tpicts,\tdata/models_strat/textures/navy_celts.tga",
                                      "model_flexi\tdata/models_strat/navy_barb.cas, max"])
             self.assertEqual(sorted(files), ["models_strat/navy_barb.cas", "models_strat/textures/navy_celts.tga.dds"])
+
+    def test_brought_unit_shared_when_only_its_eras_differ(self):
+        """Yuri's Wales from the Britannia campaign into his mod (2026-10-23, 'only the first tab filled'): a mod's
+        own faction stands in its units' 'era N' lines (the engine reads them as faction lists, unit_db.cpp), so
+        every unit it shares with this mod looked different and came again as 'Mailed Knights 2' with copies of
+        its models. Now a unit differing only in its faction lists is shared - owned, and in the eras the other
+        mod gives it."""
+        from campaign_editor import factionbring as FB
+        mod = ModData(self.root)
+        edu = mod.file("edu")
+        with open(edu, encoding="latin-1") as fh:
+            text = fh.read()
+        block = "\ntype\t\tpike\ndictionary\tpike\ncategory infantry\nownership\t%s\nera 0\t%s\nera 1\t%s\n"
+        write(edu, text + block % ("slave, alpha,", "slave, alpha, ; the rebels", "alpha"))
+        with tempfile.TemporaryDirectory() as src:
+            shutil.copytree(self.root, src, dirs_exist_ok=True)
+            write(os.path.join(src, "data", "export_descr_unit.txt"), text + block % ("zz", "zz", "slave"))
+            self.assertTrue(FB._same_unit(*[["category infantry", "ownership x", "era 0 %s" % f] for f in "xy"]))
+            plan = Plan(mod, "alpha", "beta", {})
+            shared, brought, names = FB.bring_units(plan, ModData(src), "zz", "beta")
+            self.assertEqual((shared, brought), (["pike"], []))
+            got = plan.edit(edu).texts()
+            self.assertIn("ownership\tslave, alpha, beta,", got)
+            self.assertIn("era 0\tslave, alpha, beta, ; the rebels", got)
+            self.assertIn("era 1\talpha", got)                      # the other mod gave it no era 1
+
+    def test_brought_faction_wears_its_own_battle_textures(self):
+        """A brought faction's men wore its frame's textures in battle (the frame's lines copied for it - Scots in
+        English colours, Wales of another mod likewise): a battle model both mods have with the same meshes gets
+        the brought faction's own texture lines for the new one, their files brought when this mod lacks them."""
+        from campaign_editor import factionbring as FB
+        mod = ModData(self.root)
+        dmb = "type\t\tpike\nskeleton\tfs_spear\ntexture\talpha, data/models_unit/textures/pike_alpha.tga\n" \
+              "%smodel_flexi_m\tdata/models_unit/pike.cas, max\n\n"
+        write(os.path.join(mod.data, "descr_model_battle.txt"),
+              dmb % "texture\tbeta, data/models_unit/textures/pike_alpha.tga\n")
+        with tempfile.TemporaryDirectory() as src:
+            os.makedirs(os.path.join(src, "data", "models_unit", "textures"))
+            write(os.path.join(src, "data", "descr_sm_factions.txt"), "faction\tzz\nculture\teastern\n")
+            write(os.path.join(src, "data", "descr_model_battle.txt"),
+                  dmb % "texture\tzz, data/models_unit/textures/pike_zz.tga\n")
+            write(os.path.join(src, "data", "models_unit", "textures", "pike_zz.tga.dds"), "x")
+            plan = Plan(mod, "alpha", "beta", {})
+            self.assertEqual(FB.bring_battle_textures(plan, ModData(src), "zz", "beta"), 1)
+            got = plan.edit(mod.file("model_battle")).texts()
+            self.assertIn("texture\tbeta, data/models_unit/textures/pike_zz.tga", got)
+            self.assertIn("texture\talpha, data/models_unit/textures/pike_alpha.tga", got)
+            self.assertNotIn("texture\tbeta, data/models_unit/textures/pike_alpha.tga", got)
+            self.assertEqual([os.path.relpath(d, mod.data).replace("\\", "/") for _, d in plan.copies],
+                             ["models_unit/textures/pike_zz.tga.dds"])
+            # another model under the same name (other meshes): left as it is
+            write(os.path.join(src, "data", "descr_model_battle.txt"),
+                  (dmb % "texture\tzz, data/models_unit/textures/pike_zz.tga\n").replace("pike.cas", "pike2.cas"))
+            plan = Plan(mod, "alpha", "beta", {})
+            self.assertEqual(FB.bring_battle_textures(plan, ModData(src), "zz", "beta"), 0)
+
+    def test_brought_pictures_found_by_their_place_not_their_name(self):
+        """A mod's faction whose pictures do not carry its name (Wales flying 'faction_banner_scotland', Scotland's
+        'princess_scottland'): they were left out and the new faction got EMPTY banners and figures. Each goes where
+        the frame's picture of the same place was copied - the same line, the banner blocks most alike, the same
+        kind of picture."""
+        from unittest import mock
+        from campaign_editor import factionart as FA
+        from campaign_editor import factionbring as FB
+        pics = {"wales": [{"rel": "ui/captain banners/captain_card_scotland.tga", "path": "/x/card", "label": "card"},
+                          {"rel": "banners/textures/faction_banner_scotland.texture", "path": "/x/ban",
+                           "label": "battle banner faction_banner_scotland.texture",
+                           "extra": {"kind": "banner", "ref": "banners\\textures\\Faction_banner_scotland.texture"}},
+                          {"rel": "models_strat/textures/princess_scottland.tga.dds", "path": "/x/pr", "label": "p",
+                           "link": ["model_strat", "texture:princess"]},
+                          {"rel": "ui/wales_x.tga", "path": "/x/own", "label": "x"}],
+                "england": [{"rel": "ui/captain banners/captain_card_england.tga", "label": "card"},
+                            {"rel": "banners/textures/faction_banner_england.texture", "label": "battle banner f",
+                             "extra": {"kind": "banner", "ref": "banners/textures/faction_banner_england.texture"}},
+                            {"rel": "models_strat/textures/princess_england.tga.dds", "label": "q",
+                             "link": ["model_strat", "texture:princess"]},
+                            {"rel": "ui/routing.tga", "label": "card2"}]}
+        places = {"wales": {"banners/textures/faction_banner_scotland.texture": frozenset({"spear", "cavalry"})},
+                  "england": {"banners/textures/faction_banner_england.texture": frozenset({"spear", "cavalry", "t"})}}
+        with mock.patch.object(FA, "faction_pictures", side_effect=lambda m, c, f: pics[f]), \
+                mock.patch.object(FB, "_banner_places", side_effect=lambda m, f: places[f]):
+            self.assertEqual(FB.art_picks(None, "c", "wales", "cymru", "/tmp"), {"ui/cymru_x.tga": "/x/own"})
+            self.assertEqual(FB.art_picks(None, "c", "wales", "cymru", "/tmp", frame=(None, "england")), {
+                "ui/cymru_x.tga": "/x/own", "ui/captain banners/captain_card_cymru.tga": "/x/card",
+                "banners/textures/faction_banner_cymru.texture": "/x/ban",
+                "models_strat/textures/princess_cymru.tga.dds": "/x/pr"})
 
     def test_unit_pack_paths_from_the_game_root(self):
         # Barbarian Invasion's lines name files from the game's root ('bi/data/...'): found under data and written
