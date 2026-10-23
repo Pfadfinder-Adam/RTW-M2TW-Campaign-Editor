@@ -8,7 +8,7 @@ row (card, description picture, battle model, voice; a second row on a narrow wi
 **?** beside each title; the lines fold away behind
 **Stats** - every line of the block (open it to change them; it stays open or closed as you left it). On a unit, the
 **?** beside a line's name says what each of its values means - stat_pri's attack, charge bonus, missile, range,
-ammunition..., stat_cost's turns, price, upkeep..., every word of attributes - from the game's own notes. The lists filter (**Show**: a faction or a culture - the units naming it; a mod's units anyone may hire, `ownership all`, under **everyone's units** - a category, mercenaries apart) and sort; drag the line between the list and the rest (its grip drawn in the text's colour) to make the list wider - the width is kept.
+ammunition..., stat_cost's turns, price, upkeep..., every word of attributes - from the game's own notes. The lists filter (**Show**: a faction or a culture - the units naming it; a mod's units anyone may hire, `ownership all`, under **everyone's units** - a category, mercenaries apart) and sort; drag the line between the list and the rest (its grip drawn in the text's colour) to make the list wider - the width is kept. On a building chain, **Only the lines for ...** in the Stats window shows the lines for the faction or culture picked in Show alone - the levels it may not build and the lines its factions lists keep out are left out.
 
 - **Texts players read** (under the pictures): on a unit, its name, short and long description
   (`export_units.txt`); on a building, a level's name, short description and description for a culture or a
