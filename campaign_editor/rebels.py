@@ -110,6 +110,8 @@ def problems(mod, types):
     edu = mod.file("edu")
     known = {u.type.lower(): u for u in read_units(mod.load(edu))} if edu else {}
     names = [r.name.lower() for r in types]
+    from .limits import game_kind
+    medieval2 = bool(known) and game_kind(mod) == "medieval2"
     for r in types:
         if not r.changed():
             continue
@@ -121,9 +123,15 @@ def problems(mod, types):
             out.append("%s: chance must be a whole number (%s)" % (r.name, r.chance))
         if not r.units:
             out.append("%s: no unit - the game raises nobody" % r.name)
+        was = {x.lower() for x in (r.old[4] if r.old else ())}
         for u in r.units:
             if known and u.lower() not in known:
                 out.append("%s: unit '%s' is not in export_descr_unit.txt" % (r.name, u))
+            elif medieval2 and u.lower() not in was and known[u.lower()].ownership and \
+                    not {"slave", "all"} & set(known[u.lower()].ownership):
+                # a unit added here (one the mod had already is its own matter - Check mod files says it)
+                out.append("%s: unit '%s' has no 'slave' in its ownership - Medieval II crashes when these rebels "
+                           "appear (give it to the rebels in Units, or pick another)" % (r.name, u))
         if len(set(u.lower() for u in r.units)) > VANILLA_UNITS:
             out.append("%s: %d unit types - the game takes the first %d (REX / M2EX too), the rest are dropped" % (
                 r.name, len(set(u.lower() for u in r.units)), VANILLA_UNITS))

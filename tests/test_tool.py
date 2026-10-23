@@ -3418,6 +3418,23 @@ building smith
         self.assertEqual(owners["B_R"], "alpha")
         self.assertIn("B_R", waiting)
 
+    def test_rebel_unit_without_slave_said_on_medieval2(self):
+        """Review: the Rebels window let a unit the rebels may not own into a rebel type - Medieval II crashes when
+        those rebels appear (Check mod files said it only later). Said in the window for a unit added (Medieval II);
+        Rome takes it (vanilla has five)."""
+        from campaign_editor import rebels as RB
+        data = os.path.join(self.root, "data")
+        write(os.path.join(data, "descr_rebel_factions.txt"), "rebel_type\tRebels\ncategory\tpeasant_revolt\n"
+              "chance\t3\ndescription\tRebels\nunit\trebel spear\n")
+        _, types = RB.read(ModData(data))
+        types[0].units.append("alpha general")
+        self.assertEqual(RB.problems(ModData(data), types), [])                           # Rome
+        write(os.path.join(data, "descr_religions.txt"), "religions\n{\n\tcatholic\n}\n")
+        self.assertTrue(any("no 'slave'" in w for w in RB.problems(ModData(data), types)))
+        _, types = RB.read(ModData(data))
+        types[0].chance = "4"                                     # a type changed, its old units as they were
+        self.assertEqual(RB.problems(ModData(data), types), [])
+
     def test_rebel_types_edited_and_their_regions_follow(self):
         """Report #252 (a 'Rebels' window like Mercenaries): rebel types read from descr_rebel_factions.txt; a unit
         added, a type renamed (its regions follow in descr_regions.txt), a new type (with the name players read), a
