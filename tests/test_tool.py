@@ -8797,6 +8797,10 @@ building smith
         self.assertEqual(values("rect", [5, 6, 4, 4]), [7, 7, 4, 4])
         from campaign_editor import upscale as U
         self.assertEqual(U.move_script_line("  reveal_tile 10, 20", values, xy)[0], "  reveal_tile 12, 21")
+        # Medieval II's camera / clickable box: two corners; its bare form (clear) takes no tile and is no 'check by hand'
+        self.assertEqual(U.move_script_line("restrict_strat_camera 10 15 80 100", values, xy),
+                         ("restrict_strat_camera 12 16 82 101", 1, 0))
+        self.assertEqual(U.move_script_line("restrict_clickable_rect", values, xy), ("restrict_clickable_rect", 0, 0))
 
     def test_map_size_moves_the_fog_frame_to_the_new_edge(self):
         """Medieval II's map_fog.tga: clear inside, a dark ragged frame at the edges. A report (grown 17 tiles at the
@@ -8938,6 +8942,36 @@ building smith
         self.assertNotEqual(plan.binaries[mine], old)
         with open(os.path.join(gcamp, "radar_map1.tga"), "rb") as fh:
             self.assertEqual(fh.read(), old)
+
+    def test_map_size_writes_the_games_descr_terrain_into_a_thin_mod(self):
+        """The game sizes every map layer by descr_terrain.txt (world_map.cpp). A mod keeping only what it changes,
+        with its own map_regions.tga but the game's descr_terrain.txt: the size was never written (the file was looked
+        for beside map_regions.tga only), the new layers did not fit it. Now each file is found as the game finds it
+        (the campaign's folder, then base; the mod's, then the game's) and the game's one written as the mod's own."""
+        from campaign_editor import mapresize as MR
+        from campaign_editor.tga import read_tga
+        game, _ = self._game()
+        gcamp = os.path.join(game, "data", "world", "maps", "campaign", "test")
+        img = read_tga(os.path.join(gcamp, "map_regions.tga"))
+        gbase = os.path.join(game, "data", "world", "maps", "base")
+        os.makedirs(gbase, exist_ok=True)
+        gterrain = os.path.join(gbase, "descr_terrain.txt")
+        old = "dimensions\n{\n\twidth  %d\n\theight  %d\n}\n" % (img.width, img.height)
+        write(gterrain, old)
+        data, _ = create_mod(os.path.join(game, "data"), "Beta")
+        mcamp = os.path.join(data, "world", "maps", "campaign", "test")
+        os.makedirs(mcamp, exist_ok=True)
+        for n in ("descr_strat.txt", "map_regions.tga"):
+            shutil.copy(os.path.join(gcamp, n), os.path.join(mcamp, n))
+        plan = Plan(ModData(data), "map", "map_size", {})
+        warn = MR.plan_resize(plan, "test", top=-1, clear=True)
+        f = plan.files[gterrain]
+        self.assertEqual(os.path.normcase(f.path),
+                         os.path.normcase(os.path.join(data, "world", "maps", "base", "descr_terrain.txt")))
+        self.assertIn("height  %d" % (img.height - 1), "".join(f.texts()))
+        self.assertFalse([w for w in warn if "descr_terrain" in w])
+        with open(gterrain) as fh:
+            self.assertEqual(fh.read(), old)                       # the game's file untouched
 
     def test_map_size_names_what_stands_on_the_part_cut_off(self):
         """Map size: the places are read once and any cut checked against them at once (the window checks each
