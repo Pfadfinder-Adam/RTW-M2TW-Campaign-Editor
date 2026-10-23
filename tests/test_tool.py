@@ -5258,7 +5258,8 @@ building smith
         write(os.path.join(camp, "bar_regions_and_settlement_names.txt"), "{A_R}\tA\n", utf16=True)
         mod = ModData(self.root)
         self.assertEqual(os.path.basename(mod.region_labels_file("custom/foo")), "foo_regions_and_settlement_names.txt")
-        self.assertEqual(os.path.dirname(mod.region_labels_file("custom/bar")), camp)
+        self.assertEqual(os.path.normpath(os.path.dirname(mod.region_labels_file("custom/bar"))),
+                         os.path.normpath(camp))      # Windows: 'custom/bar' joined with '\\' (tester 2026-10-23)
         self.assertIsNone(mod.region_labels_file("custom/none"))
 
     def test_override_packs_come_before_data_pack(self):
