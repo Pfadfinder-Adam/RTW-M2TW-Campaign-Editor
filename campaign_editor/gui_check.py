@@ -1,4 +1,4 @@
-"""Check mod files' answer: the problems worst first, grouped by when the game would meet them (it would not start,
+"""Check mod files' answer: the problems worst first, grouped by when the game would meet them (it closes before its menu, the campaign does not load,
 the campaign loads with something lost, in battle, while playing), each with a button to the place that puts it
 right; the whole report one button away."""
 
