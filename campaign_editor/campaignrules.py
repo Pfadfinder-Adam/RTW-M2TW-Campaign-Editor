@@ -363,11 +363,33 @@ def careful(rule):
     return CAREFUL.get(rule.key)
 
 
+# the settlement levels Medieval II reads in descr_campaign_db.xml (settlement_level_from_string, compared with its
+# letters as written): the castles' first is the game's own spelling 'moot_and_bailey' - EDB's motte_and_bailey stops
+# the game at its start ('Unknown settlement level : motte_and_bailey', report #412)
+CITY_LEVELS = ("village", "town", "large_town", "city", "large_city", "huge_city")
+CASTLE_LEVELS = ("moot_and_bailey", "wooden_castle", "castle", "fortress", "citadel")
+
+
+def level_problem(rule, text):
+    """None, or why text is no settlement level the game reads - for the rules that name one (..._city_level,
+    ..._castle_level)."""
+    if not rule.key.endswith(("_city_level", "_castle_level")) or not text.strip():
+        return None
+    t = text.strip()
+    if t in CITY_LEVELS + CASTLE_LEVELS:
+        return None
+    hint = " ('moot_and_bailey' - the game's own spelling)" if t.lower() == "motte_and_bailey" else ""
+    return "no settlement level the game knows%s: one of %s" % (hint, ", ".join(CITY_LEVELS + CASTLE_LEVELS))
+
+
 def check(rule, text):
     """None, or why the text cannot be this value."""
     t = text.strip()
     if not t:
         return "empty"
+    lv = level_problem(rule, t)
+    if lv:
+        return lv
     if blocked(rule) and t != rule.value:
         return "kept as it is for now - changing it broke the game in a test"
     if rule.kind == "uint":

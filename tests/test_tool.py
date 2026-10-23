@@ -14977,6 +14977,28 @@ building smith
         f = plan.edit(os.path.join(d, "descr_campaign_db.xml"))
         self.assertIn('<max_number_of_children uint="5"/>', "\n".join(f.texts()))
 
+    def test_campaign_db_settlement_level_the_game_knows(self):
+        """Medieval II reads a settlement level in descr_campaign_db.xml as its own words: the castles' first is
+        'moot_and_bailey' (EDB's motte_and_bailey stopped the game at its start, report #412) - Check mod files says
+        it, Campaign rules takes only the game's words."""
+        from campaign_editor import campaignrules as CR
+        from campaign_editor.check import level_rule_problems
+        d = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, d)
+        p = os.path.join(d, "descr_campaign_db.xml")
+        write(p, '<campaign_db>\n  <settlement>\n      <siege_gear_required_for_city_level string="huge_city"/>\n'
+                 '      <siege_gear_required_for_castle_level string="motte_and_bailey"/>\n'
+                 '      <no_towers_only_for_castle_level string="moot_and_bailey"/>\n  </settlement>\n</campaign_db>\n')
+        rules = {r.key: r for r in CR.read(p)}
+        got = level_rule_problems(rules.values())
+        self.assertEqual(len(got), 1)
+        self.assertIn("siege_gear_required_for_castle_level 'motte_and_bailey'", got[0])
+        self.assertIn("moot_and_bailey", got[0])
+        rule = rules["siege_gear_required_for_castle_level"]
+        self.assertIsNotNone(CR.check(rule, "motte_and_bailey"))
+        self.assertIsNone(CR.check(rule, "moot_and_bailey"))
+        self.assertIsNone(CR.check(rules["siege_gear_required_for_city_level"], "large_city"))
+
     def test_mod_at_a_glance_for_the_log(self):
         """Every Load writes a short picture of the mod into the log (the author's idea: every report then shows
         what the mod is - its factions, towns, files - without any game file)."""
