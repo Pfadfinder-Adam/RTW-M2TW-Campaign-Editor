@@ -15,6 +15,8 @@ from .gui_util import AutoKeep, ShortHint, hint
 
 TITLE = "Recolour freely"
 SIDE = 380
+SAVE_WORDS = ("No Save needed: each change is kept by itself (Close keeps it too) - Apply changes in the main "
+              "window writes the picture, with a backup")
 
 _OPEN = {}                                     # (picture, crop) -> its window (one window a picture)
 
@@ -213,6 +215,8 @@ class FreeRecolourWindow(AutoKeep, tk.Toplevel):
         self._ak_line = ttk.Label(bot, foreground="#a33")
         self._ak_line.pack(side="left", padx=8)
         ttk.Button(bot, text="Close", command=self.close).pack(side="right")
+        # no Save button by design (AutoKeep) - said where the modder looks for one (report #425: 'where is Save?')
+        ttk.Label(bot, text=SAVE_WORDS, foreground="#555").pack(side="right", padx=8)
 
     # ---- the list of changes ----
     def fill(self):
