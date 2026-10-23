@@ -12,7 +12,7 @@ import os
 import subprocess
 import sys
 
-from . import log, settings
+from . import bundle, log, settings
 from .newmod import GAME_EXES, is_game
 
 ASKED = "move_offer"                      # settings: the version that asked last, or "never"
@@ -21,7 +21,7 @@ SHORTCUT = "RTW-M2TW Campaign Editor.lnk"
 
 def running_exe():
     """The exe this editor runs from, or None when it runs from the source (nothing to move)."""
-    return os.path.abspath(sys.executable) if getattr(sys, "frozen", False) else None
+    return bundle.exe()
 
 
 def should_offer(version):
@@ -110,8 +110,11 @@ def desktop_shortcut(target):
 def start(target):
     """Start the editor from its new place - as a program of its own: a one-file exe started from another hands it its
     unpacked folder unless told not to (PyInstaller's PYINSTALLER_RESET_ENVIRONMENT), and the first one then could not
-    remove that folder when it closed (report #409: 'Failed to remove temporary directory ..._MEI...')."""
+    remove that folder when it closed (report #409: 'Failed to remove temporary directory ..._MEI...'). Nuitka's
+    one-file exe leaves NUITKA_ONEFILE_PARENT, NUITKA_ONEFILE_DIRECTORY... to its own Python - never handed on."""
     env = dict(os.environ, PYINSTALLER_RESET_ENVIRONMENT="1")
     for k in ("_MEIPASS2", "_PYI_APPLICATION_HOME_DIR", "_PYI_ARCHIVE_FILE", "_PYI_PARENT_PROCESS_LEVEL"):
         env.pop(k, None)
+    for k in [k for k in env if k.upper().startswith("NUITKA_")]:
+        env.pop(k)
     subprocess.Popen([target], cwd=os.path.dirname(target), env=env)

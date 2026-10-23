@@ -11,6 +11,8 @@ import sys
 import tempfile
 import traceback
 
+from . import bundle
+
 
 REFERENCE = ("rtw_gold_steam_manifest.json.gz", "rex_manifest.json.gz", "m2tw_manifest.json.gz",
              "engine_catalogue.json.gz")
@@ -43,7 +45,7 @@ def run(window=True):
 def built_list():
     """The modules the source had when the exe was built (modules.txt, written by the build next to the exe's own
     files); [] outside the exe or when the build wrote none."""
-    base = getattr(sys, "_MEIPASS", None)
+    base = bundle.files_dir()
     try:
         with open(os.path.join(base, "modules.txt"), encoding="utf-8") as fh:
             return [n.strip() for n in fh if n.strip() and n.strip() != "__main__"]
@@ -68,7 +70,7 @@ def _modules(ok, fail, window):
             importlib.import_module("campaign_editor." + n)
             done += 1
         except ModuleNotFoundError as e:
-            if (e.name or "").split(".")[0] in OPTIONAL and not getattr(sys, "frozen", False):
+            if (e.name or "").split(".")[0] in OPTIONAL and not bundle.frozen():
                 lacking.append(n)                           # this Python lacks Pillow / tkinter / NumPy; the exe never does
             else:
                 fail("module %s" % n, "%s: %s" % (type(e).__name__, e))
@@ -82,13 +84,13 @@ def _modules(ok, fail, window):
         glcontext.default_backend()
         ok("moderngl and its OpenGL loader import (Maps > 3D on the graphics card)")
     except Exception as e:                                  # noqa: BLE001 - the exe must have it, a Python may not
-        if getattr(sys, "frozen", False):
+        if bundle.frozen():
             fail("moderngl", "%s: %s" % (type(e).__name__, e))
     try:                                                    # REX / M2EX packs of version 4 (zstd) - gamepacks
         import zstandard  # noqa: F401
         ok("zstandard imports (packs of REX / M2EX, version 4)")
     except Exception as e:                                  # noqa: BLE001
-        if getattr(sys, "frozen", False):
+        if bundle.frozen():
             fail("zstandard", "%s: %s" % (type(e).__name__, e))
 
 

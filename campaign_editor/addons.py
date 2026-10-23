@@ -9,13 +9,13 @@ Installing and removing go through a Plan like every write: a backup, and Restor
 
 import os
 import re
-import sys
 
+from . import bundle
 from .moddata import _ci
 
 
 def assets_dir():
-    base = getattr(sys, "_MEIPASS", None)
+    base = bundle.files_dir()
     if base:
         return os.path.join(base, "assets", "addons")
     return os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "assets", "addons")

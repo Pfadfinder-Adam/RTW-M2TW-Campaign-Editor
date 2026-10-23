@@ -15,7 +15,6 @@ moves to CampaignEditor.log.old."""
 
 import datetime
 import os
-import sys
 import traceback
 
 LIMIT = 1 << 20
@@ -41,8 +40,10 @@ OLD_SETTINGS = "faction_tool_settings.json"
 
 def exe_dir():
     """The folder of the exe (from the source: of campaign_editor.py)."""
-    if getattr(sys, "frozen", False):
-        return os.path.dirname(os.path.abspath(sys.executable))
+    from . import bundle
+    exe = bundle.exe()
+    if exe:
+        return os.path.dirname(exe)
     return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 

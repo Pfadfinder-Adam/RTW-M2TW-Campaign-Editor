@@ -432,8 +432,8 @@ ORIGIN_TAG = {"game": "  [the game's own file, unchanged]", "rex": "  [REX's fil
 def reference_dir():
     """The folder with the manifests that come with the tool (docs/reference in the
     source, 'reference' inside the exe)."""
-    import sys
-    base = getattr(sys, "_MEIPASS", None)
+    from . import bundle
+    base = bundle.files_dir()
     if base:
         return os.path.join(base, "reference")
     return os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "docs", "reference")
