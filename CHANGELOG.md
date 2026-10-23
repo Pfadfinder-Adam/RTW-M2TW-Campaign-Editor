@@ -10,6 +10,7 @@
 - Layout board: the board moves and zooms the same way as the Campaign HUD's - the wheel at the mouse (Shift in small steps), the middle button or Space + left drag it, Shift+1 everything, Shift+2 the picked piece, Shift+0 100 %; the arrows move the board when no free piece is picked.
 
 ### Fixed
+- View in 3D (Medieval II): the editor read a mod's animation set even when the game does not load it - the game takes data/animations' pack and skeletons only of the versions it knows (the skeletons' tied to descr_skeleton.txt's 'Version' line), the mod's own else its own, and without them builds every skeleton from descr_skeleton.txt and the loose .cas files; the editor now chooses the same way, so such a mod's men and horses are drawn from what the game plays.
 - Maps: Change size, Bigger map (x3), Map from zero, Save picture and Merge regions are in one Map tools menu - the map's bar fits a 1280 px window with Signs and tools and Find.
 - Characters: the character panel and the family tree are dark in the Dark look (they stayed a light parchment page).
 - Terrain: a map_heights.hgt cut short stopped the line under the map with an error while the mouse moved - now it is left out.
