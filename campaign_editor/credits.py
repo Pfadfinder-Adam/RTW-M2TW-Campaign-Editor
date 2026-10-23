@@ -3,7 +3,8 @@ Tools > Credits... window. One file for both: whoever is thanked on the page is 
 
 import os
 import re
-import sys
+
+from . import bundle
 
 PAGE = "https://github.com/Pfadfinder-Adam/RTW-M2TW-Campaign-Editor/blob/main/CREDITS.md"
 RE_LINK = re.compile(r"\[([^\]]+)\]\([^)]+\)")
@@ -11,8 +12,8 @@ RE_MARK = re.compile(r"\*\*|__|(?<![\w*])[*_](?=\S)|(?<=\S)[*_](?![\w*])|`")
 
 
 def path():
-    """CREDITS.md: inside the exe (PyInstaller unpacks it beside the program's files), else the repo's root."""
-    base = getattr(sys, "_MEIPASS", None)
+    """CREDITS.md: inside the exe (it unpacks it beside the program's files), else the repo's root."""
+    base = bundle.files_dir()
     if base:
         return os.path.join(base, "CREDITS.md")
     return os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "CREDITS.md")

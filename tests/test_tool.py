@@ -4130,6 +4130,33 @@ building smith
         self.assertIn(("module gui_nothere", "not in the exe"), bad)
         self.assertEqual(SC.built_list(), [])
 
+    def test_nuitka_exe_finds_itself_and_its_files(self):
+        """The exe is built by Nuitka: no sys.frozen, no sys._MEIPASS, and sys.executable lies in the folder the one-file
+        exe unpacks to (gone when it closes). The exe file is the one the user started (containing_dir + argv[0]),
+        the settings stay beside it, the bundled files are found beside the package, and a copy started from it gets
+        none of its NUITKA_* variables."""
+        import sys
+        from types import SimpleNamespace
+        from unittest import mock
+        from campaign_editor import bundle, log, relocate
+        self.assertFalse(bundle.frozen())                                   # the source
+        self.assertIsNone(bundle.exe())
+        self.assertIsNone(bundle.files_dir())
+        game = os.path.join(self.root, "Rome Total War")
+        compiled = SimpleNamespace(containing_dir=game, original_argv0="RTW-M2TW-Campaign-Editor.exe")
+        with mock.patch.object(bundle, "NUITKA", compiled), \
+                mock.patch.object(sys, "executable", os.path.join(self.root, "onefile_1", "python.exe")):
+            self.assertTrue(bundle.frozen())
+            self.assertEqual(bundle.exe(), os.path.abspath(os.path.join(game, "RTW-M2TW-Campaign-Editor.exe")))
+            self.assertEqual(relocate.running_exe(), bundle.exe())
+            self.assertEqual(log.exe_dir(), os.path.abspath(game))
+            self.assertEqual(bundle.files_dir(), os.path.dirname(os.path.dirname(os.path.abspath(bundle.__file__))))
+            with mock.patch.dict(os.environ, {"NUITKA_ONEFILE_PARENT": "12", "NUITKA_ORIGINAL_ARGV0": "x"}), \
+                    mock.patch.object(relocate.subprocess, "Popen") as popen:
+                relocate.start(os.path.join(game, "RTW-M2TW-Campaign-Editor.exe"))
+            env = popen.call_args.kwargs["env"]
+            self.assertFalse([k for k in env if k.startswith("NUITKA_")])
+
     def test_one_unit_card_for_all_owners(self):
         """#401 (the user's answer 2026-10-22: 'one and the same card for all factions, for whoever needs it'):
         'Pictures for' offers every owner at once - the picture goes to each owner's own folder; a faction picked
