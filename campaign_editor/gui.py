@@ -2357,12 +2357,19 @@ class App(tk.Tk):
             return self.map3d.undo_step(redo)            # Maps > 3D: its strokes, else the window's own steps
         if ed is None:
             return False
-        step = getattr(ed, "redo_step" if redo else "undo_step", None)
+        # a work that was a window (Events, Traits, Mercenaries, Rebels, Recolour, Campaign rules) keeps its own steps
+        # (AutoKeep._undo): Ctrl+Z on it named a button it has not
+        step = getattr(ed, "redo_step" if redo else "undo_step", None) or getattr(ed, "_redo" if redo else "_undo", None)
         if step:
             step()
             return True
-        self.status.set("In the %s: 'Undo all changes here' drops its changes; a field goes back when you type "
-                        "its old value." % self.WORK_TITLES.get(self.v_work.get(), "editor"))
+        name = self.WORK_TITLES.get(self.v_work.get(), "editor")
+        if hasattr(ed, "reset"):
+            self.status.set("In the %s: 'Undo all changes here' drops its changes; a field goes back when you type "
+                            "its old value." % name)
+        else:                                            # no such button there
+            self.status.set("The %s has no Undo of its own: a change goes back when you set the old value again; "
+                            "nothing is written before Apply changes." % name)
         return True
 
     def _went_to(self, e):
