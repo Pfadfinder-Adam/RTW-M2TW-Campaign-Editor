@@ -9146,15 +9146,21 @@ building smith
         """Check mod files groups its problems by when the game meets them - would not start, campaign loads with
         something lost, battle, play - and names the place each is put right in."""
         from campaign_editor import check as CK
-        probs = ["descr_strat.txt has a block for 'x', which descr_sm_factions.txt does not know",
+        probs = ["export_descr_unit.txt, x (line 3): the game stops at the start - no such soldier",
+                 "descr_strat.txt has a block for 'x', which descr_sm_factions.txt does not know",
                  "win condition of 'y' names a region the map lacks z",
                  "A (b): a town without its governor's building (core 1) - the game stops: 'has not been given a "
                  "core building'",
                  "3 battle model(s) give a faction its texture but no weapons texture"]
-        self.assertEqual([CK.when_of(p) for p in probs], ["start", "play", "load", "battle"])
+        # the game's own order: start-up files (closes before the menu), the campaign's (back to the menu), ...
+        self.assertEqual([CK.when_of(p) for p in probs], ["start", "campaign", "play", "load", "battle"])
+        self.assertEqual(CK.when_of("export_descr_buildings.txt names unit(s) - the game stops at start: a"), "start")
+        self.assertEqual(CK.when_of("battle_models.modeldb cannot be read (x) - a new faction ..."), "start")
+        self.assertEqual(CK.when_of("descr_event_images.txt: the message 'faction destroyed' has 3 pictures - the "
+                                    "game crashes when faction 4 or a later one is destroyed"), "play")
         self.assertEqual([h for h, _ in CK.grouped(probs)], [h for _, h, _ in CK.WHEN])
-        self.assertEqual(CK.fix_of(probs[2])[1], "edit")
-        self.assertEqual(CK.fix_of(probs[3])[1], "units")
+        self.assertEqual(CK.fix_of(probs[3])[1], "edit")
+        self.assertEqual(CK.fix_of(probs[4])[1], "units")
         self.assertIsNone(CK.fix_of("something nobody knows"))
 
     def test_credits_page_and_window_text(self):
