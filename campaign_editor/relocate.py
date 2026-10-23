@@ -108,5 +108,10 @@ def desktop_shortcut(target):
 
 
 def start(target):
-    """Start the editor from its new place."""
-    subprocess.Popen([target], cwd=os.path.dirname(target))
+    """Start the editor from its new place - as a program of its own: a one-file exe started from another hands it its
+    unpacked folder unless told not to (PyInstaller's PYINSTALLER_RESET_ENVIRONMENT), and the first one then could not
+    remove that folder when it closed (report #409: 'Failed to remove temporary directory ..._MEI...')."""
+    env = dict(os.environ, PYINSTALLER_RESET_ENVIRONMENT="1")
+    for k in ("_MEIPASS2", "_PYI_APPLICATION_HOME_DIR", "_PYI_ARCHIVE_FILE", "_PYI_PARENT_PROCESS_LEVEL"):
+        env.pop(k, None)
+    subprocess.Popen([target], cwd=os.path.dirname(target), env=env)
