@@ -7756,7 +7756,10 @@ class App(tk.Tk):
                     result["text"] += "\n\n" + "=" * 70 + "\nWHERE %s IS NAMED (every text file of the mod)\n\n" \
                         % faction + scan_mod(ModData(data), faction, campaign).report()
             except Exception as e:
-                result["text"] = "The check stopped: %s\n\n%s" % (e, traceback.format_exc())
+                # what was found before it stopped stays (the faction's part failing threw the whole report away)
+                result["text"] = (result["text"] + "\n\n" if result.get("text") else "") + \
+                    "The check stopped%s: %s\n\n%s" % (" at '%s'" % result["step"] if result.get("step") else "", e,
+                                                     traceback.format_exc())
         th = threading.Thread(target=work, daemon=True)
         th.start()
         self.busy(True)
