@@ -3150,6 +3150,13 @@ building smith
                 self.assertTrue(os.path.isfile(exe))                       # the started copy stays where it was
                 with mock.patch.object(sys, "executable", new):
                     self.assertFalse(relocate.should_offer("10.0"))         # in the game folder: never asks
+                # the copy starts as a program of its own, not inside this one's unpacked folder (#409)
+                with mock.patch.dict(os.environ, {"_MEIPASS2": "x"}), \
+                        mock.patch.object(relocate.subprocess, "Popen") as popen:
+                    relocate.start(new)
+                env = popen.call_args.kwargs["env"]
+                self.assertEqual(env["PYINSTALLER_RESET_ENVIRONMENT"], "1")
+                self.assertNotIn("_MEIPASS2", env)
         finally:
             log._candidates, log._home, log._path, settings._data = saved
 
