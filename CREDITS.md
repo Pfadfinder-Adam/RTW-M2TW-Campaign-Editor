@@ -37,6 +37,7 @@ whose it is):
 
 - **Ruthron** - 18 reports
 - **Espartan** - 7 reports
+- **Keapon_Laffin** - 7 reports
 - **Wholesome Queen** - 6 reports
 - **bodkinarrow** - 6 reports
 - **moderman1** - 5 reports
@@ -47,7 +48,6 @@ whose it is):
 - **Diocletian Excubitor** - 3 reports
 - **doliwaq** - 2 reports
 - **HVS87** - 2 reports
-- **Keapon_Laffin** - 2 reports
 - **Tommy Speed** - 2 reports
 - **Bartek K** - 1 report
 - **CrimsonScorpio** - 1 report

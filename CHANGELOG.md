@@ -24,6 +24,11 @@
 
 ### Fixed
 - New faction > From another mod: the **Units & armies**, **Buildings** and **Roster** tabs now show the brought faction before Apply - its own units to pick garrisons from, the buildings it may build as its own mod lets it, and its roster (to see; change it after Apply, in Edit faction). Before, only the Faction tab showed it and the other tabs showed the faction it is made on.
+- Victory conditions (Rome): a block the game could not read - a goal written beside the regions, or 'short_campaign take_regions' alone - stopped the game reading the file, and every faction after it had no victory conditions ('No win condition has been set for this campaign') -> each campaign gets one condition, as Rome reads it; Check mod files names the line the game stops at, and Load offers to write the blocks again.
+- Edit faction (Rome): a short name typed for a faction of the mod went with 'nothing to change' -> the box is greyed and says the game keeps none for it (only Rome's own factions have one); the Roman houses' short names are read and written where the game keeps them.
+- Roster > By buildings: 'Lines of this building' did nothing -> it opens the Buildings work at that building.
+- Voice accents: New / Remove accent refused while other changes waited for Apply -> it is kept with them and written by the same Apply.
+- Recolour freely: nothing said how its changes are saved -> the window says Apply changes at the bottom of the main window writes them.
 - Maps > 3D: shallow sea (map_heights.tga's palest blue, as in a lagoon) lay exactly at the sea's level and showed through the water as saw-toothed patches of sand. The game never lets the sea floor be higher than 30 below the water; the 3D map now does the same, so the water is clean as in the game.
 - Maps > 3D: some of the game's own models were drawn white - Medieval II's wool sheep and the watchtowers keep their texture inside the .cas file itself, which the 3D map did not read. It reads it now, as the game does.
 - Edit faction (Medieval II): Apply - also from the flag / emblem windows - added an empty {FACTION_DESCR} string to expanded.txt for a faction that had none (the Rome-only tooltip box, greyed on Medieval II, was read as a text typed) -> an empty box adds no string; a typed one still does.
