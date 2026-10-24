@@ -23,6 +23,11 @@
 - Layout board: the board moves and zooms the same way as the Campaign HUD's - the wheel at the mouse (Shift in small steps), the middle button or Space + left drag it, Shift+1 everything, Shift+2 the picked piece, Shift+0 100 %; the arrows move the board when no free piece is picked.
 
 ### Fixed
+- Recolour: a part made a dark faction colour (Gaul's olive green) came out nearly black -> it is that colour, its folds kept.
+- Buildings by faction: 'Convert to Motte and Bailey' and the other convert_ buildings say what they are - building one turns the town into a castle (or back).
+- Recolour freely: no Save button looked missing -> the window says its changes are kept by themselves and Apply changes writes them.
+- New mod folder proposed a name a mod folder already had -> it proposes a free one.
+- Art and Models tabs kept the faction of the mod loaded before -> read again when another mod is loaded.
 - New faction > From another mod: the **Units & armies**, **Buildings** and **Roster** tabs now show the brought faction before Apply - its own units to pick garrisons from, the buildings it may build as its own mod lets it, and its roster (to see; change it after Apply, in Edit faction). Before, only the Faction tab showed it and the other tabs showed the faction it is made on.
 - Victory conditions (Rome): a block the game could not read - a goal written beside the regions, or 'short_campaign take_regions' alone - stopped the game reading the file, and every faction after it had no victory conditions ('No win condition has been set for this campaign') -> each campaign gets one condition, as Rome reads it; Check mod files names the line the game stops at, and Load offers to write the blocks again.
 - Edit faction (Rome): a short name typed for a faction of the mod went with 'nothing to change' -> the box is greyed and says the game keeps none for it (only Rome's own factions have one); the Roman houses' short names are read and written where the game keeps them.
