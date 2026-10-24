@@ -40,6 +40,7 @@ whose it is):
 - **Wholesome Queen** - 9 reports
 - **bodkinarrow** - 9 reports
 - **Espartan** - 8 reports
+- **runekjo** - 8 reports
 - **Diocletian Excubitor** - 6 reports
 - **Tommy Speed** - 6 reports
 - **moderman1** - 5 reports
@@ -49,6 +50,7 @@ whose it is):
 - **doliwaq** - 4 reports
 - **John** - 3 reports
 - **HVS87** - 2 reports
+- **hugo.favs** - 2 reports
 - **Bartek K** - 1 report
 - **CrimsonScorpio** - 1 report
 - **Gab** - 1 report
