@@ -21,6 +21,8 @@
 - Layout board: the board moves and zooms the same way as the Campaign HUD's - the wheel at the mouse (Shift in small steps), the middle button or Space + left drag it, Shift+1 everything, Shift+2 the picked piece, Shift+0 100 %; the arrows move the board when no free piece is picked.
 
 ### Fixed
+- Maps > 3D: shallow sea (map_heights.tga's palest blue, as in a lagoon) lay exactly at the sea's level and showed through the water as saw-toothed patches of sand. The game never lets the sea floor be higher than 30 below the water; the 3D map now does the same, so the water is clean as in the game.
+- Maps > 3D: some of the game's own models were drawn white - Medieval II's wool sheep and the watchtowers keep their texture inside the .cas file itself, which the 3D map did not read. It reads it now, as the game does.
 - Edit faction (Medieval II): Apply - also from the flag / emblem windows - added an empty {FACTION_DESCR} string to expanded.txt for a faction that had none (the Rome-only tooltip box, greyed on Medieval II, was read as a text typed) -> an empty box adds no string; a typed one still does.
 - Maps > 3D: towns now stand with the model the game gives them - the culture of the town's faction_creator (it was the owner's), a castle's own model (castles stood as towns), and in Medieval II a modder's own model in models_strat/residences/faction_variants/<faction>/ (a mod's own towns were not shown; the owner's faction when descr_campaign_db.xml turns use_faction_creator_sett_models off).
 - Edit regions: a new region showed twice in the Paint with list, once as itself and once with (new) -> once, with (new).
