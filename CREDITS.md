@@ -35,24 +35,26 @@ Everyone who sent a report or an idea - from the editor or on Discord - each one
 signed with, the most reports and ideas first (the editor's and Discord's together; one sent without a name counts where its mod shows
 whose it is):
 
+- **Keapon_Laffin** - 21 reports
 - **Ruthron** - 18 reports
+- **Wholesome Queen** - 9 reports
+- **bodkinarrow** - 9 reports
 - **Espartan** - 8 reports
-- **Keapon_Laffin** - 7 reports
-- **Wholesome Queen** - 6 reports
-- **bodkinarrow** - 6 reports
+- **Diocletian Excubitor** - 6 reports
+- **Tommy Speed** - 6 reports
 - **moderman1** - 5 reports
 - **Mekkermann** - 4 reports
 - **Melchon** - 4 reports
 - **Yuri** - 4 reports
+- **doliwaq** - 4 reports
 - **John** - 3 reports
-- **Diocletian Excubitor** - 3 reports
-- **doliwaq** - 2 reports
 - **HVS87** - 2 reports
-- **Tommy Speed** - 2 reports
 - **Bartek K** - 1 report
 - **CrimsonScorpio** - 1 report
 - **Gab** - 1 report
 - **seki** - 1 report
+- **warcrafthero** - 1 report
+- **ZzyzZ** - 1 report
 
 ## How to get in
 
