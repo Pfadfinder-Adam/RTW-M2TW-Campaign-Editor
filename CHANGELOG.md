@@ -17,6 +17,7 @@
 - Layout board: the board moves and zooms the same way as the Campaign HUD's - the wheel at the mouse (Shift in small steps), the middle button or Space + left drag it, Shift+1 everything, Shift+2 the picked piece, Shift+0 100 %; the arrows move the board when no free piece is picked.
 
 ### Fixed
+- Maps > 3D: towns now stand with the model the game gives them - the culture of the town's faction_creator (it was the owner's), a castle's own model (castles stood as towns), and in Medieval II a modder's own model in models_strat/residences/faction_variants/<faction>/ (a mod's own towns were not shown; the owner's faction when descr_campaign_db.xml turns use_faction_creator_sett_models off).
 - Edit regions: a new region showed twice in the Paint with list, once as itself and once with (new) -> once, with (new).
 - Ports: a port could be placed or moved onto mountains, dense forest, a river, ford or cliff - the game's own map editor puts no port there. Refused now as a town is; Check notes a port already standing on such a tile.
 - New region (Medieval II with M2EX): a new region's town could be put on mountains or dense forest - the game puts no town there, skips the region (land with no town and no owner) and crashed as the campaign started. The town is now refused there as the game refuses it (mountains, dense forest, a river, ford or cliff), when placed and when written; Check names every town standing on such a tile.
