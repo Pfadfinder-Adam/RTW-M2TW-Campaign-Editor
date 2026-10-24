@@ -36,7 +36,7 @@ signed with, the most reports and ideas first (the editor's and Discord's togeth
 whose it is):
 
 - **Ruthron** - 18 reports
-- **Espartan** - 7 reports
+- **Espartan** - 8 reports
 - **Keapon_Laffin** - 7 reports
 - **Wholesome Queen** - 6 reports
 - **bodkinarrow** - 6 reports

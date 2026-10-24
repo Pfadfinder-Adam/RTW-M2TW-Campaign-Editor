@@ -23,6 +23,7 @@
 - Layout board: the board moves and zooms the same way as the Campaign HUD's - the wheel at the mouse (Shift in small steps), the middle button or Space + left drag it, Shift+1 everything, Shift+2 the picked piece, Shift+0 100 %; the arrows move the board when no free piece is picked.
 
 ### Fixed
+- Town window (Medieval II): City or castle set to castle, the Level list still said village, town ... huge_city -> a castle's levels show by their game names (motte_and_bailey, wooden_castle, castle, fortress, citadel), without huge_city (a castle has none; a huge city made a castle becomes a citadel); the campaign file keeps its usual level words.
 - Recolour: a part made a dark faction colour (Gaul's olive green) came out nearly black -> it is that colour, its folds kept.
 - Buildings by faction: 'Convert to Motte and Bailey' and the other convert_ buildings say what they are - building one turns the town into a castle (or back).
 - Recolour freely: no Save button looked missing -> the window says its changes are kept by themselves and Apply changes writes them.
