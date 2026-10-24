@@ -4,15 +4,19 @@
 towns, armies, characters, units, buildings, diplomacy, texts and pictures - all in one window, no digging through
 files. Every change is shown before it is written, and a backup lets you go back. Free. Version **0.35.4**.
 
+> **Pfadfinder (Adam), GitHub Pfadfinder-Adam (user id 325457102), is the only author of this editor; anyone else
+> calling themselves its author is not. Decompiling, disassembling or analysing the program, also with AI tools, is
+> forbidden by its [license](LICENSE).**
+
 [![Download](https://img.shields.io/github/v/release/Pfadfinder-Adam/RTW-M2TW-Campaign-Editor?label=Download&style=for-the-badge)](../../releases)
-[![Wiki](https://img.shields.io/badge/Guide-Wiki-2b6cb0?style=for-the-badge)](../../wiki)
+[![Guide](https://img.shields.io/badge/Guide-Wiki-2b6cb0?style=for-the-badge)](../../wiki)
 [![Discord](https://img.shields.io/badge/Discord-join%20us-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/uqA9MEn4Z)
 [![Support me on Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/pfadfinder)
 
 [![RTW & M2TW Campaign Editor - video overview](https://img.youtube.com/vi/m1sCPg-Lzsw/hqdefault.jpg)](https://www.youtube.com/watch?v=m1sCPg-Lzsw)
 
-**▶ [What the editor does, in a few minutes](https://www.youtube.com/watch?v=m1sCPg-Lzsw)** · more videos and
-screenshots: [Screenshots and videos](../../wiki/Screenshots-and-videos)
+**▶ [What the editor does, in a few minutes](https://www.youtube.com/watch?v=m1sCPg-Lzsw)** · more videos:
+[YouTube](https://www.youtube.com/channel/UC8j5rv6mTmtvRR8u7NmaCvQ)
 
 ## 🚀 Get started
 
@@ -24,8 +28,8 @@ screenshots: [Screenshots and videos](../../wiki/Screenshots-and-videos)
 5. **Change something**, press **Preview changes**, then **Apply changes**.
 6. **Start the game** with the green button. Didn't like it? **Undo this write** or **Tools > Restore a backup**.
 
-Windows may warn about the exe because it is not signed yet: *More info > Run anyway*. Linux, macOS or Python:
-see [Installing](../../wiki/Installing).
+Windows may warn about the exe because it is not signed yet: *More info > Run anyway*. Linux: the
+`-linux.tar.gz` of the same release. macOS: the exe with [Wine](https://www.winehq.org/).
 
 ## 🧩 Works with
 
@@ -48,13 +52,10 @@ Any mod of these games loads - a big one like HLR or a small one that only chang
 | **Rules and scripts** | every campaign setting in plain words; ready add-ons; your own scripts made of blocks, like Scratch |
 | **Safety** | your own mod folder, preview, backups with Restore, Undo / Redo, Check mod files |
 
-Everything in detail: [Every feature](../../wiki/Every-feature) · how each window works: [Reference](../../wiki/Reference).
-
 ## ⚠️ Something went wrong?
 
 Press **Report a bug / Suggest** (bottom right). It sends the logs in one click - no account, your names cut out
 first - and the answer comes back right in the editor. Please add a screenshot or a short video.
-More: [Reporting a bug](../../wiki/Reporting-a-bug).
 
 ## ✨ What's new
 
@@ -65,10 +66,7 @@ More: [Reporting a bug](../../wiki/Reporting-a-bug).
 | | |
 |---|---|
 | ⬇ [Download](../../releases) | the newest exe |
-| 📖 [Wiki](../../wiki) | guides step by step |
-| ❓ [FAQ and known limits](../../wiki/FAQ-and-known-limits) | common questions, what does not work yet |
-| 🗺️ [Bigger map (x3)](../../wiki/Bigger-map-x3) | how the 3 x map works |
-| 📂 [What it changes](../../wiki/What-it-changes) | which game files are written, the command line |
+| 📖 [Guide](../../wiki) | installing, first steps, FAQ, reporting a bug |
 | 📝 [Changelog](CHANGELOG.md) | what changed in each version |
 | 🙏 [Credits](CREDITS.md) | the testers and everyone who helped |
 | 💬 [Discord](https://discord.gg/uqA9MEn4Z) | questions, ideas, news |
@@ -115,8 +113,9 @@ Privacy: this program transfers nothing to other networked systems unless you pr
 ## License
 
 Copyright (C) 2026 Pfadfinder (Adam) - [Pfadfinder-Adam](https://github.com/Pfadfinder-Adam), the author of
-RTW & M2TW Campaign Editor.
+RTW & M2TW Campaign Editor. All rights reserved.
 
-GNU General Public License v3.0 ([LICENSE](LICENSE)). You may use, study, change and share the editor. If you share
-it or a program built from its code, that program must stay under GPL-3.0 with its source open, and must keep the
-copyright notice above and say it is based on this project.
+The editor is free to download and use for any mod. Download it only from [Releases](../../releases); please share
+a link to that page instead of the file. It may not be re-uploaded elsewhere, sold, taken apart, copied or ported
+(also not with AI tools). Everything you make with it is yours. The full text: [LICENSE](LICENSE) (the editor shows
+it on its first start and in Tools > License). Versions up to 0.35.4 were released under GPL-3.0 and stay under it.

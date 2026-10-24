@@ -29,11 +29,11 @@ or the game's folder (a `../`, another drive, a link that leads out - whatever a
 before anything is written, and logs it. Every write is shown first and backed up (`CampaignEditor_backups`), and
 Restore undoes it (a backup that names files outside is refused too). It needs no internet connection; it sends
 something only when you press **Send** in **Report a bug / Suggest** (below), and - once it has sent a report -
-asks the same relay for the author's answers to those reports (below), and it asks GitHub for the number of the newest release (below). The Windows exe is built from this repository's source by GitHub Actions
-(`.github/workflows/release.yml`); anyone can check the build log of every release.
+asks the same relay for the author's answers to those reports (below), and it asks GitHub for the number of the newest release (below). The Windows exe and the Linux program are built by GitHub Actions
+from the editor's source (kept private since version 0.35.4) and published only on this repository's Releases page.
 
 The exe is not code-signed yet, so browsers and Windows SmartScreen may warn about it
-("Keep" / "More info -> Run anyway"). If you prefer, run it from source: `python campaign_editor.py`.
+("Keep" / "More info -> Run anyway").
 
 ## Reporting a Vulnerability
 

@@ -1,0 +1,14 @@
+Third-party software in RTW & M2TW Campaign Editor
+
+The editor's program includes the following software made by others. Each stays under its own license; the
+editor's own license (LICENSE) does not change their terms.
+
+- Python - Python Software Foundation License Version 2 - https://docs.python.org/3/license.html
+- Tcl/Tk (the window toolkit, through tkinter) - Tcl/Tk License (BSD-style) - https://www.tcl.tk/software/tcltk/license.html
+- NumPy - BSD 3-Clause License - https://numpy.org/doc/stable/license.html
+- Pillow - MIT-CMU License (HPND) - https://github.com/python-pillow/Pillow/blob/main/LICENSE
+- ModernGL - MIT License - https://github.com/moderngl/moderngl/blob/main/LICENSE
+- glcontext - MIT License - https://github.com/moderngl/glcontext/blob/main/LICENSE
+- zstandard (python-zstandard, with Zstandard by Meta) - BSD 3-Clause License - https://github.com/indygreg/python-zstandard/blob/main/LICENSE
+- certifi - Mozilla Public License 2.0 - https://github.com/certifi/python-certifi/blob/master/LICENSE
+- Nuitka (the compiler's runtime parts inside the program) - Apache License 2.0 - https://github.com/Nuitka/Nuitka/blob/develop/LICENSE.txt
