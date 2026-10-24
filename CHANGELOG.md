@@ -25,6 +25,7 @@
 - Layout board: the board moves and zooms the same way as the Campaign HUD's - the wheel at the mouse (Shift in small steps), the middle button or Space + left drag it, Shift+1 everything, Shift+2 the picked piece, Shift+0 100 %; the arrows move the board when no free piece is picked.
 
 ### Fixed
+- New mod folder from a mod kept in packs (a Kingdoms campaign such as americas): the new mod got the packs copied as they were, their files still named after the old folder - the game reads a mod's packs only under its own folder, found none of them and crashed at the start ('horde unit type ... not found'). The copy's files are now named after the new folder (their contents copied as they are). The editor reads such packs as the game does, and Check mod files names packs whose files are named after another folder.
 - Town window (Medieval II): City or castle set to castle, the Level list still said village, town ... huge_city -> a castle's levels show by their game names (motte_and_bailey, wooden_castle, castle, fortress, citadel), without huge_city (a castle has none; a huge city made a castle becomes a citadel); the campaign file keeps its usual level words.
 - Recolour: a part made a dark faction colour (Gaul's olive green) came out nearly black -> it is that colour, its folds kept.
 - Buildings by faction: 'Convert to Motte and Bailey' and the other convert_ buildings say what they are - building one turns the town into a castle (or back).
