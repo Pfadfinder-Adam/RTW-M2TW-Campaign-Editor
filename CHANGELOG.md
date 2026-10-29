@@ -44,6 +44,7 @@
 - Layout board: the board moves and zooms the same way as the Campaign HUD's - the wheel at the mouse (Shift in small steps), the middle button or Space + left drag it, Shift+1 everything, Shift+2 the picked piece, Shift+0 100 %; the arrows move the board when no free piece is picked.
 
 ### Fixed
+- View in 3D (Medieval II): a model whose bones are numbered unlike its skeleton (a model exported with bones in another order, or with bones of your own) lost its head, floated its shield or broke apart in every move - in the game too. The window now says which parts are tied to the wrong bones, and **Number its bones as the skeleton does...** puts them right by name, as the game's own models were made (every detail level, a backup, Restore gives it back).
 - Bringing a faction or units from another Medieval II mod copied many files the mod does not need: the textures of every faction of the other mod (now only of the factions that wear the brought units) and files the game already has, the same (now left out).
 - A faction brought from another Medieval II mod could stop the game at loading: its units kept the other mod's lists of who may recruit them in each era, naming factions this mod lacks. Now only this mod's factions are left in, and Check mod files looks at those lists too.
 - Bringing a faction whose unit fires a projectile neither mod has is refused in plain words (the game stopped at loading).
