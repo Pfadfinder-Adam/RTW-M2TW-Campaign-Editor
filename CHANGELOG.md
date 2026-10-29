@@ -46,6 +46,8 @@
 - Layout board: the board moves and zooms the same way as the Campaign HUD's - the wheel at the mouse (Shift in small steps), the middle button or Space + left drag it, Shift+1 everything, Shift+2 the picked piece, Shift+0 100 %; the arrows move the board when no free piece is picked.
 
 ### Fixed
+- Draw from the map: the line round the faction's land was black or white -> it is the faction's secondary colour, as the game draws it.
+- Medieval II faction-select map drawn from the map: on a mod whose pictures show another part of the world, a faction's land could sit on the edge, half under the frame -> the map is moved (and made smaller if needed) so the faction's land is in the middle of the frame.
 - Check mod files: a faction offered to play (playable list) that the campaign has no faction of is named as a problem - picking it at the start crashed the game.
 - Rome (with REX): a crash at the campaign's start from a region left with no town is named first in the report, no longer said to happen only in Medieval II.
 - View in 3D (Medieval II): a model whose bones are numbered unlike its skeleton (a model exported with bones in another order, or with bones of your own) lost its head, floated its shield or broke apart in every move - in the game too. The window now says which parts are tied to the wrong bones, and **Number its bones as the skeleton does...** puts them right by name, as the game's own models were made (every detail level, a backup, Restore gives it back).
