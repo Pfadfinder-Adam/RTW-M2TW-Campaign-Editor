@@ -89,13 +89,13 @@ Please mention the editor in your mod's description and add a link to this page,
 One line is enough - copy this one:
 
 ```
-Made with the Rome and Medieval Campaign Editor: https://github.com/Pfadfinder-Adam/RTW-M2TW-Campaign-Editor
+Made with the Rome and Medieval Campaign Editor: https://github.com/Pfadfinder-Adam/Rome-and-Medieval-Campaign-Editor
 ```
 
 For forums such as TWC:
 
 ```
-Made with the [url=https://github.com/Pfadfinder-Adam/RTW-M2TW-Campaign-Editor]Rome and Medieval Campaign Editor[/url]
+Made with the [url=https://github.com/Pfadfinder-Adam/Rome-and-Medieval-Campaign-Editor]Rome and Medieval Campaign Editor[/url]
 ```
 
 It is a request, not a condition - thank you!

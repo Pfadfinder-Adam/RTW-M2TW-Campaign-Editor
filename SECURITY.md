@@ -3,7 +3,7 @@
 ## Supported Versions
 
 Only the latest release gets fixes. Please update to it before reporting a problem:
-[Releases](https://github.com/Pfadfinder-Adam/RTW-M2TW-Campaign-Editor/releases).
+[Releases](https://github.com/Pfadfinder-Adam/Rome-and-Medieval-Campaign-Editor/releases).
 
 | Version | Supported          |
 | ------- | ------------------ |
@@ -12,7 +12,7 @@ Only the latest release gets fixes. Please update to it before reporting a probl
 
 ## Where to get it
 
-**Only download the editor from this repository's [Releases](https://github.com/Pfadfinder-Adam/RTW-M2TW-Campaign-Editor/releases) page** (or a link the author posted or approved). Never take the exe - or a "fixed" / "patched" copy of it - from another site, a file-sharing link or someone in a chat, and don't pass it on that way: a copy from elsewhere can be changed to harm your PC. Share the link to the Releases page instead.
+**Only download the editor from this repository's [Releases](https://github.com/Pfadfinder-Adam/Rome-and-Medieval-Campaign-Editor/releases) page** (or a link the author posted or approved). Never take the exe - or a "fixed" / "patched" copy of it - from another site, a file-sharing link or someone in a chat, and don't pass it on that way: a copy from elsewhere can be changed to harm your PC. Share the link to the Releases page instead.
 
 The same goes for unit packs, add-ons and mods: take them from their authors' own pages, and let the
 editor's Preview show what a pack would write before you apply it.
@@ -68,6 +68,6 @@ gets back only the author's comments on those reports and whether they are close
 off in Tools > Settings > Reports.
 
 **New versions**: when it starts, and every 6 hours while it stays open, the editor asks GitHub's public page of its own
-repository for the number of the newest release (`api.github.com/repos/Pfadfinder-Adam/RTW-M2TW-Campaign-Editor/releases/latest`).
+repository for the number of the newest release (`api.github.com/repos/Pfadfinder-Adam/Rome-and-Medieval-Campaign-Editor/releases/latest`).
 Nothing is sent with it but the request itself; a newer number turns the GitHub button green. Switch it off in
 Tools > Settings > New versions.
