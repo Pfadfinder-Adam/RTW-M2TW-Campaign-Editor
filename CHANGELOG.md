@@ -55,6 +55,7 @@
 - Layout board: the board moves and zooms the same way as the Campaign HUD's - the wheel at the mouse (Shift in small steps), the middle button or Space + left drag it, Shift+1 everything, Shift+2 the picked piece, Shift+0 100 %; the arrows move the board when no free piece is picked.
 
 ### Fixed
+- Rome (with REX): Check mod files and the unit editor said REX keeps only 3 officers per unit -> they now say 9, as REX does (Medieval II with M2EX keeps 3).
 - A write refused because of a character's skill over 10 (or Rome's age over 120) that the mod already had, not made by the change (seen on a faction rename) -> a value the mod had before no longer stops a write: the editor says it and offers to set it to 10 in the same write, or to write as it is. A value the change itself would make is offered **Set to 10 and write** instead of only a refusal.
 - View in 3D (Medieval II): an archer's quiver no longer disappears while an animation plays on a model a modder exported himself - the men are now moved by their bones exactly as the game moves them.
 - Map > Coast & heights: on Windows the map's picture did not change while you painted with the heights brush (Raise, Lower, Smooth, Level to height) or shaped the coast with the heights shown, though the changes were made (the 3D view had them) -> the picture follows the brush again.
