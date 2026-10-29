@@ -3,6 +3,8 @@
 ## Unreleased
 
 ### Added
+- Models tab: **3D plays the figure's moves on the campaign map** - walking, standing, idle... - from its skeleton's animations.
+- **Click sound** (Settings > Click sound): a soft click at every press of a button, tick, tab or list - 30 clicks to pick from, a volume slider, or your own WAV; switch it off with one tick.
 - Sack Settlement plugin (both games): the 4th button on the capture scroll can be **stretched and moved** - its width and height (in % of the game's own buttons) and a move right / down are settings on the Plugins page; in Medieval II you can also give the scroll more room under it.
 - **A setup for Windows** (`Rome-and-Medieval-Campaign-Editor-Setup.exe`, beside the zip): the license first - no install without **I accept** -, then any folder you like, then ticks for a shortcut on the desktop and in the Start menu; removed again in Windows' Apps, your settings kept unless you say otherwise.
 - **Update in one click** (installed with the setup): when a newer version is out the GitHub button becomes **Update to 0.xx** - it downloads that version's setup from the Releases page, checks it, installs it over the editor and starts it again; settings, folder and shortcuts stay.
@@ -51,6 +53,7 @@
 - Layout board: **everything a window shows can be changed** - every piece with a dashed frame, and now everything has one: **framed boxes** ('Texts players read', 'Battle model', 'Voice in battle' ...) as a whole with their words, **text fields, lists, tables, pictures drawn on a canvas, tabs, panes, bars and bordered panels**. Drag them anywhere in the box they stand in (all they hold goes with them), size them by their corners or in pixels, rename, colour, give a hover text, hide; Back to how it was and Undo put them back. A click inside a box on a button still picks the button; a right click on a box also has **This page** (refresh it, show it, its pieces back). A board laid out before is laid out again by itself the first time it opens. In the windows (Edit in the windows instead) a click on a box picks it too.
 
 ### Changed
+- **Found on Load** tells more and asks less at once: each set-up problem has its own tick, with what is wrong, what it does in the game and what the fix changes - only the ticked are put right.
 - License: its words follow the editor - 'plugin scripts' (they were add-ons), and the window's libraries are now Qt and PySide6 (LGPL), no longer Tcl/Tk; nothing else changed. The editor asks for it once more.
 - **Add-ons are called Plugins** now - the page, its buttons and the help. The plugins you added are kept: their folder is moved over by itself.
 - **New name: Rome and Medieval Campaign Editor** (was RTW & M2TW Campaign Editor); the exe is now `Rome-and-Medieval-Campaign-Editor.exe`. Your settings, logs, plugins and backups stay as they are; an old exe and its desktop shortcut can be deleted.
