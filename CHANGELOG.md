@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### Added
+- Sack Settlement plugin (both games): the 4th button on the capture scroll can be **stretched and moved** - its width and height (in % of the game's own buttons) and a move right / down are settings on the Plugins page; in Medieval II you can also give the scroll more room under it.
 - **A setup for Windows** (`Rome-and-Medieval-Campaign-Editor-Setup.exe`, beside the zip): the license first - no install without **I accept** -, then any folder you like, then ticks for a shortcut on the desktop and in the Start menu; removed again in Windows' Apps, your settings kept unless you say otherwise.
 - **Update in one click** (installed with the setup): when a newer version is out the GitHub button becomes **Update to 0.xx** - it downloads that version's setup from the Releases page, checks it, installs it over the editor and starts it again; settings, folder and shortcuts stay.
 - Plugins: **Army Replenishment** (both games, with REX or M2EX) - units win back lost men a little every turn: 7 % of their full strength in a friendly town or fort, 5 % in their own lands, 3 % anywhere else. New men come green. Green plusses on the unit cards show who is getting men, and the mouse over them says how many. The rates, who gets men, an optional price per man and the plusses are set in the Plugins window. Made by Remmy and put in with the author's permission.
@@ -62,6 +63,7 @@
 - Layout board: the board moves and zooms the same way as the Campaign HUD's - the wheel at the mouse (Shift in small steps), the middle button or Space + left drag it, Shift+1 everything, Shift+2 the picked piece, Shift+0 100 %; the arrows move the board when no free piece is picked.
 
 ### Fixed
+- Sack Settlement (Medieval II): the Raze button stood partly out of the capture scroll the first time it opened -> the scroll's inner frame now grows with the scroll, so the button stands inside it.
 - Rome (with REX): Check mod files and the unit editor said REX keeps only 3 officers per unit -> they now say 9, as REX does (Medieval II with M2EX keeps 3).
 - A write refused because of a character's skill over 10 (or Rome's age over 120) that the mod already had, not made by the change (seen on a faction rename) -> a value the mod had before no longer stops a write: the editor says it and offers to set it to 10 in the same write, or to write as it is. A value the change itself would make is offered **Set to 10 and write** instead of only a refusal.
 - View in 3D (Medieval II): an archer's quiver no longer disappears while an animation plays on a model a modder exported himself - the men are now moved by their bones exactly as the game moves them.
