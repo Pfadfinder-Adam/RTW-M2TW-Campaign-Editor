@@ -52,6 +52,7 @@
 - Layout board: the board moves and zooms the same way as the Campaign HUD's - the wheel at the mouse (Shift in small steps), the middle button or Space + left drag it, Shift+1 everything, Shift+2 the picked piece, Shift+0 100 %; the arrows move the board when no free piece is picked.
 
 ### Fixed
+- View in 3D (Medieval II): an archer's quiver no longer disappears while an animation plays on a model a modder exported himself - the men are now moved by their bones exactly as the game moves them.
 - Map > Coast & heights: on Windows the map's picture did not change while you painted with the heights brush (Raise, Lower, Smooth, Level to height) or shaped the coast with the heights shown, though the changes were made (the 3D view had them) -> the picture follows the brush again.
 - Start the game with a Medieval II mod whose start .cfg is not named after its folder (Divide and Conquer EUR's `TATW.cfg`): the editor started M2EX without the mod's .cfg, so its own settings (40-unit armies, the HD interface, unit size) were lost -> the mod's own .cfg goes in with the start, whatever its name; Check mod files says when it sets 40-unit armies.
 - Loading a patch without the mod it is made for (Grand Strategy Overhaul without Divide and Conquer EUR under it): a thousand unit errors -> one plain line on Load and in Check mod files: install the mod it is made for first, with the name of its install notes.
