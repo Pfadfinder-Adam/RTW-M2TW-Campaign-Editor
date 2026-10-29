@@ -19,10 +19,12 @@ pictures - all in one window, no digging through files. Every change is shown be
 
 ## 🚀 Get started
 
-1. **Get** `Rome-and-Medieval-Campaign-Editor.exe` (up to 0.35.5: `RTW-M2TW-Campaign-Editor.exe`) from this repository's **Releases** (on the right of this page) - only from there, never a copy from
-   another site or a chat. No install needed. By downloading or using the editor you agree to its [license](LICENSE).
-2. **Put it into the game's folder**, next to `RomeTW.exe` / `medieval2.exe` (and REX or M2EX, if you have them).
-3. **Start it** and pick the game or the mod you build on.
+1. **Get** the editor from this repository's **Releases** (on the right of this page) - the setup
+   (`Rome-and-Medieval-Campaign-Editor-Setup.exe`) or the zip - only from there, never a copy from another site or a chat. By
+   downloading or using the editor you agree to its [license](LICENSE).
+2. **Install it, or unzip the folder wherever you like** - it does not need to be in the game's folder. The setup (or,
+   from the zip, the first start) offers shortcuts on the desktop and in the Start menu.
+3. **Start it** (`Rome-and-Medieval-Campaign-Editor.exe` in that folder) and pick the game or the mod you build on.
 4. **New mod folder...** - your work goes into a folder of its own, the game stays clean.
 5. **Change something**, press **Preview changes**, then **Apply changes**.
 6. **Start the game** with the green button. Didn't like it? **Undo this write** or **Tools > Restore a backup**.

@@ -30,14 +30,14 @@ you have no right to the program beyond what the law itself gives.
 
 4. Your mods are yours. Everything you make with the editor - your mods, maps, factions, files and pictures -
    belongs to you. You may share and sell your own work as you like. The files the editor writes into your mod,
-   its add-on scripts among them, may be shared and changed as part of your mod. A mention of the editor is
+   its plugin scripts among them, may be shared and changed as part of your mod. A mention of the editor is
    welcome but not required.
 
 5. No warranty. The editor is given "as is", without any warranty. Keep backups; the author is not liable for
    any loss or damage from using it.
 
-6. Other people's parts. The program includes libraries made by others (Python, Tcl/Tk, NumPy, Pillow, ModernGL,
-   zstandard, certifi and others); each stays under its own license, listed in THIRD-PARTY-NOTICES. Points 2 and 3
+6. Other people's parts. The program includes libraries made by others (Python, Qt and PySide6, NumPy, Pillow,
+   ModernGL, zstandard, certifi and others); each stays under its own license, listed in THIRD-PARTY-NOTICES. Points 2 and 3
    cover only the author's own code and files. Where a library's license gives you rights (for example the GNU
    LGPL's right to replace or change that library and to reverse engineer the program to debug such changes),
    those rights come first and nothing in this license limits them.

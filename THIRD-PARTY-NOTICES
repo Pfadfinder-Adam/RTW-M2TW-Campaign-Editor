@@ -4,7 +4,13 @@ The editor's program includes the following software made by others. Each stays 
 editor's own license (LICENSE) does not change their terms.
 
 - Python - Python Software Foundation License Version 2 - https://docs.python.org/3/license.html
-- Tcl/Tk (the window toolkit, through tkinter) - Tcl/Tk License (BSD-style) - https://www.tcl.tk/software/tcltk/license.html
+- Qt 6 (the window toolkit) - GNU Lesser General Public License v3 (LGPL-3.0) - https://www.qt.io/licensing/open-source-lgpl-obligations
+  its source: https://download.qt.io/official_releases/qt/
+- PySide6 and Shiboken6 6.12.0 (Qt for Python, the bridge to Qt) - LGPL-3.0 - https://doc.qt.io/qtforpython-6/licenses.html
+  its source: https://code.qt.io/cgit/pyside/pyside-setup.git/ and https://download.qt.io/official_releases/QtForPython/
+  The Qt and PySide6 libraries are kept as separate files in the program's folder (Qt6*.dll, the PySide6 and
+  shiboken6 files beside the exe) so you may replace them with your own build of the same version. The license
+  texts: https://www.gnu.org/licenses/lgpl-3.0.html and https://www.gnu.org/licenses/gpl-3.0.html
 - NumPy - BSD 3-Clause License - https://numpy.org/doc/stable/license.html
 - Pillow - MIT-CMU License (HPND) - https://github.com/python-pillow/Pillow/blob/main/LICENSE
 - ModernGL - MIT License - https://github.com/moderngl/moderngl/blob/main/LICENSE
@@ -27,6 +33,9 @@ Parts that come inside the libraries above:
   (BSD-style), Little CMS (MIT), OpenJPEG (BSD 2-Clause), Brotli (MIT) - the full list and texts:
   https://github.com/python-pillow/Pillow/blob/main/wheels/dependency_licenses/
   Portions of this software are copyright (C) The FreeType Project (www.freetype.org). All rights reserved.
+- Inside Qt: the third-party parts Qt builds in (among them HarfBuzz, FreeType, libpng, PCRE2, zlib, Double
+  Conversion, Unicode data) under their own licenses - the full list and texts:
+  https://doc.qt.io/qt-6/licenses-used-in-qt.html
 - Inside NumPy: OpenBLAS (BSD 3-Clause) with the GNU Fortran runtime (GPL-3.0 with the GCC Runtime Library
   Exception) - https://github.com/numpy/numpy/blob/main/LICENSES_bundled.txt
 - Microsoft Visual C++ runtime (vcruntime140, msvcp140) - redistributed under Microsoft's Visual Studio terms
