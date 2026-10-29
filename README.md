@@ -1,7 +1,7 @@
 # <img src="assets/icon_256.png" width="64" alt="" align="top"> Rome and Medieval Campaign Editor
 
-**A campaign editor for Rome: Total War (with REX) and Medieval II: Total War (with M2EX)** (until 0.35.5 called
-RTW & M2TW Campaign Editor). Factions, the map, towns, armies, characters, units, buildings, diplomacy, texts and
+**A campaign editor for Rome: Total War (with REX) and Medieval II: Total War (with M2EX)** (version 0.35.5 still
+carries its old name, RTW & M2TW Campaign Editor). Factions, the map, towns, armies, characters, units, buildings, diplomacy, texts and
 pictures - all in one window, no digging through files. Every change is shown before it is written, and a backup lets you go back. Free. Version **0.35.5**.
 
 > **Pfadfinder (Adam), GitHub Pfadfinder-Adam (user id 325457102), is the only author of this editor; anyone else
@@ -19,12 +19,11 @@ pictures - all in one window, no digging through files. Every change is shown be
 
 ## 🚀 Get started
 
-1. **Get** the editor from this repository's **Releases** (on the right of this page) - the setup
-   (`Rome-and-Medieval-Campaign-Editor-Setup.exe`) or the zip - only from there, never a copy from another site or a chat. By
-   downloading or using the editor you agree to its [license](LICENSE).
-2. **Install it, or unzip the folder wherever you like** - it does not need to be in the game's folder. The setup (or,
-   from the zip, the first start) offers shortcuts on the desktop and in the Start menu.
-3. **Start it** (`Rome-and-Medieval-Campaign-Editor.exe` in that folder) and pick the game or the mod you build on.
+1. **Get** `RTW-M2TW-Campaign-Editor.exe` from this repository's **Releases** (on the right of this page) - only from
+   there, never a copy from another site or a chat. No install needed. By downloading or using the editor you agree to
+   its [license](LICENSE).
+2. **Put it into the game's folder**, next to `RomeTW.exe` / `medieval2.exe` (and REX or M2EX, if you have them).
+3. **Start it** and pick the game or the mod you build on.
 4. **New mod folder...** - your work goes into a folder of its own, the game stays clean.
 5. **Change something**, press **Preview changes**, then **Apply changes**.
 6. **Start the game** with the green button. Didn't like it? **Undo this write** or **Tools > Restore a backup**.
@@ -36,7 +35,7 @@ Windows may warn about the exe because it is not signed yet: *More info > Run an
 
 | Game | Original exe | With the engine |
 |---|---|---|
-| **Rome: Total War** (Gold / Steam), **Barbarian Invasion**, **Alexander** | works, the game's own limits apply (21 factions, 200 regions...) | **REX** - no limits, wastelands, plugins, your own modules |
+| **Rome: Total War** (Gold / Steam), **Barbarian Invasion**, **Alexander** | works, the game's own limits apply (21 factions, 200 regions...) | **REX** - no limits, wastelands, add-ons, your own modules |
 | **Medieval II: Total War** and Kingdoms | works, the game's own limits apply | **M2EX** - the same |
 
 Any mod of these games loads - a big one like HLR or a small one that only changes a few files.
@@ -45,12 +44,12 @@ Any mod of these games loads - a big one like HLR or a small one that only chang
 
 | Area | What you do there |
 |---|---|
-| **Factions** | make a new one from another faction or edit one: names, colours, money, towns, leader and heir, name lists (or ready-made ones of 46 peoples), garrisons, buildings, diplomacy, victory |
-| **Campaign map** | drag towns, armies and fleets; paint regions, terrain, climates, rivers and heights; hide land until it is found (Medieval II); a climate library (what each climate gives, new climates); grow, cut or make the map 3 x bigger; see it in 3D |
+| **Factions** | make a new one from another faction or edit one: names, colours, money, towns, leader and heir, garrisons, buildings, diplomacy, victory |
+| **Campaign map** | drag towns, armies and fleets; paint regions, terrain, climates, rivers and heights; a climate library (what each climate gives, new climates); grow, cut or make the map 3 x bigger; see it in 3D |
 | **Units and buildings** | every line as a field; new ones step by step; models in 3D, swapped or your own; voices; bring them from another mod |
 | **Characters** | traits, retinue, ages, names, the family tree, portraits |
-| **Pictures** | every picture of a faction replaced or recoloured, any colour of any picture changed (Recolour freely), any picture drawn on (Draw on it: brushes, fill, magic wand, layers), emblem and banners made |
-| **Rules and scripts** | every campaign setting in plain words; ready plugins; your own scripts made of blocks, like Scratch |
+| **Pictures** | every picture of a faction replaced or recoloured, emblem and banners made |
+| **Rules and scripts** | every campaign setting in plain words; ready add-ons; your own scripts made of blocks, like Scratch |
 | **Safety** | your own mod folder, preview, backups with Restore, Undo / Redo, Check mod files |
 
 ## ⚠️ Something went wrong?
