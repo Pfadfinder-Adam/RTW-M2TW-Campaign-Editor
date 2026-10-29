@@ -1,0 +1,32 @@
+Third-party software in RTW & M2TW Campaign Editor
+
+The editor's program includes the following software made by others. Each stays under its own license; the
+editor's own license (LICENSE) does not change their terms.
+
+- Python - Python Software Foundation License Version 2 - https://docs.python.org/3/license.html
+- Tcl/Tk (the window toolkit, through tkinter) - Tcl/Tk License (BSD-style) - https://www.tcl.tk/software/tcltk/license.html
+- NumPy - BSD 3-Clause License - https://numpy.org/doc/stable/license.html
+- Pillow - MIT-CMU License (HPND) - https://github.com/python-pillow/Pillow/blob/main/LICENSE
+- ModernGL - MIT License - https://github.com/moderngl/moderngl/blob/main/LICENSE
+- glcontext - MIT License - https://github.com/moderngl/glcontext/blob/main/LICENSE
+- zstandard (python-zstandard, with Zstandard by Meta) - BSD 3-Clause License - https://github.com/indygreg/python-zstandard/blob/main/LICENSE
+- certifi - Mozilla Public License 2.0 - https://github.com/certifi/python-certifi/blob/master/LICENSE
+- Nuitka (the compiler's runtime parts inside the program) - Apache License 2.0 - https://github.com/Nuitka/Nuitka/blob/develop/LICENSE.txt
+
+Parts that come inside the libraries above:
+
+- OpenSSL 3 (Python's ssl and hashlib) - Apache License 2.0 - https://www.openssl.org/source/license.html
+- libffi (Python's ctypes) - MIT License - https://github.com/libffi/libffi/blob/master/LICENSE
+- zlib - zlib License - https://zlib.net/zlib_license.html
+- bzip2 (Python's bz2) - bzip2 License (BSD-style) - https://sourceware.org/bzip2/
+- XZ Utils / liblzma (Python's lzma) - 0BSD / public domain - https://tukaani.org/xz/
+- mpdecimal (Python's decimal) - BSD 2-Clause License - https://www.bytereef.org/mpdecimal/
+- Expat (Python's XML parser) - MIT License - https://github.com/libexpat/libexpat/blob/master/expat/COPYING
+- Inside Pillow: libjpeg-turbo (IJG + BSD 3-Clause), libpng (libpng License), LibTIFF (libtiff License), FreeType
+  (FreeType License), HarfBuzz (MIT), libwebp (BSD 3-Clause), libavif with aom, dav1d, SVT-AV1 and libyuv
+  (BSD-style), Little CMS (MIT), OpenJPEG (BSD 2-Clause), Brotli (MIT) - the full list and texts:
+  https://github.com/python-pillow/Pillow/blob/main/wheels/dependency_licenses/
+  Portions of this software are copyright (C) The FreeType Project (www.freetype.org). All rights reserved.
+- Inside NumPy: OpenBLAS (BSD 3-Clause) with the GNU Fortran runtime (GPL-3.0 with the GCC Runtime Library
+  Exception) - https://github.com/numpy/numpy/blob/main/LICENSES_bundled.txt
+- Microsoft Visual C++ runtime (vcruntime140, msvcp140) - redistributed under Microsoft's Visual Studio terms

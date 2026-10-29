@@ -1,0 +1,44 @@
+RTW & M2TW Campaign Editor - License
+
+Copyright (C) 2026 Pfadfinder (Adam) - https://github.com/Pfadfinder-Adam. All rights reserved.
+
+This license covers every version of the editor released after 0.35.4. Versions up to and including 0.35.4
+were released under the GNU General Public License v3.0 and stay under it.
+
+1. Free to use. You may download the editor and use it for free, for any mod, private or public.
+
+2. Download it only from the official page:
+   https://github.com/Pfadfinder-Adam/RTW-M2TW-Campaign-Editor/releases
+   You may not share, upload or host the program (the exe or any part of it) anywhere else - not on other sites,
+   in mod packs, in chats or on file hosts - and you may not sell it or ask money for it in any way.
+   Please share a link to the official page instead. To host it elsewhere, ask the author for written permission.
+
+3. Do not take it apart or copy it. Except where the law allows it and this cannot be excluded by contract,
+   you may not - yourself, or through any other person, tool or service, including AI assistants, AI agents and
+   code generators:
+   - decompile, disassemble, unpack, reverse engineer or otherwise analyse the program to learn how it is built;
+   - take its code, data, pictures or any other part out of it, or change it;
+   - give the program or any part of it to an AI system to analyse, describe, rebuild or port, or use it to
+     train one;
+   - make, or help make, a program that copies or ports this one, its code or its windows;
+   - publish the program, or anything made from it, as your own work.
+   Anyone who tells an AI tool to do any of the above is responsible for it as if they had done it themselves.
+
+4. Your mods are yours. Everything you make with the editor - your mods, maps, factions, files and pictures -
+   belongs to you. You may share and sell your own work as you like. The files the editor writes into your mod,
+   its add-on scripts among them, may be shared and changed as part of your mod. A mention of the editor is
+   welcome but not required.
+
+5. No warranty. The editor is given "as is", without any warranty. Keep backups; the author is not liable for
+   any loss or damage from using it.
+
+6. Other people's parts. The program includes libraries made by others (Python, Tcl/Tk, NumPy, Pillow, ModernGL,
+   zstandard, certifi and others); each stays under its own license, listed in THIRD-PARTY-NOTICES. Points 2 and 3
+   cover only the author's own code and files. Where a library's license gives you rights (for example the GNU
+   LGPL's right to replace or change that library and to reverse engineer the program to debug such changes),
+   those rights come first and nothing in this license limits them.
+
+7. Starting the editor. The editor shows this license on its first start; pressing "I accept" (or using the
+   editor in any way) means you accept it. The text is always in Tools > License.
+
+Breaking these terms ends your right to use the editor, and copies hosted against them will be taken down.
