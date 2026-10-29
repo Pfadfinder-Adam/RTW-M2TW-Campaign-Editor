@@ -20,6 +20,8 @@
   *Divide and Conquer* (Medieval II with M2EX) and sent report after report; thanks to him many mistakes were found
   and many new ideas came in - natural rivers, coasts and borders among them.
 - **Klerski** - for the questions and ideas that pushed the editor forward.
+- **Remmy** - for *Army Replenishment*, the plugin in the editor that brings lost men back to the armies, given
+  to the editor with the author's permission.
 
 ## Supporters
 
