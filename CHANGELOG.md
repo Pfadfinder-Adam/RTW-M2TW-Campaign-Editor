@@ -49,6 +49,7 @@
 - Layout board: the board moves and zooms the same way as the Campaign HUD's - the wheel at the mouse (Shift in small steps), the middle button or Space + left drag it, Shift+1 everything, Shift+2 the picked piece, Shift+0 100 %; the arrows move the board when no free piece is picked.
 
 ### Fixed
+- Make the campaign map 3 x bigger now works on every way a mod lays out its map: some mods keep the map's files in the campaign's folder, some in `world/maps/base`, some split between the two - a split map was left half old (its size file and some pictures kept the old size) and the game could not build it. Every file is now taken where the game takes it and the bigger copy written into one folder; when the map is shared by another campaign (Medieval II's prologue), that campaign keeps its own. REX / M2EX's 16-bit heights (`map_heights_ex.png`) are made at the new size too.
 - Draw from the map: the line round the faction's land was black or white -> it is the faction's secondary colour, as the game draws it.
 - Medieval II faction-select map drawn from the map: on a mod whose pictures show another part of the world, a faction's land could sit on the edge, half under the frame -> the map is moved (and made smaller if needed) so the faction's land is in the middle of the frame.
 - Check mod files: a faction offered to play (playable list) that the campaign has no faction of is named as a problem - picking it at the start crashed the game.
