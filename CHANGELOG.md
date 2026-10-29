@@ -1,5 +1,101 @@
 # Changelog
 
+## Unreleased
+
+### Added
+- Models tab: **3D plays the figure's moves on the campaign map** - walking, standing, idle... - from its skeleton's animations.
+- **Click sound** (Settings > Click sound): a soft click at every press of a button, tick, tab or list - 30 clicks to pick from, a volume slider, or your own WAV; switch it off with one tick.
+- Map > Terrain and Coast & heights: **Fill (paint bucket)** - tick it and a click fills the whole joined area of the same ground (or climate, river mark, hidden land, land or sea) with the brush you picked, in one step you can undo; **in its region** stops the fill at the region's border.
+- Sack Settlement plugin (both games): the 4th button on the capture scroll can be **stretched and moved** - its width and height (in % of the game's own buttons) and a move right / down are settings on the Plugins page; in Medieval II you can also give the scroll more room under it.
+- **A setup for Windows** (`Rome-and-Medieval-Campaign-Editor-Setup.exe`, beside the zip): the license first - no install without **I accept** -, then any folder you like, then ticks for a shortcut on the desktop and in the Start menu; removed again in Windows' Apps, your settings kept unless you say otherwise.
+- **Update in one click** (installed with the setup): when a newer version is out the GitHub button becomes **Update to 0.xx** - it downloads that version's setup from the Releases page, checks it, installs it over the editor and starts it again; settings, folder and shortcuts stay.
+- Plugins: **Army Replenishment** (both games, with REX or M2EX) - units win back lost men a little every turn: 7 % of their full strength in a friendly town or fort, 5 % in their own lands, 3 % anywhere else. New men come green. Green plusses on the unit cards show who is getting men, and the mouse over them says how many. The rates, who gets men, an optional price per man and the plusses are set in the Plugins window. Made by Remmy and put in with the author's permission.
+- Rome (with REX): the campaign map in 3D and the map picture show the terrain the game shows - the **Enhanced** terrain of the next REX (its ground pictures, mountains and hills, beach and surf), or Classic when that is the player's pick in the game's options. The Climate library lists each terrain's ground pictures, and a new climate made from another is written into the terrain the mod uses.
+- Rome (with REX): the 3D tab has a **Terrain** pick beside Winter when the game has more than one campaign terrain (Classic, Enhanced): the map is shown in the one picked, without changing the game. The Climate library's **Change...** works on every terrain's ground pictures.
+- Rome (with REX): the next REX shows its new **Enhanced** campaign map terrain by default, and a mod that has its own campaign map ground art would then show REX's instead - its own only after a player picks Classic in Options > Video. Check mod files and Load now say so (naming the mod's climates that would look plain) and, with a yes, put a small file in the mod that keeps its own terrain the default; Enhanced stays in the options. Backup first, Restore takes it out.
+- Any game file, as it is written: **Open in Notepad++...** opens the picked file in your text editor at the line you are on - Notepad++ when it is installed, else Notepad, or any program you pick in Settings > Text editor. A file of the game is first copied into the mod (with a backup, Restore takes it out), so what you save there goes into the mod; when you come back to the window it shows the file as you saved it.
+- **Victory conditions maps** (Medieval II): the small map on the faction scroll's victory conditions page (`vc_<faction>.tga`, `vcs_` for the short campaign) is drawn for the faction - the regions its Victory says to hold lit in its colour, paler. A new faction gets its own (it had a copy of its template's, showing the template's regions); when you change the regions to hold on Victory, the map is drawn again; on the Art tab (Maps) **Draw from Victory** draws it by hand. A picture you gave it yourself is kept. Rome draws its victory map itself.
+- Draw from the map (the faction-select map) opens a small window first: pick a **style** - the game's ground or an **old map** (parchment, the coast in ink with lines out in the water, dotted borders) - how much of the faction's colour covers its land (0 % to a solid fill), the line round it (its width, none, its colour: the faction's second colour, black or white, or your own). The picture changes as you go; Draw keeps the look for the next drawings too.
+- Make the campaign map 3 x bigger: **Keep the economy as it was** (Medieval II, on by default) - every distance on the bigger map is 3 x longer, and the game pays merchants and adds unrest and corruption by distance, so a merchant could suddenly earn many times more. The window shows the mod's values next to the game's own and what the bigger map would do to each; with the tick, step 1 sets the merchants' income, the distance unrest and the corruption so they give what they gave on the old map. Town trade does not count the distance and stays as it is. Rome keeps these in the game itself: the window says how much they grow.
+- Map > Terrain: **Hidden** (Medieval II) - paint the parts of the map that stay black until a unit of the player sees them, as the Americas are at the start of the game; hidden tiles are drawn dark while you paint, and 'as usual' gives a tile back the ordinary fog. Its '?' says how the game keeps such land out of reach until an event like 'The World is Round': ocean around it, which only ocean-going ships cross, and those ships built only after the event. Preview, a backup, Restore gives it back.
+- Family tree: **Put on the map...** - a son, a new heir or anyone of the family off the map goes on the campaign map as one of the family (not a plain general), with the general's bodyguard: beside the faction's first town or on a tile you click on the map (a tile no one may stand on is said, and the nearest good one is taken). He can be made the heir - the heir before steps down. A new grown-up son is no longer refused: he is offered the map. Medieval II's women go on the map as princesses; Rome has no women on the map. Preview, a backup, Restore.
+- Faction tab: **Music** (Medieval II) - the music a faction hears on the campaign map and in battle (northern_european, middle_eastern...); a new faction keeps its template's unless you pick another. Rome plays music by culture.
+- New mod folder on a mod: **A thin mod on top of it** - a mod made from another mod no longer has to copy that whole mod. The new folder goes inside the mod's folder (`HLR/my_mod`, `mods/americas/my_mod`) and holds only what you change; the game reads every other file from that mod, then from the game, and the mod itself is never written to. Its start script and .cfg are made with the right path, the mod list shows it under its base, and a full copy of the base leaves it out. Rome needs REX; Medieval II needs an M2EX with 'mods on top of mods' (not in M2EX yet - the full copy stays there, as before).
+- Edit faction: **Take out of the campaign...** (beside Rename...) - a faction leaves the campaign so that at the start of the game it is simply not there, as if it had died before: no 'Faction Destroyed' message. Its towns go to the rebels or to a faction you pick, with their buildings and the captains guarding them; its family, armies and agents go with it; its places in the faction lists, diplomacy, victory conditions and events go too, and rebels dressed as it become plain rebels. It stays in the mod (units, pictures, names, other campaigns) - New faction with the same internal name brings it back. Both games, Preview, a backup, Restore gives it back.
+- Faction tab > **Name list...**: **ready-made name lists** of the editor's own - men's names, surnames and women's names of 46 peoples, ancient and medieval (Roman, Greek, Gaul, Germanic, Carthaginian, Egyptian, Persian, English, French, German, Italian, Spanish, Norse, Polish, Russian, Byzantine, Arab, Turkish, Mongol, Chinese, Japanese, Aztec, Inca and more). Historical names, free to use in any mod. Pick one and it becomes the faction's list with the next Apply, or add its names to yours; the faction's own people is picked to start with. Both games.
+- **Draw on it...**: any picture you open big (a card, a button, a battle or campaign-map texture, Medieval II's `.texture`) and Recolour freely now let you draw right on the picture, as in a small image editor. Brush (square with whole pixels and a hard edge, or round), eraser, line, rectangle, ellipse, fill, colour picker; select a box or an ellipse, use the magic wand or the smart selection (a colour with its shades) - paint then goes only inside it; layers you can add, hide, make see-through, move and merge; Undo / Redo. The picture keeps its see-through unless you untick it. Written in its own format with a backup, Restore gives it back (reports R-20261023-3F82E0, R-20261024-D522D1).
+- Characters: **Random...** picks traits, retinue and, if asked, a new name at random for the picked character or for every character of the faction on the map. It can take **any**, **only good** or **only bad** ones, and you choose how many traits and ancillaries. It takes only traits for the character's kind and never two opposites, only ancillaries the culture may have, and only names from the faction's own lists (report R-20261019-6584E8).
+- Tools: **Rename this mod...** - the loaded mod's folder gets a new name, and its start script and .cfg are renamed with it (the `-mod:` / `mods/<name>` lines changed). Its packs' file names move to the new folder, because the game reads a mod's packs only under its own folder. The mod is then loaded again from the new folder (report R-20261024-75EB38).
+- Report a bug / Suggest: **the file the game's log blames is offered** - when the game stopped or met an error on a file of your mod, that file is ticked under 'What goes with it' (one click leaves it out); a file over 3 MB goes as the lines around the error, or just its size (`map.rwm`, a big picture). The game's own files are never offered.
+- Report a bug / Suggest: **Attach a file...** - any file goes with a report or with your answer to the author (a mod's `data/menu/Rome.lnt`, a `descr_strat.txt`...), up to 10, 3 MB each, under its place in the mod. A text file loses your user name in paths and the words you hide, like the logs; 'Show what is sent' lists the files.
+- Faction tab: **New culture...** (both games) - a culture of its own, written with a backup: **from zero**, part by part (its towns level by level from any culture or its own .cas, its fort / port / watchtower, its portraits and agents, its voices, the building chains open to it ticked, plain building cards drawn or another culture's - nothing else taken; you give it units) or **a copy** of a culture of the mod (its buildings, units, voices, music, walls, texts and pictures).
+- Traits and retinue: **New trait... / New ancillary...** ask first - **from zero** (who gets it, as many levels as you want - each its name, threshold and effects picked from the game's list -, one simple trigger if you want it: when, an optional condition, the chance; an ancillary gets its effects and its own picture from the game's generic one) or a copy of one of the mod.
+- New unit > **from zero** now makes **siege engines, ships, elephants and chariots** too (it was foot soldiers and horsemen only): learnt from the mod's units of that kind; you pick the engine, ship, gun or animal one of them uses, and the numbers and model start at those of the units with it.
+- Climate library: **New climate...** asks first - **from zero** (its colour, heat and only the campaign trees you pick, one by one; its battle map 'modifies' a climate you pick, since the game must find one there) or a copy of the picked climate, as before.
+- Voice accents: **New accent...** asks first - **from zero** (a folder of its own sounds, laid into the sound banks by their names; where it has none it speaks like an accent you pick, so no soldier is silent) or a copy of another accent's voices.
+- **Every 'New ...' asks first: from zero or a copy** - one small window, **New from zero** picked (the editor writes every line, nothing of another taken), or **A copy of** one of the mod, picked from a list; next time the window picks what you took last. In New faction, New culture, New unit / New building (step by step), New religion, Rebels > New type, New trait / ancillary, New climate and New accent.
+- Tools: **Any game file, as it is written (the notepad)...** - every text file the game reads (the mod's own and the game's under it, found the way the game finds them) in one list: type part of a name, pick a file, change it as in Notepad. It says what the file is and which window of the editor handles it, underlines a brace never closed or an xml that would not read, and writes only the lines you changed - Preview, a backup, Restore gives it back; a file of the game's own data becomes the mod's copy. Both games.
+- Faction tab: **Voice accent** (Medieval II) - which voices a faction speaks with: its soldiers' orders and name calls in battle, its general's speech before battle, its agents and diplomats on the map. Pick another accent and the faction moves to it in descr_sounds_accents.txt. **Accents...** beside it lists every accent with its factions and the sound files that speak it; **New accent...** makes one (a Venetian beside the Mediterranean) that speaks like another until it has sounds of its own, so nothing is silent; **Remove accent...** gives its factions another. A new faction keeps its template's accent unless another is picked, a faction brought from another mod keeps its own when this mod has that accent, a renamed faction keeps its accent. Rome has no accents (its voices follow the culture) - said there. Check mod files: a faction with no accent (silent), a faction the accents file names that the mod lacks, an accent no sound file speaks, a sound file or a unit naming an accent that does not exist (letter case counts). The Unit editor's `accent` line offers the mod's own accents. Preview, a backup, Restore gives it back.
+- Faction tab: **Leader succession** (Medieval II) - who leads after the leader dies: **By birth** (the heir, then the leader's sons; children are born and marriages offered), **By election (teutonic)** as the Teutonic Order (the family's grown man with the most authority + command becomes leader, the next one heir; the family tree is shown, but no child is born and no marriage offered - new members come by adoption), or **No family tree** as the Pope (no tree, births or marriages; the heir or the family member with the most authority takes over - and the faction never dies, even with no town and no leader, which is said). **princesses** beside it turns its princesses on or off; an election turns them off by itself, as the game refuses the two together, and princesses already on the map are named. This is descr_sm_factions.txt's has_family_tree yes / teutonic / no and can_have_princess; a new faction keeps its template's unless another is picked. Rome's leaders always follow the family tree - the row is greyed there. Preview, a backup, Restore gives it back.
+- Campaign map: **Reference picture...** (under the map) - lay a picture of your own over the map (a real map of the land, a sketch, another mod's map) to trace the coasts and borders by: how much of it shows, under or over the towns and armies, moved and sized on the tiles with the mouse or typed in tiles, mirrored, grey; kept for each mod and campaign. The keys are PureRef's (Ctrl+Shift+= / - how much shows, Alt+L to move and size it, Ctrl+Shift+T over the whole map...), in any keyboard layout. One picture for every map of both games - the Map, Terrain, Coast & heights and the 3D map, where it lies on the ground over the hills and the sea; **Fit by two places** lays it with four clicks (a town on the picture, the same town on the map, twice). Nothing of it is written into the mod.
+- Buildings > Stats: **Only the lines for ...** - with a faction or a culture picked in Show, a chain's lines are those for it: the levels it may not build and the recruit or other lines its factions lists keep out are left out (a line for its culture or for all stays). The tick is kept for every start.
+- View in 3D: **Report a problem with this model...** - a report of its own kind (marked '3D model' for the author) that takes the 3D window's picture and the files the model was drawn with - its skeletons (their records and descr_skeleton.txt lines), the animation on show and each skeleton's default, the meshes, and a note of which animation set the game loads and how each skeleton was read (a tick to leave them out). A mod's model that looks wrong can be drawn again the same way and fixed. The ordinary report takes none of it.
+- Recolour freely: any colour of any picture made another, not only the faction's colours - click a colour on a battle texture, campaign-map figure, card or button, pick the new colour or turn it with the sliders; its light and shade kept, faces left alone, several changes in a row, a brush to add or keep. On every texture card (Unit editor, Models tab) and every picture opened big; a texture of the game is copied, never written over; a unit's texture can change for that unit only. Both games, a backup, Restore gives it back.
+- **Plugin: Building time x 2** (both games, any mod, no engine needed) - every building's construction turns multiplied or divided (x 2, / 2 or any number; never under 1 turn), for you and the computer alike; the building scroll shows the new turns. Take it out puts back exactly the old ones.
+- Plugin Upkeep x 2: **Multiplied or Divided** - the upkeep can also be divided (cheaper armies).
+- **Plugin: Building cost x 2** and **Plugin: Recruitment cost x 2** (both games, any mod, no engine needed) - every building's price, or every unit's price to recruit, multiplied or divided (x 2, / 2 or any number), for you and the computer alike; the scrolls show the new prices. They go together with Building time x 2 and Upkeep x 2, each changing only its own number. Take it out puts back exactly the old ones.
+- **Plugin: Skip videos** (both games, any mod, no engine needed) - the game starts straight to the main menu, without its logo movies, and plays no movie later (a faction's intro, victory, events), so no Esc press each time. Rome (BI, Alexander, REX or not): the game's own `-nm` switch put into the mod's start script and used by Start the game - a Steam or desktop shortcut of your own needs `-nm` added by hand, as Rome takes it only from the start line. Medieval II: `[video] movies = 0` in medieval2.preference.cfg (for every mod of the game; the main menu's picture stands still then); with M2EX it can skip only the start logos and keep the other movies. Take it out puts everything back.
+
+- Plugin Player Diplomacy: **Medieval II with M2EX** too (it was Rome with REX only). There a faction in a truce also likes you at least as much as set (neutral by default) - the number its diplomacy decides by.
+- Plugin Player Diplomacy: **an ally keeps the alliance with you** for 20 of your turns from its start (or as many as set, or always): it plans no invasion of you, and a betrayal in that time is undone - peace and the alliance put back. REX's computer turns on an ally once the alliance no longer pays.
+- Plugin Player Diplomacy: **strength counted as the computer counts it** - the army strength it weighs its own betrayals and coalitions with (soldiers and their quality), not the number of units; a choice keeps the old count. Console: `sq ::ally_status()`.
+- Climate library: **View in 3D...** for a tree model and **Open the picture...** for a ground or other picture (a click on the small picture or a double click on the row does it too), as everywhere else in the editor.
+- Recolour freely: a **square brush** beside the round one - whole pixels, a hard edge, 1 px = one pixel; a quick drag no longer leaves gaps between the brush's dabs.
+- Layout board: **everything a window shows can be changed** - every piece with a dashed frame, and now everything has one: **framed boxes** ('Texts players read', 'Battle model', 'Voice in battle' ...) as a whole with their words, **text fields, lists, tables, pictures drawn on a canvas, tabs, panes, bars and bordered panels**. Drag them anywhere in the box they stand in (all they hold goes with them), size them by their corners or in pixels, rename, colour, give a hover text, hide; Back to how it was and Undo put them back. A click inside a box on a button still picks the button; a right click on a box also has **This page** (refresh it, show it, its pieces back). A board laid out before is laid out again by itself the first time it opens. In the windows (Edit in the windows instead) a click on a box picks it too.
+
+### Changed
+- **Found on Load** tells more and asks less at once: each set-up problem has its own tick, with what is wrong, what it does in the game and what the fix changes - only the ticked are put right.
+- License: its words follow the editor - 'plugin scripts' (they were add-ons), and the window's libraries are now Qt and PySide6 (LGPL), no longer Tcl/Tk; nothing else changed. The editor asks for it once more.
+- **Add-ons are called Plugins** now - the page, its buttons and the help. The plugins you added are kept: their folder is moved over by itself.
+- **New name: Rome and Medieval Campaign Editor** (was RTW & M2TW Campaign Editor); the exe is now `Rome-and-Medieval-Campaign-Editor.exe`. Your settings, logs, plugins and backups stay as they are; an old exe and its desktop shortcut can be deleted.
+- **A new window, faster on big mods**: the whole window is made anew (Qt) - the same tabs, buttons and fields in the same places; long lists, Art, Models and the 3D map open much faster, and the Dark look reaches every corner. The editor now comes as a folder (the setup or the zip) you can put anywhere - no longer in the game's folder - with a shortcut on the desktop or in the Start menu.
+- License: the files the editor writes into your mod (its plugin scripts too) may be shared and changed with your mod; the libraries made by others keep the rights their own licenses give (the LGPL's among them); the ban on taking it apart stops where the law allows it anyway. THIRD-PARTY-NOTICES now also lists the parts inside Python, Pillow and NumPy (OpenSSL, FreeType...). The editor asks for the changed license once.
+- License: downloading or using the editor already means agreeing to it (the editor asks again on its first start); the release page says so, and the license and the notices of the parts by others come with every download (beside the exe in Assets, inside the Linux archive).
+- Recolour freely: an **Apply** button. Changes are no longer kept by themselves - Apply puts them into the main window's Apply changes list; closing the window without Apply drops them (what was applied before still waits). A change kept by mistake: Apply changes, right click its line, throw it away.
+- New mod folder (Rome): the new mod goes into `<game>\mods\<name>` as in Medieval II, the `mods` folder made if the game has none; its start script says `-mod:mods/<name>`. Mods already beside the game (and Barbarian Invasion, Alexander) stay where they are and load as before.
+- Medieval II from Steam (and its Kingdoms campaigns, and a mod on such a game) loads straight from its packs, as the game reads them - no unpacking, no unpacker, nothing written into the game folder (the first Load takes a few seconds). A changed file is written loose into data, where the game reads it before its packs; Restore takes it away. The "unpack it now?" question is gone; packs that do not open are said in plain words.
+- The **guide (wiki)** is now short: what the editor is, installing, first steps, FAQ, reporting a bug.
+- Layout board: the board moves and zooms the same way as the Campaign HUD's - the wheel at the mouse (Shift in small steps), the middle button or Space + left drag it, Shift+1 everything, Shift+2 the picked piece, Shift+0 100 %; the arrows move the board when no free piece is picked.
+
+### Fixed
+- Sack Settlement (Medieval II): the Raze button stood partly out of the capture scroll the first time it opened -> the scroll's inner frame now grows with the scroll, so the button stands inside it.
+- Rome (with REX): Check mod files and the unit editor said REX keeps only 3 officers per unit -> they now say 9, as REX does (Medieval II with M2EX keeps 3).
+- A write refused because of a character's skill over 10 (or Rome's age over 120) that the mod already had, not made by the change (seen on a faction rename) -> a value the mod had before no longer stops a write: the editor says it and offers to set it to 10 in the same write, or to write as it is. A value the change itself would make is offered **Set to 10 and write** instead of only a refusal.
+- View in 3D (Medieval II): an archer's quiver no longer disappears while an animation plays on a model a modder exported himself - the men are now moved by their bones exactly as the game moves them.
+- Map > Coast & heights: on Windows the map's picture did not change while you painted with the heights brush (Raise, Lower, Smooth, Level to height) or shaped the coast with the heights shown, though the changes were made (the 3D view had them) -> the picture follows the brush again.
+- Start the game with a Medieval II mod whose start .cfg is not named after its folder (Divide and Conquer EUR's `TATW.cfg`): the editor started M2EX without the mod's .cfg, so its own settings (40-unit armies, the HD interface, unit size) were lost -> the mod's own .cfg goes in with the start, whatever its name; Check mod files says when it sets 40-unit armies.
+- Loading a patch without the mod it is made for (Grand Strategy Overhaul without Divide and Conquer EUR under it): a thousand unit errors -> one plain line on Load and in Check mod files: install the mod it is made for first, with the name of its install notes.
+- Make the campaign map 3 x bigger now works on every way a mod lays out its map: some mods keep the map's files in the campaign's folder, some in `world/maps/base`, some split between the two - a split map was left half old (its size file and some pictures kept the old size) and the game could not build it. Every file is now taken where the game takes it and the bigger copy written into one folder; when the map is shared by another campaign (Medieval II's prologue), that campaign keeps its own. REX / M2EX's 16-bit heights (`map_heights_ex.png`) are made at the new size too.
+- Draw from the map: the line round the faction's land was black or white -> it is the faction's secondary colour, as the game draws it.
+- Medieval II faction-select map drawn from the map: on a mod whose pictures show another part of the world, a faction's land could sit on the edge, half under the frame -> the map is moved (and made smaller if needed) so the faction's land is in the middle of the frame.
+- Check mod files: a faction offered to play (playable list) that the campaign has no faction of is named as a problem - picking it at the start crashed the game.
+- Rome (with REX): a crash at the campaign's start from a region left with no town is named first in the report, no longer said to happen only in Medieval II.
+- View in 3D (Medieval II): a model whose bones are numbered unlike its skeleton (a model exported with bones in another order, or with bones of your own) lost its head, floated its shield or broke apart in every move - in the game too. The window now says which parts are tied to the wrong bones, and **Number its bones as the skeleton does...** puts them right by name, as the game's own models were made (every detail level, a backup, Restore gives it back).
+- Bringing a faction or units from another Medieval II mod copied many files the mod does not need: the textures of every faction of the other mod (now only of the factions that wear the brought units) and files the game already has, the same (now left out).
+- A faction brought from another Medieval II mod could stop the game at loading: its units kept the other mod's lists of who may recruit them in each era, naming factions this mod lacks. Now only this mod's factions are left in, and Check mod files looks at those lists too.
+- Bringing a faction whose unit fires a projectile neither mod has is refused in plain words (the game stopped at loading).
+- A faction picked in New faction > From another mod was forgotten after a look at Edit faction and made as a plain copy of the template.
+- A faction brought from another mod: its leader and heir are offered from its own name list (its own names were refused).
+- New faction with no starting town picked says so at once, not after the whole faction was made.
+- Report a bug: a game that stopped at loading and closed itself was called 'closed in the usual way', and a check the game went on after was called the stop.
+- Town window: a building given and another taken away in one town at the same Apply broke descr_strat.txt (the game stopped reading it).
+- Tools > Any game file, as it is written: on a Medieval II still in its packs the window did not answer for minutes (it took every file of the packs out first) -> it lists the packs' text files at once and takes a file out only when it is opened.
+- New faction > From zero could take one faction's own role with it (the Pope's, a horde), its own buildings and its settings; now it gets what most of its culture has, its own victory goals (its first town, as many regions as the campaign's factions usually take - not the template's), and the window asks whose soldiers it dresses like (recoloured).
+- New mod folder from a mod kept in packs (a Kingdoms campaign such as americas): the new mod got the packs copied as they were, their files still named after the old folder - the game reads a mod's packs only under its own folder, found none of them and crashed at the start ('horde unit type ... not found'). The copy's files are now named after the new folder (their contents copied as they are). The editor reads such packs as the game does, and Check mod files names packs whose files are named after another folder.
+- Recolour freely: no Save button looked missing -> the window says its changes are kept by themselves and Apply changes writes them.
+- Voice accents: New / Remove accent refused while other changes waited for Apply -> it is kept with them and written by the same Apply.
+- Recolour freely: nothing said how its changes are saved -> the window says Apply changes at the bottom of the main window writes them.
+
 ## 0.35.5 - 2026-10-28
 
 ### In short
@@ -164,6 +260,8 @@
 - New mod folder puts no switched-off engine settings files (descr_ex, descr_caps_ex) in: the mod runs on the engine's defaults as before; the editor writes the line a change needs, Check mod files' Copy them in brings the whole list.
 
 ### Fixed
+- Maps > 3D: painting a river two tiles wide (a 2 x 2 block) froze the editor - the river routing went round in circles -> the 3D map shows it at once (the Terrain Preview still warns: the game dies on such a river); rivers one tile wide are drawn as before.
+- Tools > Any game file, as it is written: on a Medieval II still in its packs the window did not answer for minutes (it took every file of the packs out first) -> it lists the packs' text files at once and takes a file out only when it is opened.
 - New faction > From zero on Rome stopped at Create Faction: the culture's own names (with letters like ë or é, a dot, a surname of several words) were refused as if typed -> the game's own names are taken as they are.
 - A general taken off the map whose name is part of a name on the family tree ('Abel' of 'Abel Alphid') was written back as a man who died before the start -> only a man the tree itself names stays on it.
 - Events > Campaign script: taking out wait_monitors while monitors stayed said nothing - the script then ends at once and its monitors never react -> it is said before Apply.
@@ -215,6 +313,8 @@
 - **Changed**: nothing else - this release holds only these fixes.
 
 ### Fixed
+- Maps > 3D: painting a river two tiles wide (a 2 x 2 block) froze the editor - the river routing went round in circles -> the 3D map shows it at once (the Terrain Preview still warns: the game dies on such a river); rivers one tile wide are drawn as before.
+- Tools > Any game file, as it is written: on a Medieval II still in its packs the window did not answer for minutes (it took every file of the packs out first) -> it lists the packs' text files at once and takes a file out only when it is opened.
 - Two changes kept for one Apply (a town's new garrison and new agents on the Map) could leave the garrison's units under an agent - the game then stopped reading the factions there: the factions after it were missing, the rebels' towns empty and playing one of them crashed -> the units stay with their army; Check mod files names such a line and a write never makes a new one.
 - Terrain editor and the 3D map: the ground colours were mixed up - high fertility was shown as low fertility, low fertility as sparse forest, sparse forest as high fertility (and its trees stood on the wrong tiles), impassable sea painted a colour the game does not know -> every ground is read and painted with the games' own colours.
 - Units > Battle model: war dogs and pigs had no picture of their own, only their handlers' - the animals are listed now with their own texture, View in 3D and Save its files; chariots and siege engines show their texture too, as do soldiers whose model has no texture line (Rome).
@@ -227,6 +327,8 @@
 - **Changed**: the exe checks itself for every part of the editor before it is handed out.
 
 ### Fixed
+- Maps > 3D: painting a river two tiles wide (a 2 x 2 block) froze the editor - the river routing went round in circles -> the 3D map shows it at once (the Terrain Preview still warns: the game dies on such a river); rivers one tile wide are drawn as before.
+- Tools > Any game file, as it is written: on a Medieval II still in its packs the window did not answer for minutes (it took every file of the packs out first) -> it lists the packs' text files at once and takes a file out only when it is opened.
 - The map stopped drawing when a watchtower, port, army or region point was picked while a town waited for Apply -> it draws on.
 - A name with a letter like 'ė' or 'ā' stopped the write -> the nearest plain letter is written, and the write says so.
 - A full description typed for a faction whose campaign had none was lost on Apply -> it is written.
@@ -274,6 +376,8 @@
 - **Changed**: the faction-select map and minimap use the 3D map's picture where a ground's texture was not found; a name given twice in a faction gets a free one instead of a refused write.
 
 ### Fixed
+- Maps > 3D: painting a river two tiles wide (a 2 x 2 block) froze the editor - the river routing went round in circles -> the 3D map shows it at once (the Terrain Preview still warns: the game dies on such a river); rivers one tile wide are drawn as before.
+- Tools > Any game file, as it is written: on a Medieval II still in its packs the window did not answer for minutes (it took every file of the packs out first) -> it lists the packs' text files at once and takes a file out only when it is opened.
 - New faction > From another mod: a name list typed in the window was replaced by the other mod's, so the leader typed from it was refused (naming the template) -> the typed list wins; the message names the faction whose list it is.
 - An error box at start (the message line placed before the tabs before they were laid out) -> gone.
 - Two characters of one faction with the same name: the write was refused (naming captains stopped) -> the second one takes a free name of the faction's own list, said in the report.
@@ -544,6 +648,8 @@
   line of the block** in both editors; the editor remembers whether it was open.
 
 ### Fixed
+- Maps > 3D: painting a river two tiles wide (a 2 x 2 block) froze the editor - the river routing went round in circles -> the 3D map shows it at once (the Terrain Preview still warns: the game dies on such a river); rivers one tile wide are drawn as before.
+- Tools > Any game file, as it is written: on a Medieval II still in its packs the window did not answer for minutes (it took every file of the packs out first) -> it lists the packs' text files at once and takes a file out only when it is opened.
 - Maps > 3D: rebel villages (a region with no settlement in descr_strat.txt) were not shown -> each stands there, as in the game; Rome's wonders stand on the map with their own models.
 - Maps > 3D: the heights brush's circle looked dark on sand -> its white line is wider.
 - Maps > 3D with HLR: the figures were white and many grounds plain - the mod's own pack names its files with the mod's folder in front, and a texture named without its ending was not tried as .tga -> both found.
@@ -972,6 +1078,8 @@
   release's page.
 
 ### Fixed
+- Maps > 3D: painting a river two tiles wide (a 2 x 2 block) froze the editor - the river routing went round in circles -> the 3D map shows it at once (the Terrain Preview still warns: the game dies on such a river); rivers one tile wide are drawn as before.
+- Tools > Any game file, as it is written: on a Medieval II still in its packs the window did not answer for minutes (it took every file of the packs out first) -> it lists the packs' text files at once and takes a file out only when it is opened.
 - **View in 3D: the camera jerked while an animation played** - each frame was sized anew; the view now keeps its
   place and size while it plays (sized again for another animation, the mount or the weapons).
 - **Unit editor: France picked in Show, England's colours shown** - the card, the battle model's texture and the 3D
@@ -1250,6 +1358,8 @@
   test mod.
 
 ### Fixed
+- Maps > 3D: painting a river two tiles wide (a 2 x 2 block) froze the editor - the river routing went round in circles -> the 3D map shows it at once (the Terrain Preview still warns: the game dies on such a river); rivers one tile wide are drawn as before.
+- Tools > Any game file, as it is written: on a Medieval II still in its packs the window did not answer for minutes (it took every file of the packs out first) -> it lists the packs' text files at once and takes a file out only when it is opened.
 - **Add-ons (Sack Settlement, both games; Avoid Growth): the game's script console and other script texts turned
   into another font** after the add-on had drawn - a font it opened could stay open when its drawing failed, and
   everything drawn after it took that font. Every font the add-ons use is now closed by the game itself, whatever
@@ -1338,6 +1448,8 @@
 - Long explanations at the top of Mercenaries, Map size and the 3 x bigger map are one line now; the rest shows on the '?'.
 
 ### Fixed
+- Maps > 3D: painting a river two tiles wide (a 2 x 2 block) froze the editor - the river routing went round in circles -> the 3D map shows it at once (the Terrain Preview still warns: the game dies on such a river); rivers one tile wide are drawn as before.
+- Tools > Any game file, as it is written: on a Medieval II still in its packs the window did not answer for minutes (it took every file of the packs out first) -> it lists the packs' text files at once and takes a file out only when it is opened.
 - Backups that were put back (Restore, Undo this write) stayed in `CampaignEditor_backups` as `*_restored` folders, one per undo. They are deleted now, and the ones older versions left are taken away when the mod is loaded.
 - **Change size...** under the map did nothing on the Terrain tab; it opens the Map size window from every map now.
 - The family member's diamond on a flag was always white; it takes the colour that reads on the flag (dark on a light flag, light on a dark one), like every other mark.
@@ -1355,6 +1467,8 @@
 ## 0.30.1 - 2026-10-07
 
 ### Fixed
+- Maps > 3D: painting a river two tiles wide (a 2 x 2 block) froze the editor - the river routing went round in circles -> the 3D map shows it at once (the Terrain Preview still warns: the game dies on such a river); rivers one tile wide are drawn as before.
+- Tools > Any game file, as it is written: on a Medieval II still in its packs the window did not answer for minutes (it took every file of the packs out first) -> it lists the packs' text files at once and takes a file out only when it is opened.
 - Edit faction on a faction the mod has but the campaign does not (no block in its `descr_strat.txt`): said in plain words what to do (another campaign, or bring it in as a new / later faction).
 - Module builder and Add-ons on Medieval II: putting a script into the game refused with 'D:\Medieval II Total War\data holds only the files this mod changes' when the game keeps its data in packs (the usual install). The loaded mod now carries the write and its backup; Scripts in the game the same.
 - The set-up problems found on Load: a long list ran off the screen and the window could not be closed. The same problem on many lines of a file is now said once with its lines, a long text scrolls, and the buttons are always in sight (*Put them right* / *Not now*).
@@ -1365,6 +1479,8 @@
 ## 0.30.0 - 2026-10-07
 
 ### Fixed
+- Maps > 3D: painting a river two tiles wide (a 2 x 2 block) froze the editor - the river routing went round in circles -> the 3D map shows it at once (the Terrain Preview still warns: the game dies on such a river); rivers one tile wide are drawn as before.
+- Tools > Any game file, as it is written: on a Medieval II still in its packs the window did not answer for minutes (it took every file of the packs out first) -> it lists the packs' text files at once and takes a file out only when it is opened.
 - Windows: two writes in the same second could be put back by Restore in the wrong order (the files' own times are too coarse there); every backup now keeps the exact moment it was made. The game's log kept with the editor's logs got every line ending doubled.
 - The map: painting land to a region and moving a town or port in the same write kept only one of them (the second change of the regions picture started again from the file); a town or port moved onto land just painted to its region was refused as 'not its land' until written. Both now go in one write.
 - Unit cards: a mod folder that keeps the game's own cards showed them as wide name buttons; the cards are now found in the game's data too, a unit without any picture gets a grey card of the same size with its name, and cards of another size sit in the middle of the usual box, so the rows stay even.
@@ -1922,6 +2038,8 @@
   tree), so the pictures, the battle model and the voice have the room; Add line... opens them.
 
 ### Fixed
+- Maps > 3D: painting a river two tiles wide (a 2 x 2 block) froze the editor - the river routing went round in circles -> the 3D map shows it at once (the Terrain Preview still warns: the game dies on such a river); rivers one tile wide are drawn as before.
+- Tools > Any game file, as it is written: on a Medieval II still in its packs the window did not answer for minutes (it took every file of the packs out first) -> it lists the packs' text files at once and takes a file out only when it is opened.
 - **Terrain tab**: the map showed tiny or not at all when the tab opened - it was fitted before the tab had its size; it is fitted again once it has one.
 - Recolour window: the 'wheel: zoom, right drag: move' line has a row of its own (it was cut at the window's edge).
 - **Bigger map (x3): the coast comes down to the water** - the land by the water kept the old shore's full height,
@@ -2280,6 +2398,8 @@
   starts from there. 'Not now' asks with the next version, 'Don't ask again' never; Settings > Folders has the button.
 
 ### Fixed
+- Maps > 3D: painting a river two tiles wide (a 2 x 2 block) froze the editor - the river routing went round in circles -> the 3D map shows it at once (the Terrain Preview still warns: the game dies on such a river); rivers one tile wide are drawn as before.
+- Tools > Any game file, as it is written: on a Medieval II still in its packs the window did not answer for minutes (it took every file of the packs out first) -> it lists the packs' text files at once and takes a file out only when it is opened.
 - **The bigger map (x3) keeps the rules of the games' own maps** (five reports from Divide and Conquer, all of them
   measured on vanilla Medieval II too - 66 of 77 ports there had no water beside them): a town in a region
   descr_regions does not list stays one town pixel with its land round it (Erebor became nine); every port stands on
@@ -2336,6 +2456,8 @@
   list opens on the add-on of the loaded game.
 
 ### Fixed
+- Maps > 3D: painting a river two tiles wide (a 2 x 2 block) froze the editor - the river routing went round in circles -> the 3D map shows it at once (the Terrain Preview still warns: the game dies on such a river); rivers one tile wide are drawn as before.
+- Tools > Any game file, as it is written: on a Medieval II still in its packs the window did not answer for minutes (it took every file of the packs out first) -> it lists the packs' text files at once and takes a file out only when it is opened.
 - **A new Medieval II faction keeps its template's `ai_label` and `denari_kings_purse`**: they were lost, so the AI
   ran on the 'default' rule set with no income each turn (one reason new factions stood still). A note in Preview
   when the new faction starts with one army led by its leader (the computer seldom sends its leader out).
@@ -2401,6 +2523,8 @@
   faction a script names that the mod lacks. "Open another log..." reads any other one.
 
 ### Fixed
+- Maps > 3D: painting a river two tiles wide (a 2 x 2 block) froze the editor - the river routing went round in circles -> the 3D map shows it at once (the Terrain Preview still warns: the game dies on such a river); rivers one tile wide are drawn as before.
+- Tools > Any game file, as it is written: on a Medieval II still in its packs the window did not answer for minutes (it took every file of the packs out first) -> it lists the packs' text files at once and takes a file out only when it is opened.
 - **M2EX / REX not seen** (a player with M2EX got "the original exe cannot take more"): the engine is found in
   the game folder by any spelling of its exe or .xdb, and its `descr_ex.txt` (in the mod or the game's data) counts as
   the engine being installed. Load says which engine was found and where `max_factions` comes from; a refusal says
@@ -2425,6 +2549,8 @@
   resource, a region's last land, a river tile, or a port's last land. Undo / Redo stroke, Preview, one backup.
 
 ### Fixed
+- Maps > 3D: painting a river two tiles wide (a 2 x 2 block) froze the editor - the river routing went round in circles -> the 3D map shows it at once (the Terrain Preview still warns: the game dies on such a river); rivers one tile wide are drawn as before.
+- Tools > Any game file, as it is written: on a Medieval II still in its packs the window did not answer for minutes (it took every file of the packs out first) -> it lists the packs' text files at once and takes a file out only when it is opened.
 - **The bigger map (Tools > Make the campaign map 3 x bigger) - played in the game, it was flat and square:**
   - `map_heights.hgt` - the game's float copy of the heights, which it reads INSTEAD of `map_heights.tga` and never
     makes again - was left at the old size; it is now written at the new size (measured on both vanilla games:
@@ -2466,6 +2592,8 @@
   one over the armies, agents and fleets (name, tile, or a unit inside the army, e.g. "knight").
 
 ### Fixed
+- Maps > 3D: painting a river two tiles wide (a 2 x 2 block) froze the editor - the river routing went round in circles -> the 3D map shows it at once (the Terrain Preview still warns: the game dies on such a river); rivers one tile wide are drawn as before.
+- Tools > Any game file, as it is written: on a Medieval II still in its packs the window did not answer for minutes (it took every file of the packs out first) -> it lists the packs' text files at once and takes a file out only when it is opened.
 - A mod without `descr_names.txt` (e.g. a small Medieval II add-on mod) no longer stops the window when a template
   faction is picked ("expected str, bytes or os.PathLike object, not NoneType"); the name lists are just empty.
 - The mouse wheel over an open drop-down list no longer logs an error.
@@ -2523,6 +2651,8 @@
   and the Victory block.
 
 ### Fixed
+- Maps > 3D: painting a river two tiles wide (a 2 x 2 block) froze the editor - the river routing went round in circles -> the 3D map shows it at once (the Terrain Preview still warns: the game dies on such a river); rivers one tile wide are drawn as before.
+- Tools > Any game file, as it is written: on a Medieval II still in its packs the window did not answer for minutes (it took every file of the packs out first) -> it lists the packs' text files at once and takes a file out only when it is opened.
 - **Medieval II diplomacy**: the tab now reads and writes `faction_standings` (-1.0 .. 1.0) - before it showed every
   Medieval II faction as neutral. A new Medieval II faction 'neutral to all' got Rome's `600 slave` lines, which
   Medieval II does not read (it was not at war with the rebels); now `faction_standings -1.0 slave` and
@@ -2599,6 +2729,8 @@
   out (and the names of services in it) scared people off; the wiki page keeps the details.
 
 ### Fixed
+- Maps > 3D: painting a river two tiles wide (a 2 x 2 block) froze the editor - the river routing went round in circles -> the 3D map shows it at once (the Terrain Preview still warns: the game dies on such a river); rivers one tile wide are drawn as before.
+- Tools > Any game file, as it is written: on a Medieval II still in its packs the window did not answer for minutes (it took every file of the packs out first) -> it lists the packs' text files at once and takes a file out only when it is opened.
 - **"modeldb: a number expected at ..." on a mod's battle_models.modeldb**: a
   modeldb edited by hand - line breaks, tabs, two spaces between the values - is read as the game reads it (it was
   refused, so no new faction could be made); written back in the game's own form.
@@ -2657,6 +2789,8 @@
   of its template's); drawing one from the faction's towns comes back in a later release.
 
 ### Fixed
+- Maps > 3D: painting a river two tiles wide (a 2 x 2 block) froze the editor - the river routing went round in circles -> the 3D map shows it at once (the Terrain Preview still warns: the game dies on such a river); rivers one tile wide are drawn as before.
+- Tools > Any game file, as it is written: on a Medieval II still in its packs the window did not answer for minutes (it took every file of the packs out first) -> it lists the packs' text files at once and takes a file out only when it is opened.
 - **A unit given to a faction was listed twice in a building's description**:
   where a level recruits a unit by two lines for different factions (vanilla: Arab Cavalry for the Moors and for
   Egypt, Turkomans, the Carthaginian peasant for Spain and for the Carthaginian culture - 36 levels in Rome, 107 in
@@ -2732,6 +2866,8 @@
   mod does not have are refused - as is leaving out the governor's chain.
 
 ### Fixed
+- Maps > 3D: painting a river two tiles wide (a 2 x 2 block) froze the editor - the river routing went round in circles -> the 3D map shows it at once (the Terrain Preview still warns: the game dies on such a river); rivers one tile wide are drawn as before.
+- Tools > Any game file, as it is written: on a Medieval II still in its packs the window did not answer for minutes (it took every file of the packs out first) -> it lists the packs' text files at once and takes a file out only when it is opened.
 - **A region or its town could not be renamed** (a user asked; a double click on the town list only adds the town):
   **Rename...** beside the towns list, a right click on a town, and Edit region now show the names players see of the
   region and its town and write them to the campaign's `<campaign>_regions_and_settlement_names.txt` (the key and
@@ -2769,6 +2905,8 @@
   and New religion. The files keep the internal name.
 
 ### Fixed
+- Maps > 3D: painting a river two tiles wide (a 2 x 2 block) froze the editor - the river routing went round in circles -> the 3D map shows it at once (the Terrain Preview still warns: the game dies on such a river); rivers one tile wide are drawn as before.
+- Tools > Any game file, as it is written: on a Medieval II still in its packs the window did not answer for minutes (it took every file of the packs out first) -> it lists the packs' text files at once and takes a file out only when it is opened.
 - **Buildings whose list says `factions { all, }`** (a modder's way to let everyone build them) were taken as
   buildable by no one: the Buildings tab offered only the other levels, and setting them warned "not in the faction
   list". 'all' in a factions list now means every faction, everywhere the tool checks it.
@@ -2789,6 +2927,8 @@
 ## 0.19.0 - 2026-09-30
 
 ### Fixed
+- Maps > 3D: painting a river two tiles wide (a 2 x 2 block) froze the editor - the river routing went round in circles -> the 3D map shows it at once (the Terrain Preview still warns: the game dies on such a river); rivers one tile wide are drawn as before.
+- Tools > Any game file, as it is written: on a Medieval II still in its packs the window did not answer for minutes (it took every file of the packs out first) -> it lists the packs' text files at once and takes a file out only when it is opened.
 - **A faction picked in New faction mode** (to change it, not to copy it) no longer ends in a puzzling "nothing to
   write": the line at the top and the message on Apply now say that it is the template of
   a new faction, and to press Edit faction to change it itself.
@@ -2834,6 +2974,8 @@
 - **An icon of its own** for the exe and the window: a gear ring round a Roman "R" and a medieval "M" (drawn for the editor, no game pictures).
 
 ### Fixed
+- Maps > 3D: painting a river two tiles wide (a 2 x 2 block) froze the editor - the river routing went round in circles -> the 3D map shows it at once (the Terrain Preview still warns: the game dies on such a river); rivers one tile wide are drawn as before.
+- Tools > Any game file, as it is written: on a Medieval II still in its packs the window did not answer for minutes (it took every file of the packs out first) -> it lists the packs' text files at once and takes a file out only when it is opened.
 - Settlement names by culture under M2EX: checked in the game, so Preview no longer warns that it is untested there.
 - **Medieval II with M2EX: a new mod folder starts the way M2EX's own mods do** - `Start_<name>.bat` runs
   `M2EX.exe --features.mod=mods/<name>` (as M2EX's Teutonic.bat / Crusades.bat), the plain game keeps
@@ -2842,6 +2984,8 @@
 ## 0.18.1 - 2026-09-30
 
 ### Fixed
+- Maps > 3D: painting a river two tiles wide (a 2 x 2 block) froze the editor - the river routing went round in circles -> the 3D map shows it at once (the Terrain Preview still warns: the game dies on such a river); rivers one tile wide are drawn as before.
+- Tools > Any game file, as it is written: on a Medieval II still in its packs the window did not answer for minutes (it took every file of the packs out first) -> it lists the packs' text files at once and takes a file out only when it is opened.
 - **Barbarian Invasion: regions read and written right.** BI's descr_regions.txt has a `legion: ...` line after
   each region's name and a beliefs line (`pagan 90 christianity 10`) after farming. The tool took the legion
   line for the town, so a BI region showed the town as "legion: ...", the builder as the town and so on. Now
@@ -2854,6 +2998,8 @@
   built from its code must stay open under GPL-3.0 and keep the author's copyright notice.
 
 ### Fixed (from the user's tests)
+- Maps > 3D: painting a river two tiles wide (a 2 x 2 block) froze the editor - the river routing went round in circles -> the 3D map shows it at once (the Terrain Preview still warns: the game dies on such a river); rivers one tile wide are drawn as before.
+- Tools > Any game file, as it is written: on a Medieval II still in its packs the window did not answer for minutes (it took every file of the packs out first) -> it lists the packs' text files at once and takes a file out only when it is opened.
 - **Medieval II: a new army, agent or fleet of the rebels never showed up in the game.** In Medieval II the rebels
   are the last faction in descr_strat, and their block ends where the diplomacy starts with `faction_standings`
   (Rome starts it with `core_attitudes`). The tool knew only Rome's word, so it wrote the rebel army after the
@@ -2867,6 +3013,8 @@
   towns list, or more room for the roster cards.
 
 ### Fixed (from the modders' guides, checked on the vanilla files)
+- Maps > 3D: painting a river two tiles wide (a 2 x 2 block) froze the editor - the river routing went round in circles -> the 3D map shows it at once (the Terrain Preview still warns: the game dies on such a river); rivers one tile wide are drawn as before.
+- Tools > Any game file, as it is written: on a Medieval II still in its packs the window did not answer for minutes (it took every file of the packs out first) -> it lists the packs' text files at once and takes a file out only when it is opened.
 - **REX / M2EX: the original game's limits no longer hold a modder back.** With REX or M2EX beside the game the
   religions limit (9) is not applied (New religion... says "no limit"), and Check mod counts regions, map size,
   units and religions as lifted for both engines (their own notes: "no faction, religion, region, unit, cultures,
@@ -2928,6 +3076,8 @@ Asked on Discord: where are the rebels?
   and Medieval II (rebels take a town, a captain and a new army written, Restore byte-exact) and in the window.
 
 ### Fixed
+- Maps > 3D: painting a river two tiles wide (a 2 x 2 block) froze the editor - the river routing went round in circles -> the 3D map shows it at once (the Terrain Preview still warns: the game dies on such a river); rivers one tile wide are drawn as before.
+- Tools > Any game file, as it is written: on a Medieval II still in its packs the window did not answer for minutes (it took every file of the packs out first) -> it lists the packs' text files at once and takes a file out only when it is opened.
 - **A new faction no longer takes its template's shadow / spawn ties** (BI / Medieval II `descr_sm_factions`):
   a clone of `empire_east` was also `shadowed_by empire_east_rebels`, so two factions claimed one civil-war
   shadow; `spawns_on_revolt`, `spawned_by` and `spawned_on_event` were copied the same way. The clone starts as a
@@ -2938,6 +3088,8 @@ Asked on Discord: where are the rebels?
 REX's new features, read from REX's own notes, and two things the tool got wrong on Medieval II.
 
 ### Fixed
+- Maps > 3D: painting a river two tiles wide (a 2 x 2 block) froze the editor - the river routing went round in circles -> the 3D map shows it at once (the Terrain Preview still warns: the game dies on such a river); rivers one tile wide are drawn as before.
+- Tools > Any game file, as it is written: on a Medieval II still in its packs the window did not answer for minutes (it took every file of the packs out first) -> it lists the packs' text files at once and takes a file out only when it is opened.
 - **Medieval II recruitment lines**: Medieval II recruits with `recruit_pool` lines (the vanilla buildings file has
   1475 of them and no `recruit` line at all), but the Roster tab, unit renames, unit packs, "Copy as new" and the
   line checks read only Rome's `recruit`. On Medieval II the Roster showed no place a unit is recruited, a renamed
@@ -2970,6 +3122,8 @@ and ran with the changes, and its own log converts buildings the same way the to
 building not specified ... building will disappear during conversion").
 
 ### Fixed
+- Maps > 3D: painting a river two tiles wide (a 2 x 2 block) froze the editor - the river routing went round in circles -> the 3D map shows it at once (the Terrain Preview still warns: the game dies on such a river); rivers one tile wide are drawn as before.
+- Tools > Any game file, as it is written: on a Medieval II still in its packs the window did not answer for minutes (it took every file of the packs out first) -> it lists the packs' text files at once and takes a file out only when it is opened.
 - **City / castle with a size set by hand**: Inverness (a castle town) made a city and raised to a large town got
   its governor's building fitted to the file's old size at the write (`wooden_pallisade` in a large town - Preview
   warned "the game refuses to load that"). Buildings picked in the window keep the governor's building fitted
@@ -2993,6 +3147,8 @@ building not specified ... building will disappear during conversion").
   warning that one was missing.
 
 ### Fixed
+- Maps > 3D: painting a river two tiles wide (a 2 x 2 block) froze the editor - the river routing went round in circles -> the 3D map shows it at once (the Terrain Preview still warns: the game dies on such a river); rivers one tile wide are drawn as before.
+- Tools > Any game file, as it is written: on a Medieval II still in its packs the window did not answer for minutes (it took every file of the packs out first) -> it lists the packs' text files at once and takes a file out only when it is opened.
 - **"<army> stands on x, y - move it first" when moving a town**: taking Odessus sent its
   garrison out to the next free tile, the very tile the town was then moved to, and Apply refused every time. An
   army on a moved town's new tile now steps aside to the nearest free tile of the region (said in Preview).
@@ -3028,6 +3184,8 @@ building not specified ... building will disappear during conversion").
 ## 0.14.1 - 2026-09-29
 
 ### Fixed
+- Maps > 3D: painting a river two tiles wide (a 2 x 2 block) froze the editor - the river routing went round in circles -> the 3D map shows it at once (the Terrain Preview still warns: the game dies on such a river); rivers one tile wide are drawn as before.
+- Tools > Any game file, as it is written: on a Medieval II still in its packs the window did not answer for minutes (it took every file of the packs out first) -> it lists the packs' text files at once and takes a file out only when it is opened.
 - **Name list... on Medieval II**: vanilla M2 has surname keys with a space (`de Lyon`, `von Saxony`, `al Rashid` -
   8 factions' characters carry them). A new list kept such names as `de_Lyon`, another key, so the game would not
   have found the characters' names. Names the characters already carry are now kept exactly as written; new names
@@ -3077,6 +3235,8 @@ plain Rome copy (the julii taking Mediolanium); not yet tested in the game.
   town has now ("(shown: Medhlan)"). A name set in Names by culture... shows on the map the moment OK is pressed.
 
 ### Fixed
+- Maps > 3D: painting a river two tiles wide (a 2 x 2 block) froze the editor - the river routing went round in circles -> the 3D map shows it at once (the Terrain Preview still warns: the game dies on such a river); rivers one tile wide are drawn as before.
+- Tools > Any game file, as it is written: on a Medieval II still in its packs the window did not answer for minutes (it took every file of the packs out first) -> it lists the packs' text files at once and takes a file out only when it is opened.
 - **New mod folder made from Barbarian Invasion or Alexander** (REX): its start file now starts that game (`-bi` /
   `-alx`, as REX's own start files do). Without it REX read the mod over the plain game's data, and the menu's
   imperial campaign was read with BI's factions.
@@ -3109,6 +3269,8 @@ Medieval II copies, in the window on Linux and with the deep Check; the flag sym
   Two writes made by one Apply are undone in the right order.
 
 ### Fixed
+- Maps > 3D: painting a river two tiles wide (a 2 x 2 block) froze the editor - the river routing went round in circles -> the 3D map shows it at once (the Terrain Preview still warns: the game dies on such a river); rivers one tile wide are drawn as before.
+- Tools > Any game file, as it is written: on a Medieval II still in its packs the window did not answer for minutes (it took every file of the packs out first) -> it lists the packs' text files at once and takes a file out only when it is opened.
 - Building editor: **Add line** refused a new `recruit` line once a level had as many as the busiest level of the
   mod ("no building level in this mod has more than 101 'recruit' lines"). Recruit lines only list units and the
   game takes any number of them, so they are no longer held to that rule. (Reported by a tester.)
@@ -3148,6 +3310,8 @@ its own pictures shown everywhere, the painted terrain drawn; the bugs he found 
   `RTW-M2TW-Campaign-Editor-files`; a log an older version left there moves into `logs` by itself.
 
 ### Fixed
+- Maps > 3D: painting a river two tiles wide (a 2 x 2 block) froze the editor - the river routing went round in circles -> the 3D map shows it at once (the Terrain Preview still warns: the game dies on such a river); rivers one tile wide are drawn as before.
+- Tools > Any game file, as it is written: on a Medieval II still in its packs the window did not answer for minutes (it took every file of the packs out first) -> it lists the packs' text files at once and takes a file out only when it is opened.
 - **Two characters of one faction with the same name**: the game skipped the second ("duplicated character name
   in this faction, skipping") - an army named like the leader, a spy named like an automatic captain. Names now
   stay unique in a faction: the automatic captain skips taken names, the New army / agent dialog refuses one,
@@ -3194,11 +3358,15 @@ its own pictures shown everywhere, the painted terrain drawn; the bugs he found 
 - The map draws each feature in its own colour (rivers, fords, sources, cliffs, volcanoes).
 
 ### Fixed
+- Maps > 3D: painting a river two tiles wide (a 2 x 2 block) froze the editor - the river routing went round in circles -> the 3D map shows it at once (the Terrain Preview still warns: the game dies on such a river); rivers one tile wide are drawn as before.
+- Tools > Any game file, as it is written: on a Medieval II still in its packs the window did not answer for minutes (it took every file of the packs out first) -> it lists the packs' text files at once and takes a file out only when it is opened.
 - Medieval II's impassable land (`64 64 64` in map_ground_types) now refuses characters like mountains do.
 
 ## 0.9.4 - 2026-09-29
 
 ### Fixed
+- Maps > 3D: painting a river two tiles wide (a 2 x 2 block) froze the editor - the river routing went round in circles -> the 3D map shows it at once (the Terrain Preview still warns: the game dies on such a river); rivers one tile wide are drawn as before.
+- Tools > Any game file, as it is written: on a Medieval II still in its packs the window did not answer for minutes (it took every file of the packs out first) -> it lists the packs' text files at once and takes a file out only when it is opened.
 - **Barbarian Invasion (bi) would not load its campaign** ("invalid literal for int() ... 'Pictii'"): an entry
   of its `descr_regions.txt` has a line more before the colour. The file is now read by one reader for
   everyone (the colour line anchors each entry), and the tool's writers (Edit region, region tags) use it too.
@@ -3235,6 +3403,8 @@ its own pictures shown everywhere, the painted terrain drawn; the bugs he found 
   `descr_regions.txt` lines of a region of the map (builder, rebels, region tags, triumph, farming).
 
 ### Fixed
+- Maps > 3D: painting a river two tiles wide (a 2 x 2 block) froze the editor - the river routing went round in circles -> the 3D map shows it at once (the Terrain Preview still warns: the game dies on such a river); rivers one tile wide are drawn as before.
+- Tools > Any game file, as it is written: on a Medieval II still in its packs the window did not answer for minutes (it took every file of the packs out first) -> it lists the packs' text files at once and takes a file out only when it is opened.
 - A new region shows in the towns list on the Faction tab at once (it only came after Apply).
 - A **new faction** can start in a region made in the same session: the map, the region and the faction are
   written by one Apply (the region first; the faction takes it as a rebel village). Characters placed next to
@@ -3253,6 +3423,8 @@ its own pictures shown everywhere, the painted terrain drawn; the bugs he found 
 - README: how to install (the exe in a folder of its own) and what the tool does with your own pictures.
 
 ### Fixed
+- Maps > 3D: painting a river two tiles wide (a 2 x 2 block) froze the editor - the river routing went round in circles -> the 3D map shows it at once (the Terrain Preview still warns: the game dies on such a river); rivers one tile wide are drawn as before.
+- Tools > Any game file, as it is written: on a Medieval II still in its packs the window did not answer for minutes (it took every file of the packs out first) -> it lists the packs' text files at once and takes a file out only when it is opened.
 - Restore removes the folders a run made for its new files when they are left empty.
 
 ## 0.8.0 - 2026-09-29
@@ -3268,12 +3440,16 @@ its own pictures shown everywhere, the painted terrain drawn; the bugs he found 
   Checked on the vanilla files of both games (julii, england): preview, write, Restore byte for byte.
 
 ### Fixed
+- Maps > 3D: painting a river two tiles wide (a 2 x 2 block) froze the editor - the river routing went round in circles -> the 3D map shows it at once (the Terrain Preview still warns: the game dies on such a river); rivers one tile wide are drawn as before.
+- Tools > Any game file, as it is written: on a Medieval II still in its packs the window did not answer for minutes (it took every file of the packs out first) -> it lists the packs' text files at once and takes a file out only when it is opened.
 - Renaming the leader or heir on the Faction tab now renames him on the family tree (`relative`
   lines) too; before, the tree kept the old name.
 
 ## 0.7.5 - 2026-09-29
 
 ### Fixed
+- Maps > 3D: painting a river two tiles wide (a 2 x 2 block) froze the editor - the river routing went round in circles -> the 3D map shows it at once (the Terrain Preview still warns: the game dies on such a river); rivers one tile wide are drawn as before.
+- Tools > Any game file, as it is written: on a Medieval II still in its packs the window did not answer for minutes (it took every file of the packs out first) -> it lists the packs' text files at once and takes a file out only when it is opened.
 - **Medieval II: crash on load after taking a castle** ("The castle core building level should be
   EQUAL the settlement level!"): a castle's governor's building (`core_castle_building`) stands at
   the settlement's own level (motte_and_bailey = village, wooden_castle = town, castle = large
@@ -3286,6 +3462,8 @@ its own pictures shown everywhere, the painted terrain drawn; the bugs he found 
 ## 0.7.4 - 2026-09-28
 
 ### Fixed
+- Maps > 3D: painting a river two tiles wide (a 2 x 2 block) froze the editor - the river routing went round in circles -> the 3D map shows it at once (the Terrain Preview still warns: the game dies on such a river); rivers one tile wide are drawn as before.
+- Tools > Any game file, as it is written: on a Medieval II still in its packs the window did not answer for minutes (it took every file of the packs out first) -> it lists the packs' text files at once and takes a file out only when it is opened.
 - **Art tab: the picture list was squeezed to a strip** by the campaign-select map blown up to 2x;
   the map now takes at most about 40 % of the tab's height (and half its width), smaller on small
   windows, so the pictures below keep their room.
@@ -3306,6 +3484,8 @@ its own pictures shown everywhere, the painted terrain drawn; the bugs he found 
 ## 0.7.1 - 2026-09-28
 
 ### Fixed
+- Maps > 3D: painting a river two tiles wide (a 2 x 2 block) froze the editor - the river routing went round in circles -> the 3D map shows it at once (the Terrain Preview still warns: the game dies on such a river); rivers one tile wide are drawn as before.
+- Tools > Any game file, as it is written: on a Medieval II still in its packs the window did not answer for minutes (it took every file of the packs out first) -> it lists the packs' text files at once and takes a file out only when it is opened.
 - **Preview / Apply changes, Undo, Tools... disappeared** when a tab was taller than the window
   (a smaller screen, a window made smaller): the buttons and the status line are now held at the
   bottom first and the tab shrinks instead (checked on a 1000 x 640 window on every tab).
@@ -3327,6 +3507,8 @@ The first release since 0.1.2: it holds 0.2.0 - 0.6.0 below (those were test bui
   zeroed dialog cannot break the game.
 
 ### Fixed
+- Maps > 3D: painting a river two tiles wide (a 2 x 2 block) froze the editor - the river routing went round in circles -> the 3D map shows it at once (the Terrain Preview still warns: the game dies on such a river); rivers one tile wide are drawn as before.
+- Tools > Any game file, as it is written: on a Medieval II still in its packs the window did not answer for minutes (it took every file of the packs out first) -> it lists the packs' text files at once and takes a file out only when it is opened.
 - **Campaign-select map (Medieval II) lit in the wrong place in the game** (shifted right): the
   place of the map inside the picture is now learnt from where the game lights each vanilla faction
   on its own map (a scale per axis); the land is filled solid (the see-through fill looked poor),
@@ -3464,6 +3646,8 @@ Fixes from a run through every part of the tool as a user (vanilla and HLR).
   texts, pictures).
 
 ### Fixed
+- Maps > 3D: painting a river two tiles wide (a 2 x 2 block) froze the editor - the river routing went round in circles -> the 3D map shows it at once (the Terrain Preview still warns: the game dies on such a river); rivers one tile wide are drawn as before.
+- Tools > Any game file, as it is written: on a Medieval II still in its packs the window did not answer for minutes (it took every file of the packs out first) -> it lists the packs' text files at once and takes a file out only when it is opened.
 - A new faction now also gets the template's mouse-over, selected and grey
   campaign buttons (file names with the faction name in the middle were missed).
 
@@ -3483,6 +3667,8 @@ Fixes from a run through every part of the tool as a user (vanilla and HLR).
 - A template fills the new faction's empty fields (money, colours).
 
 ### Fixed
+- Maps > 3D: painting a river two tiles wide (a 2 x 2 block) froze the editor - the river routing went round in circles -> the 3D map shows it at once (the Terrain Preview still warns: the game dies on such a river); rivers one tile wide are drawn as before.
+- Tools > Any game file, as it is written: on a Medieval II still in its packs the window did not answer for minutes (it took every file of the packs out first) -> it lists the packs' text files at once and takes a file out only when it is opened.
 - A princess (witch) takes a woman's name from descr_names.
 - A lower settlement level or a smaller governor's building pulls every other
   building down to what fits.
