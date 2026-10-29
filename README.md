@@ -34,7 +34,7 @@ Windows may warn about the exe because it is not signed yet: *More info > Run an
 
 | Game | Original exe | With the engine |
 |---|---|---|
-| **Rome: Total War** (Gold / Steam), **Barbarian Invasion**, **Alexander** | works, the game's own limits apply (21 factions, 200 regions...) | **REX** - no limits, wastelands, add-ons, your own modules |
+| **Rome: Total War** (Gold / Steam), **Barbarian Invasion**, **Alexander** | works, the game's own limits apply (21 factions, 200 regions...) | **REX** - no limits, wastelands, plugins, your own modules |
 | **Medieval II: Total War** and Kingdoms | works, the game's own limits apply | **M2EX** - the same |
 
 Any mod of these games loads - a big one like HLR or a small one that only changes a few files.
@@ -48,7 +48,7 @@ Any mod of these games loads - a big one like HLR or a small one that only chang
 | **Units and buildings** | every line as a field; new ones step by step; models in 3D, swapped or your own; voices; bring them from another mod |
 | **Characters** | traits, retinue, ages, names, the family tree, portraits |
 | **Pictures** | every picture of a faction replaced or recoloured, any colour of any picture changed (Recolour freely), any picture drawn on (Draw on it: brushes, fill, magic wand, layers), emblem and banners made |
-| **Rules and scripts** | every campaign setting in plain words; ready add-ons; your own scripts made of blocks, like Scratch |
+| **Rules and scripts** | every campaign setting in plain words; ready plugins; your own scripts made of blocks, like Scratch |
 | **Safety** | your own mod folder, preview, backups with Restore, Undo / Redo, Check mod files |
 
 ## ⚠️ Something went wrong?
