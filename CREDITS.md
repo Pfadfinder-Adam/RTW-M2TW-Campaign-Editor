@@ -1,6 +1,6 @@
 # Credits
 
-**RTW & M2TW Campaign Editor** is a shared project. Every report, idea and test in the game has left its mark on it. Thank you, all of you.
+**Rome and Medieval Campaign Editor** is a shared project. Every report, idea and test in the game has left its mark on it. Thank you, all of you.
 
 ## The author
 

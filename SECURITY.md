@@ -19,7 +19,7 @@ editor's Preview show what a pack would write before you apply it.
 
 ## What the tool does on your PC
 
-RTW & M2TW Campaign Editor only reads and writes the game or mod folder you load, plus its own files
+Rome and Medieval Campaign Editor only reads and writes the game or mod folder you load, plus its own files
 in its folder next to the exe, `CampaignEditor` (`CampaignEditor_settings.json`, `CampaignEditor_logs` with the log and the saved sessions,
 `CampaignEditor_addons` with add-ons you added; `CampaignEditor_look.json`, `CampaignEditor_lang` and
 `CampaignEditor_interface` once you change the window's look, add a language or keep your own interface pictures) and files you pick in a save

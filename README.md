@@ -1,8 +1,8 @@
-# <img src="assets/icon_256.png" width="64" alt="" align="top"> RTW & M2TW Campaign Editor
+# <img src="assets/icon_256.png" width="64" alt="" align="top"> Rome and Medieval Campaign Editor
 
-**A campaign editor for Rome: Total War (with REX) and Medieval II: Total War (with M2EX).** Factions, the map,
-towns, armies, characters, units, buildings, diplomacy, texts and pictures - all in one window, no digging through
-files. Every change is shown before it is written, and a backup lets you go back. Free. Version **0.35.5**.
+**A campaign editor for Rome: Total War (with REX) and Medieval II: Total War (with M2EX)** (until 0.35.5 called
+RTW & M2TW Campaign Editor). Factions, the map, towns, armies, characters, units, buildings, diplomacy, texts and
+pictures - all in one window, no digging through files. Every change is shown before it is written, and a backup lets you go back. Free. Version **0.35.5**.
 
 > **Pfadfinder (Adam), GitHub Pfadfinder-Adam (user id 325457102), is the only author of this editor; anyone else
 > calling themselves its author is not. Decompiling, disassembling or analysing the program, also with AI tools, is
@@ -12,14 +12,14 @@ files. Every change is shown before it is written, and a backup lets you go back
 [![Discord](https://img.shields.io/badge/Discord-join%20us-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/uqA9MEn4Z)
 [![Support me on Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/pfadfinder)
 
-[![RTW & M2TW Campaign Editor - video overview](https://img.youtube.com/vi/m1sCPg-Lzsw/hqdefault.jpg)](https://www.youtube.com/watch?v=m1sCPg-Lzsw)
+[![Rome and Medieval Campaign Editor - video overview](https://img.youtube.com/vi/m1sCPg-Lzsw/hqdefault.jpg)](https://www.youtube.com/watch?v=m1sCPg-Lzsw)
 
 **▶ [What the editor does, in a few minutes](https://www.youtube.com/watch?v=m1sCPg-Lzsw)** · more videos:
 [YouTube](https://www.youtube.com/channel/UC8j5rv6mTmtvRR8u7NmaCvQ)
 
 ## 🚀 Get started
 
-1. **Get** `RTW-M2TW-Campaign-Editor.exe` from this repository's **Releases** (on the right of this page) - only from there, never a copy from
+1. **Get** `Rome-and-Medieval-Campaign-Editor.exe` (up to 0.35.5: `RTW-M2TW-Campaign-Editor.exe`) from this repository's **Releases** (on the right of this page) - only from there, never a copy from
    another site or a chat. No install needed. By downloading or using the editor you agree to its [license](LICENSE).
 2. **Put it into the game's folder**, next to `RomeTW.exe` / `medieval2.exe` (and REX or M2EX, if you have them).
 3. **Start it** and pick the game or the mod you build on.
@@ -89,13 +89,13 @@ Please mention the editor in your mod's description and add a link to this page,
 One line is enough - copy this one:
 
 ```
-Made with the RTW & M2TW Campaign Editor: https://github.com/Pfadfinder-Adam/RTW-M2TW-Campaign-Editor
+Made with the Rome and Medieval Campaign Editor: https://github.com/Pfadfinder-Adam/RTW-M2TW-Campaign-Editor
 ```
 
 For forums such as TWC:
 
 ```
-Made with the [url=https://github.com/Pfadfinder-Adam/RTW-M2TW-Campaign-Editor]RTW & M2TW Campaign Editor[/url]
+Made with the [url=https://github.com/Pfadfinder-Adam/RTW-M2TW-Campaign-Editor]Rome and Medieval Campaign Editor[/url]
 ```
 
 It is a request, not a condition - thank you!
@@ -107,7 +107,7 @@ This program transfers nothing to other networked systems unless you press **Sen
 ## License
 
 Copyright (C) 2026 Pfadfinder (Adam) - [Pfadfinder-Adam](https://github.com/Pfadfinder-Adam), the author of
-RTW & M2TW Campaign Editor. All rights reserved.
+Rome and Medieval Campaign Editor. All rights reserved.
 
 The editor is free to download and use for any mod. Take it only from this repository's Releases; please share
 a link to that page instead of the file. It may not be re-uploaded elsewhere, sold, taken apart, copied or ported
