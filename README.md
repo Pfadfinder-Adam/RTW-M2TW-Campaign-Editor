@@ -20,7 +20,7 @@ files. Every change is shown before it is written, and a backup lets you go back
 ## 🚀 Get started
 
 1. **Get** `RTW-M2TW-Campaign-Editor.exe` from this repository's **Releases** (on the right of this page) - only from there, never a copy from
-   another site or a chat. No install needed.
+   another site or a chat. No install needed. By downloading or using the editor you agree to its [license](LICENSE).
 2. **Put it into the game's folder**, next to `RomeTW.exe` / `medieval2.exe` (and REX or M2EX, if you have them).
 3. **Start it** and pick the game or the mod you build on.
 4. **New mod folder...** - your work goes into a folder of its own, the game stays clean.
@@ -111,7 +111,8 @@ RTW & M2TW Campaign Editor. All rights reserved.
 
 The editor is free to download and use for any mod. Take it only from this repository's Releases; please share
 a link to that page instead of the file. It may not be re-uploaded elsewhere, sold, taken apart, copied or ported
-(also not with AI tools). Everything you make with it is yours. The full text: [LICENSE](LICENSE) (the editor shows
+(also not with AI tools). Everything you make with it is yours. Downloading or using the editor means you agree
+to the license; the editor asks again on its first start. The full text: [LICENSE](LICENSE) (the editor shows
 it on its first start and in Tools > License). Versions up to 0.35.4 were released under GPL-3.0 and stay under it.
 
 An unofficial fan tool, not made, approved or supported by SEGA or Creative Assembly. Total War, Rome: Total War and

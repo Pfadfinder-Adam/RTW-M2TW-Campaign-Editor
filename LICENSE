@@ -5,6 +5,10 @@ Copyright (C) 2026 Pfadfinder (Adam) - https://github.com/Pfadfinder-Adam. All r
 This license covers every version of the editor released after 0.35.4. Versions up to and including 0.35.4
 were released under the GNU General Public License v3.0 and stay under it.
 
+By downloading, installing or using the editor you agree to this license. If you do not agree, do not download
+or use it. Not having started it, or not having pressed "I accept", gives no extra rights: without this license
+you have no right to the program beyond what the law itself gives.
+
 1. Free to use. You may download the editor and use it for free, for any mod, private or public.
 
 2. Download it only from the official page:
@@ -38,7 +42,8 @@ were released under the GNU General Public License v3.0 and stay under it.
    LGPL's right to replace or change that library and to reverse engineer the program to debug such changes),
    those rights come first and nothing in this license limits them.
 
-7. Starting the editor. The editor shows this license on its first start; pressing "I accept" (or using the
-   editor in any way) means you accept it. The text is always in Tools > License.
+7. Accepting. Downloading the editor already means you accept this license, and the editor asks again: it shows
+   the license on its first start (and again when it changes), and pressing "I accept" (or using the editor in
+   any way) confirms it. A copy of this text comes with every download; it is always in Tools > License.
 
 Breaking these terms ends your right to use the editor, and copies hosted against them will be taken down.
