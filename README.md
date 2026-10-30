@@ -4,10 +4,6 @@
 carries its old name, RTW & M2TW Campaign Editor). Factions, the map, towns, armies, characters, units, buildings, diplomacy, texts and
 pictures - all in one window, no digging through files. Every change is shown before it is written, and a backup lets you go back. Free. Version **0.35.5**.
 
-> **Pfadfinder (Adam), GitHub Pfadfinder-Adam (user id 325457102), is the only author of this editor; anyone else
-> calling themselves its author is not. Decompiling, disassembling or analysing the program, also with AI tools, is
-> forbidden by its [license](LICENSE).**
-
 [![Guide](https://img.shields.io/badge/Guide-Wiki-2b6cb0?style=for-the-badge)](../../wiki)
 [![Discord](https://img.shields.io/badge/Discord-join%20us-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/uqA9MEn4Z)
 [![Support me on Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/pfadfinder)
